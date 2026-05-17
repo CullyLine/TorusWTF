@@ -1,0 +1,14 @@
+/* Shared Tailwind utility / brand styles. Imported by apps/web. */
+
+:root {
+  --torus-bg: #0a0b1e;
+  --torus-fg: #f5f5fa;
+  --torus-bass: #ff2d95;
+  --torus-mid: #22d3ce;
+  --torus-high: #f7e08c;
+  --torus-fg-dim: rgba(245, 245, 250, 0.65);
+  --torus-fg-faint: rgba(245, 245, 250, 0.35);
+  --torus-surface: rgba(255, 255, 255, 0.04);
+  --torus-border: rgba(255, 255, 255, 0.08);
+  --torus-border-strong: rgba(255, 255, 255, 0.18);
+}
