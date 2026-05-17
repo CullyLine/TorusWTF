@@ -24,6 +24,7 @@
     "arctic": "^3.6.0",
     "better-sqlite3": "^11.7.0",
     "bullmq": "^5.34.6",
+    "dotenv": "^17.0.0",
     "drizzle-orm": "^0.38.3",
     "framer-motion": "^11.15.0",
     "ioredis": "^5.4.2",

@@ -1,3 +1,21 @@
+import { config as loadEnv } from 'dotenv';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+// Load .env from the monorepo root before any other module that reads env vars.
+(function loadRootEnv() {
+  let dir = process.cwd();
+  for (let i = 0; i < 10; i++) {
+    if (existsSync(resolve(dir, 'pnpm-workspace.yaml'))) {
+      loadEnv({ path: resolve(dir, '.env'), override: false, quiet: true });
+      return;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+})();
+
 import { Worker, Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { processClip } from './jobs/process-clip.js';
