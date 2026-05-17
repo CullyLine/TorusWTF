@@ -1,0 +1,18 @@
+# Default to LF for everything except Windows-specific scripts
+* text=auto eol=lf
+
+# Windows batch files MUST be CRLF or cmd.exe parses them as garbage
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Shell scripts MUST be LF
+*.sh    text eol=lf
+
+# Binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.svg   text
