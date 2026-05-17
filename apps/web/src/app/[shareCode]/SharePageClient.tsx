@@ -8,6 +8,7 @@ import { VisualizerOverlay } from '@/components/VisualizerOverlay';
 
 interface SharePageClientProps {
   shareCode: string;
+  shareUrl: string;
   title: string | null;
   status: ClipStatus;
   statusError: string | null;
@@ -75,8 +76,9 @@ export function SharePageClient(props: SharePageClientProps) {
   }, [props.shareCode, liveStatus]);
 
   const palette = livePalette ?? undefined;
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const shareUrl = `${baseUrl}/${props.shareCode}`;
+  // shareUrl is computed server-side from PUBLIC_URL and passed in as a prop
+  // so server and client render the same string (no hydration mismatch).
+  const shareUrl = props.shareUrl;
 
   const accentStyle: CSSProperties | undefined = palette
     ? ({

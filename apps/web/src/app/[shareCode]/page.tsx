@@ -69,9 +69,13 @@ export default async function SharePage({ params }: PageProps) {
   const peaksUrl = clip.peaksKey ? storage.publicUrl(clip.peaksKey) : null;
   const spectrogramUrl = clip.spectrogramKey ? storage.publicUrl(clip.spectrogramKey) : null;
 
+  const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
+  const shareUrl = `${baseUrl}/${clip.shareCode}`;
+
   return (
     <SharePageClient
       shareCode={clip.shareCode}
+      shareUrl={shareUrl}
       title={clip.title}
       status={clip.status}
       statusError={clip.statusError}
