@@ -33,12 +33,13 @@ echo [INFO]  Starting Docker services...
 docker compose -f infra/docker-compose.yml up -d
 if errorlevel 1 goto :error
 
-timeout /t 3 /nobreak >nul
+REM Give MinIO bucket-init a moment. ping is more portable than timeout when stdin is redirected.
+ping -n 4 127.0.0.1 >nul
 
 if not exist "data" mkdir "data"
 echo [INFO]  Running DB migrations...
 call pnpm db:migrate
-if errorlevel 1 goto :error
+if errorlevel 1 goto :migrate_failed
 
 start "" http://localhost:3000
 
@@ -57,6 +58,14 @@ echo.
 
 call pnpm dev
 goto :end
+
+:migrate_failed
+echo.
+echo [HINT]  If you see 'Could not locate the bindings file' above,
+echo         your native modules need to be rebuilt. Run this once:
+echo             pnpm install --force
+echo         then re-run start.bat
+goto :error
 
 :no_pnpm
 echo [ERROR] pnpm not found on PATH.
@@ -77,6 +86,8 @@ goto :error
 :error
 echo.
 echo [FAIL]  Startup failed. See messages above.
+echo.
+pause
 popd
 exit /b 1
 
