@@ -53,7 +53,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ shareCode: st
     .set({ status: 'processing', statusError: null })
     .where(eq(clips.id, clip.id));
 
-  await getClipQueue().add('process-clip', { clipId: clip.id }, { jobId: `clip:${clip.id}` });
+  // BullMQ v5 disallows `:` in jobIds (reserved as Redis namespace separator).
+  await getClipQueue().add('process-clip', { clipId: clip.id }, { jobId: `clip-${clip.id}` });
 
   if (clip.ownerId) {
     await bustQuotaCache(clip.ownerId);
