@@ -12,8 +12,13 @@ import { renderSpectrogram } from '../audio/spectrogram.js';
 import { renderOgImage } from '../images/og.js';
 import { palettize, type Palette } from '../images/palette.js';
 
-const db = getDb();
-const storage = createStorage();
+// Lazy singletons so creation happens at first-call time, AFTER the worker's
+// env loader has populated process.env. Constructing these at module load
+// time would capture env-vars too early under ESM import hoisting.
+let _db: ReturnType<typeof getDb> | null = null;
+let _storage: ReturnType<typeof createStorage> | null = null;
+const db = () => (_db ??= getDb());
+const storage = () => (_storage ??= createStorage());
 
 export interface ProcessResult {
   clipId: string;
@@ -35,7 +40,7 @@ export interface ProcessResult {
  * Heavy work goes through ffmpeg + Node's WebAssembly DSP (no native deps beyond ffmpeg).
  */
 export async function processClip(clipId: string): Promise<ProcessResult> {
-  const [clip] = await db.select().from(clips).where(eq(clips.id, clipId)).limit(1);
+  const [clip] = await db().select().from(clips).where(eq(clips.id, clipId)).limit(1);
   if (!clip) throw new Error(`clip ${clipId} not found`);
   if (!clip.originalKey) throw new Error(`clip ${clipId} has no original_key`);
 
@@ -43,7 +48,7 @@ export async function processClip(clipId: string): Promise<ProcessResult> {
   try {
     // --- 1. download original ---
     const originalPath = join(work, 'original');
-    const downloadUrl = await storage.downloadPresignedUrl(clip.originalKey, 600);
+    const downloadUrl = await storage().downloadPresignedUrl(clip.originalKey, 600);
     const res = await fetch(downloadUrl);
     if (!res.ok) throw new Error(`fetch original failed: ${res.status} ${res.statusText}`);
     const originalBytes = Buffer.from(await res.arrayBuffer());
@@ -63,7 +68,7 @@ export async function processClip(clipId: string): Promise<ProcessResult> {
     const opusPath = join(work, 'audio.opus.ogg');
     await transcodeToOpus(originalPath, opusPath, 96);
     const opusBytes = await readFile(opusPath);
-    await storage.putObject(
+    await storage().putObject(
       StorageKeys.opus(clipId),
       opusBytes,
       'audio/ogg',
@@ -72,7 +77,7 @@ export async function processClip(clipId: string): Promise<ProcessResult> {
 
     // --- 4. peaks + band-energy ---
     const peaks = await computePeaks(originalPath, { binMs: 50 });
-    await storage.putObject(
+    await storage().putObject(
       StorageKeys.peaks(clipId),
       Buffer.from(JSON.stringify(peaks)),
       'application/json',
@@ -84,7 +89,7 @@ export async function processClip(clipId: string): Promise<ProcessResult> {
 
     // --- 6. spectrogram + OG image ---
     const spectrogramPng = await renderSpectrogram(originalPath, { width: 1600, height: 400 });
-    await storage.putObject(
+    await storage().putObject(
       StorageKeys.spectrogram(clipId),
       spectrogramPng,
       'image/png',
@@ -98,7 +103,7 @@ export async function processClip(clipId: string): Promise<ProcessResult> {
       durationMs,
     });
     const ogPngBuf = await sharp(ogPng).png().toBuffer();
-    await storage.putObject(
+    await storage().putObject(
       StorageKeys.ogImage(clipId),
       ogPngBuf,
       'image/png',
@@ -106,7 +111,7 @@ export async function processClip(clipId: string): Promise<ProcessResult> {
     );
 
     // --- 7. mark ready ---
-    await db
+    await db()
       .update(clips)
       .set({
         status: 'ready',
@@ -128,7 +133,7 @@ export async function processClip(clipId: string): Promise<ProcessResult> {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await db
+    await db()
       .update(clips)
       .set({ status: 'failed', statusError: message.slice(0, 500) })
       .where(eq(clips.id, clipId));

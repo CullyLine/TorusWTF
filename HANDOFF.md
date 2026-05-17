@@ -130,6 +130,11 @@ These are the bugs we already fought through. Future agent: if any of these symp
 **Why**: BullMQ v5 reserves `:` as a Redis-key namespace separator in jobIds.
 **Fix**: use `-` (we use `clip-${id}` as jobId).
 
+### 6.5b ESM import hoisting beats your IIFE env loader
+**Symptom**: env vars set by `dotenv` are undefined inside imported modules — e.g. `Could not load credentials from any providers` in the worker.
+**Why**: ESM evaluates all `import` statements before running any non-import top-level code, regardless of source order. So `import { processClip } from './jobs/process-clip'` runs `process-clip.ts`'s top-level (`const storage = createStorage()`) BEFORE the IIFE that calls `dotenv.config()`.
+**Fix (already in place)**: in `apps/worker/src/jobs/process-clip.ts`, both `db` and `storage` are lazy function singletons (`const db = () => (_db ??= getDb())`) so they only construct on first call — well after env vars are populated. If you add another module-level singleton that reads env, apply the same pattern.
+
 ### 6.6 Windows `.bat` files have three sharp edges
 **Symptoms** range from `... was unexpected at this time` to scripts silently exiting.
 **Always**:
