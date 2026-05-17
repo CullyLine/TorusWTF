@@ -3,7 +3,7 @@
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { VisualizerSceneProps } from '../registry.js';
+import type { VisualizerSceneProps } from '../registry';
 
 /**
  * **Volumetric Waveform** — the live time-domain waveform extruded into 3D,

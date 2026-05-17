@@ -4,8 +4,8 @@ import {
   generateUniqueShareCode,
   isValidShareCode,
   normalizeShareCode,
-} from './share-code.js';
-import { isoWeekBucket, parseWeekBucket, previousWeekBucket } from './week.js';
+} from './share-code';
+import { isoWeekBucket, parseWeekBucket, previousWeekBucket } from './week';
 
 describe('share-code', () => {
   it('generates 8-character codes from the allowed alphabet', () => {

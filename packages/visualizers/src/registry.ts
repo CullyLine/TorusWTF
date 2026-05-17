@@ -1,9 +1,9 @@
 import type { ComponentType } from 'react';
-import type { AnalyserHandle } from './audio.js';
-import { TorusFieldScene } from './presets/TorusField.js';
-import { ParticleStormScene } from './presets/ParticleStorm.js';
-import { SpectralTunnelScene } from './presets/SpectralTunnel.js';
-import { VolumetricWaveformScene } from './presets/VolumetricWaveform.js';
+import type { AnalyserHandle } from './audio';
+import { TorusFieldScene } from './presets/TorusField';
+import { ParticleStormScene } from './presets/ParticleStorm';
+import { SpectralTunnelScene } from './presets/SpectralTunnel';
+import { VolumetricWaveformScene } from './presets/VolumetricWaveform';
 
 export type VisualizerId =
   | 'torus_field'

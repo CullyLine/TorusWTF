@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
-import { useToast } from '../toast/Toast.js';
+import { useToast } from '../toast/Toast';
 
 type VisualizerPreset =
   | 'none'
@@ -119,7 +119,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
         });
 
         setState({ phase: 'finalizing' });
-        const completeRes = await fetch(`/api/clips/${init.clipId}/complete`, {
+        const completeRes = await fetch(`/api/clips/${init.shareCode}/complete`, {
           method: 'POST',
         });
         if (!completeRes.ok) {

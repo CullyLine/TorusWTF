@@ -1,6 +1,6 @@
 import 'server-only';
 import { Queue } from 'bullmq';
-import { getRedis } from './redis.js';
+import { getRedis } from './redis';
 
 export const PROCESS_CLIP_QUEUE = 'process-clip';
 

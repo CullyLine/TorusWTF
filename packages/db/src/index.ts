@@ -1,4 +1,4 @@
-export * as schema from './schema.js';
+export * as schema from './schema';
 export {
   users,
   sessions,
@@ -11,7 +11,7 @@ export {
   weeklyCharts,
   reports,
   moderationLog,
-} from './schema.js';
+} from './schema';
 export type {
   User,
   NewUser,
@@ -27,5 +27,5 @@ export type {
   WeeklyChart,
   Report,
   ModerationLogEntry,
-} from './schema.js';
-export { getDb, closeDb, type Db } from './client.js';
+} from './schema';
+export { getDb, closeDb, type Db } from './client';

@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { UploadDialog } from './UploadDialog.js';
+import { UploadDialog } from './UploadDialog';
 
 interface UploadDialogApi {
   open: () => void;

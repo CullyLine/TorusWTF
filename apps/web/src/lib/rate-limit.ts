@@ -1,5 +1,5 @@
 import 'server-only';
-import { getRedis } from './redis.js';
+import { getRedis } from './redis';
 
 export interface RateLimitResult {
   ok: boolean;

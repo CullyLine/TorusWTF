@@ -1,6 +1,6 @@
 import 'server-only';
 import { redirect } from 'next/navigation';
-import { getCurrentUserFromCookies } from './auth.js';
+import { getCurrentUserFromCookies } from './auth';
 import type { User } from '@torus/db';
 
 export async function requireAdmin(): Promise<User> {

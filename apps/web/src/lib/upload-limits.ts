@@ -1,9 +1,9 @@
 import 'server-only';
 import { eq, sql, and, gte } from 'drizzle-orm';
 import { getEnv } from '@torus/shared';
-import { db, clips } from './db.js';
-import { getRedis } from './redis.js';
-import { isEmergencyStopActive } from './admin.js';
+import { db, clips } from './db';
+import { getRedis } from './redis';
+import { isEmergencyStopActive } from './admin';
 
 export interface LimitCheckResult {
   ok: boolean;

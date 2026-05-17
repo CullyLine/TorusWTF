@@ -4,7 +4,7 @@ import { eq, and, gt } from 'drizzle-orm';
 import { sha256 } from '@oslojs/crypto/sha2';
 import { encodeBase32LowerCaseNoPadding, encodeHexLowerCase } from '@oslojs/encoding';
 import { generateId } from '@torus/shared';
-import { db, users, sessions } from './db.js';
+import { db, users, sessions } from './db';
 import type { User } from '@torus/db';
 
 export const SESSION_COOKIE_NAME = 'torus_session';

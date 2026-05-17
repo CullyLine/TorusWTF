@@ -2,9 +2,9 @@
 
 import { useMemo, type RefObject } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { useAudioAnalyser } from './audio.js';
-import { detectTier } from './tier.js';
-import { VISUALIZERS, type VisualizerId } from './registry.js';
+import { useAudioAnalyser } from './audio';
+import { detectTier } from './tier';
+import { VISUALIZERS, type VisualizerId } from './registry';
 
 interface VisualizerCanvasProps {
   /** The <audio> element backing playback. We hook a Web Audio analyser to it. */

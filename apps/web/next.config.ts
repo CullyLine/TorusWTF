@@ -7,7 +7,7 @@ const config: NextConfig = {
     typedRoutes: true,
     serverActions: { bodySizeLimit: '2mb' },
   },
-  transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared'],
+  transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared', '@torus/db', '@torus/storage'],
   serverExternalPackages: ['better-sqlite3'],
   async headers() {
     return [

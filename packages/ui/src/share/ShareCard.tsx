@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useState } from 'react';
-import { useToast } from '../toast/Toast.js';
+import { useToast } from '../toast/Toast';
 
 interface ShareCardProps {
   shareUrl: string;

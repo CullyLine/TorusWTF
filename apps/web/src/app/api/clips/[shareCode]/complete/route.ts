@@ -1,20 +1,25 @@
 import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
+import { isValidShareCode, normalizeShareCode } from '@torus/shared';
 import { db, clips } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { getClipQueue } from '@/lib/queue';
 import { bustQuotaCache } from '@/lib/upload-limits';
 
 /**
- * POST /api/clips/:clipId/complete
+ * POST /api/clips/:shareCode/complete
  * Called by the browser after the presigned PUT upload finishes.
  * Verifies the object exists, flips the clip to "processing", and enqueues
  * the worker job that does ffmpeg transcoding + waveform peak analysis.
  */
-export async function POST(_req: Request, ctx: { params: Promise<{ clipId: string }> }) {
-  const { clipId } = await ctx.params;
+export async function POST(_req: Request, ctx: { params: Promise<{ shareCode: string }> }) {
+  const { shareCode } = await ctx.params;
+  if (!isValidShareCode(shareCode)) {
+    return NextResponse.json({ error: 'Invalid share code.' }, { status: 400 });
+  }
+  const code = normalizeShareCode(shareCode);
 
-  const [clip] = await db.select().from(clips).where(eq(clips.id, clipId)).limit(1);
+  const [clip] = await db.select().from(clips).where(eq(clips.shareCode, code)).limit(1);
   if (!clip) return NextResponse.json({ error: 'Clip not found.' }, { status: 404 });
   if (clip.deletedAt) return NextResponse.json({ error: 'Clip removed.' }, { status: 410 });
 
