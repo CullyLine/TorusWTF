@@ -19,27 +19,43 @@ See [`PRINCIPLES.md`](./PRINCIPLES.md) for the no-bullshit charter.
 
 No ads. No algorithmic feeds. No engagement metrics shoved in your face. No tracking cookies. No proprietary telemetry by default. No premium-only core features. No VC funding.
 
-## Quick start (dev)
+## Quick start
+
+**Prereqs:** Node 22+, pnpm 10+, Docker Desktop (must be running).
+
+### Windows
+
+Just double-click **`start.bat`**.
+
+It checks your tools, copies `.env` if needed, installs dependencies (first run only), spins up Redis + MinIO + Mailhog in Docker, runs DB migrations, opens your browser, and starts dev servers.
+
+| Script        | What it does                                                        |
+| ------------- | ------------------------------------------------------------------- |
+| `start.bat`   | Full happy-path startup. Idempotent — safe to run again.             |
+| `stop.bat`    | Stop Docker services (your data is preserved).                       |
+| `reset.bat`   | Nuke local DB + MinIO volume. Asks for confirmation first.           |
+| `update.bat`  | `git pull` + `pnpm install` + run new migrations.                    |
+
+### macOS / Linux
 
 ```bash
-# 1. Prereqs: Node 22+, pnpm 10+, Docker (for Redis + MinIO)
-# 2. Clone + install
-git clone https://github.com/YOUR_ORG/torus.git
-cd torus
+chmod +x start.sh stop.sh reset.sh update.sh   # once, after clone
+./start.sh
+```
+
+Same four scripts (`start.sh`, `stop.sh`, `reset.sh`, `update.sh`).
+
+### Manual (if you prefer)
+
+```bash
 pnpm install
-
-# 3. Bring up local infrastructure (Redis, MinIO, mailhog)
-cd infra && docker compose up -d && cd ..
-
-# 4. Copy env and migrate the DB
+docker compose -f infra/docker-compose.yml up -d
 cp .env.example .env
 pnpm db:migrate
-
-# 5. Run everything in dev mode
 pnpm dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>. Caught magic-link emails appear at <http://localhost:8025> (Mailhog). MinIO console at <http://localhost:9001> (`minioadmin` / `minioadmin`).
 
 ## Repo layout
 
