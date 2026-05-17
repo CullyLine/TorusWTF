@@ -15,12 +15,12 @@ const EMERGENCY_KEY = 'admin:emergency_stop';
 
 export async function isEmergencyStopActive(): Promise<boolean> {
   if (process.env.EMERGENCY_STOP?.toLowerCase() === 'true') return true;
-  const { getRedis } = await import('./redis.js');
+  const { getRedis } = await import('./redis');
   const flag = await getRedis().get(EMERGENCY_KEY);
   return flag === '1';
 }
 
 export async function setEmergencyStop(active: boolean): Promise<void> {
-  const { getRedis } = await import('./redis.js');
+  const { getRedis } = await import('./redis');
   await getRedis().set(EMERGENCY_KEY, active ? '1' : '0');
 }
