@@ -36,34 +36,39 @@ export async function checkUploadLimits(opts: {
 
   const redis = getRedis();
 
-  // Anonymous per-IP rate limits (sliding hour + day windows).
+  // Anonymous per-IP rate limits. 0 disables a given limit entirely.
   if (!opts.userId) {
-    const hourKey = `upload:ip:${opts.ip}:h`;
-    const dayKey = `upload:ip:${opts.ip}:d`;
-
-    const [hourCount, dayCount] = await Promise.all([redis.incr(hourKey), redis.incr(dayKey)]);
-    if (hourCount === 1) await redis.expire(hourKey, 60 * 60);
-    if (dayCount === 1) await redis.expire(dayKey, 24 * 60 * 60);
-
-    if (hourCount > env.UPLOAD_ANON_PER_HOUR) {
-      const ttl = await redis.ttl(hourKey);
-      return { ok: false, reason: 'Hourly anonymous upload limit reached.', retryAfterSec: ttl };
+    if (env.UPLOAD_ANON_PER_HOUR > 0) {
+      const hourKey = `upload:ip:${opts.ip}:h`;
+      const hourCount = await redis.incr(hourKey);
+      if (hourCount === 1) await redis.expire(hourKey, 60 * 60);
+      if (hourCount > env.UPLOAD_ANON_PER_HOUR) {
+        const ttl = await redis.ttl(hourKey);
+        return { ok: false, reason: 'Hourly anonymous upload limit reached.', retryAfterSec: ttl };
+      }
     }
-    if (dayCount > env.UPLOAD_ANON_PER_DAY) {
-      const ttl = await redis.ttl(dayKey);
-      return { ok: false, reason: 'Daily anonymous upload limit reached.', retryAfterSec: ttl };
+    if (env.UPLOAD_ANON_PER_DAY > 0) {
+      const dayKey = `upload:ip:${opts.ip}:d`;
+      const dayCount = await redis.incr(dayKey);
+      if (dayCount === 1) await redis.expire(dayKey, 24 * 60 * 60);
+      if (dayCount > env.UPLOAD_ANON_PER_DAY) {
+        const ttl = await redis.ttl(dayKey);
+        return { ok: false, reason: 'Daily anonymous upload limit reached.', retryAfterSec: ttl };
+      }
     }
     return { ok: true };
   }
 
-  // Per-user daily count cap.
-  const userDayKey = `upload:u:${opts.userId}:d`;
-  const userDayCount = await redis.incr(userDayKey);
-  if (userDayCount === 1) await redis.expire(userDayKey, 24 * 60 * 60);
+  // Per-user daily count cap. 0 disables.
+  if (env.UPLOAD_USER_PER_DAY > 0) {
+    const userDayKey = `upload:u:${opts.userId}:d`;
+    const userDayCount = await redis.incr(userDayKey);
+    if (userDayCount === 1) await redis.expire(userDayKey, 24 * 60 * 60);
 
-  if (userDayCount > env.UPLOAD_USER_PER_DAY) {
-    const ttl = await redis.ttl(userDayKey);
-    return { ok: false, reason: 'Daily upload limit reached.', retryAfterSec: ttl };
+    if (userDayCount > env.UPLOAD_USER_PER_DAY) {
+      const ttl = await redis.ttl(userDayKey);
+      return { ok: false, reason: 'Daily upload limit reached.', retryAfterSec: ttl };
+    }
   }
 
   // Per-user lifetime storage quota — sum of all live clip original_bytes.
