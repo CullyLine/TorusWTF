@@ -6,7 +6,7 @@ This file is the orientation packet for anyone picking up work on torus.fm with 
 
 ## 0. TL;DR — the project in three sentences
 
-**torus.fm** is a no-bullshit, open-source, self-hostable audio clip sharing site — a spiritual successor to Clyp.it. Drag a file in, get an instant short share link, beautiful frequency-band-colored waveform, optional fullscreen 3D visualizers (Torus Field, Particle Storm, Spectral Tunnel, Volumetric Waveform). Monorepo: Next.js 15 web app + BullMQ worker + Drizzle on SQLite (+ Litestream backup) + pluggable Storage (MinIO/S3/Azure/GCS).
+**torus.fm** is a no-bullshit, open-source, self-hostable audio clip sharing site. Drag a file in, get an instant short share link, beautiful frequency-band-colored waveform, optional fullscreen 3D visualizers (Torus Field, Particle Storm, Spectral Tunnel, Volumetric Waveform). Monorepo: Next.js 15 web app + BullMQ worker + Drizzle on SQLite (+ Litestream backup) + pluggable Storage (MinIO/S3/Azure/GCS).
 
 ---
 
@@ -50,7 +50,7 @@ The user is on **Windows 10, AMD Ryzen 5 3600, PowerShell**. Docker Desktop is i
 - No notification / email nag campaigns
 - No dark patterns in unsubscribe / account-deletion flows
 - No tracking cookies / third-party analytics by default
-- No VC funding (the Clyp.it death spiral)
+- No VC funding
 
 **If you propose a feature, justify it against this list first.** The user picked these rules deliberately and asked that future-them not be allowed to forget them.
 

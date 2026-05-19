@@ -14,9 +14,7 @@ export default async function PublicModerationLogPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Link href="/" aria-label="torus.fm home">
-        <Logo size={28} className="text-torus-fg" />
-      </Link>
+      <Logo size={28} className="text-torus-fg" />
       <h1 className="mt-10 text-2xl font-semibold tracking-tight">moderation log</h1>
       <p className="mt-2 text-sm text-torus-fg-dim">
         Public, append-only record of moderation actions. No silent enforcement.

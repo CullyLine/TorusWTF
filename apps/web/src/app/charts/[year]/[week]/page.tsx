@@ -35,9 +35,7 @@ export default async function ChartPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Link href="/charts" aria-label="charts">
-        <Logo size={28} className="text-torus-fg" />
-      </Link>
+      <Logo size={28} href="/charts" className="text-torus-fg" />
       <h1 className="mt-8 font-mono text-2xl font-semibold">{bucket}</h1>
       <p className="mt-1 text-sm text-torus-fg-dim">Top clips that week</p>
 

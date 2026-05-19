@@ -12,3 +12,13 @@
   --torus-border: rgba(255, 255, 255, 0.08);
   --torus-border-strong: rgba(255, 255, 255, 0.18);
 }
+
+/* Native upload dialog — centered modal with backdrop */
+dialog[open] {
+  margin: auto;
+  border: none;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}

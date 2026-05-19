@@ -4,6 +4,8 @@ import { Logo } from '@torus/ui';
 import { isoWeekBucket } from '@torus/shared';
 import { db, clips, users, votes } from '@/lib/db';
 import { storage } from '@/lib/storage';
+import { getCurrentUserFromCookies } from '@/lib/auth';
+import { AuthNav } from '@/components/AuthNav';
 import { UploadButton } from '@/components/UploadButton';
 
 export const dynamic = 'force-dynamic';
@@ -67,7 +69,11 @@ async function loadRecentClips(limit = 12): Promise<LeaderboardEntry[]> {
 }
 
 export default async function HomePage() {
-  const [leaderboard, recent] = await Promise.all([loadWeeklyLeaderboard(), loadRecentClips()]);
+  const [leaderboard, recent, sessionUser] = await Promise.all([
+    loadWeeklyLeaderboard(),
+    loadRecentClips(),
+    getCurrentUserFromCookies(),
+  ]);
   const weekBucket = isoWeekBucket();
 
   return (
@@ -76,12 +82,7 @@ export default async function HomePage() {
         <Logo size={32} wordmark className="text-torus-fg" />
         <div className="flex items-center gap-2">
           <UploadButton variant="pill" label="upload (U)" />
-          <Link
-            href="/signin"
-            className="rounded-full border border-torus-border-strong px-4 py-2 text-xs text-torus-fg-dim hover:bg-torus-surface"
-          >
-            sign in
-          </Link>
+          <AuthNav initialUser={sessionUser ? { handle: sessionUser.handle } : null} />
         </div>
       </header>
 

@@ -1,14 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from 'react';
+import { MagicLinkSentNotice, type DevMailInfo } from '../auth/MagicLinkSentNotice';
 import { useToast } from '../toast/Toast';
-
-type VisualizerPreset =
-  | 'none'
-  | 'torus_field'
-  | 'particle_storm'
-  | 'spectral_tunnel'
-  | 'volumetric_waveform';
+import type { UploadAuthConfig } from './upload-context';
 
 interface CreateClipResponse {
   clipId: string;
@@ -22,6 +25,8 @@ interface CreateClipResponse {
 interface UploadDialogProps {
   open: boolean;
   onClose: () => void;
+  pendingFile?: File | null;
+  auth?: UploadAuthConfig;
 }
 
 type UploadState =
@@ -34,23 +39,25 @@ type UploadState =
 
 const ACCEPT = '.mp3,.wav,.flac,.aiff,.aif,.ogg,.opus,.m4a,.webm,audio/*';
 
-const PRESET_OPTIONS: { id: VisualizerPreset; label: string; hint: string }[] = [
-  { id: 'none', label: 'None', hint: 'Just the waveform — no 3D' },
-  { id: 'torus_field', label: 'Torus Field', hint: 'The signature' },
-  { id: 'particle_storm', label: 'Particle Storm', hint: 'Punchy energy' },
-  { id: 'spectral_tunnel', label: 'Spectral Tunnel', hint: 'Melodic / ambient' },
-  { id: 'volumetric_waveform', label: 'Volumetric Wave', hint: 'Minimal 3D' },
-];
+const DEFAULT_CREATOR = 'Anonymous';
 
-export function UploadDialog({ open, onClose }: UploadDialogProps) {
+export function UploadDialog({ open, onClose, pendingFile = null, auth }: UploadDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
   const [state, setState] = useState<UploadState>({ phase: 'idle' });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
-  const [preset, setPreset] = useState<VisualizerPreset>('none');
+  const [creator, setCreator] = useState(DEFAULT_CREATOR);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [magicEmail, setMagicEmail] = useState('');
+  const [magicSent, setMagicSent] = useState(false);
+  const [magicDevMail, setMagicDevMail] = useState<DevMailInfo | null>(null);
+  const [magicBusy, setMagicBusy] = useState(false);
+  const [magicError, setMagicError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const toast = useToast();
+  const sessionUser = auth?.sessionUser ?? null;
 
   useEffect(() => {
     const dlg = dialogRef.current;
@@ -61,19 +68,59 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
 
   useEffect(() => {
     if (!open) {
-      // Reset when re-opening
       setState({ phase: 'idle' });
       setTitle('');
-      setPreset('none');
+      setCreator(DEFAULT_CREATOR);
+      setSignInOpen(false);
+      setMagicEmail('');
+      setMagicSent(false);
+      setMagicDevMail(null);
+      setMagicError(null);
+      setSelectedFile(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    void auth?.refreshSession();
+  }, [open, auth]);
+
+  useEffect(() => {
+    if (!open || !signInOpen) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      if (e.data?.type === 'torus-auth-success') {
+        void auth?.refreshSession();
+        setSignInOpen(false);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [open, signInOpen, auth]);
+
+  useEffect(() => {
+    if (!open || (!signInOpen && !magicSent)) return;
+    const id = window.setInterval(() => {
+      void auth?.refreshSession();
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [open, signInOpen, magicSent, auth]);
+
+  useEffect(() => {
+    if (sessionUser) setSignInOpen(false);
+  }, [sessionUser]);
+
+  useEffect(() => {
+    if (!open || !pendingFile) return;
+    setSelectedFile(pendingFile);
+    setTitle((t) => t || stripExt(pendingFile.name));
+  }, [open, pendingFile]);
 
   const startUpload = useCallback(
     async (file: File) => {
       try {
         setState({ phase: 'requesting' });
 
-        const presetForApi: Exclude<VisualizerPreset, 'none'> | 'none' = preset;
         const initRes = await fetch('/api/clips', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -82,7 +129,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
             contentType: file.type || 'audio/mpeg',
             bytes: file.size,
             title: title.trim() || undefined,
-            visualizerPreset: presetForApi,
+            creatorDisplayName: sessionUser ? undefined : creator,
           }),
         });
 
@@ -147,21 +194,48 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
         toast.show(message, 'error');
       }
     },
-    [preset, title, toast],
+    [title, creator, sessionUser, toast],
   );
 
-  const onFileChosen = useCallback(
-    (file: File) => {
-      if (!title) setTitle(stripExt(file.name));
-      void startUpload(file);
+  const onMagicSubmit = useCallback(
+    async (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      setMagicError(null);
+      setMagicBusy(true);
+      try {
+        const res = await fetch('/api/auth/magic', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: magicEmail }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          devMail?: DevMailInfo;
+        };
+        if (!res.ok) {
+          throw new Error(data.error ?? `Sign-in failed (${res.status})`);
+        }
+        setMagicDevMail(data.devMail ?? null);
+        setMagicSent(true);
+      } catch (err) {
+        setMagicError(err instanceof Error ? err.message : 'Sign-in failed.');
+      } finally {
+        setMagicBusy(false);
+      }
     },
-    [startUpload, title],
+    [magicEmail],
   );
+
+  const onFileChosen = useCallback((file: File) => {
+    setSelectedFile(file);
+    setTitle((t) => t || stripExt(file.name));
+  }, []);
 
   const onPick = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const f = e.target.files?.[0];
       if (f) onFileChosen(f);
+      e.target.value = '';
     },
     [onFileChosen],
   );
@@ -169,12 +243,18 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+      e.stopPropagation();
       setIsDragging(false);
       const f = e.dataTransfer.files?.[0];
       if (f) onFileChosen(f);
     },
     [onFileChosen],
   );
+
+  const onConfirmUpload = useCallback(() => {
+    if (!selectedFile) return;
+    void startUpload(selectedFile);
+  }, [selectedFile, startUpload]);
 
   const cancelUpload = useCallback(() => {
     xhrRef.current?.abort();
@@ -201,6 +281,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
         padding: 0,
         maxWidth: 520,
         width: '90vw',
+        margin: 'auto',
         boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
       }}
     >
@@ -214,7 +295,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
           </button>
         </div>
 
-        {state.phase === 'idle' || state.phase === 'requesting' ? (
+        {state.phase === 'idle' ? (
           <>
             <Dropzone
               onDrop={onDrop}
@@ -225,6 +306,7 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
               onDragLeave={() => setIsDragging(false)}
               onClick={() => inputRef.current?.click()}
               isDragging={isDragging}
+              selectedFile={selectedFile}
             />
             <input ref={inputRef} type="file" accept={ACCEPT} onChange={onPick} hidden />
             <label htmlFor="upload-title" style={labelStyle}>
@@ -239,34 +321,139 @@ export function UploadDialog({ open, onClose }: UploadDialogProps) {
               maxLength={140}
               style={inputStyle}
             />
-            <fieldset style={{ border: 'none', padding: 0, margin: '20px 0 0' }}>
-              <legend style={{ ...labelStyle, padding: 0 }}>3D visualizer (optional)</legend>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(5, 1fr)',
-                  gap: 6,
-                  marginTop: 8,
-                }}
-              >
-                {PRESET_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setPreset(opt.id)}
-                    aria-pressed={preset === opt.id}
-                    title={opt.hint}
+            {sessionUser ? (
+              <div style={{ marginTop: 20 }}>
+                <span style={labelStyle}>Creator</span>
+                <div style={{ marginTop: 8 }}>
+                  <a
+                    href={`/u/${encodeURIComponent(sessionUser.handle)}`}
                     style={{
-                      ...presetBtn,
-                      ...(preset === opt.id ? presetBtnActive : null),
+                      color: 'var(--color-torus-mid)',
+                      fontSize: 15,
+                      fontWeight: 500,
+                      textDecoration: 'none',
                     }}
                   >
-                    {opt.label}
-                  </button>
-                ))}
+                    @{sessionUser.handle}
+                  </a>
+                </div>
               </div>
-            </fieldset>
+            ) : (
+              <div style={{ marginTop: 20 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <label htmlFor="upload-creator" style={{ ...labelStyle, marginTop: 0 }}>
+                    Creator
+                  </label>
+                  <span style={{ fontSize: 12, color: 'var(--color-torus-fg-dim, rgba(245,245,250,0.55))' }}>
+                    or{' '}
+                    <button
+                      type="button"
+                      onClick={() => setSignInOpen((o) => !o)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: 'var(--color-torus-mid)',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        font: 'inherit',
+                        fontSize: 'inherit',
+                      }}
+                    >
+                      sign in
+                    </button>
+                  </span>
+                </div>
+                <input
+                  id="upload-creator"
+                  type="text"
+                  value={creator}
+                  onChange={(e) => setCreator(e.target.value)}
+                  placeholder={DEFAULT_CREATOR}
+                  maxLength={64}
+                  style={{ ...inputStyle, marginTop: 8 }}
+                />
+                {signInOpen ? (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: 14,
+                      borderRadius: 12,
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      background: 'rgba(255,255,255,0.03)',
+                    }}
+                  >
+                    {magicSent ? (
+                      <MagicLinkSentNotice
+                        email={magicEmail}
+                        devMail={magicDevMail}
+                        compact
+                      />
+                    ) : (
+                      <form onSubmit={onMagicSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <input
+                          type="email"
+                          required
+                          autoComplete="email"
+                          value={magicEmail}
+                          onChange={(e) => setMagicEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          disabled={magicBusy}
+                          style={inputStyle}
+                        />
+                        <button type="submit" disabled={magicBusy || !magicEmail} style={ghostBtn}>
+                          {magicBusy ? 'sending…' : 'send sign-in link'}
+                        </button>
+                        {magicError ? (
+                          <p role="alert" style={{ margin: 0, fontSize: 12, color: 'var(--color-torus-bass)' }}>
+                            {magicError}
+                          </p>
+                        ) : null}
+                      </form>
+                    )}
+                    {auth?.discordAuth ? (
+                      <button
+                        type="button"
+                        onClick={() => auth.openDiscordSignIn()}
+                        style={{ ...ghostBtn, width: '100%', marginTop: 10 }}
+                      >
+                        Continue with Discord
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={onConfirmUpload}
+              disabled={!selectedFile}
+              style={{
+                ...primaryBtn,
+                width: '100%',
+                justifyContent: 'center',
+                marginTop: 24,
+                opacity: selectedFile ? 1 : 0.4,
+                cursor: selectedFile ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Upload
+            </button>
           </>
+        ) : null}
+
+        {state.phase === 'requesting' ? (
+          <div style={{ marginTop: 24, padding: 16, textAlign: 'center', opacity: 0.7 }}>
+            Preparing upload...
+          </div>
         ) : null}
 
         {state.phase === 'uploading' ? (
@@ -314,9 +501,17 @@ interface DropzoneProps {
   onDragLeave: (e: DragEvent<HTMLDivElement>) => void;
   onClick: () => void;
   isDragging: boolean;
+  selectedFile: File | null;
 }
 
-function Dropzone({ onDrop, onDragOver, onDragLeave, onClick, isDragging }: DropzoneProps) {
+function Dropzone({
+  onDrop,
+  onDragOver,
+  onDragLeave,
+  onClick,
+  isDragging,
+  selectedFile,
+}: DropzoneProps) {
   return (
     <div
       role="button"
@@ -344,8 +539,19 @@ function Dropzone({ onDrop, onDragOver, onDragLeave, onClick, isDragging }: Drop
       }}
     >
       <div style={{ fontSize: 14, opacity: 0.8 }}>
-        Drag an audio file here, or{' '}
-        <span style={{ textDecoration: 'underline' }}>click to browse</span>
+        {selectedFile ? (
+          <>
+            <span style={{ color: 'var(--color-torus-mid)' }}>{selectedFile.name}</span>
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.6 }}>
+              Drop or click to choose a different file
+            </div>
+          </>
+        ) : (
+          <>
+            Drag an audio file here, or{' '}
+            <span style={{ textDecoration: 'underline' }}>click to browse</span>
+          </>
+        )}
       </div>
       <div style={{ fontSize: 12, opacity: 0.5, marginTop: 8 }}>
         mp3 · wav · flac · aiff · ogg · opus · m4a · up to 200 MB
@@ -459,23 +665,6 @@ const inputStyle = {
   borderRadius: 8,
   padding: '8px 12px',
   fontSize: 14,
-} as const;
-
-const presetBtn = {
-  padding: '8px 4px',
-  background: 'transparent',
-  border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 8,
-  color: 'inherit',
-  fontSize: 11,
-  cursor: 'pointer',
-  transition: 'all 0.15s ease',
-} as const;
-
-const presetBtnActive = {
-  background: 'rgba(34, 211, 206, 0.08)',
-  borderColor: 'var(--color-torus-mid)',
-  color: 'var(--color-torus-mid)',
 } as const;
 
 const primaryBtn = {

@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { Logo, ShareCard, Waveform } from '@torus/ui';
-import type { PeaksJson, WaveformPalette, ClipStatus, VisualizerPreset } from '@torus/shared';
-import { VisualizerOverlay } from '@/components/VisualizerOverlay';
+import { Logo, ShareCard } from '@torus/ui';
+import type { PeaksJson, WaveformPalette, ClipStatus } from '@torus/shared';
+import { AuthNav } from '@/components/AuthNav';
+import { ClipPlayer } from '@/components/ClipPlayer';
+import { UploadButton } from '@/components/UploadButton';
 
 interface SharePageClientProps {
   shareCode: string;
@@ -17,9 +19,10 @@ interface SharePageClientProps {
   audioUrl: string | null;
   peaksUrl: string | null;
   spectrogramUrl: string | null;
-  visualizerPreset: VisualizerPreset | null;
   allowDownload: boolean;
   originalKey: string | null;
+  creatorHandle: string | null;
+  creatorLabel: string | null;
 }
 
 export function SharePageClient(props: SharePageClientProps) {
@@ -30,7 +33,6 @@ export function SharePageClient(props: SharePageClientProps) {
   const [liveAudioUrl, setLiveAudioUrl] = useState(props.audioUrl);
   const [livePeaksUrl, setLivePeaksUrl] = useState(props.peaksUrl);
   const [liveSpecUrl, setLiveSpecUrl] = useState(props.spectrogramUrl);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   // Fetch peaks JSON when available
   useEffect(() => {
@@ -92,15 +94,11 @@ export function SharePageClient(props: SharePageClientProps) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-6 py-12" style={accentStyle}>
       <header className="flex items-center justify-between">
-        <Link href="/" aria-label="torus.fm home">
-          <Logo size={36} wordmark={false} className="text-torus-fg" />
-        </Link>
-        <Link
-          href="/"
-          className="rounded-full border border-torus-border-strong px-3 py-1.5 text-xs text-torus-fg-dim hover:bg-torus-surface"
-        >
-          new upload
-        </Link>
+        <Logo size={36} wordmark className="text-torus-fg" />
+        <div className="flex items-center gap-2">
+          <UploadButton variant="pill" label="upload (U)" />
+          <AuthNav />
+        </div>
       </header>
 
       <div className="mt-12 flex-1">
@@ -108,22 +106,36 @@ export function SharePageClient(props: SharePageClientProps) {
           {liveTitle ?? <span className="opacity-40">untitled</span>}
         </h1>
 
+        <p className="mt-3 text-sm text-torus-fg-dim">
+          by{' '}
+          {props.creatorHandle ? (
+            <Link href={`/u/${props.creatorHandle}`} className="text-torus-mid hover:underline">
+              @{props.creatorHandle}
+            </Link>
+          ) : (
+            <span>{props.creatorLabel ?? 'Anonymous'}</span>
+          )}
+        </p>
+
         <div className="mt-8">
           {liveStatus === 'failed' ? (
             <FailedView error={props.statusError} />
           ) : (
-            <Waveform
+            <ClipPlayer
               peaks={peaks ?? undefined}
               palette={palette}
               audioUrl={liveAudioUrl ?? undefined}
               spectrogramUrl={liveSpecUrl ?? undefined}
+              durationSec={
+                props.durationMs && props.durationMs > 0 ? props.durationMs / 1000 : undefined
+              }
               height={180}
             />
           )}
         </div>
 
         <div className="mt-8 flex flex-col gap-4">
-          <ShareCard shareUrl={shareUrl} />
+          <ShareCard shareUrl={shareUrl} title={props.title} />
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-torus-fg-dim">
             {liveStatus === 'pending' || liveStatus === 'processing' ? <ProcessingTag /> : null}
@@ -135,17 +147,6 @@ export function SharePageClient(props: SharePageClientProps) {
               >
                 download
               </a>
-            ) : null}
-            {props.visualizerPreset &&
-            props.visualizerPreset !== 'none' &&
-            liveStatus === 'ready' ? (
-              <VisualizerOverlay
-                audioRef={audioRef}
-                preset={props.visualizerPreset}
-                palette={livePalette}
-                title={liveTitle}
-                shareCode={props.shareCode}
-              />
             ) : null}
             <Link
               href={`/${props.shareCode}/report`}

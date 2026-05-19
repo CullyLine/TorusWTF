@@ -76,9 +76,7 @@ export default async function ProfilePage({ params }: PageProps) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-6 py-12">
       <header className="flex items-center justify-between">
-        <Link href="/" aria-label="torus.fm home">
-          <Logo size={28} className="text-torus-fg" />
-        </Link>
+        <Logo size={28} className="text-torus-fg" />
       </header>
 
       <section className="mt-12 flex items-start gap-6">

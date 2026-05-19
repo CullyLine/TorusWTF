@@ -1,6 +1,21 @@
 import 'server-only';
 import nodemailer, { type Transporter } from 'nodemailer';
 
+/** Local Mailhog (or similar) — messages are captured, not delivered to real inboxes. */
+export function isDevMailCapture(): boolean {
+  const host = process.env.SMTP_HOST ?? 'localhost';
+  const port = Number(process.env.SMTP_PORT ?? 1025);
+  return (
+    process.env.NODE_ENV === 'development' &&
+    (host === 'localhost' || host === '127.0.0.1') &&
+    port === 1025
+  );
+}
+
+export function devMailInboxUrl(): string {
+  return process.env.MAILHOG_WEB_URL ?? 'http://localhost:8025';
+}
+
 let cached: Transporter | null = null;
 
 function makeTransporter(): Transporter {

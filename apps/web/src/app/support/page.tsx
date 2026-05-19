@@ -11,9 +11,7 @@ export default async function SupportPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Link href="/" aria-label="torus.fm home">
-        <Logo size={28} className="text-torus-fg" />
-      </Link>
+      <Logo size={28} className="text-torus-fg" />
 
       <h1 className="mt-10 text-3xl font-semibold tracking-tight">support torus.fm</h1>
       <p className="mt-3 max-w-prose text-sm text-torus-fg-dim">

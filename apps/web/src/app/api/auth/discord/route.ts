@@ -1,7 +1,8 @@
 import { Discord, generateState, generateCodeVerifier } from 'arctic';
 import { NextResponse } from 'next/server';
 
-export async function GET() {
+export async function GET(req: Request) {
+  const popup = new URL(req.url).searchParams.get('popup') === '1';
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
   const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
@@ -24,6 +25,9 @@ export async function GET() {
     'Set-Cookie',
     `torus_oauth_verifier=${encodeURIComponent(codeVerifier)}; ${cookieAttrs}`,
   );
+  if (popup) {
+    headers.append('Set-Cookie', `torus_oauth_popup=1; ${cookieAttrs}`);
+  }
   headers.set('Location', authUrl.toString());
   return new NextResponse(null, { status: 302, headers });
 }

@@ -4,15 +4,13 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
+import { useMetricsRef } from '../metrics';
 
-/**
- * **Spectral Tunnel** — flying through a tube whose walls displace on bass and
- * color-shift on highs. Best fit for melodic / atmospheric material.
- */
 export function SpectralTunnelScene({ analyser, palette, tier }: VisualizerSceneProps) {
   const tunnelRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
+  const metricsRef = useMetricsRef();
 
   const segments = tier === 'high' ? 256 : tier === 'mid' ? 128 : 64;
   const radial = tier === 'low' ? 32 : 64;
@@ -23,6 +21,8 @@ export function SpectralTunnelScene({ analyser, palette, tier }: VisualizerScene
       uBass: { value: 0 },
       uMid: { value: 0 },
       uHigh: { value: 0 },
+      uBeat: { value: 0 },
+      uEnergy: { value: 0 },
       uBassColor: { value: new THREE.Color(palette.bass) },
       uMidColor: { value: new THREE.Color(palette.mid) },
       uHighColor: { value: new THREE.Color(palette.high) },
@@ -35,25 +35,18 @@ export function SpectralTunnelScene({ analyser, palette, tier }: VisualizerScene
     const mat = matRef.current;
     if (!tunnel || !mat) return;
 
-    let bass = 0.2;
-    let mid = 0.2;
-    let high = 0.2;
-    if (analyser) {
-      const bins = analyser.getFrequencyData(freqBuf.current);
-      if (bins > 0) {
-        const s1 = Math.floor(bins * 0.1);
-        const s2 = Math.floor(bins * 0.4);
-        bass = avg(freqBuf.current, 0, s1) / 255;
-        mid = avg(freqBuf.current, s1, s2) / 255;
-        high = avg(freqBuf.current, s2, bins) / 255;
-      }
-    }
+    const m = metricsRef.current;
+    uniforms.uTime.value += delta * (0.6 + m.energy * 1.8);
+    uniforms.uBass.value = lerp(uniforms.uBass.value, m.bass, 0.25);
+    uniforms.uMid.value = lerp(uniforms.uMid.value, m.mid, 0.2);
+    uniforms.uHigh.value = lerp(uniforms.uHigh.value, m.high, 0.2);
+    uniforms.uBeat.value = lerp(uniforms.uBeat.value, m.beat, 0.35);
+    uniforms.uEnergy.value = lerp(uniforms.uEnergy.value, m.energy, 0.15);
 
-    uniforms.uTime.value += delta;
-    uniforms.uBass.value = lerp(uniforms.uBass.value, bass, 0.2);
-    uniforms.uMid.value = lerp(uniforms.uMid.value, mid, 0.2);
-    uniforms.uHigh.value = lerp(uniforms.uHigh.value, high, 0.2);
-    tunnel.rotation.z += delta * 0.1;
+    tunnel.rotation.z += delta * (0.08 + m.mid * 0.5);
+    tunnel.position.z = Math.sin(_state.clock.elapsedTime * 0.5) * m.breath * 0.3;
+
+    if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
   return (
@@ -69,13 +62,15 @@ export function SpectralTunnelScene({ analyser, palette, tier }: VisualizerScene
           uniform float uTime;
           uniform float uBass;
           uniform float uMid;
+          uniform float uBeat;
           varying vec3 vWorldPos;
           varying float vDisplace;
 
           void main() {
             vec3 p = position;
-            float wave = sin(p.y * 2.0 + uTime * 1.2) * uBass * 0.6;
-            wave += cos(p.y * 4.0 - uTime * 0.6) * uMid * 0.3;
+            float wave = sin(p.y * 2.0 + uTime * 1.2) * uBass * 0.9;
+            wave += cos(p.y * 4.0 - uTime * 0.6) * uMid * 0.45;
+            wave += sin(p.y * 8.0 + uTime * 2.0) * uBeat * 0.5;
             p += normal * wave;
             vDisplace = wave;
             vWorldPos = (modelMatrix * vec4(p, 1.0)).xyz;
@@ -85,6 +80,8 @@ export function SpectralTunnelScene({ analyser, palette, tier }: VisualizerScene
         fragmentShader={`
           uniform float uTime;
           uniform float uHigh;
+          uniform float uEnergy;
+          uniform float uBeat;
           uniform vec3 uBassColor;
           uniform vec3 uMidColor;
           uniform vec3 uHighColor;
@@ -94,8 +91,9 @@ export function SpectralTunnelScene({ analyser, palette, tier }: VisualizerScene
           void main() {
             float t = smoothstep(-0.5, 0.7, sin(vWorldPos.y * 1.5 + uTime));
             vec3 col = mix(uBassColor, uMidColor, t);
-            col = mix(col, uHighColor, uHigh * 0.7 + abs(vDisplace) * 0.4);
-            float alpha = 0.65 + uHigh * 0.25;
+            col = mix(col, uHighColor, uHigh * 0.8 + abs(vDisplace) * 0.5);
+            col *= 0.85 + uEnergy * 0.35 + uBeat * 0.25;
+            float alpha = 0.55 + uHigh * 0.3 + uEnergy * 0.2;
             gl_FragColor = vec4(col, alpha);
           }
         `}
@@ -106,10 +104,4 @@ export function SpectralTunnelScene({ analyser, palette, tier }: VisualizerScene
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
-}
-
-function avg(buf: Uint8Array, start: number, end: number): number {
-  let total = 0;
-  for (let i = start; i < end; i++) total += buf[i]!;
-  return total / Math.max(1, end - start);
 }

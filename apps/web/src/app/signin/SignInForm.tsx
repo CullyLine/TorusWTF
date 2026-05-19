@@ -1,15 +1,22 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import { MagicLinkSentNotice, type DevMailInfo } from '@torus/ui';
 
 interface SignInFormProps {
   initialSent: boolean;
   initialError: string | null;
 }
 
+interface MagicApiResponse {
+  message?: string;
+  devMail?: DevMailInfo;
+}
+
 export function SignInForm({ initialSent, initialError }: SignInFormProps) {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(initialSent);
+  const [devMail, setDevMail] = useState<DevMailInfo | undefined>(undefined);
   const [error, setError] = useState<string | null>(initialError);
   const [busy, setBusy] = useState(false);
 
@@ -23,10 +30,11 @@ export function SignInForm({ initialSent, initialError }: SignInFormProps) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+      const data = (await res.json().catch(() => ({}))) as MagicApiResponse & { error?: string };
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? `Sign-in failed (${res.status})`);
       }
+      setDevMail(data.devMail);
       setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-in failed.');
@@ -37,11 +45,8 @@ export function SignInForm({ initialSent, initialError }: SignInFormProps) {
 
   if (sent) {
     return (
-      <div
-        role="status"
-        className="rounded-2xl border border-torus-border-strong bg-torus-surface p-5 text-center text-sm text-torus-fg-dim"
-      >
-        Check your inbox — if {email || 'your email'} is registered, a sign-in link is on the way.
+      <div className="rounded-2xl border border-torus-border-strong bg-torus-surface p-5">
+        <MagicLinkSentNotice email={email} devMail={devMail} />
       </div>
     );
   }

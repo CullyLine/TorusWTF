@@ -14,6 +14,8 @@ const CreateClipBody = z.object({
   bytes: z.number().int().positive(),
   title: z.string().max(140).optional(),
   description: z.string().max(2000).optional(),
+  /** Anonymous attribution label (ignored when signed in). */
+  creatorDisplayName: z.string().max(64).optional(),
   visualizerPreset: z
     .enum(['torus_field', 'particle_storm', 'spectral_tunnel', 'volumetric_waveform', 'none'])
     .optional(),
@@ -85,12 +87,17 @@ export async function POST(req: Request) {
   // attach this clip to a created account.
   const claimToken = user ? null : `clm_${generateId()}`;
 
+  const creatorDisplayName = user
+    ? null
+    : normalizeCreatorDisplayName(body.data.creatorDisplayName);
+
   await db.insert(clips).values({
     id: clipId,
     shareCode,
     ownerId: user?.id ?? null,
     title: body.data.title?.trim() || null,
     description: body.data.description?.trim() || null,
+    creatorDisplayName,
     originalFilename: body.data.filename,
     originalBytes: body.data.bytes,
     originalKey,
@@ -112,4 +119,10 @@ export async function POST(req: Request) {
     },
     { status: 201 },
   );
+}
+
+function normalizeCreatorDisplayName(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'anonymous') return null;
+  return trimmed.slice(0, 64);
 }

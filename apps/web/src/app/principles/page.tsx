@@ -9,9 +9,7 @@ export const metadata = {
 export default function PrinciplesPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Link href="/" aria-label="torus.fm home">
-        <Logo size={32} className="text-torus-fg" />
-      </Link>
+      <Logo size={32} className="text-torus-fg" />
 
       <h1 className="mt-10 text-3xl font-semibold tracking-tight">principles</h1>
       <p className="mt-3 text-sm text-torus-fg-dim">
@@ -40,7 +38,7 @@ export default function PrinciplesPage() {
           <li>use dark patterns in unsubscribe / account-deletion flows</li>
           <li>set tracking cookies or load third-party analytics by default</li>
           <li>surface engagement metrics in shame-driven ways</li>
-          <li>take VC funding (the Clyp.it death spiral)</li>
+          <li>take VC funding</li>
         </ul>
       </section>
 

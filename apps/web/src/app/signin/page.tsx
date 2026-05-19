@@ -14,12 +14,14 @@ export default async function SignInPage({ searchParams }: PageProps) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 py-16">
-      <Link href="/" aria-label="torus.fm home">
-        <Logo size={56} wordmark className="text-torus-fg" />
-      </Link>
+      <Logo size={56} wordmark className="text-torus-fg" />
       <h1 className="mt-10 text-2xl font-semibold tracking-tight">sign in</h1>
       <p className="mt-3 text-center text-sm text-torus-fg-dim">
-        Optional — uploads work without an account.
+        Optional — uploads work without an account. On localhost, magic links are caught by{' '}
+        <a href="http://localhost:8025" className="text-torus-mid underline">
+          Mailhog
+        </a>
+        , not sent to your real email.
       </p>
 
       <div className="mt-10 flex w-full flex-col gap-4">

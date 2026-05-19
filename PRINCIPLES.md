@@ -40,11 +40,13 @@ Account deletion is a single button that works the first time. Unsubscribe is on
 
 ### Will never take VC funding
 
-VC funding forces unsustainable growth and inevitably leads to enshittification — see Clyp.it's death spiral. torus.fm survives on donations, the Supporter tier, and self-hosted instances. If that's not enough to keep the main hub running, we will gracefully sunset it before betraying these principles.
+VC funding forces unsustainable growth and inevitably leads to enshittification. torus.fm survives on donations, the Supporter tier, and self-hosted instances. If that's not enough to keep the main hub running, we will gracefully sunset it before betraying these principles.
 
 ### Will never use tracking cookies / proprietary analytics by default
 
 No Google Analytics. No Meta Pixel. No third-party tracking SDKs. Optional self-hosted Plausible or Umami can be enabled by self-hosters via env var, but the default config ships with **zero telemetry**.
+
+**Session cookies are allowed** — a single first-party, `HttpOnly` login cookie (`torus_session`) is required so signed-in users stay signed in. It is not used for ads, profiling, or cross-site tracking. Magic-link and OAuth sign-in set it; logout clears it.
 
 ### Will never surface engagement metrics to users in shame-driven ways
 
@@ -88,4 +90,4 @@ When in doubt: **err on the side of less product, more soul**.
 
 ---
 
-_Inspired by the spirit of Clyp.it, Picosong, last.fm in its early years, and every small, lovingly-maintained corner of the internet that has remained good despite the world._
+_Inspired by last.fm in its early years and every small, lovingly-maintained corner of the internet that has remained good despite the world._

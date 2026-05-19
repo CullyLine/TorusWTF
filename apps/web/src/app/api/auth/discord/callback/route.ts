@@ -69,10 +69,29 @@ export async function GET(req: Request) {
 
   const session = await createSession(user.id);
 
+  const isPopup = getCookie('torus_oauth_popup') === '1';
+
   const headers = new Headers();
   headers.append('Set-Cookie', buildSessionCookie(session.token, session.expiresAt));
   headers.append('Set-Cookie', 'torus_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
   headers.append('Set-Cookie', 'torus_oauth_verifier=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+  headers.append('Set-Cookie', 'torus_oauth_popup=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+
+  if (isPopup) {
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    return new NextResponse(
+      `<!DOCTYPE html><html><body><p>Signed in — you can close this window.</p><script>
+        try {
+          if (window.opener) {
+            window.opener.postMessage({ type: 'torus-auth-success' }, window.location.origin);
+          }
+        } catch (_) {}
+        window.close();
+      </script></body></html>`,
+      { status: 200, headers },
+    );
+  }
+
   headers.set('Location', '/?welcome=1');
   return new NextResponse(null, { status: 302, headers });
 }

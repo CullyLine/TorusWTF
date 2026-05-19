@@ -9,9 +9,7 @@ export const metadata = {
 export default function AboutPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Link href="/" aria-label="torus.fm home">
-        <Logo size={32} className="text-torus-fg" />
-      </Link>
+      <Logo size={32} className="text-torus-fg" />
 
       <h1 className="mt-10 text-3xl font-semibold tracking-tight">about torus.fm</h1>
 
@@ -22,16 +20,9 @@ export default function AboutPage() {
         </p>
 
         <p>
-          It exists because{' '}
-          <a href="https://clyp.it" className="underline">
-            Clyp.it
-          </a>{' '}
-          and{' '}
-          <a href="https://picosong.com" className="underline">
-            Picosong
-          </a>{' '}
-          used to do this well and then died. The internet needs a small, lovingly-maintained corner
-          for sound. So here it is.
+          The internet used to have more small, lovingly-maintained corners for sharing sound.
+          Many of them are gone. torus.fm is our attempt to bring that spirit back — without ads,
+          without growth hacks, without selling your data.
         </p>
 
         <p>

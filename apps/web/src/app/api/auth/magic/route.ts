@@ -4,7 +4,7 @@ import { sha256 } from '@oslojs/crypto/sha2';
 import { encodeBase32LowerCaseNoPadding, encodeHexLowerCase } from '@oslojs/encoding';
 import { generateId } from '@torus/shared';
 import { db, magicLinks } from '@/lib/db';
-import { sendMagicLinkEmail } from '@/lib/mail';
+import { devMailInboxUrl, isDevMailCapture, sendMagicLinkEmail } from '@/lib/mail';
 
 const Body = z.object({
   email: z.string().email().max(254),
@@ -39,14 +39,39 @@ export async function POST(req: Request) {
   const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
   const loginUrl = `${baseUrl}/api/auth/magic/verify?token=${encodeURIComponent(token)}`;
 
+  let sent = false;
   try {
     await sendMagicLinkEmail({ to: email, loginUrl, expiresMinutes: EXPIRES_MIN });
+    sent = true;
+    if (isDevMailCapture()) {
+      console.info('[auth] magic link (dev mail capture) →', loginUrl);
+    }
   } catch (err) {
     console.error('[auth] magic link send failed:', (err as Error).message);
-    // Still return success to not leak email existence; the link is in our DB if SMTP comes back later.
+    if (isDevMailCapture()) {
+      console.info('[auth] magic link (SMTP failed, use this URL locally) →', loginUrl);
+    }
   }
 
-  return NextResponse.json({
-    message: `If an account exists for ${email}, a sign-in link has been sent.`,
-  });
+  const payload: {
+    message: string;
+    devMail?: { inboxUrl: string; loginUrl: string; sent: boolean };
+  } = {
+    message: sent
+      ? `If an account exists for ${email}, a sign-in link has been sent.`
+      : `If an account exists for ${email}, a sign-in link has been sent.`,
+  };
+
+  if (isDevMailCapture()) {
+    payload.devMail = {
+      inboxUrl: devMailInboxUrl(),
+      loginUrl,
+      sent,
+    };
+    payload.message = sent
+      ? 'Local dev: your sign-in email was captured by Mailhog (not sent to a real inbox).'
+      : 'Local dev: SMTP is not reachable. Use the sign-in link below or start Mailhog.';
+  }
+
+  return NextResponse.json(payload);
 }

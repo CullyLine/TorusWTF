@@ -23,9 +23,7 @@ export default async function ReportPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col px-6 py-12">
-      <Link href={`/${clip.shareCode}`} aria-label="back to clip">
-        <Logo size={28} className="text-torus-fg" />
-      </Link>
+      <Logo size={28} href={`/${clip.shareCode}`} className="text-torus-fg" />
       <h1 className="mt-10 text-2xl font-semibold tracking-tight">report a clip</h1>
       <p className="mt-2 text-sm text-torus-fg-dim">
         Reporting <span className="font-mono">{clip.shareCode}</span>

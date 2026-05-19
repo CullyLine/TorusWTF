@@ -2,7 +2,7 @@
 
 > **Share the loop.** Drop any audio, get an instant link.
 
-A modern, open-source spiritual successor to [Clyp.it](https://clyp.it) — built for EDM producers, musicians, and anyone who wants a no-bullshit way to share short audio clips.
+A modern, open-source audio clip sharing site — built for producers, musicians, and anyone who wants a no-bullshit way to share short audio clips.
 
 ## What it is
 

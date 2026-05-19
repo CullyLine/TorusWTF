@@ -4,18 +4,14 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
+import { useMetricsRef } from '../metrics';
 
-/**
- * **Torus Field** — the brand-signature visualizer.
- *
- * A luminous torus pulses with bass energy. Particles flow through the
- * inside, fan out around the top, descend the outside, and return —
- * the sacred-geometry torus-field energy flow, set in motion by sound.
- */
 export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProps) {
   const torusRef = useRef<THREE.Mesh>(null);
   const particlesRef = useRef<THREE.Points>(null);
+  const matRef = useRef<THREE.PointsMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
+  const metricsRef = useMetricsRef();
 
   const particleCount = tier === 'high' ? 6000 : tier === 'mid' ? 2500 : 800;
 
@@ -39,60 +35,56 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
     const mid = new THREE.Color(palette.mid);
     const high = new THREE.Color(palette.high);
     for (let i = 0; i < particleCount; i++) {
-      const t = (basePhi[i]! / (Math.PI * 2)) % 1;
-      let color: THREE.Color;
-      if (t < 0.33) color = bass;
-      else if (t < 0.66) color = mid;
-      else color = high;
+      const t = (i / particleCount) % 1;
+      const color = t < 0.33 ? bass : t < 0.66 ? mid : high;
       c[i * 3] = color.r;
       c[i * 3 + 1] = color.g;
       c[i * 3 + 2] = color.b;
     }
     return c;
-  }, [particleCount, basePhi, palette]);
+  }, [particleCount, palette]);
 
   useFrame((_state, delta) => {
     const torus = torusRef.current;
     const points = particlesRef.current;
-    if (!torus || !points) return;
+    const pointsMat = matRef.current;
+    if (!torus || !points || !pointsMat) return;
 
-    let bassEnergy = 0.2;
-    let midEnergy = 0.2;
-    let highEnergy = 0.2;
-    if (analyser) {
-      const bins = analyser.getFrequencyData(freqBuf.current);
-      if (bins > 0) {
-        const split1 = Math.floor(bins * 0.1);
-        const split2 = Math.floor(bins * 0.4);
-        bassEnergy = avg(freqBuf.current, 0, split1) / 255;
-        midEnergy = avg(freqBuf.current, split1, split2) / 255;
-        highEnergy = avg(freqBuf.current, split2, bins) / 255;
-      }
+    const m = metricsRef.current;
+    const flowSpeed = delta * (0.35 + m.mid * 3.5 + m.beat * 2);
+    const activeRatio = 0.3 + m.flow * 0.7;
+
+    torus.scale.setScalar(1 + m.bass * 0.35 + m.beat * 0.15);
+    torus.rotation.y += flowSpeed * 0.4;
+    torus.rotation.x += delta * (0.03 + m.high * 0.2);
+
+    const torusMat = torus.material;
+    if (torusMat && !Array.isArray(torusMat) && 'emissiveIntensity' in torusMat) {
+      (torusMat as THREE.MeshStandardMaterial).emissiveIntensity =
+        0.1 + m.breath * 0.5 + m.beat * 0.3;
     }
 
-    torus.scale.setScalar(1 + bassEnergy * 0.25);
-    torus.rotation.y += delta * (0.1 + midEnergy * 0.6);
-    torus.rotation.x += delta * 0.04;
+    pointsMat.size = 0.02 + m.energy * 0.05;
+    pointsMat.opacity = 0.5 + m.flow * 0.45;
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
-    const flow = delta * (0.4 + midEnergy * 2.5);
+
     for (let i = 0; i < particleCount; i++) {
-      basePhi[i] = (basePhi[i]! + flow) % (Math.PI * 2);
-      baseTheta[i] = (baseTheta[i]! + delta * (0.2 + highEnergy * 0.8)) % (Math.PI * 2);
-      const radius = 1.4 + bassEnergy * 0.15;
-      const tube = 0.5 + bassEnergy * 0.1;
+      if (i / particleCount > activeRatio) continue;
+      basePhi[i] = (basePhi[i]! + flowSpeed) % (Math.PI * 2);
+      baseTheta[i] = (baseTheta[i]! + delta * (0.15 + m.high * 1.2 + m.beat)) % (Math.PI * 2);
+      const radius = 1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08;
+      const tube = 0.5 + m.breath * 0.15;
       setTorusPoint(arr, i * 3, baseTheta[i]!, basePhi[i]!, radius, tube);
     }
     posAttr.needsUpdate = true;
+
+    if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
   return (
     <>
-      <ambientLight intensity={0.4} />
-      <pointLight position={[0, 4, 4]} intensity={1.4} color={palette.mid} />
-      <pointLight position={[0, -4, -4]} intensity={0.8} color={palette.bass} />
-
       <mesh ref={torusRef}>
         <torusGeometry args={[1.4, 0.5, tier === 'low' ? 32 : 64, tier === 'low' ? 64 : 128]} />
         <meshStandardMaterial
@@ -123,6 +115,7 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
           />
         </bufferGeometry>
         <pointsMaterial
+          ref={matRef}
           size={0.035}
           sizeAttenuation
           transparent
@@ -148,10 +141,4 @@ function setTorusPoint(
   arr[i] = (R + r * Math.cos(theta)) * cos;
   arr[i + 1] = r * Math.sin(theta);
   arr[i + 2] = (R + r * Math.cos(theta)) * Math.sin(phi);
-}
-
-function avg(buf: Uint8Array, start: number, end: number): number {
-  let total = 0;
-  for (let i = start; i < end; i++) total += buf[i]!;
-  return total / Math.max(1, end - start);
 }

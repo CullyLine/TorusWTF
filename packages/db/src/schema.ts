@@ -96,6 +96,9 @@ export const clips = sqliteTable(
     title: text('title'),
     description: text('description'),
 
+    /** Display name for anonymous uploads (signed-in clips use owner handle). */
+    creatorDisplayName: text('creator_display_name'),
+
     /** Original filename (for "download original" UX). */
     originalFilename: text('original_filename'),
 

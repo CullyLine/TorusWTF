@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 import type { Metadata } from 'next';
-import { db, clips } from '@/lib/db';
+import { db, clips, users } from '@/lib/db';
 import { storage } from '@/lib/storage';
 import { isValidShareCode, normalizeShareCode } from '@torus/shared';
 import { SharePageClient } from './SharePageClient';
@@ -15,15 +15,22 @@ interface PageProps {
 async function loadClipByShareCode(rawCode: string) {
   if (!isValidShareCode(rawCode)) return null;
   const code = normalizeShareCode(rawCode);
-  const [clip] = await db.select().from(clips).where(eq(clips.shareCode, code)).limit(1);
-  if (!clip || clip.deletedAt) return null;
-  return clip;
+  const rows = await db
+    .select({ clip: clips, ownerHandle: users.handle })
+    .from(clips)
+    .leftJoin(users, eq(clips.ownerId, users.id))
+    .where(eq(clips.shareCode, code))
+    .limit(1);
+  const row = rows[0];
+  if (!row?.clip || row.clip.deletedAt) return null;
+  return row;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { shareCode } = await params;
-  const clip = await loadClipByShareCode(shareCode);
-  if (!clip) return { title: 'not found' };
+  const loaded = await loadClipByShareCode(shareCode);
+  if (!loaded) return { title: 'not found' };
+  const { clip } = loaded;
 
   const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
   const ogImageUrl = clip.ogImageKey
@@ -61,8 +68,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function SharePage({ params }: PageProps) {
   const { shareCode } = await params;
-  const clip = await loadClipByShareCode(shareCode);
-  if (!clip) notFound();
+  const loaded = await loadClipByShareCode(shareCode);
+  if (!loaded) notFound();
+  const { clip, ownerHandle } = loaded;
 
   const palette = parsePalette(clip.waveformPalette);
   const audioUrl = clip.opusKey ? storage.publicUrl(clip.opusKey) : null;
@@ -71,6 +79,10 @@ export default async function SharePage({ params }: PageProps) {
 
   const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
   const shareUrl = `${baseUrl}/${clip.shareCode}`;
+
+  const creatorLabel = ownerHandle
+    ? null
+    : (clip.creatorDisplayName?.trim() || 'Anonymous');
 
   return (
     <SharePageClient
@@ -84,9 +96,10 @@ export default async function SharePage({ params }: PageProps) {
       audioUrl={audioUrl}
       peaksUrl={peaksUrl}
       spectrogramUrl={spectrogramUrl}
-      visualizerPreset={clip.visualizerPreset}
       allowDownload={clip.allowDownload}
       originalKey={clip.originalKey}
+      creatorHandle={ownerHandle}
+      creatorLabel={creatorLabel}
     />
   );
 }

@@ -5,37 +5,50 @@ import { Canvas } from '@react-three/fiber';
 import { useAudioAnalyser } from './audio';
 import { detectTier } from './tier';
 import { VISUALIZERS, type VisualizerId } from './registry';
+import { AudioMetricsProvider } from './metrics';
+import { SceneRig } from './SceneRig';
+import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 
 interface VisualizerCanvasProps {
-  /** The <audio> element backing playback. We hook a Web Audio analyser to it. */
   audioRef: RefObject<HTMLAudioElement | null>;
-  /** Which preset to render. */
   preset: VisualizerId;
-  /** Per-clip palette derived by the worker. */
   palette: { bass: string; mid: string; high: string };
-  /** Override device tier (e.g. for forced quality). */
   forceTier?: 'high' | 'mid' | 'low';
+  /** Embedded in the waveform panel (not fullscreen). */
+  embedded?: boolean;
+  /** Wheel / pinch zoom — also used to reveal overlay chrome. */
+  onInteract?: () => void;
 }
 
-/**
- * Mounts a fullscreen R3F Canvas with the chosen preset Scene inside.
- * Owns the AudioContext setup (via useAudioAnalyser) and the device-tier
- * detection — preset Scenes are pure renderers that consume both.
- */
-export function VisualizerCanvas({ audioRef, preset, palette, forceTier }: VisualizerCanvasProps) {
+export function VisualizerCanvas({
+  audioRef,
+  preset,
+  palette,
+  forceTier,
+  embedded = false,
+  onInteract,
+}: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const analyser = useAudioAnalyser(audioRef.current, tier === 'low' ? 256 : 1024);
   const def = VISUALIZERS[preset] ?? VISUALIZERS.torus_field;
+  const defaultZ = embedded ? 3.2 : 4;
 
   return (
-    <Canvas
-      camera={{ position: [0, 0, 4], fov: 50 }}
-      dpr={tier === 'high' ? [1, 2] : 1}
-      gl={{ antialias: tier !== 'low', powerPreference: 'high-performance' }}
-      style={{ width: '100%', height: '100%' }}
-    >
-      <color attach="background" args={['#0a0b1e']} />
-      <def.Scene analyser={analyser} palette={palette} tier={tier} />
-    </Canvas>
+    <CameraZoomProvider embedded={embedded}>
+      <VisualizerZoomSurface onInteract={onInteract}>
+        <Canvas
+          camera={{ position: [0, 0, defaultZ], fov: embedded ? 55 : 50 }}
+          dpr={tier === 'high' ? [1, 2] : 1}
+          gl={{ antialias: tier !== 'low', powerPreference: 'high-performance', alpha: true }}
+          style={{ width: '100%', height: '100%', background: 'transparent' }}
+        >
+          <color attach="background" args={['#0a0b1e']} />
+          <AudioMetricsProvider analyser={analyser}>
+            <SceneRig palette={palette} tier={tier} embedded={embedded} />
+            <def.Scene analyser={analyser} palette={palette} tier={tier} />
+          </AudioMetricsProvider>
+        </Canvas>
+      </VisualizerZoomSurface>
+    </CameraZoomProvider>
   );
 }

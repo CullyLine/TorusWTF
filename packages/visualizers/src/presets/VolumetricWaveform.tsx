@@ -4,54 +4,96 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
+import { useMetricsRef } from '../metrics';
 
-/**
- * **Volumetric Waveform** — the live time-domain waveform extruded into 3D,
- * slowly rotating with dust motes. The most minimal of the four. Genre-agnostic.
- */
 export function VolumetricWaveformScene({ analyser, palette, tier }: VisualizerSceneProps) {
   const groupRef = useRef<THREE.Group>(null);
   const lineRef = useRef<THREE.LineSegments>(null);
+  const dustRef = useRef<THREE.Points>(null);
   const timeBuf = useRef<Uint8Array>(new Uint8Array(1024));
+  const metricsRef = useMetricsRef();
 
   const samples = tier === 'high' ? 512 : tier === 'mid' ? 256 : 128;
+  const dustCount = tier === 'high' ? 2000 : tier === 'mid' ? 900 : 400;
 
   const positions = useMemo(() => new Float32Array(samples * 2 * 3), [samples]);
   const colors = useMemo(() => {
     const c = new Float32Array(samples * 2 * 3);
+    const bass = new THREE.Color(palette.bass);
     const mid = new THREE.Color(palette.mid);
+    const high = new THREE.Color(palette.high);
     for (let i = 0; i < samples * 2; i++) {
-      c[i * 3] = mid.r;
-      c[i * 3 + 1] = mid.g;
-      c[i * 3 + 2] = mid.b;
+      const t = i / (samples * 2);
+      const color = t < 0.33 ? bass : t < 0.66 ? mid : high;
+      c[i * 3] = color.r;
+      c[i * 3 + 1] = color.g;
+      c[i * 3 + 2] = color.b;
     }
     return c;
   }, [samples, palette]);
 
+  const { dustPos, dustVel } = useMemo(() => {
+    const p = new Float32Array(dustCount * 3);
+    const v = new Float32Array(dustCount * 3);
+    for (let i = 0; i < dustCount; i++) {
+      p[i * 3] = (Math.random() - 0.5) * 5;
+      p[i * 3 + 1] = (Math.random() - 0.5) * 3;
+      p[i * 3 + 2] = (Math.random() - 0.5) * 2;
+      v[i * 3] = (Math.random() - 0.5) * 0.01;
+      v[i * 3 + 1] = Math.random() * 0.02;
+      v[i * 3 + 2] = (Math.random() - 0.5) * 0.01;
+    }
+    return { dustPos: p, dustVel: v };
+  }, [dustCount]);
+
   useFrame((_state, delta) => {
     const line = lineRef.current;
     const group = groupRef.current;
+    const dust = dustRef.current;
     if (!line || !group) return;
-    group.rotation.y += delta * 0.15;
+
+    const m = metricsRef.current;
+    group.rotation.y += delta * (0.1 + m.mid * 0.4 + m.beat * 0.2);
+    group.scale.setScalar(1 + m.breath * 0.12);
 
     if (analyser) {
       const bins = analyser.getTimeDomainData(timeBuf.current);
       if (bins > 0) {
         const arr = line.geometry.getAttribute('position').array as Float32Array;
+        const amp = 1.2 + m.energy * 1.5 + m.beat * 0.8;
         for (let i = 0; i < samples; i++) {
           const src = Math.floor((i / samples) * bins);
-          const v = (timeBuf.current[src]! / 128 - 1) * 1.2;
+          const v = (timeBuf.current[src]! / 128 - 1) * amp;
           const x = (i / samples) * 6 - 3;
           const baseIdx = i * 6;
           arr[baseIdx] = x;
           arr[baseIdx + 1] = v;
-          arr[baseIdx + 2] = 0;
+          arr[baseIdx + 2] = Math.sin(i * 0.1 + _state.clock.elapsedTime) * m.mid * 0.2;
           arr[baseIdx + 3] = x;
           arr[baseIdx + 4] = -v;
-          arr[baseIdx + 5] = 0;
+          arr[baseIdx + 5] = -arr[baseIdx + 2]!;
         }
         (line.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
       }
+    }
+
+    if (dust) {
+      const mat = dust.material as THREE.PointsMaterial;
+      mat.size = 0.02 + m.flow * 0.05;
+      mat.opacity = 0.2 + m.energy * 0.6;
+      const posAttr = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const arr = posAttr.array as Float32Array;
+      const speed = delta * (0.5 + m.energy * 4 + m.beat * 3);
+      const active = 0.2 + m.flow * 0.8;
+      for (let i = 0; i < dustCount; i++) {
+        if (i / dustCount > active) continue;
+        const i3 = i * 3;
+        arr[i3] = (arr[i3] ?? 0) + (dustVel[i3] ?? 0) * speed * 20;
+        arr[i3 + 1] = (arr[i3 + 1] ?? 0) + (dustVel[i3 + 1] ?? 0) * speed * 20;
+        arr[i3 + 2] = (arr[i3 + 2] ?? 0) + (dustVel[i3 + 2] ?? 0) * speed * 20;
+        if (Math.abs(arr[i3 + 1]!) > 2.5) arr[i3 + 1] = 0;
+      }
+      posAttr.needsUpdate = true;
     }
   });
 
@@ -78,8 +120,22 @@ export function VolumetricWaveformScene({ analyser, palette, tier }: VisualizerS
           opacity={0.9}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
+          linewidth={1}
         />
       </lineSegments>
+      <points ref={dustRef}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[dustPos, 3]} count={dustCount} />
+        </bufferGeometry>
+        <pointsMaterial
+          color={palette.mid}
+          size={0.03}
+          transparent
+          opacity={0.5}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </points>
     </group>
   );
 }

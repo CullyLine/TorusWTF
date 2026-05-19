@@ -1,16 +1,20 @@
 'use client';
 
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useId,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react';
 import type { PeaksJson, WaveformPalette } from '@torus/shared';
+import { WaveformOptionsMenu } from './WaveformOptionsMenu';
 
 export interface WaveformProps {
   /** Pre-computed peaks + per-band energy (from the worker). */
@@ -27,6 +31,20 @@ export interface WaveformProps {
   particles?: boolean;
   /** Fired with seconds played whenever playback emits timeupdate. */
   onTimeUpdate?: (timeSec: number) => void;
+  /** Known duration from the server (seconds). Used until audio metadata loads. */
+  durationSec?: number;
+  /** When true, top 85% shows `visualizerSlot`; bottom 15% keeps the 2D waveform. */
+  visualizerEnabled?: boolean;
+  onVisualizerEnabledChange?: (enabled: boolean) => void;
+  /** Rendered in the upper band when `visualizerEnabled` (pass VisualizerCanvas from the app). */
+  visualizerSlot?: ReactNode;
+  /** Show "Enable 3D visualizer" in the options menu. */
+  visualizerAvailable?: boolean;
+  /** Fullscreen theater: 3D fills the viewport; waveform band docks to the bottom. */
+  visualizerTheater?: boolean;
+  /** Fade theater chrome (preset menu + bottom waveform) after idle. */
+  theaterOverlayVisible?: boolean;
+  onTheaterOverlayActivity?: () => void;
 }
 
 const DEFAULT_PALETTE: WaveformPalette = {
@@ -36,6 +54,7 @@ const DEFAULT_PALETTE: WaveformPalette = {
 };
 
 const PARTICLE_BUDGET = 64;
+const DEFAULT_VOLUME = 0.75;
 
 /**
  * The signature 2D Waveform.
@@ -49,18 +68,30 @@ const PARTICLE_BUDGET = 64;
  *  - prefers-reduced-motion disables animation + particles
  *  - Full keyboard: Space play/pause, M mute, ←/→ seek 5s, ↑/↓ volume
  */
-export function Waveform({
-  peaks,
-  palette = DEFAULT_PALETTE,
-  audioUrl,
-  spectrogramUrl,
-  height = 160,
-  particles = true,
-  onTimeUpdate,
-}: WaveformProps) {
+export const Waveform = forwardRef<HTMLAudioElement, WaveformProps>(function Waveform(
+  {
+    peaks,
+    palette = DEFAULT_PALETTE,
+    audioUrl,
+    spectrogramUrl,
+    height = 160,
+    particles = true,
+    onTimeUpdate,
+    durationSec,
+    visualizerEnabled = false,
+    onVisualizerEnabledChange,
+    visualizerSlot,
+    visualizerAvailable = false,
+    visualizerTheater = false,
+    theaterOverlayVisible = true,
+    onTheaterOverlayActivity,
+  },
+  ref,
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  useImperativeHandle(ref, () => audioRef.current as HTMLAudioElement, []);
   const rafRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
@@ -69,10 +100,53 @@ export function Waveform({
   const id = useId();
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState(() =>
+    durationSec && durationSec > 0 ? durationSec : 0,
+  );
   const [showSpectrogram, setShowSpectrogram] = useState(false);
-  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(DEFAULT_VOLUME);
+  const volumeBeforeMuteRef = useRef(DEFAULT_VOLUME);
   const [reducedMotion, setReducedMotion] = useState(false);
+
+  const inlineBandHeight = visualizerEnabled
+    ? Math.max(28, Math.round(height * 0.15))
+    : height;
+  const [theaterBandHeight, setTheaterBandHeight] = useState(72);
+  const inTheater = visualizerTheater && visualizerEnabled;
+
+  useEffect(() => {
+    if (!inTheater) return;
+    const update = () => {
+      setTheaterBandHeight(Math.max(56, Math.round(window.innerHeight * 0.14)));
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, [inTheater]);
+
+  const bandHeight = inTheater ? theaterBandHeight : inlineBandHeight;
+  const showOptionsMenu =
+    !!spectrogramUrl || visualizerAvailable;
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = volume;
+    audio.muted = volume === 0;
+  }, [volume, audioUrl]);
+
+  useEffect(() => {
+    if (durationSec && durationSec > 0) {
+      setDuration((d) => (d > 0 ? d : durationSec));
+    }
+  }, [durationSec]);
+
+  const syncDurationFromAudio = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const d = audio.duration;
+    if (Number.isFinite(d) && d > 0) setDuration(d);
+  }, []);
 
   // Detect prefers-reduced-motion
   useEffect(() => {
@@ -91,7 +165,7 @@ export function Waveform({
 
     const dpr = window.devicePixelRatio || 1;
     const cssWidth = container.clientWidth;
-    const cssHeight = height;
+    const cssHeight = bandHeight;
     canvas.width = Math.floor(cssWidth * dpr);
     canvas.height = Math.floor(cssHeight * dpr);
     canvas.style.width = `${cssWidth}px`;
@@ -137,7 +211,7 @@ export function Waveform({
       ctx.fillStyle = 'rgba(245,245,250,0.85)';
       ctx.fillRect(Math.floor(x), 0, 1.5, cssHeight);
     }
-  }, [peaks, palette, height, currentTime, duration]);
+  }, [peaks, palette, bandHeight, currentTime, duration]);
 
   // Redraw on size + state changes
   useEffect(() => {
@@ -158,7 +232,7 @@ export function Waveform({
       if (canvas && container) {
         const dpr = window.devicePixelRatio || 1;
         const w = container.clientWidth;
-        const h = height;
+        const h = bandHeight;
         if (canvas.width !== Math.floor(w * dpr)) {
           canvas.width = Math.floor(w * dpr);
           canvas.height = Math.floor(h * dpr);
@@ -219,7 +293,7 @@ export function Waveform({
       alive = false;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [particles, reducedMotion, peaks, palette, currentTime, duration, height]);
+  }, [particles, reducedMotion, peaks, palette, currentTime, duration, bandHeight]);
 
   useEffect(() => {
     playingRef.current = isPlaying;
@@ -228,27 +302,38 @@ export function Waveform({
   // ---------- Audio element ----------
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !audioUrl) return;
+
     const onTime = () => {
       setCurrentTime(audio.currentTime);
       onTimeUpdate?.(audio.currentTime);
+      syncDurationFromAudio();
     };
-    const onMeta = () => setDuration(audio.duration || 0);
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
+
     audio.addEventListener('timeupdate', onTime);
-    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('loadedmetadata', syncDurationFromAudio);
+    audio.addEventListener('durationchange', syncDurationFromAudio);
+    audio.addEventListener('loadeddata', syncDurationFromAudio);
+    audio.addEventListener('canplay', syncDurationFromAudio);
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onPause);
+
+    syncDurationFromAudio();
+
     return () => {
       audio.removeEventListener('timeupdate', onTime);
-      audio.removeEventListener('loadedmetadata', onMeta);
+      audio.removeEventListener('loadedmetadata', syncDurationFromAudio);
+      audio.removeEventListener('durationchange', syncDurationFromAudio);
+      audio.removeEventListener('loadeddata', syncDurationFromAudio);
+      audio.removeEventListener('canplay', syncDurationFromAudio);
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onPause);
     };
-  }, [onTimeUpdate]);
+  }, [audioUrl, onTimeUpdate, syncDurationFromAudio]);
 
   // ---------- Interactions ----------
   const seekTo = useCallback((fractional: number) => {
@@ -306,14 +391,26 @@ export function Waveform({
         case 'm':
         case 'M':
           e.preventDefault();
-          audio.muted = !audio.muted;
-          setMuted(audio.muted);
+          if (volume > 0) {
+            volumeBeforeMuteRef.current = volume;
+            setVolume(0);
+          } else {
+            setVolume(volumeBeforeMuteRef.current || DEFAULT_VOLUME);
+          }
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setVolume((v) => Math.min(1, Math.round((v + 0.05) * 100) / 100));
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          setVolume((v) => Math.max(0, Math.round((v - 0.05) * 100) / 100));
           break;
         default:
           break;
       }
     },
-    [togglePlay],
+    [togglePlay, volume],
   );
 
   const formatted = useMemo(
@@ -321,57 +418,148 @@ export function Waveform({
     [currentTime, duration],
   );
 
-  const wrapStyle: CSSProperties = {
+  const shellStyle: CSSProperties = {
     position: 'relative',
     width: '100%',
     height,
     background: 'rgba(255,255,255,0.02)',
     borderRadius: 8,
     overflow: 'hidden',
-    cursor: 'pointer',
-    touchAction: 'none',
   };
+
+  const bandStyle: CSSProperties = inTheater
+    ? {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: bandHeight,
+        minHeight: 56,
+        cursor: 'pointer',
+        touchAction: 'none',
+        zIndex: 10,
+        borderTop: '1px solid rgba(255,255,255,0.12)',
+        background: 'rgba(10, 11, 30, 0.42)',
+        backdropFilter: 'blur(10px)',
+        opacity: theaterOverlayVisible ? 0.88 : 0,
+        transition: 'opacity 0.35s ease',
+        pointerEvents: theaterOverlayVisible ? 'auto' : 'none',
+      }
+    : {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: visualizerEnabled ? '15%' : '100%',
+        minHeight: visualizerEnabled ? 28 : undefined,
+        cursor: 'pointer',
+        touchAction: 'none',
+        zIndex: 2,
+        borderTop: visualizerEnabled ? '1px solid rgba(255,255,255,0.08)' : undefined,
+      };
+
+  const waveformBand = (
+    <div
+      ref={containerRef}
+      role="slider"
+      aria-label="audio waveform — drag to seek"
+      aria-valuemin={0}
+      aria-valuemax={duration || 0}
+      aria-valuenow={currentTime}
+      aria-valuetext={`${formatted.now} of ${formatted.total}`}
+      tabIndex={0}
+      onPointerDown={(e) => {
+        onTheaterOverlayActivity?.();
+        onPointerDown(e);
+      }}
+      onKeyDown={onKeyDown}
+      style={bandStyle}
+      aria-controls={id}
+    >
+      {showSpectrogram && spectrogramUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={spectrogramUrl}
+          alt=""
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            opacity: 0.45,
+            filter: 'saturate(0.6) hue-rotate(290deg)',
+            pointerEvents: 'none',
+          }}
+        />
+      ) : null}
+      <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0 }} />
+      <canvas
+        ref={overlayRef}
+        style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+      />
+    </div>
+  );
+
+  const theaterOverlay =
+    inTheater && visualizerSlot ? (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 60,
+          background: '#0a0b1e',
+        }}
+        onPointerMove={onTheaterOverlayActivity}
+        onPointerDown={onTheaterOverlayActivity}
+        onWheel={onTheaterOverlayActivity}
+        onTouchStart={onTheaterOverlayActivity}
+      >
+        <div style={{ position: 'absolute', inset: 0 }}>{visualizerSlot}</div>
+        {waveformBand}
+      </div>
+    ) : null;
 
   return (
     <div>
-      <div
-        ref={containerRef}
-        role="slider"
-        aria-label="audio waveform — drag to seek"
-        aria-valuemin={0}
-        aria-valuemax={duration || 0}
-        aria-valuenow={currentTime}
-        aria-valuetext={`${formatted.now} of ${formatted.total}`}
-        tabIndex={0}
-        onPointerDown={onPointerDown}
-        onKeyDown={onKeyDown}
-        style={wrapStyle}
-        aria-controls={id}
-      >
-        {showSpectrogram && spectrogramUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={spectrogramUrl}
-            alt=""
+      <div style={shellStyle}>
+        {visualizerEnabled && visualizerSlot && !inTheater ? (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '85%',
+              zIndex: 0,
+              overflow: 'hidden',
+            }}
+          >
+            {visualizerSlot}
+          </div>
+        ) : null}
+        {!inTheater ? waveformBand : null}
+        {inTheater ? (
+          <div
             aria-hidden
             style={{
               position: 'absolute',
               inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              opacity: 0.45,
-              filter: 'saturate(0.6) hue-rotate(290deg)',
-              pointerEvents: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 11,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              opacity: 0.35,
             }}
-          />
+          >
+            Theater mode
+          </div>
         ) : null}
-        <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0 }} />
-        <canvas
-          ref={overlayRef}
-          style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
-        />
       </div>
+      {theaterOverlay}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
         <button
@@ -387,40 +575,60 @@ export function Waveform({
           {formatted.now} / {formatted.total}
         </span>
         <div style={{ flex: 1 }} />
-        {spectrogramUrl ? (
-          <button
-            type="button"
-            onClick={() => setShowSpectrogram((v) => !v)}
-            aria-pressed={showSpectrogram}
-            style={pillBtnStyle}
-            title="Toggle spectrogram"
-          >
-            spectrum
-          </button>
+        {showOptionsMenu ? (
+          <WaveformOptionsMenu
+            spectrogramAvailable={!!spectrogramUrl}
+            showSpectrogram={showSpectrogram}
+            onShowSpectrogramChange={setShowSpectrogram}
+            visualizerAvailable={visualizerAvailable}
+            showVisualizer={visualizerEnabled}
+            onShowVisualizerChange={onVisualizerEnabledChange}
+          />
         ) : null}
-        <button
-          type="button"
-          onClick={() => {
-            const audio = audioRef.current;
-            if (!audio) return;
-            audio.muted = !audio.muted;
-            setMuted(audio.muted);
+        <label
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 11,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            opacity: 0.8,
           }}
-          aria-label={muted ? 'Unmute' : 'Mute'}
-          aria-pressed={muted}
-          style={pillBtnStyle}
         >
-          {muted ? 'unmute' : 'mute'}
-        </button>
+          <span>vol</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(volume * 100)}
+            onChange={(e) => {
+              const next = Number(e.target.value) / 100;
+              setVolume(next);
+              if (next > 0) volumeBeforeMuteRef.current = next;
+            }}
+            aria-label="Volume"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(volume * 100)}
+            style={{ width: 96, accentColor: 'var(--color-torus-mid)' }}
+          />
+        </label>
       </div>
 
       {audioUrl ? (
         // eslint-disable-next-line jsx-a11y/media-has-caption
-        <audio ref={audioRef} src={audioUrl} preload="metadata" id={id} />
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="metadata"
+          id={id}
+          crossOrigin={visualizerAvailable ? 'anonymous' : undefined}
+        />
       ) : null}
     </div>
   );
-}
+});
 
 interface Particle {
   x: number;
