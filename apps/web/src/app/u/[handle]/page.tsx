@@ -106,7 +106,16 @@ export default async function ProfilePage({ params }: PageProps) {
             <span>{profile.followerCount} followers</span>
           </div>
         </div>
-        {viewer && viewer.id !== profile.user.id ? (
+        {viewer && viewer.id === profile.user.id ? (
+          <form action="/api/auth/logout" method="POST">
+            <button
+              type="submit"
+              className="rounded-full border border-torus-border-strong px-4 py-2 text-xs font-medium text-torus-fg-dim transition hover:bg-torus-surface"
+            >
+              log out
+            </button>
+          </form>
+        ) : viewer ? (
           <ProfileFollowButton handle={profile.user.handle} initialFollowing={alreadyFollowing} />
         ) : null}
       </section>

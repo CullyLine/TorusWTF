@@ -48,6 +48,7 @@ export function UploadDialog({ open, onClose, pendingFile = null, auth }: Upload
   const [state, setState] = useState<UploadState>({ phase: 'idle' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
+  const [allowDownload, setAllowDownload] = useState(false);
   const [creator, setCreator] = useState(DEFAULT_CREATOR);
   const [signInOpen, setSignInOpen] = useState(false);
   const [magicEmail, setMagicEmail] = useState('');
@@ -70,6 +71,7 @@ export function UploadDialog({ open, onClose, pendingFile = null, auth }: Upload
     if (!open) {
       setState({ phase: 'idle' });
       setTitle('');
+      setAllowDownload(false);
       setCreator(DEFAULT_CREATOR);
       setSignInOpen(false);
       setMagicEmail('');
@@ -129,6 +131,7 @@ export function UploadDialog({ open, onClose, pendingFile = null, auth }: Upload
             contentType: file.type || 'audio/mpeg',
             bytes: file.size,
             title: title.trim() || undefined,
+            allowDownload,
             creatorDisplayName: sessionUser ? undefined : creator,
           }),
         });
@@ -194,7 +197,7 @@ export function UploadDialog({ open, onClose, pendingFile = null, auth }: Upload
         toast.show(message, 'error');
       }
     },
-    [title, creator, sessionUser, toast],
+    [title, allowDownload, creator, sessionUser, toast],
   );
 
   const onMagicSubmit = useCallback(
@@ -321,6 +324,26 @@ export function UploadDialog({ open, onClose, pendingFile = null, auth }: Upload
               maxLength={140}
               style={inputStyle}
             />
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginTop: 20,
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={allowDownload}
+                onChange={(e) => setAllowDownload(e.target.checked)}
+              />
+              <span>Enable downloads</span>
+            </label>
+            <p style={{ margin: '8px 0 0', fontSize: 12, opacity: 0.55, lineHeight: 1.45 }}>
+              When off, listeners can stream your clip but won&apos;t get a download button.
+            </p>
             {sessionUser ? (
               <div style={{ marginTop: 20 }}>
                 <span style={labelStyle}>Creator</span>

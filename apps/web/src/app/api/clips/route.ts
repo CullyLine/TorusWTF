@@ -20,6 +20,7 @@ const CreateClipBody = z.object({
     .enum(['torus_field', 'particle_storm', 'spectral_tunnel', 'volumetric_waveform', 'none'])
     .optional(),
   visibility: z.enum(['public', 'unlisted']).default('public'),
+  allowDownload: z.boolean().optional(),
 });
 
 /**
@@ -103,6 +104,7 @@ export async function POST(req: Request) {
     originalKey,
     visualizerPreset: (body.data.visualizerPreset ?? 'none') as VisualizerPreset,
     visibility: body.data.visibility,
+    allowDownload: body.data.allowDownload ?? false,
     status: 'pending',
     claimToken,
   });

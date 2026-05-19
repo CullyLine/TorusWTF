@@ -45,6 +45,9 @@ export interface WaveformProps {
   /** Fade theater chrome (preset menu + bottom waveform) after idle. */
   theaterOverlayVisible?: boolean;
   onTheaterOverlayActivity?: () => void;
+  canManageClip?: boolean;
+  onEditDetails?: () => void;
+  onDeleteClip?: () => void;
 }
 
 const DEFAULT_PALETTE: WaveformPalette = {
@@ -85,6 +88,9 @@ export const Waveform = forwardRef<HTMLAudioElement, WaveformProps>(function Wav
     visualizerTheater = false,
     theaterOverlayVisible = true,
     onTheaterOverlayActivity,
+    canManageClip,
+    onEditDetails,
+    onDeleteClip,
   },
   ref,
 ) {
@@ -126,7 +132,9 @@ export const Waveform = forwardRef<HTMLAudioElement, WaveformProps>(function Wav
 
   const bandHeight = inTheater ? theaterBandHeight : inlineBandHeight;
   const showOptionsMenu =
-    !!spectrogramUrl || visualizerAvailable;
+    !!spectrogramUrl ||
+    visualizerAvailable ||
+    (canManageClip && (!!onEditDetails || !!onDeleteClip));
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -583,6 +591,9 @@ export const Waveform = forwardRef<HTMLAudioElement, WaveformProps>(function Wav
             visualizerAvailable={visualizerAvailable}
             showVisualizer={visualizerEnabled}
             onShowVisualizerChange={onVisualizerEnabledChange}
+            canManageClip={canManageClip}
+            onEditDetails={onEditDetails}
+            onDeleteClip={onDeleteClip}
           />
         ) : null}
         <label

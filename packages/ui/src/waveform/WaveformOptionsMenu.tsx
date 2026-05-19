@@ -9,6 +9,9 @@ export interface WaveformOptionsMenuProps {
   visualizerAvailable?: boolean;
   showVisualizer?: boolean;
   onShowVisualizerChange?: (value: boolean) => void;
+  canManageClip?: boolean;
+  onEditDetails?: () => void;
+  onDeleteClip?: () => void;
 }
 
 export function WaveformOptionsMenu({
@@ -18,6 +21,9 @@ export function WaveformOptionsMenu({
   visualizerAvailable,
   showVisualizer,
   onShowVisualizerChange,
+  canManageClip,
+  onEditDetails,
+  onDeleteClip,
 }: WaveformOptionsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -40,11 +46,12 @@ export function WaveformOptionsMenu({
     };
   }, [open]);
 
-  const hasItems =
+  const hasToggles =
     (spectrogramAvailable && onShowSpectrogramChange) ||
     (visualizerAvailable && onShowVisualizerChange);
+  const hasManage = canManageClip && (onEditDetails || onDeleteClip);
 
-  if (!hasItems) return null;
+  if (!hasToggles && !hasManage) return null;
 
   return (
     <div ref={rootRef} style={{ position: 'relative' }}>
@@ -81,6 +88,33 @@ export function WaveformOptionsMenu({
               />
               <span>Show spectrogram</span>
             </label>
+          ) : null}
+          {hasManage && hasToggles ? <div style={menuDividerStyle} role="separator" /> : null}
+          {canManageClip && onEditDetails ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={menuActionStyle}
+              onClick={() => {
+                setOpen(false);
+                onEditDetails();
+              }}
+            >
+              Edit details
+            </button>
+          ) : null}
+          {canManageClip && onDeleteClip ? (
+            <button
+              type="button"
+              role="menuitem"
+              style={{ ...menuActionStyle, color: 'var(--color-torus-bass, #ff2d95)' }}
+              onClick={() => {
+                setOpen(false);
+                onDeleteClip();
+              }}
+            >
+              Delete clip
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -121,4 +155,22 @@ const menuItemStyle: CSSProperties = {
   fontSize: 13,
   cursor: 'pointer',
   color: 'var(--color-torus-fg)',
+};
+
+const menuActionStyle: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  padding: '10px 16px',
+  border: 'none',
+  background: 'transparent',
+  textAlign: 'left',
+  fontSize: 13,
+  cursor: 'pointer',
+  color: 'var(--color-torus-fg)',
+};
+
+const menuDividerStyle: CSSProperties = {
+  height: 1,
+  margin: '6px 12px',
+  background: 'rgba(255,255,255,0.1)',
 };

@@ -1,12 +1,19 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Logo, ShareCard } from '@torus/ui';
 import type { PeaksJson, WaveformPalette, ClipStatus } from '@torus/shared';
 import { AuthNav } from '@/components/AuthNav';
 import { ClipPlayer } from '@/components/ClipPlayer';
+import { EditClipDialog } from '@/components/EditClipDialog';
 import { UploadButton } from '@/components/UploadButton';
+import {
+  clipManageHeaders,
+  getClaimTokenForShareCode,
+  removeClaimTokenForShareCode,
+} from '@/lib/claim-tokens';
 
 interface SharePageClientProps {
   shareCode: string;
@@ -26,13 +33,41 @@ interface SharePageClientProps {
 }
 
 export function SharePageClient(props: SharePageClientProps) {
+  const router = useRouter();
   const [peaks, setPeaks] = useState<PeaksJson | null>(null);
   const [liveStatus, setLiveStatus] = useState<ClipStatus>(props.status);
   const [liveTitle, setLiveTitle] = useState(props.title);
+  const [liveAllowDownload, setLiveAllowDownload] = useState(props.allowDownload);
   const [livePalette, setLivePalette] = useState(props.palette);
   const [liveAudioUrl, setLiveAudioUrl] = useState(props.audioUrl);
   const [livePeaksUrl, setLivePeaksUrl] = useState(props.peaksUrl);
   const [liveSpecUrl, setLiveSpecUrl] = useState(props.spectrogramUrl);
+  const [canManage, setCanManage] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/clips/${props.shareCode}/manage`, {
+          credentials: 'same-origin',
+          headers: clipManageHeaders(props.shareCode),
+        });
+        if (cancelled) return;
+        if (!res.ok) {
+          setCanManage(false);
+          return;
+        }
+        const data = (await res.json()) as { canManage?: boolean };
+        setCanManage(Boolean(data.canManage));
+      } catch {
+        if (!cancelled) setCanManage(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [props.shareCode]);
 
   // Fetch peaks JSON when available
   useEffect(() => {
@@ -58,6 +93,7 @@ export function SharePageClient(props: SharePageClientProps) {
         const data = JSON.parse((e as MessageEvent).data) as {
           status: ClipStatus;
           title?: string | null;
+          allowDownload?: boolean;
           palette?: WaveformPalette | null;
           audioUrl?: string | null;
           peaksUrl?: string | null;
@@ -65,6 +101,7 @@ export function SharePageClient(props: SharePageClientProps) {
         };
         if (data.status) setLiveStatus(data.status);
         if (typeof data.title !== 'undefined') setLiveTitle(data.title ?? null);
+        if (typeof data.allowDownload !== 'undefined') setLiveAllowDownload(data.allowDownload);
         if (typeof data.palette !== 'undefined') setLivePalette(data.palette ?? null);
         if (typeof data.audioUrl !== 'undefined') setLiveAudioUrl(data.audioUrl ?? null);
         if (typeof data.peaksUrl !== 'undefined') setLivePeaksUrl(data.peaksUrl ?? null);
@@ -81,6 +118,34 @@ export function SharePageClient(props: SharePageClientProps) {
   // shareUrl is computed server-side from PUBLIC_URL and passed in as a prop
   // so server and client render the same string (no hydration mismatch).
   const shareUrl = props.shareUrl;
+
+  const handleDeleteClip = useCallback(async () => {
+    if (
+      !window.confirm(
+        'Delete this clip permanently? The share link will stop working.',
+      )
+    ) {
+      return;
+    }
+    const claimToken = getClaimTokenForShareCode(props.shareCode);
+    const res = await fetch(`/api/clips/${props.shareCode}`, {
+      method: 'DELETE',
+      headers: {
+        'content-type': 'application/json',
+        ...clipManageHeaders(props.shareCode),
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(claimToken ? { claimToken } : {}),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      window.alert(data.error ?? 'Could not delete clip.');
+      return;
+    }
+    removeClaimTokenForShareCode(props.shareCode);
+    router.push('/');
+    router.refresh();
+  }, [props.shareCode, router]);
 
   const accentStyle: CSSProperties | undefined = palette
     ? ({
@@ -130,19 +195,21 @@ export function SharePageClient(props: SharePageClientProps) {
                 props.durationMs && props.durationMs > 0 ? props.durationMs / 1000 : undefined
               }
               height={180}
+              canManageClip={canManage}
+              onEditDetails={canManage ? () => setEditOpen(true) : undefined}
+              onDeleteClip={canManage ? () => void handleDeleteClip() : undefined}
             />
           )}
         </div>
 
         <div className="mt-8 flex flex-col gap-4">
-          <ShareCard shareUrl={shareUrl} title={props.title} />
+          <ShareCard shareUrl={shareUrl} title={liveTitle} />
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-torus-fg-dim">
             {liveStatus === 'pending' || liveStatus === 'processing' ? <ProcessingTag /> : null}
-            {liveStatus === 'ready' && props.allowDownload && liveAudioUrl ? (
+            {liveStatus === 'ready' && liveAllowDownload ? (
               <a
-                href={liveAudioUrl}
-                download
+                href={`/api/clips/${props.shareCode}/download`}
                 className="rounded-full border border-torus-border-strong px-3 py-1.5 hover:bg-torus-surface"
               >
                 download
@@ -159,6 +226,18 @@ export function SharePageClient(props: SharePageClientProps) {
           </div>
         </div>
       </div>
+
+      <EditClipDialog
+        open={editOpen}
+        shareCode={props.shareCode}
+        initialTitle={liveTitle}
+        initialAllowDownload={liveAllowDownload}
+        onClose={() => setEditOpen(false)}
+        onSaved={({ title, allowDownload }) => {
+          setLiveTitle(title);
+          setLiveAllowDownload(allowDownload);
+        }}
+      />
 
       <footer className="mt-12 pt-6 text-center text-xs text-torus-fg-faint">
         <Link href="/" className="hover:text-torus-fg">

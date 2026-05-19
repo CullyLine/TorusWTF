@@ -45,6 +45,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ shareCode: str
           const snapshot = {
             status: clip.status,
             title: clip.title,
+            allowDownload: clip.allowDownload,
             palette: clip.waveformPalette ? safeJson(clip.waveformPalette) : null,
             audioUrl: clip.opusKey ? storage.publicUrl(clip.opusKey) : null,
             peaksUrl: clip.peaksKey ? storage.publicUrl(clip.peaksKey) : null,

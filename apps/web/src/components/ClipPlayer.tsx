@@ -20,6 +20,9 @@ interface ClipPlayerProps {
   spectrogramUrl?: string;
   durationSec?: number;
   height?: number;
+  canManageClip?: boolean;
+  onEditDetails?: () => void;
+  onDeleteClip?: () => void;
 }
 
 export function ClipPlayer({
@@ -29,6 +32,9 @@ export function ClipPlayer({
   spectrogramUrl,
   durationSec,
   height = 180,
+  canManageClip,
+  onEditDetails,
+  onDeleteClip,
 }: ClipPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [visualizerEnabled, setVisualizerEnabled] = useState(false);
@@ -84,6 +90,9 @@ export function ClipPlayer({
       theaterOverlayVisible={uiVisible || presetOpen}
       onTheaterOverlayActivity={revealUi}
       visualizerSlot={visualizerSlot}
+      canManageClip={canManageClip}
+      onEditDetails={onEditDetails}
+      onDeleteClip={onDeleteClip}
     />
   );
 }

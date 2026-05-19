@@ -55,7 +55,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Open <http://localhost:3000>. Caught magic-link emails appear at <http://localhost:8025> (Mailhog). MinIO console at <http://localhost:9001> (`minioadmin` / `minioadmin`).
+Open <http://localhost:3000>. Dev starts **both** the web app and the audio worker (required for waveforms). If you only run the web app, uploads stay stuck on “preparing waveform…”. Caught magic-link emails appear at <http://localhost:8025> (Mailhog). MinIO console at <http://localhost:9001> (`minioadmin` / `minioadmin`).
 
 ## Repo layout
 

@@ -133,7 +133,7 @@ export const clips = sqliteTable(
       .default('public'),
 
     /** Owner can prevent visitors from downloading the original. */
-    allowDownload: integer('allow_download', { mode: 'boolean' }).notNull().default(true),
+    allowDownload: integer('allow_download', { mode: 'boolean' }).notNull().default(false),
 
     playCount: integer('play_count').notNull().default(0),
 
