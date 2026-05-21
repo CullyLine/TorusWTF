@@ -588,7 +588,7 @@ For every preset:
 
 ---
 
-#### - [ ] 18. BPM detection + display (was #18)
+#### - [x] shipped 18. BPM detection + display (was #18)
 
 **Why:** Producers think in BPM. Showing detected BPM proves the visualizer is "smart" and helps users dial reactivity for the right feel.
 
@@ -721,3 +721,4 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 12 (Outrun Grid) | commit 3da53b6
 
 - 2026-05-21 | Item 13 (Liquid Chrome) | commit c66eaed
+- 2026-05-21 | Item 18 (BPM detection) | commit 11bb485

@@ -14,11 +14,13 @@ import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
 import { ShortcutsModal } from '@/components/ShortcutsModal';
+import { BPMIndicator } from '@/components/BPMIndicator';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ExportPanel } from '@/components/ExportPanel';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import { useExport } from '@/hooks/useExport';
+import { useBPM } from '@/hooks/useBPM';
 import { useIdleHide } from '@/hooks/useIdleHide';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useToast } from '@/hooks/useToast';
@@ -43,6 +45,7 @@ import {
   EXPORT_RESOLUTION_KEY,
   PALETTE_KEY,
   PRESET_KEY,
+  SHOW_BPM_KEY,
   SOURCE_KIND_KEY,
   loadSavedPresets,
   persistSavedPresets,
@@ -87,6 +90,7 @@ export function VisualizerApp() {
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [presetsVersion, setPresetsVersion] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [showBpm, setShowBpm] = usePersistedState<boolean>(SHOW_BPM_KEY, false);
 
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -218,6 +222,7 @@ export function VisualizerApp() {
   const { uiVisible: overlayVisible, reveal: revealOverlay } = useIdleHide({
     forceVisible: isRecording,
   });
+  const { bpm, confident } = useBPM(audio.analyser, showBpm && Boolean(audio.source));
   const overlayFade = reducedMotion ? '' : 'transition-opacity duration-250';
   const overlayHidden = overlayVisible ? 'opacity-100' : 'opacity-0 pointer-events-none';
 
@@ -330,6 +335,8 @@ export function VisualizerApp() {
             onChange={(patch) => setControls((c) => ({ ...c, ...patch }))}
             palette={palette}
             onPaletteChange={setPalette}
+            showBpm={showBpm}
+            onShowBpmChange={setShowBpm}
             unlocked={unlock.unlocked}
             onLoadSaved={handleLoadSaved}
             onSavePreset={handleSavePreset}
@@ -420,6 +427,13 @@ export function VisualizerApp() {
                   REC {formatTime(exportHook.elapsedSec)}
                 </div>
               ) : null}
+              <BPMIndicator
+                bpm={bpm}
+                confident={confident}
+                visible={showBpm}
+                fileSource={audio.source.kind === 'file'}
+                className={`${overlayFade} ${overlayHidden}`}
+              />
             </>
           ) : (
             <EmptyStateHero

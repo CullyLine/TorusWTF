@@ -11,6 +11,8 @@ interface ControlPanelProps {
   onChange: (patch: Partial<VisualizerControls>) => void;
   palette: WaveformPalette;
   onPaletteChange: (palette: WaveformPalette) => void;
+  showBpm: boolean;
+  onShowBpmChange: (show: boolean) => void;
   unlocked: boolean;
   onLoadSaved: (preset: SavedPreset) => void;
   onSavePreset: () => void;
@@ -27,6 +29,8 @@ export function ControlPanel({
   onChange,
   palette,
   onPaletteChange,
+  showBpm,
+  onShowBpmChange,
   unlocked,
   onLoadSaved,
   onSavePreset,
@@ -87,6 +91,16 @@ export function ControlPanel({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="flex items-center gap-2 text-xs text-torus-fg-dim">
+          <input
+            type="checkbox"
+            checked={showBpm}
+            onChange={(e) => onShowBpmChange(e.target.checked)}
+            className="accent-torus-mid"
+          />
+          Show BPM in viewport
         </label>
       </div>
 
