@@ -13,3 +13,4 @@
 - Add keyboard shortcuts help modal (? key)
 - Add Cosmic Mandala visualizer preset
 - Add Star Field galaxy spiral preset
+- Add Outrun Grid synthwave shader preset

@@ -6,6 +6,7 @@ import { SpectralTunnelScene } from './presets/SpectralTunnel';
 import { VolumetricWaveformScene } from './presets/VolumetricWaveform';
 import { CosmicMandalaScene } from './presets/CosmicMandala';
 import { StarFieldScene } from './presets/StarField';
+import { OutrunGridScene } from './presets/OutrunGrid';
 
 export type VisualizerId =
   | 'torus_field'
@@ -13,7 +14,8 @@ export type VisualizerId =
   | 'spectral_tunnel'
   | 'volumetric_waveform'
   | 'cosmic_mandala'
-  | 'star_field';
+  | 'star_field'
+  | 'outrun_grid';
 
 export interface VisualizerSceneProps {
   analyser: AnalyserHandle | null;
@@ -64,5 +66,11 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Star Field',
     hint: 'Galaxy spiral arms that tighten with the bass and twinkle on highs.',
     Scene: StarFieldScene,
+  },
+  outrun_grid: {
+    id: 'outrun_grid',
+    label: 'Outrun Grid',
+    hint: 'Synthwave horizon grid with a pulsing sun — producer-nightdrive vibes.',
+    Scene: OutrunGridScene,
   },
 };

@@ -398,7 +398,7 @@ For every preset:
 
 ---
 
-#### - [ ] 12. New preset: Outrun Grid (was #12)
+#### - [x] shipped 12. New preset: Outrun Grid (was #12)
 
 **Why:** Synthwave aesthetic, perfect for the music-producer audience.
 
@@ -717,3 +717,5 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 10 (Cosmic Mandala) | commit bf9198b
 
 - 2026-05-21 | Item 11 (Star Field) | commit a85161b
+
+- 2026-05-21 | Item 12 (Outrun Grid) | commit 3da53b6
