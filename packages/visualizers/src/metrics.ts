@@ -39,13 +39,26 @@ export function useMetricsRef(): MutableRefObject<AudioMetrics> {
   return ctx;
 }
 
+export interface MetricsScales {
+  reactivity?: number;
+  bassMix?: number;
+  midMix?: number;
+  highMix?: number;
+  speed?: number;
+}
+
 export function AudioMetricsProvider({
   analyser,
   children,
+  reactivity = 1,
+  bassMix = 1,
+  midMix = 1,
+  highMix = 1,
+  speed = 1,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
-}) {
+} & MetricsScales) {
   const metricsRef = useRef<AudioMetrics>({ ...DEFAULT_METRICS });
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const prevBass = useRef(0.15);
@@ -62,25 +75,30 @@ export function AudioMetricsProvider({
       if (bins > 0) {
         const s1 = Math.floor(bins * 0.08);
         const s2 = Math.floor(bins * 0.35);
-        bass = avg(freqBuf.current, 0, s1) / 255;
-        mid = avg(freqBuf.current, s1, s2) / 255;
-        high = avg(freqBuf.current, s2, bins) / 255;
-        energy = avg(freqBuf.current, 0, bins) / 255;
+        bass = (avg(freqBuf.current, 0, s1) / 255) * bassMix * reactivity;
+        mid = (avg(freqBuf.current, s1, s2) / 255) * midMix * reactivity;
+        high = (avg(freqBuf.current, s2, bins) / 255) * highMix * reactivity;
+        energy = (avg(freqBuf.current, 0, bins) / 255) * reactivity;
       }
     }
 
+    const bassSmooth = Math.min(1, 0.35 * speed);
+    const energySmooth = Math.min(1, 0.2 * speed);
+    const breathSmooth = Math.min(1, 0.08 * speed);
+    const flowSmooth = Math.min(1, 0.12 * speed);
+
     const beat = Math.max(0, bass - prevBass.current - 0.04) * 4.5;
-    prevBass.current = lerp(prevBass.current, bass, 0.35);
-    prevEnergy.current = lerp(prevEnergy.current, energy, 0.2);
+    prevBass.current = lerp(prevBass.current, bass, bassSmooth);
+    prevEnergy.current = lerp(prevEnergy.current, energy, energySmooth);
 
     metricsRef.current = {
-      bass,
-      mid,
-      high,
-      energy,
+      bass: clamp01(bass),
+      mid: clamp01(mid),
+      high: clamp01(high),
+      energy: clamp01(energy),
       beat: Math.min(1, beat),
-      breath: lerp(metricsRef.current.breath, bass, 0.08),
-      flow: lerp(metricsRef.current.flow, energy, 0.12),
+      breath: lerp(metricsRef.current.breath, bass, breathSmooth),
+      flow: lerp(metricsRef.current.flow, energy, flowSmooth),
     };
   });
 
@@ -95,4 +113,8 @@ function avg(buf: Uint8Array, start: number, end: number): number {
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
 }

@@ -7,16 +7,26 @@ import type { PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useCameraZoomDistanceRef } from './cameraZoom';
 
+export type CameraMode = 'still' | 'drift' | 'orbit' | 'dive';
+
 interface SceneRigProps {
   palette: { bass: string; mid: string; high: string };
   tier: 'high' | 'mid' | 'low';
   embedded?: boolean;
+  bloomIntensity?: number;
+  cameraMode?: CameraMode;
 }
 
 /**
  * Shared lighting, bass-reactive camera shake, and bloom god-rays for all presets.
  */
-export function SceneRig({ palette, tier, embedded }: SceneRigProps) {
+export function SceneRig({
+  palette,
+  tier,
+  embedded,
+  bloomIntensity,
+  cameraMode = 'drift',
+}: SceneRigProps) {
   const metricsRef = useMetricsRef();
   const bassLight = useRef<PointLight>(null);
   const midLight = useRef<PointLight>(null);
@@ -41,13 +51,36 @@ export function SceneRig({ palette, tier, embedded }: SceneRigProps) {
     }
 
     const shake = m.beat * (embedded ? 0.06 : 0.1) + m.bass * 0.02;
-    state.camera.position.x = Math.sin(t * 18.7) * shake;
-    state.camera.position.y = Math.cos(t * 14.3) * shake * 0.7;
-    state.camera.position.z = baseZ + Math.sin(t * 11.1) * shake * 0.4;
+
+    switch (cameraMode) {
+      case 'still':
+        state.camera.position.set(0, 0, baseZ);
+        break;
+      case 'orbit': {
+        const radius = embedded ? 0.8 : 1.2;
+        state.camera.position.x = Math.sin(t * 0.35) * radius;
+        state.camera.position.y = Math.sin(t * 0.18) * 0.35;
+        state.camera.position.z = baseZ + Math.cos(t * 0.35) * radius * 0.5;
+        break;
+      }
+      case 'dive':
+        state.camera.position.x = Math.sin(t * 12.1) * shake * 0.5;
+        state.camera.position.y = Math.cos(t * 9.7) * shake * 0.35;
+        state.camera.position.z = baseZ - m.bass * 1.4 - m.beat * 0.6;
+        break;
+      case 'drift':
+      default:
+        state.camera.position.x = Math.sin(t * 18.7) * shake;
+        state.camera.position.y = Math.cos(t * 14.3) * shake * 0.7;
+        state.camera.position.z = baseZ + Math.sin(t * 11.1) * shake * 0.4;
+        break;
+    }
+
     state.camera.lookAt(0, 0, 0);
   });
 
-  const bloomIntensity = tier === 'low' ? 0.8 : 1.1;
+  const tierBloom = tier === 'low' ? 0.8 : 1.1;
+  const resolvedBloom = bloomIntensity ?? tierBloom;
 
   return (
     <>
@@ -67,7 +100,7 @@ export function SceneRig({ palette, tier, embedded }: SceneRigProps) {
       {tier !== 'low' ? (
         <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
           <Bloom
-            intensity={bloomIntensity}
+            intensity={resolvedBloom}
             luminanceThreshold={0.12}
             luminanceSmoothing={0.9}
             mipmapBlur

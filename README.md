@@ -96,4 +96,4 @@ We love contributors. See [`CONTRIBUTING.md`](./CONTRIBUTING.md). The 3D visuali
 
 ## Sustainability
 
-torus.fm is run as a passion project, not a startup. We accept donations via [GitHub Sponsors](#) and [Open Collective](#), and a tiny optional [Supporter tier](#) ($3/mo) gets you a custom subdomain. No ads, no data sales, no VC funding — see [`PRINCIPLES.md`](./PRINCIPLES.md).
+torus.fm is run as a passion project, not a startup. We accept donations via [GitHub Sponsors](#) and [Open Collective](#), and a tiny optional [Supporter tier](#) ($3/mo) gets you a custom subdomain. **[torus visualizer](apps/visualizer/)** — a sibling web app for 3D audio visuals and export — offers a $10 one-time unlock for higher export quality. No ads, no data sales, no VC funding — see [`PRINCIPLES.md`](./PRINCIPLES.md).
