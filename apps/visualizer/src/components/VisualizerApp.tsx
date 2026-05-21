@@ -16,6 +16,7 @@ import { ExportPanel } from '@/components/ExportPanel';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import { useExport } from '@/hooks/useExport';
+import { usePersistedState } from '@/hooks/usePersistedState';
 import { useToast } from '@/hooks/useToast';
 import { useUnlock } from '@/hooks/useUnlock';
 import { DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
@@ -23,11 +24,19 @@ import {
   FREE_MAX_FPS,
   FREE_MAX_RES,
   RESOLUTION_SIZES,
+  isFpsLocked,
+  isResolutionLocked,
   type ExportFps,
   type ExportResolution,
 } from '@/lib/export-config';
 import {
+  CONTROLS_KEY,
   DEFAULT_CONTROLS,
+  EXPORT_FPS_KEY,
+  EXPORT_RESOLUTION_KEY,
+  PALETTE_KEY,
+  PRESET_KEY,
+  SOURCE_KIND_KEY,
   loadSavedPresets,
   persistSavedPresets,
   type SavedPreset,
@@ -51,12 +60,21 @@ export function VisualizerApp() {
   const exportHook = useExport(unlock.unlocked);
   const { toast, prompt } = useToast();
 
-  const [preset, setPreset] = useState<VisualizerId>('torus_field');
-  const [palette, setPalette] = useState<WaveformPalette>(DEFAULT_PALETTE);
-  const [controls, setControls] = useState<VisualizerControls>(DEFAULT_CONTROLS);
-  const [resolution, setResolution] = useState<ExportResolution>(FREE_MAX_RES);
-  const [fps, setFps] = useState<ExportFps>(FREE_MAX_FPS);
-  const [sourceKind, setSourceKind] = useState<SourceKind | null>(null);
+  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'torus_field');
+  const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
+  const [controls, setControls] = usePersistedState<VisualizerControls>(
+    CONTROLS_KEY,
+    DEFAULT_CONTROLS,
+  );
+  const [resolution, setResolution] = usePersistedState<ExportResolution>(
+    EXPORT_RESOLUTION_KEY,
+    FREE_MAX_RES,
+  );
+  const [fps, setFps] = usePersistedState<ExportFps>(EXPORT_FPS_KEY, FREE_MAX_FPS);
+  const [sourceKind, setSourceKind] = usePersistedState<SourceKind | null>(
+    SOURCE_KIND_KEY,
+    null,
+  );
   const [fullscreen, setFullscreen] = useState(false);
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [presetsVersion, setPresetsVersion] = useState(0);
@@ -76,7 +94,13 @@ export function VisualizerApp() {
       reactivity: Math.min(c.reactivity, 0.4),
       bloomIntensity: Math.min(c.bloomIntensity, 0.7),
     }));
-  }, [reducedMotion]);
+  }, [reducedMotion, setControls]);
+
+  useEffect(() => {
+    if (unlock.checking || unlock.unlocked) return;
+    if (isResolutionLocked(resolution, false)) setResolution(FREE_MAX_RES);
+    if (isFpsLocked(fps, false)) setFps(FREE_MAX_FPS);
+  }, [unlock.checking, unlock.unlocked, resolution, fps, setResolution, setFps]);
 
   const handleSelectKind = useCallback(
     async (kind: SourceKind) => {

@@ -90,7 +90,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-#### - [ ] 2. Settings persistence (was #1)
+#### - [x] shipped 2. Settings persistence (was #1)
 
 **Why:** Today every slider, palette, preset, and source choice resets on page reload. Foundational UX fix and unblocks "settings page" later.
 
@@ -704,8 +704,5 @@ Every PR Composer opens should use this body structure:
 
 ## Done log
 
-(Composer appends here when items are shipped.)
-
-<!-- Example:
-- **2026-05-22** | Item 1 (Toast) | PR #5 | merged
--->
+- 2026-05-21 | Item 1 (Toast notifications) | commit dd2edbf
+- 2026-05-21 | Item 2 (Settings persistence) | commit TBD
