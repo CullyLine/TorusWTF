@@ -709,4 +709,4 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 3 (Snapshot PNG export) | commit e29e23a
 - 2026-05-21 | Item 4 (Audio scrubber) | commit 22bdca8
 - 2026-05-21 | Item 5 (Aspect ratio presets) | commit d51947e
-- 2026-05-21 | Item 6 (Demo audio file) | commit TBD
+- 2026-05-21 | Item 6 (Demo audio file) | commit 9bb8623
