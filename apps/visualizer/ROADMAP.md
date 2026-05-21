@@ -426,7 +426,7 @@ For every preset:
 
 ---
 
-#### - [ ] 13. New preset: Liquid Chrome (was #13)
+#### - [x] shipped 13. New preset: Liquid Chrome (was #13)
 
 **Why:** Premium aesthetic, instantly recognizable as "high production value".
 
@@ -719,3 +719,5 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 11 (Star Field) | commit a85161b
 
 - 2026-05-21 | Item 12 (Outrun Grid) | commit 3da53b6
+
+- 2026-05-21 | Item 13 (Liquid Chrome) | commit c66eaed

@@ -14,3 +14,4 @@
 - Add Cosmic Mandala visualizer preset
 - Add Star Field galaxy spiral preset
 - Add Outrun Grid synthwave shader preset
+- Add Liquid Chrome metallic blob preset

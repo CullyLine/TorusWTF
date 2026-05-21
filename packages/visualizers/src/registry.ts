@@ -7,6 +7,7 @@ import { VolumetricWaveformScene } from './presets/VolumetricWaveform';
 import { CosmicMandalaScene } from './presets/CosmicMandala';
 import { StarFieldScene } from './presets/StarField';
 import { OutrunGridScene } from './presets/OutrunGrid';
+import { LiquidChromeScene } from './presets/LiquidChrome';
 
 export type VisualizerId =
   | 'torus_field'
@@ -15,7 +16,8 @@ export type VisualizerId =
   | 'volumetric_waveform'
   | 'cosmic_mandala'
   | 'star_field'
-  | 'outrun_grid';
+  | 'outrun_grid'
+  | 'liquid_chrome';
 
 export interface VisualizerSceneProps {
   analyser: AnalyserHandle | null;
@@ -72,5 +74,11 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Outrun Grid',
     hint: 'Synthwave horizon grid with a pulsing sun — producer-nightdrive vibes.',
     Scene: OutrunGridScene,
+  },
+  liquid_chrome: {
+    id: 'liquid_chrome',
+    label: 'Liquid Chrome',
+    hint: 'Metallic blob morphing with bass and beats — high-gloss centerpiece.',
+    Scene: LiquidChromeScene,
   },
 };
