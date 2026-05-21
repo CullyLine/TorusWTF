@@ -23,6 +23,8 @@ export function useAudioSource() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [source, setSource] = useState<SourceState>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const mic = useMicCapture();
@@ -61,6 +63,8 @@ export function useAudioSource() {
     tab.stop();
     setSource(null);
     setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
     setError(null);
   }, [mic, tab, source]);
 
@@ -124,7 +128,46 @@ export function useAudioSource() {
   const restartFile = useCallback(async () => {
     if (source?.kind !== 'file' || !audioRef.current) return;
     audioRef.current.currentTime = 0;
+    setCurrentTime(0);
     await audioRef.current.play();
+  }, [source]);
+
+  const seek = useCallback(
+    (time: number) => {
+      if (source?.kind !== 'file' || !audioRef.current) return;
+      const max = Number.isFinite(audioRef.current.duration) ? audioRef.current.duration : 0;
+      const clamped = Math.max(0, Math.min(time, max));
+      audioRef.current.currentTime = clamped;
+      setCurrentTime(clamped);
+    },
+    [source],
+  );
+
+  useEffect(() => {
+    if (source?.kind !== 'file') {
+      setCurrentTime(0);
+      setDuration(0);
+      return;
+    }
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const syncDuration = () => {
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    };
+    const syncTime = () => setCurrentTime(audio.currentTime);
+
+    audio.addEventListener('loadedmetadata', syncDuration);
+    audio.addEventListener('durationchange', syncDuration);
+    audio.addEventListener('timeupdate', syncTime);
+    syncDuration();
+    syncTime();
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', syncDuration);
+      audio.removeEventListener('durationchange', syncDuration);
+      audio.removeEventListener('timeupdate', syncTime);
+    };
   }, [source]);
 
   const getAudioStreamForExport = useCallback((): MediaStream | null => {
@@ -165,6 +208,9 @@ export function useAudioSource() {
     pause,
     togglePlay,
     restartFile,
+    seek,
+    currentTime,
+    duration,
     getAudioStreamForExport,
   };
 }

@@ -11,6 +11,7 @@ import {
 import type { WaveformPalette } from '@torus/shared';
 import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { PresetPicker } from '@/components/PresetPicker';
+import { Scrubber } from '@/components/Scrubber';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ExportPanel } from '@/components/ExportPanel';
 import { UnlockBanner } from '@/components/UnlockBanner';
@@ -210,6 +211,17 @@ export function VisualizerApp() {
       if (e.key === 'r' || e.key === 'R') {
         handleRandomPreset();
       }
+      if (audio.source?.kind === 'file') {
+        const step = e.shiftKey ? 15 : 5;
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          audio.seek(Math.max(0, audio.currentTime - step));
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          audio.seek(Math.min(audio.duration, audio.currentTime + step));
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -318,10 +330,11 @@ export function VisualizerApp() {
 
         <section
           ref={viewportRef}
-          className={`relative overflow-hidden rounded-xl border border-torus-border bg-torus-bg ${
+          className={`relative flex flex-col overflow-hidden rounded-xl border border-torus-border bg-torus-bg ${
             fullscreen ? 'h-dvh' : 'min-h-[420px] lg:min-h-[560px]'
           }`}
         >
+          <div className="relative min-h-0 flex-1">
           {audio.source ? (
             <>
               <VisualizerCanvas
@@ -369,6 +382,14 @@ export function VisualizerApp() {
               </p>
             </div>
           )}
+          </div>
+          {audio.source?.kind === 'file' ? (
+            <Scrubber
+              currentTime={audio.currentTime}
+              duration={audio.duration}
+              onSeek={audio.seek}
+            />
+          ) : null}
         </section>
       </main>
 

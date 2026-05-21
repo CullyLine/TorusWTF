@@ -157,7 +157,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ### Quick wins — high user value, low risk
 
-#### - [ ] 4. Audio file scrubber + timeline (was #2)
+#### - [x] shipped 4. Audio file scrubber + timeline (was #2)
 
 **Why:** File mode has no transport. Producers want to scrub to the drop before exporting.
 
@@ -706,4 +706,5 @@ Every PR Composer opens should use this body structure:
 
 - 2026-05-21 | Item 1 (Toast notifications) | commit dd2edbf
 - 2026-05-21 | Item 2 (Settings persistence) | commit e03b82f
-- 2026-05-21 | Item 3 (Snapshot PNG export) | commit TBD
+- 2026-05-21 | Item 3 (Snapshot PNG export) | commit e29e23a
+- 2026-05-21 | Item 4 (Audio scrubber) | commit TBD
