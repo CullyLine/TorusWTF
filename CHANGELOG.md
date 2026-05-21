@@ -7,3 +7,4 @@
 - Add one-click Snapshot PNG export with timestamped filename
 - Add file audio scrubber with click, drag, and keyboard seek
 - Add export aspect ratio presets with letterboxed preview
+- Add demo audio file with try-demo link for empty state

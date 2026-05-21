@@ -122,8 +122,19 @@ export function VisualizerApp() {
       audio.loadFile(file);
       setHeroCollapsed(true);
     },
-    [audio],
+    [audio, setSourceKind],
   );
+
+  const handleTryDemo = useCallback(async () => {
+    try {
+      const res = await fetch('/demo.mp3');
+      if (!res.ok) throw new Error('fetch failed');
+      const blob = await res.blob();
+      handleFile(new File([blob], 'demo.mp3', { type: 'audio/mpeg' }));
+    } catch {
+      toast({ message: 'Could not load demo audio', variant: 'error' });
+    }
+  }, [handleFile, toast]);
 
   const handleRandomPreset = useCallback(() => {
     setPreset(pickRandomVisualizerPreset());
@@ -294,10 +305,12 @@ export function VisualizerApp() {
           <AudioSourcePicker
             activeKind={sourceKind}
             fileName={audio.source?.kind === 'file' ? audio.source.fileName : null}
+            hasSource={Boolean(audio.source)}
             error={audio.error}
             tabSupported={isChromium()}
             onSelectKind={handleSelectKind}
             onFile={handleFile}
+            onTryDemo={() => void handleTryDemo()}
           />
           <PresetPicker active={preset} onChange={setPreset} onRandom={handleRandomPreset} />
           <ControlPanel

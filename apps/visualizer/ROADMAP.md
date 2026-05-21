@@ -218,7 +218,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-#### - [ ] 6. Demo audio file (was #5)
+#### - [x] shipped 6. Demo audio file (was #5)
 
 **Why:** Visitors who don't have a track to hand should still get the wow moment. Lowers bounce on the landing page.
 
@@ -708,4 +708,5 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 2 (Settings persistence) | commit e03b82f
 - 2026-05-21 | Item 3 (Snapshot PNG export) | commit e29e23a
 - 2026-05-21 | Item 4 (Audio scrubber) | commit 22bdca8
-- 2026-05-21 | Item 5 (Aspect ratio presets) | commit TBD
+- 2026-05-21 | Item 5 (Aspect ratio presets) | commit d51947e
+- 2026-05-21 | Item 6 (Demo audio file) | commit TBD

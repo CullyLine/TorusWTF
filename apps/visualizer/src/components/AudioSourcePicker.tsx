@@ -6,10 +6,12 @@ import type { SourceKind } from '@/hooks/useAudioSource';
 interface AudioSourcePickerProps {
   activeKind: SourceKind | null;
   fileName: string | null;
+  hasSource: boolean;
   error: string | null;
   tabSupported: boolean;
   onSelectKind: (kind: SourceKind) => void;
   onFile: (file: File) => void;
+  onTryDemo: () => void;
 }
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac';
@@ -17,10 +19,12 @@ const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac';
 export function AudioSourcePicker({
   activeKind,
   fileName,
+  hasSource,
   error,
   tabSupported,
   onSelectKind,
   onFile,
+  onTryDemo,
 }: AudioSourcePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -81,6 +85,18 @@ export function AudioSourcePicker({
               if (file) onFile(file);
             }}
           />
+          {!hasSource ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTryDemo();
+              }}
+              className="mt-3 text-xs text-torus-mid hover:underline"
+            >
+              Try with demo audio
+            </button>
+          ) : null}
         </div>
       ) : activeKind === 'mic' ? (
         <p className="text-sm text-torus-fg-dim">Listening to your microphone.</p>

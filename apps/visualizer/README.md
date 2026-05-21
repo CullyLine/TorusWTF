@@ -62,6 +62,9 @@ Output: `apps/visualizer/.next`
 - **File** — drag-and-drop MP3/WAV/FLAC/OGG/Opus
 - **Mic** — microphone or line-in
 - **Tab** — Chrome/Edge tab audio via screen share (requires sharing a tab with audio)
+- **Demo** — click "Try with demo audio" on the landing state (uses `public/demo.mp3`)
+
+The bundled `public/demo.mp3` is a placeholder sine-tone sequence generated for development. Replace it with a curated royalty-free loop before launch.
 
 ## Export format
 
