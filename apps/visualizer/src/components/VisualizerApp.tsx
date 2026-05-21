@@ -25,15 +25,17 @@ import { downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
 import {
   FREE_MAX_FPS,
   FREE_MAX_RES,
-  RESOLUTION_SIZES,
+  dimensionsFor,
   isFpsLocked,
   isResolutionLocked,
+  type AspectRatio,
   type ExportFps,
   type ExportResolution,
 } from '@/lib/export-config';
 import {
   CONTROLS_KEY,
   DEFAULT_CONTROLS,
+  EXPORT_ASPECT_KEY,
   EXPORT_FPS_KEY,
   EXPORT_RESOLUTION_KEY,
   PALETTE_KEY,
@@ -73,6 +75,7 @@ export function VisualizerApp() {
     FREE_MAX_RES,
   );
   const [fps, setFps] = usePersistedState<ExportFps>(EXPORT_FPS_KEY, FREE_MAX_FPS);
+  const [aspect, setAspect] = usePersistedState<AspectRatio>(EXPORT_ASPECT_KEY, '16:9');
   const [sourceKind, setSourceKind] = usePersistedState<SourceKind | null>(
     SOURCE_KIND_KEY,
     null,
@@ -170,6 +173,7 @@ export function VisualizerApp() {
       glCanvas: canvas,
       audioStream: audio.getAudioStreamForExport(),
       resolution,
+      aspect,
       fps,
       onBeforeRecord: async () => {
         if (audio.source?.kind === 'file') {
@@ -178,7 +182,7 @@ export function VisualizerApp() {
       },
       onFileEnded: () => exportHook.stop(),
     });
-  }, [audio, exportHook, resolution, fps]);
+  }, [audio, exportHook, resolution, aspect, fps]);
 
   const handleSnapshot = useCallback(async () => {
     const canvas = glCanvasRef.current;
@@ -192,8 +196,10 @@ export function VisualizerApp() {
     }
   }, [audio.source, toast]);
 
-  const exportSize = RESOLUTION_SIZES[resolution];
+  const exportSize = dimensionsFor(resolution, aspect);
   const isRecording = exportHook.state === 'recording';
+  const previewAspect = `${exportSize.width} / ${exportSize.height}`;
+  const previewPortrait = aspect === '9:16' || aspect === '4:5';
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -308,8 +314,10 @@ export function VisualizerApp() {
           <ExportPanel
             unlocked={unlock.unlocked}
             resolution={resolution}
+            aspect={aspect}
             fps={fps}
             onResolutionChange={setResolution}
+            onAspectChange={setAspect}
             onFpsChange={setFps}
             recording={isRecording}
             rendering={exportHook.state === 'rendering'}
@@ -337,6 +345,11 @@ export function VisualizerApp() {
           <div className="relative min-h-0 flex-1">
           {audio.source ? (
             <>
+              <div className="flex h-full w-full items-center justify-center">
+                <div
+                  className={`relative ${previewPortrait ? 'h-full max-w-full' : 'w-full max-h-full'}`}
+                  style={{ aspectRatio: previewAspect }}
+                >
               <VisualizerCanvas
                 audioRef={audio.source.kind === 'file' ? audio.audioRef : undefined}
                 analyserOverride={audio.source.kind !== 'file' ? audio.analyser : undefined}
@@ -356,6 +369,8 @@ export function VisualizerApp() {
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
               />
+                </div>
+              </div>
               {audio.source.kind === 'file' ? (
                 <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-torus-border bg-torus-bg/80 px-3 py-1.5 text-xs backdrop-blur-sm">
                   <button type="button" onClick={audio.togglePlay} className="text-torus-mid">

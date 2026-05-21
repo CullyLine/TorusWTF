@@ -4,9 +4,10 @@ import { useCallback, useRef, useState } from 'react';
 import { createCompositor } from '@/lib/compose';
 import {
   bitrateFor,
+  dimensionsFor,
   fileExtensionForMime,
   pickRecorderMimeType,
-  RESOLUTION_SIZES,
+  type AspectRatio,
   type ExportFps,
   type ExportResolution,
 } from '@/lib/export-config';
@@ -60,13 +61,14 @@ export function useExport(unlocked: boolean) {
       glCanvas: HTMLCanvasElement;
       audioStream: MediaStream | null;
       resolution: ExportResolution;
+      aspect?: AspectRatio;
       fps: ExportFps;
       onBeforeRecord?: () => Promise<void>;
       onFileEnded?: () => void;
     }) => {
       if (state !== 'idle') return;
 
-      const { width, height } = RESOLUTION_SIZES[opts.resolution];
+      const { width, height } = dimensionsFor(opts.resolution, opts.aspect ?? '16:9');
       const watermark = !unlocked;
       const compositor = createCompositor(opts.glCanvas, width, height, watermark);
       compositorRef.current = compositor;

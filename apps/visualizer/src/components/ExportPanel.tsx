@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import {
+  ASPECT_OPTIONS,
   isFpsLocked,
   isResolutionLocked,
+  type AspectRatio,
   type ExportFps,
   type ExportResolution,
 } from '@/lib/export-config';
@@ -12,8 +14,10 @@ import { QualityWarning } from './QualityWarning';
 interface ExportPanelProps {
   unlocked: boolean;
   resolution: ExportResolution;
+  aspect: AspectRatio;
   fps: ExportFps;
   onResolutionChange: (res: ExportResolution) => void;
+  onAspectChange: (aspect: AspectRatio) => void;
   onFpsChange: (fps: ExportFps) => void;
   recording: boolean;
   rendering: boolean;
@@ -30,8 +34,10 @@ const FPS_OPTIONS: ExportFps[] = [30, 60, 120, 240];
 export function ExportPanel({
   unlocked,
   resolution,
+  aspect,
   fps,
   onResolutionChange,
+  onAspectChange,
   onFpsChange,
   recording,
   rendering,
@@ -85,6 +91,27 @@ export function ExportPanel({
             ))}
           </select>
         </label>
+      </div>
+
+      <div className="mb-3">
+        <p className="mb-2 text-xs text-torus-fg-dim">Aspect ratio</p>
+        <div className="grid grid-cols-4 gap-2">
+          {ASPECT_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => onAspectChange(opt.id)}
+              className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs transition-colors ${
+                aspect === opt.id
+                  ? 'border-torus-mid/50 bg-torus-mid/10 text-torus-mid'
+                  : 'border-torus-border text-torus-fg-dim hover:border-torus-mid/30'
+              }`}
+            >
+              <span className="text-base leading-none">{opt.icon}</span>
+              <span>{opt.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <QualityWarning resolution={resolution} fps={fps} />
