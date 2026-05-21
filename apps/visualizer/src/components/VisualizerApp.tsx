@@ -18,6 +18,7 @@ import { ExportPanel } from '@/components/ExportPanel';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import { useExport } from '@/hooks/useExport';
+import { useIdleHide } from '@/hooks/useIdleHide';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useToast } from '@/hooks/useToast';
 import { useUnlock } from '@/hooks/useUnlock';
@@ -212,6 +213,11 @@ export function VisualizerApp() {
   const isRecording = exportHook.state === 'recording';
   const previewAspect = `${exportSize.width} / ${exportSize.height}`;
   const previewPortrait = aspect === '9:16' || aspect === '4:5';
+  const { uiVisible: overlayVisible, reveal: revealOverlay } = useIdleHide({
+    forceVisible: isRecording,
+  });
+  const overlayFade = reducedMotion ? '' : 'transition-opacity duration-250';
+  const overlayHidden = overlayVisible ? 'opacity-100' : 'opacity-0 pointer-events-none';
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -355,6 +361,11 @@ export function VisualizerApp() {
           className={`relative flex flex-col overflow-hidden rounded-xl border border-torus-border bg-torus-bg ${
             fullscreen ? 'h-dvh' : 'min-h-[420px] lg:min-h-[560px]'
           }`}
+          onPointerMove={revealOverlay}
+          onPointerDown={revealOverlay}
+          onClick={revealOverlay}
+          onWheel={revealOverlay}
+          onKeyDown={revealOverlay}
         >
           <div className="relative min-h-0 flex-1">
           {audio.source ? (
@@ -386,7 +397,9 @@ export function VisualizerApp() {
                 </div>
               </div>
               {audio.source.kind === 'file' ? (
-                <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-torus-border bg-torus-bg/80 px-3 py-1.5 text-xs backdrop-blur-sm">
+                <div
+                  className={`absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-torus-border bg-torus-bg/80 px-3 py-1.5 text-xs backdrop-blur-sm ${overlayFade} ${overlayHidden}`}
+                >
                   <button type="button" onClick={audio.togglePlay} className="text-torus-mid">
                     {audio.isPlaying ? 'pause' : 'play'}
                   </button>
@@ -396,7 +409,9 @@ export function VisualizerApp() {
                 </div>
               ) : null}
               {isRecording ? (
-                <div className="absolute top-3 right-3 rounded-full bg-torus-bass/20 px-3 py-1 text-xs text-torus-bass border border-torus-bass/40">
+                <div
+                  className={`absolute top-3 right-3 rounded-full bg-torus-bass/20 px-3 py-1 text-xs text-torus-bass border border-torus-bass/40 ${overlayFade} ${overlayHidden}`}
+                >
                   REC {formatTime(exportHook.elapsedSec)}
                 </div>
               ) : null}

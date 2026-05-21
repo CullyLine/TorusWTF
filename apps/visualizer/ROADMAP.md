@@ -273,7 +273,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-#### - [ ] 8. Idle UI auto-hide in viewport (was #8)
+#### - [x] shipped 8. Idle UI auto-hide in viewport (was #8)
 
 **Why:** Producers using this as a listening companion want the visual front-and-center. Hide controls after a few seconds of inactivity.
 
@@ -711,3 +711,4 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 5 (Aspect ratio presets) | commit d51947e
 - 2026-05-21 | Item 6 (Demo audio file) | commit 9bb8623
 - 2026-05-21 | Item 7 (Better empty-state animation) | commit 0be10a1
+- 2026-05-21 | Item 8 (Idle UI auto-hide) | commit 23a6223
