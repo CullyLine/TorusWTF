@@ -5,13 +5,15 @@ import { ParticleStormScene } from './presets/ParticleStorm';
 import { SpectralTunnelScene } from './presets/SpectralTunnel';
 import { VolumetricWaveformScene } from './presets/VolumetricWaveform';
 import { CosmicMandalaScene } from './presets/CosmicMandala';
+import { StarFieldScene } from './presets/StarField';
 
 export type VisualizerId =
   | 'torus_field'
   | 'particle_storm'
   | 'spectral_tunnel'
   | 'volumetric_waveform'
-  | 'cosmic_mandala';
+  | 'cosmic_mandala'
+  | 'star_field';
 
 export interface VisualizerSceneProps {
   analyser: AnalyserHandle | null;
@@ -56,5 +58,11 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Cosmic Mandala',
     hint: 'Sacred-geometry rings in radial symmetry — brand-aligned calm power.',
     Scene: CosmicMandalaScene,
+  },
+  star_field: {
+    id: 'star_field',
+    label: 'Star Field',
+    hint: 'Galaxy spiral arms that tighten with the bass and twinkle on highs.',
+    Scene: StarFieldScene,
   },
 };

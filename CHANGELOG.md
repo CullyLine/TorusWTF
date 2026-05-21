@@ -12,3 +12,4 @@
 - Add idle auto-hide for viewport overlay controls during playback
 - Add keyboard shortcuts help modal (? key)
 - Add Cosmic Mandala visualizer preset
+- Add Star Field galaxy spiral preset

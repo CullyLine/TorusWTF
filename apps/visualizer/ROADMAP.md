@@ -371,7 +371,7 @@ For every preset:
 
 ---
 
-#### - [ ] 11. New preset: Star Field / Galaxy Spiral (was #11)
+#### - [x] shipped 11. New preset: Star Field / Galaxy Spiral (was #11)
 
 **Why:** Universal appeal, gentler than Particle Storm.
 
@@ -715,3 +715,5 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 9 (Keyboard shortcut help modal) | commit 2b4cc79
 
 - 2026-05-21 | Item 10 (Cosmic Mandala) | commit bf9198b
+
+- 2026-05-21 | Item 11 (Star Field) | commit a85161b
