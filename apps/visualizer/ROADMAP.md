@@ -59,7 +59,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ### Foundations — ship these first, later items depend on them
 
-#### - [ ] 1. Toast notifications (was #7)
+#### - [x] shipped 1. Toast notifications (was #7)
 
 **Why:** Multiple later items need to surface success/error to the user without `alert()` or `window.prompt()`. Build the primitive once.
 

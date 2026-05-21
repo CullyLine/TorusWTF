@@ -16,6 +16,7 @@ import { ExportPanel } from '@/components/ExportPanel';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import { useExport } from '@/hooks/useExport';
+import { useToast } from '@/hooks/useToast';
 import { useUnlock } from '@/hooks/useUnlock';
 import { DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
 import {
@@ -48,6 +49,7 @@ export function VisualizerApp() {
   const audio = useAudioSource();
   const unlock = useUnlock();
   const exportHook = useExport(unlock.unlocked);
+  const { toast, prompt } = useToast();
 
   const [preset, setPreset] = useState<VisualizerId>('torus_field');
   const [palette, setPalette] = useState<WaveformPalette>(DEFAULT_PALETTE);
@@ -112,9 +114,9 @@ export function VisualizerApp() {
     });
   }, []);
 
-  const handleSavePreset = useCallback(() => {
+  const handleSavePreset = useCallback(async () => {
     if (!unlock.unlocked) return;
-    const name = window.prompt('Preset name');
+    const name = await prompt({ message: 'Preset name', placeholder: 'My preset' });
     if (!name?.trim()) return;
     const saved = loadSavedPresets();
     const entry: SavedPreset = {
@@ -125,9 +127,14 @@ export function VisualizerApp() {
       palette,
       ...controls,
     };
-    persistSavedPresets([entry, ...saved]);
-    setPresetsVersion((v) => v + 1);
-  }, [unlock.unlocked, preset, palette, controls]);
+    try {
+      persistSavedPresets([entry, ...saved]);
+      setPresetsVersion((v) => v + 1);
+      toast({ message: `Saved "${name.trim()}"`, variant: 'success' });
+    } catch {
+      toast({ message: 'Could not save preset', variant: 'error' });
+    }
+  }, [unlock.unlocked, preset, palette, controls, prompt, toast]);
 
   const startExport = useCallback(async () => {
     const canvas = glCanvasRef.current;
