@@ -246,7 +246,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-#### - [ ] 7. Better empty-state animation (was #6)
+#### - [x] shipped 7. Better empty-state animation (was #6)
 
 **Why:** Current empty state is plain text. Spending 30 seconds on a beautiful animated torus ring drawing itself makes a strong first impression.
 
@@ -710,3 +710,4 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 4 (Audio scrubber) | commit 22bdca8
 - 2026-05-21 | Item 5 (Aspect ratio presets) | commit d51947e
 - 2026-05-21 | Item 6 (Demo audio file) | commit 9bb8623
+- 2026-05-21 | Item 7 (Better empty-state animation) | commit 0be10a1

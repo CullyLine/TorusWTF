@@ -8,3 +8,4 @@
 - Add file audio scrubber with click, drag, and keyboard seek
 - Add export aspect ratio presets with letterboxed preview
 - Add demo audio file with try-demo link for empty state
+- Add animated torus ring empty-state hero with demo button in viewport

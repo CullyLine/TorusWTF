@@ -10,6 +10,7 @@ import {
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import { AudioSourcePicker } from '@/components/AudioSourcePicker';
+import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
 import { ControlPanel } from '@/components/ControlPanel';
@@ -401,14 +402,10 @@ export function VisualizerApp() {
               ) : null}
             </>
           ) : (
-            <div className="flex h-full min-h-[420px] flex-col items-center justify-center px-6 text-center">
-              <p className="text-sm text-torus-fg-dim">
-                Drop a track, talk into your mic, or share a tab to see the visualizer.
-              </p>
-              <p className="mt-2 text-xs text-torus-fg-faint">
-                Shortcuts: Space play/pause · F fullscreen · R random preset
-              </p>
-            </div>
+            <EmptyStateHero
+              reducedMotion={reducedMotion}
+              onTryDemo={() => void handleTryDemo()}
+            />
           )}
           </div>
           {audio.source?.kind === 'file' ? (
