@@ -302,7 +302,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-#### - [ ] 9. Keyboard shortcut help modal (was #9)
+#### - [x] shipped 9. Keyboard shortcut help modal (was #9)
 
 **Why:** Shortcuts are mentioned once in the empty state. Producers want a `?` key reference.
 
@@ -712,3 +712,4 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 6 (Demo audio file) | commit 9bb8623
 - 2026-05-21 | Item 7 (Better empty-state animation) | commit 0be10a1
 - 2026-05-21 | Item 8 (Idle UI auto-hide) | commit 23a6223
+- 2026-05-21 | Item 9 (Keyboard shortcut help modal) | commit 2b4cc79

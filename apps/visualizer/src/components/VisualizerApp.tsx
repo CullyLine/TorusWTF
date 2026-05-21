@@ -13,6 +13,7 @@ import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
+import { ShortcutsModal } from '@/components/ShortcutsModal';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ExportPanel } from '@/components/ExportPanel';
 import { UnlockBanner } from '@/components/UnlockBanner';
@@ -85,6 +86,7 @@ export function VisualizerApp() {
   const [fullscreen, setFullscreen] = useState(false);
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [presetsVersion, setPresetsVersion] = useState(0);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -234,6 +236,9 @@ export function VisualizerApp() {
       }
       if (e.key === 'r' || e.key === 'R') {
         handleRandomPreset();
+      }
+      if (e.key === '?') {
+        setShortcutsOpen(true);
       }
       if (audio.source?.kind === 'file') {
         const step = e.shiftKey ? 15 : 5;
@@ -434,6 +439,12 @@ export function VisualizerApp() {
       </main>
 
       {!unlock.unlocked && !unlock.checking ? <UnlockBanner /> : null}
+
+      <ShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        hasFileSource={audio.source?.kind === 'file'}
+      />
     </div>
   );
 }
