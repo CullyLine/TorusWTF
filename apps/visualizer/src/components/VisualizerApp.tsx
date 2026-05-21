@@ -20,6 +20,7 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 import { useToast } from '@/hooks/useToast';
 import { useUnlock } from '@/hooks/useUnlock';
 import { DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
+import { downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
 import {
   FREE_MAX_FPS,
   FREE_MAX_RES,
@@ -178,6 +179,18 @@ export function VisualizerApp() {
     });
   }, [audio, exportHook, resolution, fps]);
 
+  const handleSnapshot = useCallback(async () => {
+    const canvas = glCanvasRef.current;
+    if (!canvas || !audio.source) return;
+    try {
+      const blob = await takeSnapshot(canvas);
+      downloadSnapshot(blob);
+      toast({ message: 'Snapshot saved', variant: 'success' });
+    } catch {
+      toast({ message: 'Could not capture snapshot', variant: 'error' });
+    }
+  }, [audio.source, toast]);
+
   const exportSize = RESOLUTION_SIZES[resolution];
   const isRecording = exportHook.state === 'recording';
 
@@ -292,6 +305,7 @@ export function VisualizerApp() {
             hasSource={Boolean(audio.source)}
             onStart={() => void startExport()}
             onStop={exportHook.stop}
+            onSnapshot={() => void handleSnapshot()}
           />
           {!unlock.unlocked ? (
             <p className="text-center text-xs text-torus-fg-faint">

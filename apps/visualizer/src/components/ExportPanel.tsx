@@ -21,6 +21,7 @@ interface ExportPanelProps {
   hasSource: boolean;
   onStart: () => void;
   onStop: () => void;
+  onSnapshot: () => void;
 }
 
 const RESOLUTIONS: ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
@@ -38,6 +39,7 @@ export function ExportPanel({
   hasSource,
   onStart,
   onStop,
+  onSnapshot,
 }: ExportPanelProps) {
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
@@ -102,7 +104,7 @@ export function ExportPanel({
         </p>
       ) : null}
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {!recording ? (
           <button
             type="button"
@@ -121,6 +123,14 @@ export function ExportPanel({
             Stop ({elapsedSec}s)
           </button>
         )}
+        <button
+          type="button"
+          disabled={!hasSource || recording || rendering}
+          onClick={onSnapshot}
+          className="rounded-full border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40 hover:text-torus-mid disabled:opacity-40"
+        >
+          Snapshot PNG
+        </button>
       </div>
     </section>
   );

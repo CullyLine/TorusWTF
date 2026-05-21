@@ -126,7 +126,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-#### - [ ] 3. Snapshot PNG export (was #3)
+#### - [x] shipped 3. Snapshot PNG export (was #3)
 
 **Why:** One-click poster image of the current frame. Free feature, drives organic sharing. Also the primitive that item 19 builds on for saved-preset thumbnails.
 
@@ -705,4 +705,5 @@ Every PR Composer opens should use this body structure:
 ## Done log
 
 - 2026-05-21 | Item 1 (Toast notifications) | commit dd2edbf
-- 2026-05-21 | Item 2 (Settings persistence) | commit TBD
+- 2026-05-21 | Item 2 (Settings persistence) | commit e03b82f
+- 2026-05-21 | Item 3 (Snapshot PNG export) | commit TBD
