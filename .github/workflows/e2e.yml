@@ -1,0 +1,82 @@
+name: e2e
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'infra/**'
+      - 'pnpm-lock.yaml'
+
+jobs:
+  upload-playback:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_DEFAULT_BUCKETS: torus-clips:public
+        ports: ['9000:9000']
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
+          --health-interval 10s
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pnpm install --frozen-lockfile
+
+      - name: Migrate DB
+        env:
+          DATABASE_URL: file:./data/torus.db
+        run: |
+          mkdir -p data
+          pnpm db:migrate
+
+      - name: Install Playwright browsers
+        run: pnpm dlx playwright@latest install --with-deps chromium
+
+      - name: Build packages
+        run: pnpm --filter @torus/web build
+
+      - name: Build worker
+        run: pnpm --filter @torus/worker build
+
+      - name: Run Playwright upload e2e
+        env:
+          NODE_ENV: test
+          PUBLIC_URL: http://localhost:3000
+          DATABASE_URL: file:./data/torus.db
+          REDIS_URL: redis://localhost:6379
+          STORAGE_DRIVER: minio
+          STORAGE_ENDPOINT: http://localhost:9000
+          STORAGE_BUCKET: torus-clips
+          STORAGE_ACCESS_KEY: minioadmin
+          STORAGE_SECRET_KEY: minioadmin
+          STORAGE_PUBLIC_URL: http://localhost:9000/torus-clips
+          SESSION_SECRET: ci-test-secret-please-rotate-this-in-prod
+          CI: 'true'
+        run: |
+          pnpm --filter @torus/worker start &
+          pnpm --filter @torus/web exec playwright test e2e/upload.spec.ts
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

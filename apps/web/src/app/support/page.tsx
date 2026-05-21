@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 import { SupporterPanel } from './SupporterPanel';
 import { getCurrentUserFromCookies } from '@/lib/auth';
 
@@ -11,9 +11,8 @@ export default async function SupportPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Logo size={28} className="text-torus-fg" />
-
-      <h1 className="mt-10 text-3xl font-semibold tracking-tight">support torus.fm</h1>
+      <SiteHeader logoSize={28} initialUser={user ? { handle: user.handle } : null} />
+      <h1 className="mt-12 text-3xl font-semibold tracking-tight">support torus.fm</h1>
       <p className="mt-3 max-w-prose text-sm text-torus-fg-dim">
         torus.fm is a passion project, not a startup. There are no ads, no data sales, no VC
         funding. The site survives on small donations and an optional Supporter tier. Whatever feels

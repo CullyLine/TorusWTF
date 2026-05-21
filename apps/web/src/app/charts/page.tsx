@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { desc, sql } from 'drizzle-orm';
 import { db, weeklyCharts } from '@/lib/db';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +15,8 @@ export default async function ChartsIndexPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Logo size={28} className="text-torus-fg" />
-      <h1 className="mt-10 text-2xl font-semibold tracking-tight">weekly chart history</h1>
+      <SiteHeader logoSize={28} />
+      <h1 className="mt-12 text-2xl font-semibold tracking-tight">weekly chart history</h1>
       <p className="mt-2 text-sm text-torus-fg-dim">Snapshots taken every Monday at 00:00 UTC.</p>
       <ul className="mt-8 flex flex-col divide-y divide-torus-border">
         {rows.length === 0 ? (

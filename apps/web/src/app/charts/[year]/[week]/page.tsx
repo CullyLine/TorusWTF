@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { and, asc, eq } from 'drizzle-orm';
 import { db, weeklyCharts, clips, users } from '@/lib/db';
 import { storage } from '@/lib/storage';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +35,8 @@ export default async function ChartPage({ params }: PageProps) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Logo size={28} href="/charts" className="text-torus-fg" />
-      <h1 className="mt-8 font-mono text-2xl font-semibold">{bucket}</h1>
+      <SiteHeader logoSize={28} />
+      <h1 className="mt-12 font-mono text-2xl font-semibold">{bucket}</h1>
       <p className="mt-1 text-sm text-torus-fg-dim">Top clips that week</p>
 
       <ol className="mt-8 flex flex-col divide-y divide-torus-border">

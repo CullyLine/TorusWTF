@@ -67,3 +67,44 @@ export async function sendMagicLinkEmail(opts: {
     `,
   });
 }
+
+export async function sendAnonymizeRescueEmail(opts: {
+  to: string;
+  links: { shareCode: string; url: string }[];
+}): Promise<void> {
+  const from = process.env.SMTP_FROM ?? 'torus.fm <noreply@torus.fm>';
+  const lines = opts.links.map(
+    (l) => `  ${l.shareCode} — ${l.url}`,
+  );
+  const textBody = [
+    'Your torus.fm account was deleted, but your clips are still online as Anonymous.',
+    '',
+    'Use these rescue links to manage or delete individual clips (open each link in the same browser):',
+    '',
+    ...lines,
+    '',
+    'These links store a claim token locally so you can edit or delete each clip without signing back in.',
+  ].join('\n');
+
+  const htmlLinks = opts.links
+    .map(
+      (l) =>
+        `<li style="margin: 8px 0;"><a href="${l.url}" style="color: #22d3ce;">${l.shareCode}</a></li>`,
+    )
+    .join('');
+
+  await getMailer().sendMail({
+    from,
+    to: opts.to,
+    subject: 'Your torus.fm clips — rescue links',
+    text: textBody,
+    html: `
+      <div style="font-family: -apple-system, system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; color: #0a0b1e;">
+        <h1 style="margin: 0 0 16px; font-size: 20px;">Your clips are still online</h1>
+        <p style="margin: 0 0 16px; color: #444;">Your account was deleted, but your uploads remain as Anonymous. Open each link to regain manage access for that clip:</p>
+        <ul style="padding-left: 20px;">${htmlLinks}</ul>
+        <p style="margin: 24px 0 0; color: #aaa; font-size: 12px;">Save these links if you might want to delete clips later.</p>
+      </div>
+    `,
+  });
+}

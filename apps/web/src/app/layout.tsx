@@ -14,6 +14,7 @@ export const metadata: Metadata = {
     siteName: 'torus.fm',
     title: 'torus.fm',
     description: 'Share the loop. Drop any audio, get an instant link.',
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'torus.fm' }],
   },
   twitter: {
     card: 'summary_large_image',

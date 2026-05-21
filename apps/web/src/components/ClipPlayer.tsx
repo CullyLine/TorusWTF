@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Waveform } from '@torus/ui';
 import type { PeaksJson, WaveformPalette } from '@torus/shared';
 import { pickRandomVisualizerPreset, type VisualizerId } from '@torus/visualizers';
@@ -14,6 +14,7 @@ const DEFAULT_PALETTE: WaveformPalette = {
 };
 
 interface ClipPlayerProps {
+  shareCode?: string;
   peaks?: PeaksJson;
   palette?: WaveformPalette;
   audioUrl?: string;
@@ -26,6 +27,7 @@ interface ClipPlayerProps {
 }
 
 export function ClipPlayer({
+  shareCode,
   peaks,
   palette,
   audioUrl,
@@ -37,6 +39,7 @@ export function ClipPlayer({
   onDeleteClip,
 }: ClipPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playedOnceRef = useRef(false);
   const [visualizerEnabled, setVisualizerEnabled] = useState(false);
   const [theater, setTheater] = useState(false);
   const [activePreset, setActivePreset] = useState<VisualizerId>('torus_field');
@@ -44,6 +47,23 @@ export function ClipPlayer({
 
   const colors = palette ?? DEFAULT_PALETTE;
   const canUse3D = !!audioUrl;
+
+  useEffect(() => {
+    if (!shareCode) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onPlay = () => {
+      if (playedOnceRef.current) return;
+      playedOnceRef.current = true;
+      void fetch(`/api/clips/${shareCode}/play`, { method: 'POST', credentials: 'same-origin' }).catch(
+        () => undefined,
+      );
+    };
+
+    audio.addEventListener('play', onPlay);
+    return () => audio.removeEventListener('play', onPlay);
+  }, [shareCode, audioUrl]);
 
   const handleVisualizerEnabledChange = useCallback(
     (enabled: boolean) => {

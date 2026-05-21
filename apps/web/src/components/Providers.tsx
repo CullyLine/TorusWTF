@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { ToastProvider, UploadDialogProvider } from '@torus/ui';
 import { useSessionUser } from '@/hooks/useSessionUser';
+import { useClaimOrphanClips } from '@/hooks/useClaimOrphanClips';
 
 function UploadAuthProvider({ children }: { children: ReactNode }) {
   const { user, refresh, discordAuth, openDiscordPopup } = useSessionUser(true);
@@ -30,10 +31,18 @@ function UploadAuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+function ClaimOnSignIn() {
+  useClaimOrphanClips();
+  return null;
+}
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
-      <UploadAuthProvider>{children}</UploadAuthProvider>
+      <UploadAuthProvider>
+        <ClaimOnSignIn />
+        {children}
+      </UploadAuthProvider>
     </ToastProvider>
   );
 }

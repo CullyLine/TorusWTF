@@ -27,6 +27,33 @@ export function clipManageHeaders(shareCode: string): HeadersInit {
   return { [CLAIM_TOKEN_HEADER]: claimToken };
 }
 
+export function addClaimToken(opts: { shareCode: string; token: string }): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const code = opts.shareCode.toUpperCase();
+    const items = JSON.parse(
+      localStorage.getItem(CLAIM_TOKENS_STORAGE_KEY) || '[]',
+    ) as StoredClaimToken[];
+    const filtered = items.filter((x) => x.shareCode.toUpperCase() !== code);
+    filtered.push({ token: opts.token, shareCode: code, at: Date.now() });
+    localStorage.setItem(CLAIM_TOKENS_STORAGE_KEY, JSON.stringify(filtered));
+  } catch {
+    // ignore
+  }
+}
+
+export function getAllStoredClaimTokens(): string[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const items = JSON.parse(
+      localStorage.getItem(CLAIM_TOKENS_STORAGE_KEY) || '[]',
+    ) as StoredClaimToken[];
+    return items.map((x) => x.token).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 export function removeClaimTokenForShareCode(shareCode: string): void {
   if (typeof localStorage === 'undefined') return;
   try {

@@ -1,16 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Logo, ShareCard } from '@torus/ui';
+import { ShareCard } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 import type { PeaksJson, WaveformPalette, ClipStatus } from '@torus/shared';
-import { AuthNav } from '@/components/AuthNav';
 import { ClipPlayer } from '@/components/ClipPlayer';
+import { VoteButton } from '@/components/VoteButton';
+import { CommentsSection } from '@/components/CommentsSection';
 import { EditClipDialog } from '@/components/EditClipDialog';
-import { UploadButton } from '@/components/UploadButton';
 import {
   clipManageHeaders,
+  addClaimToken,
   getClaimTokenForShareCode,
   removeClaimTokenForShareCode,
 } from '@/lib/claim-tokens';
@@ -30,10 +32,13 @@ interface SharePageClientProps {
   originalKey: string | null;
   creatorHandle: string | null;
   creatorLabel: string | null;
+  initialVoteCount: number;
+  initialHasVoted: boolean;
 }
 
 export function SharePageClient(props: SharePageClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [peaks, setPeaks] = useState<PeaksJson | null>(null);
   const [liveStatus, setLiveStatus] = useState<ClipStatus>(props.status);
   const [liveTitle, setLiveTitle] = useState(props.title);
@@ -44,6 +49,15 @@ export function SharePageClient(props: SharePageClientProps) {
   const [liveSpecUrl, setLiveSpecUrl] = useState(props.spectrogramUrl);
   const [canManage, setCanManage] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+
+  useEffect(() => {
+    const claim = searchParams.get('claim');
+    if (!claim) return;
+    addClaimToken({ shareCode: props.shareCode, token: claim });
+    const next = new URL(window.location.href);
+    next.searchParams.delete('claim');
+    router.replace(next.pathname + (next.search || ''));
+  }, [props.shareCode, router, searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,13 +172,7 @@ export function SharePageClient(props: SharePageClientProps) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-6 py-12" style={accentStyle}>
-      <header className="flex items-center justify-between">
-        <Logo size={36} wordmark className="text-torus-fg" />
-        <div className="flex items-center gap-2">
-          <UploadButton variant="pill" label="upload (U)" />
-          <AuthNav />
-        </div>
-      </header>
+      <SiteHeader logoSize={36} />
 
       <div className="mt-12 flex-1">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -187,6 +195,7 @@ export function SharePageClient(props: SharePageClientProps) {
             <FailedView error={props.statusError} />
           ) : (
             <ClipPlayer
+              shareCode={props.shareCode}
               peaks={peaks ?? undefined}
               palette={palette}
               audioUrl={liveAudioUrl ?? undefined}
@@ -215,6 +224,11 @@ export function SharePageClient(props: SharePageClientProps) {
                 download
               </a>
             ) : null}
+            <VoteButton
+              shareCode={props.shareCode}
+              initialCount={props.initialVoteCount}
+              initialHasVoted={props.initialHasVoted}
+            />
             <Link
               href={`/${props.shareCode}/report`}
               className="rounded-full px-3 py-1.5 text-torus-fg-faint hover:bg-torus-surface"
@@ -224,6 +238,8 @@ export function SharePageClient(props: SharePageClientProps) {
             <span aria-hidden className="ml-auto opacity-50" />
             <span className="font-mono opacity-60">{props.shareCode}</span>
           </div>
+
+          <CommentsSection shareCode={props.shareCode} />
         </div>
       </div>
 

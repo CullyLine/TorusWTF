@@ -1,9 +1,9 @@
 'use client';
 
 import { useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
-import * as THREE from 'three';
+import type { PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useCameraZoomDistanceRef } from './cameraZoom';
 
@@ -18,9 +18,9 @@ interface SceneRigProps {
  */
 export function SceneRig({ palette, tier, embedded }: SceneRigProps) {
   const metricsRef = useMetricsRef();
-  const bassLight = useRef<THREE.PointLight>(null);
-  const midLight = useRef<THREE.PointLight>(null);
-  const highLight = useRef<THREE.PointLight>(null);
+  const bassLight = useRef<PointLight>(null);
+  const midLight = useRef<PointLight>(null);
+  const highLight = useRef<PointLight>(null);
   const zoomDistanceRef = useCameraZoomDistanceRef();
   const fallbackZ = embedded ? 3.2 : 4;
 

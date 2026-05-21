@@ -1,7 +1,6 @@
-import Link from 'next/link';
 import { desc } from 'drizzle-orm';
 import { db, moderationLog } from '@/lib/db';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +13,8 @@ export default async function PublicModerationLogPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Logo size={28} className="text-torus-fg" />
-      <h1 className="mt-10 text-2xl font-semibold tracking-tight">moderation log</h1>
+      <SiteHeader logoSize={28} />
+      <h1 className="mt-12 text-2xl font-semibold tracking-tight">moderation log</h1>
       <p className="mt-2 text-sm text-torus-fg-dim">
         Public, append-only record of moderation actions. No silent enforcement.
       </p>

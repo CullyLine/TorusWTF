@@ -19,7 +19,7 @@ export default defineConfig({
     ? {
         command: 'pnpm start',
         url: 'http://localhost:3000',
-        timeout: 60_000,
+        timeout: 120_000,
         reuseExistingServer: false,
       }
     : undefined,

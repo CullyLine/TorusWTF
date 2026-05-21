@@ -51,6 +51,20 @@ export const users = sqliteTable(
   ],
 );
 
+/** Previous handles for a user — old /u/<handle> URLs redirect to the current profile. */
+export const handleHistory = sqliteTable(
+  'handle_history',
+  {
+    id: text('id').primaryKey(),
+    oldHandle: text('old_handle').notNull(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    changedAt: integer('changed_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [uniqueIndex('handle_history_lower_unique').on(sql`lower(${t.oldHandle})`)],
+);
+
 export const sessions = sqliteTable(
   'sessions',
   {
@@ -302,6 +316,7 @@ export const moderationLog = sqliteTable(
 
 // ---------- Type exports ----------
 
+export type HandleHistory = typeof handleHistory.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;

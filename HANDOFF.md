@@ -246,4 +246,4 @@ Stop and ask the user first. Things that count as scope changes:
 
 ---
 
-*Last reviewed: 2026-05-17 by the agent who shipped the v0.1 monorepo. Update this date and a short note when you finish meaningful work.*
+*Last reviewed: 2026-05-19 — shipped settings/account deletion, comments/votes UI, claim-on-signin, play count, SiteHeader, CI/e2e, and search.*

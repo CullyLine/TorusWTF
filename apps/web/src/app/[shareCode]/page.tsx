@@ -1,7 +1,10 @@
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { isoWeekBucket } from '@torus/shared';
 import type { Metadata } from 'next';
-import { db, clips, users } from '@/lib/db';
+import { db, clips, users, votes } from '@/lib/db';
+import { getCurrentUserFromCookies } from '@/lib/auth';
 import { storage } from '@/lib/storage';
 import { isValidShareCode, normalizeShareCode } from '@torus/shared';
 import { SharePageClient } from './SharePageClient';
@@ -84,7 +87,28 @@ export default async function SharePage({ params }: PageProps) {
     ? null
     : (clip.creatorDisplayName?.trim() || 'Anonymous');
 
+  const weekBucket = isoWeekBucket();
+  const voteRows = await db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(votes)
+    .where(and(eq(votes.clipId, clip.id), eq(votes.weekBucket, weekBucket)));
+  const initialVoteCount = voteRows[0]?.count ?? 0;
+
+  const viewer = await getCurrentUserFromCookies();
+  let initialHasVoted = false;
+  if (viewer) {
+    const [mine] = await db
+      .select({ clipId: votes.clipId })
+      .from(votes)
+      .where(
+        and(eq(votes.clipId, clip.id), eq(votes.userId, viewer.id), eq(votes.weekBucket, weekBucket)),
+      )
+      .limit(1);
+    initialHasVoted = Boolean(mine);
+  }
+
   return (
+    <Suspense fallback={<div className="min-h-dvh bg-torus-bg" />}>
     <SharePageClient
       shareCode={clip.shareCode}
       shareUrl={shareUrl}
@@ -100,7 +124,10 @@ export default async function SharePage({ params }: PageProps) {
       originalKey={clip.originalKey}
       creatorHandle={ownerHandle}
       creatorLabel={creatorLabel}
+      initialVoteCount={initialVoteCount}
+      initialHasVoted={initialHasVoted}
     />
+    </Suspense>
   );
 }
 

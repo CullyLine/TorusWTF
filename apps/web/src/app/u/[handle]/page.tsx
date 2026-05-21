@@ -1,10 +1,10 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { db, clips, users, follows } from '@/lib/db';
+import { db, clips, users, follows, handleHistory } from '@/lib/db';
 import { storage } from '@/lib/storage';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 import { ProfileFollowButton } from './ProfileFollowButton';
 import { getCurrentUserFromCookies } from '@/lib/auth';
 
@@ -21,7 +21,17 @@ async function loadProfile(rawHandle: string) {
     .from(users)
     .where(eq(sql`lower(${users.handle})`, handle))
     .limit(1);
-  if (!user || user.isBanned) return null;
+  if (!user || user.isBanned) {
+    const [hist] = await db
+      .select({ userId: handleHistory.userId })
+      .from(handleHistory)
+      .where(eq(sql`lower(${handleHistory.oldHandle})`, handle))
+      .limit(1);
+    if (!hist?.userId) return null;
+    const [current] = await db.select().from(users).where(eq(users.id, hist.userId)).limit(1);
+    if (!current || current.isBanned) return null;
+    redirect(`/u/${current.handle}`);
+  }
 
   const userClips = await db
     .select({
@@ -75,9 +85,10 @@ export default async function ProfilePage({ params }: PageProps) {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-3xl flex-col px-6 py-12">
-      <header className="flex items-center justify-between">
-        <Logo size={28} className="text-torus-fg" />
-      </header>
+      <SiteHeader
+        logoSize={28}
+        initialUser={viewer ? { handle: viewer.handle } : null}
+      />
 
       <section className="mt-12 flex items-start gap-6">
         <div
@@ -107,14 +118,22 @@ export default async function ProfilePage({ params }: PageProps) {
           </div>
         </div>
         {viewer && viewer.id === profile.user.id ? (
-          <form action="/api/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="rounded-full border border-torus-border-strong px-4 py-2 text-xs font-medium text-torus-fg-dim transition hover:bg-torus-surface"
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              href="/settings"
+              className="rounded-full border border-torus-border-strong px-4 py-2 text-center text-xs font-medium text-torus-fg-dim transition hover:bg-torus-surface"
             >
-              log out
-            </button>
-          </form>
+              settings
+            </Link>
+            <form action="/api/auth/logout" method="POST">
+              <button
+                type="submit"
+                className="w-full rounded-full border border-torus-border-strong px-4 py-2 text-xs font-medium text-torus-fg-dim transition hover:bg-torus-surface"
+              >
+                log out
+              </button>
+            </form>
+          </div>
         ) : viewer ? (
           <ProfileFollowButton handle={profile.user.handle} initialFollowing={alreadyFollowing} />
         ) : null}

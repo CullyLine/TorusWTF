@@ -1,26 +1,15 @@
 import Link from 'next/link';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
-import { Logo } from '@torus/ui';
 import { isoWeekBucket } from '@torus/shared';
 import { db, clips, users, votes } from '@/lib/db';
-import { storage } from '@/lib/storage';
 import { getCurrentUserFromCookies } from '@/lib/auth';
-import { AuthNav } from '@/components/AuthNav';
+import { SiteHeader } from '@/components/SiteHeader';
+import { ClipRow, RecentTile, type ClipListEntry } from '@/components/ClipRow';
 import { UploadButton } from '@/components/UploadButton';
 
 export const dynamic = 'force-dynamic';
 
-interface LeaderboardEntry {
-  clipId: string;
-  shareCode: string;
-  title: string | null;
-  ogImageKey: string | null;
-  durationMs: number | null;
-  voteCount: number;
-  ownerHandle: string | null;
-}
-
-async function loadWeeklyLeaderboard(limit = 20): Promise<LeaderboardEntry[]> {
+async function loadWeeklyLeaderboard(limit = 20): Promise<ClipListEntry[]> {
   const weekBucket = isoWeekBucket();
   const rows = await db
     .select({
@@ -49,7 +38,7 @@ async function loadWeeklyLeaderboard(limit = 20): Promise<LeaderboardEntry[]> {
   return rows;
 }
 
-async function loadRecentClips(limit = 12): Promise<LeaderboardEntry[]> {
+async function loadRecentClips(limit = 12): Promise<ClipListEntry[]> {
   const rows = await db
     .select({
       clipId: clips.id,
@@ -78,13 +67,7 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-4xl flex-col px-6 py-12">
-      <header className="flex items-center justify-between">
-        <Logo size={32} wordmark className="text-torus-fg" />
-        <div className="flex items-center gap-2">
-          <UploadButton variant="pill" label="upload (U)" />
-          <AuthNav initialUser={sessionUser ? { handle: sessionUser.handle } : null} />
-        </div>
-      </header>
+      <SiteHeader initialUser={sessionUser ? { handle: sessionUser.handle } : null} />
 
       <section className="mt-20 flex flex-col items-center text-center">
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">share the loop</h1>
@@ -108,7 +91,7 @@ export default async function HomePage() {
         ) : (
           <ol className="flex flex-col divide-y divide-torus-border">
             {leaderboard.map((entry, i) => (
-              <ChartRow key={entry.clipId} rank={i + 1} entry={entry} />
+              <ClipRow key={entry.clipId} rank={i + 1} entry={entry} showVotes />
             ))}
           </ol>
         )}
@@ -142,6 +125,14 @@ export default async function HomePage() {
           charts
         </Link>
         ·
+        <Link href="/privacy" className="mx-2 hover:text-torus-fg">
+          privacy
+        </Link>
+        ·
+        <Link href="/terms" className="mx-2 hover:text-torus-fg">
+          terms
+        </Link>
+        ·
         <a
           href="https://github.com"
           className="mx-2 hover:text-torus-fg"
@@ -153,77 +144,4 @@ export default async function HomePage() {
       </footer>
     </main>
   );
-}
-
-function ChartRow({ rank, entry }: { rank: number; entry: LeaderboardEntry }) {
-  return (
-    <li>
-      <Link
-        href={`/${entry.shareCode}`}
-        className="flex items-center gap-4 rounded-lg p-3 hover:bg-torus-surface"
-      >
-        <span className="w-8 text-center font-mono text-sm text-torus-fg-faint">{rank}</span>
-        <div
-          className="h-12 w-20 flex-shrink-0 rounded bg-torus-surface"
-          style={{
-            backgroundImage: entry.ogImageKey
-              ? `url(${storage.publicUrl(entry.ogImageKey)})`
-              : undefined,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-          aria-hidden
-        />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">
-            {entry.title ?? <span className="opacity-50">untitled</span>}
-          </div>
-          <div className="mt-1 font-mono text-xs text-torus-fg-faint">
-            {entry.ownerHandle ? `@${entry.ownerHandle}` : 'anonymous'}
-            {entry.durationMs ? ` · ${formatDuration(entry.durationMs)}` : ''}
-          </div>
-        </div>
-        <span className="font-mono text-sm text-torus-fg-dim">
-          {entry.voteCount} {entry.voteCount === 1 ? 'vote' : 'votes'}
-        </span>
-      </Link>
-    </li>
-  );
-}
-
-function RecentTile({ entry }: { entry: LeaderboardEntry }) {
-  return (
-    <li>
-      <Link
-        href={`/${entry.shareCode}`}
-        className="block overflow-hidden rounded-lg border border-torus-border hover:border-torus-border-strong"
-      >
-        <div
-          className="aspect-[2/1] w-full bg-torus-surface"
-          style={{
-            backgroundImage: entry.ogImageKey
-              ? `url(${storage.publicUrl(entry.ogImageKey)})`
-              : undefined,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-          aria-hidden
-        />
-        <div className="px-3 py-2">
-          <div className="truncate text-xs font-medium">
-            {entry.title ?? <span className="opacity-50">untitled</span>}
-          </div>
-          <div className="mt-0.5 font-mono text-[10px] text-torus-fg-faint">
-            torus.fm/{entry.shareCode}
-          </div>
-        </div>
-      </Link>
-    </li>
-  );
-}
-
-function formatDuration(ms: number): string {
-  const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  return `${m}:${String(s).padStart(2, '0')}`;
 }

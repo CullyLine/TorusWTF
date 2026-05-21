@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export const metadata = {
   title: 'principles',
@@ -9,9 +9,8 @@ export const metadata = {
 export default function PrinciplesPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Logo size={32} className="text-torus-fg" />
-
-      <h1 className="mt-10 text-3xl font-semibold tracking-tight">principles</h1>
+      <SiteHeader />
+      <h1 className="mt-12 text-3xl font-semibold tracking-tight">principles</h1>
       <p className="mt-3 text-sm text-torus-fg-dim">
         A hard contract with users. Every proposed feature must justify itself against this list.
         The canonical version lives in{' '}

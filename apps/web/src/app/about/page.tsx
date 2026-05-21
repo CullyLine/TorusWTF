@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export const metadata = {
   title: 'about',
@@ -9,9 +9,8 @@ export const metadata = {
 export default function AboutPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
-      <Logo size={32} className="text-torus-fg" />
-
-      <h1 className="mt-10 text-3xl font-semibold tracking-tight">about torus.fm</h1>
+      <SiteHeader />
+      <h1 className="mt-12 text-3xl font-semibold tracking-tight">about torus.fm</h1>
 
       <section className="mt-8 space-y-5 text-sm leading-relaxed text-torus-fg-dim">
         <p>

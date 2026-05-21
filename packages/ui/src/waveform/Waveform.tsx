@@ -485,7 +485,6 @@ export const Waveform = forwardRef<HTMLAudioElement, WaveformProps>(function Wav
       aria-controls={id}
     >
       {showSpectrogram && spectrogramUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={spectrogramUrl}
           alt=""
@@ -628,7 +627,6 @@ export const Waveform = forwardRef<HTMLAudioElement, WaveformProps>(function Wav
       </div>
 
       {audioUrl ? (
-        // eslint-disable-next-line jsx-a11y/media-has-caption
         <audio
           ref={audioRef}
           src={audioUrl}
@@ -712,14 +710,3 @@ const playBtnStyle: CSSProperties = {
   justifyContent: 'center',
 };
 
-const pillBtnStyle: CSSProperties = {
-  padding: '6px 12px',
-  background: 'transparent',
-  color: 'var(--color-torus-fg)',
-  border: '1px solid rgba(255,255,255,0.18)',
-  borderRadius: 999,
-  fontSize: 11,
-  cursor: 'pointer',
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-};

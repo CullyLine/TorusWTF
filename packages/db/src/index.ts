@@ -1,6 +1,7 @@
 export * as schema from './schema';
 export {
   users,
+  handleHistory,
   sessions,
   magicLinks,
   clips,
@@ -13,6 +14,7 @@ export {
   moderationLog,
 } from './schema';
 export type {
+  HandleHistory,
   User,
   NewUser,
   Session,

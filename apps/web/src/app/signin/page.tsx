@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Logo } from '@torus/ui';
+import { SiteHeader } from '@/components/SiteHeader';
 import { SignInForm } from './SignInForm';
 
 interface PageProps {
@@ -13,9 +13,10 @@ export default async function SignInPage({ searchParams }: PageProps) {
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center px-6 py-16">
-      <Logo size={56} wordmark className="text-torus-fg" />
-      <h1 className="mt-10 text-2xl font-semibold tracking-tight">sign in</h1>
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-6 py-12">
+      <SiteHeader logoSize={40} />
+      <div className="mt-16 flex flex-1 flex-col items-center justify-center">
+      <h1 className="text-2xl font-semibold tracking-tight">sign in</h1>
       <p className="mt-3 text-center text-sm text-torus-fg-dim">
         Optional — uploads work without an account. On localhost, magic links are caught by{' '}
         <a href="http://localhost:8025" className="text-torus-mid underline">
@@ -50,6 +51,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
         </Link>
         .
       </p>
+      </div>
     </main>
   );
 }

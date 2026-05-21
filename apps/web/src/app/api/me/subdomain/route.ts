@@ -14,25 +14,7 @@ const Body = z.object({
     .nullable(),
 });
 
-const RESERVED = new Set([
-  'www',
-  'admin',
-  'api',
-  'media',
-  'static',
-  'mail',
-  'help',
-  'support',
-  'about',
-  'signin',
-  'signup',
-  'login',
-  'auth',
-  'charts',
-  'moderation',
-  'embed',
-  'u',
-]);
+import { isReservedHandle } from '@/lib/reserved-handles';
 
 export async function POST(req: Request) {
   const user = await getCurrentUser(req);
@@ -49,7 +31,7 @@ export async function POST(req: Request) {
     );
   }
   const sub = body.data.subdomain?.toLowerCase().trim() ?? null;
-  if (sub && RESERVED.has(sub)) {
+  if (sub && isReservedHandle(sub)) {
     return NextResponse.json({ error: 'That subdomain is reserved.' }, { status: 409 });
   }
 
