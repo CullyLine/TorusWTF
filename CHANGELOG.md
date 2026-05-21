@@ -11,3 +11,4 @@
 - Add animated torus ring empty-state hero with demo button in viewport
 - Add idle auto-hide for viewport overlay controls during playback
 - Add keyboard shortcuts help modal (? key)
+- Add Cosmic Mandala visualizer preset

@@ -343,7 +343,7 @@ For every preset:
 - Add to `VisualizerId` union + `VISUALIZERS` registry.
 - Smoke-test in the visualizer app: drop a track, switch to the new preset, verify it reacts.
 
-#### - [ ] 10. New preset: Cosmic Mandala (was #10)
+#### - [x] shipped 10. New preset: Cosmic Mandala (was #10)
 
 **Why:** Brand-aligned sacred geometry, complements Torus Field as a signature preset.
 
@@ -713,3 +713,5 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 7 (Better empty-state animation) | commit 0be10a1
 - 2026-05-21 | Item 8 (Idle UI auto-hide) | commit 23a6223
 - 2026-05-21 | Item 9 (Keyboard shortcut help modal) | commit 2b4cc79
+
+- 2026-05-21 | Item 10 (Cosmic Mandala) | commit bf9198b

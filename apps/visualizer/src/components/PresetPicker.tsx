@@ -15,6 +15,10 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   particle_storm: '#22D3CE',
   spectral_tunnel: '#F7E08C',
   volumetric_waveform: '#A78BFA',
+  cosmic_mandala: '#E879F9',
+  star_field: '#60A5FA',
+  outrun_grid: '#FB7185',
+  liquid_chrome: '#C4B5FD',
 };
 
 export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) {
@@ -57,3 +61,4 @@ export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) 
     </section>
   );
 }
+
