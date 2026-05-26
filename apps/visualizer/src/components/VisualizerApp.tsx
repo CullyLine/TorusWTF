@@ -98,6 +98,11 @@ export function VisualizerApp() {
     false,
   );
   const [desktopGuideOpen, setDesktopGuideOpen] = useState(false);
+  const [desktopSupported, setDesktopSupported] = useState(false);
+
+  useEffect(() => {
+    setDesktopSupported(isChromium());
+  }, []);
 
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -348,7 +353,7 @@ export function VisualizerApp() {
             fileName={audio.source?.kind === 'file' ? audio.source.fileName : null}
             hasSource={Boolean(audio.source)}
             error={audio.error}
-            desktopSupported={isChromium()}
+            desktopSupported={desktopSupported}
             onSelectKind={handleSelectKind}
             onDesktopSelect={handleDesktopSelect}
             onShowDesktopGuide={() => setDesktopGuideOpen(true)}
