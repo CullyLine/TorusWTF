@@ -680,7 +680,7 @@ For every preset:
 
 ---
 
-#### - [ ] 21. Mandelbrot Zoom preset
+#### - [x] shipped 21. Mandelbrot Zoom preset
 
 **Why:** Infinite fractal zoom visualizer with music-reactive colors and intensity-driven dive speed.
 
@@ -786,4 +786,5 @@ Every PR Composer opens should use this body structure:
 
 - 2026-05-21 | Item 13 (Liquid Chrome) | commit c66eaed
 - 2026-05-21 | Item 18 (BPM detection) | commit 11bb485
-- 2026-05-26 | Item 20 (Desktop audio source) | pending
+- 2026-05-26 | Item 20 (Desktop audio source) | commit 85b4068, PR #1
+- 2026-05-26 | Item 21 (Mandelbrot Zoom) | commit 5ae5b2d, PR #2
