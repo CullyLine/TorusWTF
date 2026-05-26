@@ -647,6 +647,47 @@ For every preset:
 
 ---
 
+#### - [ ] 20. Desktop audio source
+
+**Why:** Producers want to visualize Spotify, Ableton, Splice, or any desktop app in real time without uploading files.
+
+**Tier:** Free.
+**Scope:** ~200 LOC.
+**Dependencies:** None.
+
+---
+
+#### - [x] shipped 21. Mandelbrot Zoom preset
+
+**Why:** Infinite fractal zoom visualizer with music-reactive colors and intensity-driven dive speed.
+
+**Tier:** Free.
+**Scope:** ~250 LOC.
+**Dependencies:** None.
+
+**Files:**
+
+- Add `packages/visualizers/src/presets/MandelbrotZoom.tsx`
+- Modify `packages/visualizers/src/registry.ts`
+- Modify `apps/visualizer/src/components/PresetPicker.tsx`
+
+**Implementation notes:**
+
+- Full-screen GLSL Mandelbrot shader with looped zoom into Seahorse Valley.
+- Colors cycle via palette + hue shift driven by mid/high bands.
+- Zoom rate scales with energy + beat metrics.
+- Tiered iteration counts: high 192, mid 128, low 72.
+
+**Acceptance criteria:**
+
+- Preset appears in picker with mint dot and hint text.
+- Zoom accelerates on loud passages, slows on quiet ones.
+- Colors shift continuously with the music.
+- Reset crossfade masks float precision wall at ~1e6 zoom.
+- Existing presets unaffected.
+
+---
+
 ## PR body template
 
 Every PR Composer opens should use this body structure:
@@ -722,3 +763,4 @@ Every PR Composer opens should use this body structure:
 
 - 2026-05-21 | Item 13 (Liquid Chrome) | commit c66eaed
 - 2026-05-21 | Item 18 (BPM detection) | commit 11bb485
+- 2026-05-26 | Item 21 (Mandelbrot Zoom) | commit 5ae5b2d, PR #2

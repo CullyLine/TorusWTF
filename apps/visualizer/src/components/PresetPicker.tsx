@@ -19,6 +19,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   star_field: '#60A5FA',
   outrun_grid: '#FB7185',
   liquid_chrome: '#C4B5FD',
+  mandelbrot_zoom: '#34D399',
 };
 
 export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) {

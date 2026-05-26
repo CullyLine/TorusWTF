@@ -16,3 +16,4 @@
 - Add Outrun Grid synthwave shader preset
 - Add Liquid Chrome metallic blob preset
 - Add BPM detection pill with persisted sidebar toggle
+- Add Mandelbrot Zoom fractal preset with music-reactive colors and intensity-driven dive speed
