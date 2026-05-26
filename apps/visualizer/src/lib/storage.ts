@@ -12,6 +12,7 @@ export const EXPORT_FPS_KEY = 'torus-visualizer-export-fps';
 export const EXPORT_ASPECT_KEY = 'torus-visualizer-export-aspect';
 export const SOURCE_KIND_KEY = 'torus-visualizer-source-kind';
 export const SHOW_BPM_KEY = 'torus-visualizer-show-bpm';
+export const DESKTOP_GUIDE_SEEN_KEY = 'torus-visualizer-desktop-guide-seen';
 
 export interface SavedPreset {
   id: string;

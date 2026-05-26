@@ -647,6 +647,70 @@ For every preset:
 
 ---
 
+#### - [x] shipped 20. Desktop audio source
+
+**Why:** Producers want to visualize Spotify, Ableton, Splice, or any desktop app in real time without uploading files. The existing Tab capture already supports this via Entire Screen + Share system audio on Windows/Linux Chrome — users just don't know.
+
+**Tier:** Free.
+**Scope:** ~200 LOC.
+**Dependencies:** None.
+
+**Files:**
+
+- Add `apps/visualizer/src/lib/platform.ts`
+- Add `apps/visualizer/src/components/DesktopAudioGuide.tsx`
+- Modify `apps/visualizer/src/components/AudioSourcePicker.tsx`
+- Modify `apps/visualizer/src/hooks/useTabCapture.ts`
+- Modify `apps/visualizer/src/lib/storage.ts`
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`
+
+**Implementation notes:**
+
+- Relabel Tab button to Desktop; underlying `SourceKind` stays `'tab'`.
+- First-run modal with OS-specific instructions (Windows/Linux vs macOS BlackHole).
+- "Don't show this again" persisted via `DESKTOP_GUIDE_SEEN_KEY`.
+- "How does this work?" link re-opens the guide.
+
+**Acceptance criteria:**
+
+- Windows + Chrome: Desktop → guide → share dialog → Entire Screen + system audio → visualizer reacts.
+- Dismissed guide with checkbox → subsequent clicks skip modal.
+- macOS user sees BlackHole instructions.
+- Persisted `'tab'` source kind still restores on reload.
+
+---
+
+#### - [ ] 21. Mandelbrot Zoom preset
+
+**Why:** Infinite fractal zoom visualizer with music-reactive colors and intensity-driven dive speed.
+
+**Tier:** Free.
+**Scope:** ~250 LOC.
+**Dependencies:** None.
+
+**Files:**
+
+- Add `packages/visualizers/src/presets/MandelbrotZoom.tsx`
+- Modify `packages/visualizers/src/registry.ts`
+- Modify `apps/visualizer/src/components/PresetPicker.tsx`
+
+**Implementation notes:**
+
+- Full-screen GLSL Mandelbrot shader with looped zoom into Seahorse Valley.
+- Colors cycle via palette + hue shift driven by mid/high bands.
+- Zoom rate scales with energy + beat metrics.
+- Tiered iteration counts: high 192, mid 128, low 72.
+
+**Acceptance criteria:**
+
+- Preset appears in picker with mint dot and hint text.
+- Zoom accelerates on loud passages, slows on quiet ones.
+- Colors shift continuously with the music.
+- Reset crossfade masks float precision wall at ~1e6 zoom.
+- Existing presets unaffected.
+
+---
+
 ## PR body template
 
 Every PR Composer opens should use this body structure:
@@ -722,3 +786,4 @@ Every PR Composer opens should use this body structure:
 
 - 2026-05-21 | Item 13 (Liquid Chrome) | commit c66eaed
 - 2026-05-21 | Item 18 (BPM detection) | commit 11bb485
+- 2026-05-26 | Item 20 (Desktop audio source) | pending

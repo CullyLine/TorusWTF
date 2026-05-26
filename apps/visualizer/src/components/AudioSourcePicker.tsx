@@ -8,21 +8,31 @@ interface AudioSourcePickerProps {
   fileName: string | null;
   hasSource: boolean;
   error: string | null;
-  tabSupported: boolean;
+  desktopSupported: boolean;
   onSelectKind: (kind: SourceKind) => void;
+  onDesktopSelect: () => void;
+  onShowDesktopGuide: () => void;
   onFile: (file: File) => void;
   onTryDemo: () => void;
 }
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac';
 
+const SOURCE_BUTTONS: { kind: SourceKind; label: string }[] = [
+  { kind: 'file', label: 'File' },
+  { kind: 'mic', label: 'Mic' },
+  { kind: 'tab', label: 'Desktop' },
+];
+
 export function AudioSourcePicker({
   activeKind,
   fileName,
   hasSource,
   error,
-  tabSupported,
+  desktopSupported,
   onSelectKind,
+  onDesktopSelect,
+  onShowDesktopGuide,
   onFile,
   onTryDemo,
 }: AudioSourcePickerProps) {
@@ -37,24 +47,35 @@ export function AudioSourcePicker({
     [onFile],
   );
 
+  const handleKindClick = useCallback(
+    (kind: SourceKind) => {
+      if (kind === 'tab') {
+        onDesktopSelect();
+        return;
+      }
+      onSelectKind(kind);
+    },
+    [onDesktopSelect, onSelectKind],
+  );
+
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Audio source</h2>
       <div className="mb-3 flex flex-wrap gap-2">
-        {(['file', 'mic', 'tab'] as const).map((kind) => (
+        {SOURCE_BUTTONS.map(({ kind, label }) => (
           <button
             key={kind}
             type="button"
-            disabled={kind === 'tab' && !tabSupported}
-            onClick={() => onSelectKind(kind)}
+            disabled={kind === 'tab' && !desktopSupported}
+            onClick={() => handleKindClick(kind)}
             className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
               activeKind === kind
                 ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
                 : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong'
-            } ${kind === 'tab' && !tabSupported ? 'opacity-40 cursor-not-allowed' : ''}`}
-            title={kind === 'tab' && !tabSupported ? 'Requires Chrome or Edge' : undefined}
+            } ${kind === 'tab' && !desktopSupported ? 'opacity-40 cursor-not-allowed' : ''}`}
+            title={kind === 'tab' && !desktopSupported ? 'Requires Chrome or Edge' : undefined}
           >
-            {kind === 'file' ? 'File' : kind === 'mic' ? 'Mic' : 'Tab'}
+            {label}
           </button>
         ))}
       </div>
@@ -72,7 +93,7 @@ export function AudioSourcePicker({
           className="flex min-h-[88px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-torus-border-strong px-4 py-6 text-center hover:border-torus-mid/50"
         >
           <p className="text-sm text-torus-fg">
-            {fileName ?? 'Drop a track, talk into your mic, or share a tab.'}
+            {fileName ?? 'Drop a track, use your mic, or capture desktop audio.'}
           </p>
           <p className="mt-1 text-xs text-torus-fg-faint">MP3, WAV, FLAC, OGG, Opus</p>
           <input
@@ -101,7 +122,19 @@ export function AudioSourcePicker({
       ) : activeKind === 'mic' ? (
         <p className="text-sm text-torus-fg-dim">Listening to your microphone.</p>
       ) : (
-        <p className="text-sm text-torus-fg-dim">Capturing audio from a shared browser tab.</p>
+        <div className="space-y-2">
+          <p className="text-sm text-torus-fg-dim">
+            Capturing audio from your desktop — Spotify, Ableton, Splice, anything that&apos;s
+            playing.
+          </p>
+          <button
+            type="button"
+            onClick={onShowDesktopGuide}
+            className="text-xs text-torus-mid hover:underline"
+          >
+            How does this work?
+          </button>
+        </div>
       )}
 
       {error ? <p className="mt-2 text-xs text-torus-bass">{error}</p> : null}
