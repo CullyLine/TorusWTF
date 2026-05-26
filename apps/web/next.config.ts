@@ -22,8 +22,8 @@ import { dirname, resolve } from 'node:path';
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  typedRoutes: true,
   experimental: {
-    typedRoutes: true,
     serverActions: { bodySizeLimit: '2mb' },
   },
   transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared', '@torus/db', '@torus/storage'],

@@ -19,9 +19,7 @@ import { dirname, resolve } from 'node:path';
 const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared'],
   async headers() {
     return [

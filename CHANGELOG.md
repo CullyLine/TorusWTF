@@ -19,3 +19,4 @@
 - Rebrand Tab audio source to Desktop with first-run setup guide for Spotify / Ableton / Splice capture
 - Add Mandelbrot Zoom fractal preset with music-reactive colors and intensity-driven dive speed
 - Add Open Graph and Twitter social card images, expand SEO metadata, allow display-capture permissions
+- Bump Next.js to 15.5.18 to address upstream CVEs and move typedRoutes out of experimental
