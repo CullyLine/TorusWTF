@@ -16,4 +16,5 @@
 - Add Outrun Grid synthwave shader preset
 - Add Liquid Chrome metallic blob preset
 - Add BPM detection pill with persisted sidebar toggle
+- Rebrand Tab audio source to Desktop with first-run setup guide for Spotify / Ableton / Splice capture
 - Add Mandelbrot Zoom fractal preset with music-reactive colors and intensity-driven dive speed

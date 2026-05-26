@@ -31,7 +31,9 @@ export function useTabCapture() {
 
       if (next.getAudioTracks().length === 0) {
         next.getTracks().forEach((t) => t.stop());
-        setError('No audio track in the shared tab. Share a tab that is playing audio.');
+        setError(
+          'No audio in the shared source. Pick Entire Screen and tick Share system audio, or pick a tab that is playing audio.',
+        );
         return null;
       }
 

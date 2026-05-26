@@ -10,6 +10,7 @@ import {
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import { AudioSourcePicker } from '@/components/AudioSourcePicker';
+import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
@@ -47,6 +48,7 @@ import {
   PRESET_KEY,
   SHOW_BPM_KEY,
   SOURCE_KIND_KEY,
+  DESKTOP_GUIDE_SEEN_KEY,
   loadSavedPresets,
   persistSavedPresets,
   type SavedPreset,
@@ -91,6 +93,11 @@ export function VisualizerApp() {
   const [presetsVersion, setPresetsVersion] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [showBpm, setShowBpm] = usePersistedState<boolean>(SHOW_BPM_KEY, false);
+  const [desktopGuideSeen, setDesktopGuideSeen] = usePersistedState<boolean>(
+    DESKTOP_GUIDE_SEEN_KEY,
+    false,
+  );
+  const [desktopGuideOpen, setDesktopGuideOpen] = useState(false);
 
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -121,7 +128,24 @@ export function VisualizerApp() {
       if (kind === 'mic') await audio.startMic();
       if (kind === 'tab') await audio.startTab();
     },
-    [audio],
+    [audio, setSourceKind],
+  );
+
+  const handleDesktopSelect = useCallback(() => {
+    if (!desktopGuideSeen) {
+      setDesktopGuideOpen(true);
+      return;
+    }
+    void handleSelectKind('tab');
+  }, [desktopGuideSeen, handleSelectKind]);
+
+  const handleDesktopGuideConfirm = useCallback(
+    (dontShowAgain: boolean) => {
+      if (dontShowAgain) setDesktopGuideSeen(true);
+      setDesktopGuideOpen(false);
+      void handleSelectKind('tab');
+    },
+    [handleSelectKind, setDesktopGuideSeen],
   );
 
   const handleFile = useCallback(
@@ -324,8 +348,10 @@ export function VisualizerApp() {
             fileName={audio.source?.kind === 'file' ? audio.source.fileName : null}
             hasSource={Boolean(audio.source)}
             error={audio.error}
-            tabSupported={isChromium()}
+            desktopSupported={isChromium()}
             onSelectKind={handleSelectKind}
+            onDesktopSelect={handleDesktopSelect}
+            onShowDesktopGuide={() => setDesktopGuideOpen(true)}
             onFile={handleFile}
             onTryDemo={() => void handleTryDemo()}
           />
@@ -458,6 +484,13 @@ export function VisualizerApp() {
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
         hasFileSource={audio.source?.kind === 'file'}
+      />
+
+      <DesktopAudioGuide
+        open={desktopGuideOpen}
+        reducedMotion={reducedMotion}
+        onClose={() => setDesktopGuideOpen(false)}
+        onConfirm={handleDesktopGuideConfirm}
       />
     </div>
   );
