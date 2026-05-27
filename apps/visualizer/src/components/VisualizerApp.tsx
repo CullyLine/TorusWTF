@@ -298,7 +298,12 @@ export function VisualizerApp() {
     forceVisible: isRecording,
     idleMs: 3_000,
   });
-  const { bpm, confident } = useBPM(audio.analyser, showBpm && Boolean(audio.source));
+  // Run BPM detection whenever there's an audio source, regardless of the
+  // BPM-indicator visibility — presets read beat/bar phase from metrics.
+  const { bpm, confident, bpmRef, lastOnsetRef } = useBPM(
+    audio.analyser,
+    Boolean(audio.source),
+  );
   const overlayFade = reducedMotion ? '' : 'transition-opacity duration-250';
   const overlayHidden = overlayVisible ? 'opacity-100' : 'opacity-0 pointer-events-none';
   const sidebarFade = reducedMotion ? '' : 'transition-opacity duration-300';
@@ -472,6 +477,8 @@ export function VisualizerApp() {
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}
+                bpmRef={bpmRef}
+                lastOnsetRef={lastOnsetRef}
               />
             </div>
           </div>

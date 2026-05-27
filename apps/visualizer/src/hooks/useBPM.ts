@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import type { AnalyserHandle } from '@torus/visualizers';
 
 const MIN_BPM = 60;
@@ -8,7 +9,16 @@ const MAX_BPM = 180;
 const WINDOW_SEC = 8;
 const SMOOTH_SEC = 4;
 
-export function useBPM(analyser: AnalyserHandle | null, enabled: boolean) {
+export interface UseBPMResult {
+  bpm: number | null;
+  confident: boolean;
+  /** Mutable ref tracking the smoothed BPM. Read in useFrame loops without re-renders. */
+  bpmRef: MutableRefObject<number | null>;
+  /** Mutable ref tracking the timestamp (seconds) of the most recent detected onset. */
+  lastOnsetRef: MutableRefObject<number>;
+}
+
+export function useBPM(analyser: AnalyserHandle | null, enabled: boolean): UseBPMResult {
   const [bpm, setBpm] = useState<number | null>(null);
   const [confident, setConfident] = useState(false);
   const fluxHistory = useRef<number[]>([]);
@@ -18,10 +28,15 @@ export function useBPM(analyser: AnalyserHandle | null, enabled: boolean) {
   const smoothBpm = useRef<number | null>(null);
   const timeBuf = useRef<Uint8Array>(new Uint8Array(2048));
 
+  // External refs that consumers (AudioMetricsProvider) read inside useFrame
+  // to avoid per-render churn. Kept in sync with the React state.
+  const bpmRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!enabled || !analyser) {
       setBpm(null);
       setConfident(false);
+      bpmRef.current = null;
       return;
     }
 
@@ -87,11 +102,16 @@ export function useBPM(analyser: AnalyserHandle | null, enabled: boolean) {
         const alpha = Math.min(1, (sampleMs / 1000) / SMOOTH_SEC);
         smoothBpm.current = smoothBpm.current * (1 - alpha) + bestBpm * alpha;
       }
-      setBpm(Math.round(smoothBpm.current));
+      const rounded = Math.round(smoothBpm.current);
+      bpmRef.current = rounded;
+      setBpm(rounded);
     }, sampleMs);
 
     return () => clearInterval(id);
   }, [analyser, enabled]);
 
-  return { bpm, confident };
+  return useMemo(
+    () => ({ bpm, confident, bpmRef, lastOnsetRef: lastOnset }),
+    [bpm, confident],
+  );
 }

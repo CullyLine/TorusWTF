@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type RefObject } from 'react';
+import { useMemo, type MutableRefObject, type RefObject } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { useAudioAnalyser } from './audio';
 import { detectTier } from './tier';
@@ -46,6 +46,10 @@ interface VisualizerCanvasProps {
   bassMaxHz?: number;
   /** Upper edge of the mid band in Hz. */
   midMaxHz?: number;
+  /** BPM ref from useBPM, drives beat/bar phase uniforms. */
+  bpmRef?: MutableRefObject<number | null>;
+  /** Last onset timestamp ref from useBPM, anchors beat/bar phase. */
+  lastOnsetRef?: MutableRefObject<number>;
 }
 
 export function VisualizerCanvas({
@@ -72,6 +76,8 @@ export function VisualizerCanvas({
   creature,
   bassMaxHz,
   midMaxHz,
+  bpmRef,
+  lastOnsetRef,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -90,6 +96,8 @@ export function VisualizerCanvas({
     creature,
     bassMaxHz,
     midMaxHz,
+    bpmRef,
+    lastOnsetRef,
   };
 
   const containerStyle = exportSize

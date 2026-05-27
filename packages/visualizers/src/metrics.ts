@@ -7,6 +7,7 @@ import {
   useRef,
   type MutableRefObject,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { AnalyserHandle } from './audio';
@@ -26,6 +27,12 @@ export interface AudioMetrics {
   beat: number;
   breath: number;
   flow: number;
+  /** Detected tempo (whole BPM). null = not enough confidence yet. */
+  bpm: number | null;
+  /** 0..1 phase within the current beat. Advances even between detected onsets. */
+  beatPhase: number;
+  /** 0..1 phase within the current 4/4 bar. */
+  barPhase: number;
 }
 
 export const DEFAULT_METRICS: AudioMetrics = {
@@ -36,6 +43,9 @@ export const DEFAULT_METRICS: AudioMetrics = {
   beat: 0,
   breath: 0.15,
   flow: 0.15,
+  bpm: null,
+  beatPhase: 0,
+  barPhase: 0,
 };
 
 const MetricsRefContext = createContext<MutableRefObject<AudioMetrics> | null>(null);
@@ -64,6 +74,10 @@ export interface MetricsScales {
   bassMaxHz?: number;
   /** Upper edge of the mid band in Hz. Default 2000Hz. */
   midMaxHz?: number;
+  /** Optional BPM ref (from useBPM). Drives metrics.bpm / beatPhase / barPhase. */
+  bpmRef?: RefObject<number | null>;
+  /** Optional last-onset-timestamp ref (from useBPM). Anchors phase wrapping. */
+  lastOnsetRef?: RefObject<number>;
 }
 
 export function AudioMetricsProvider({
@@ -78,6 +92,8 @@ export function AudioMetricsProvider({
   creature = NEUTRAL_PERSONALITY,
   bassMaxHz = 250,
   midMaxHz = 2000,
+  bpmRef,
+  lastOnsetRef,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
@@ -124,6 +140,21 @@ export function AudioMetricsProvider({
     const smoothClamped = Math.max(0, Math.min(0.99, smoothness));
     const respond = 1 - smoothClamped * 0.98;
 
+    // BPM phase tracking. We tick phase from the most recent detected onset
+    // so it stays musical even when there's a brief detection gap.
+    const bpmNow = bpmRef?.current ?? null;
+    const onsetNow = lastOnsetRef?.current ?? 0;
+    let beatPhase = 0;
+    let barPhase = 0;
+    if (bpmNow && bpmNow > 30 && onsetNow > 0) {
+      const beatPeriod = 60 / bpmNow;
+      const barPeriod = 4 * beatPeriod;
+      const nowSec = performance.now() / 1000;
+      const sinceOnset = Math.max(0, nowSec - onsetNow);
+      beatPhase = (sinceOnset % beatPeriod) / beatPeriod;
+      barPhase = (sinceOnset % barPeriod) / barPeriod;
+    }
+
     const prev = metricsRef.current;
     metricsRef.current = {
       bass: lerp(prev.bass, softCap(bass), respond),
@@ -135,6 +166,9 @@ export function AudioMetricsProvider({
       beat: lerp(prev.beat, Math.min(METRIC_CEILING, beat), Math.max(respond, 0.4)),
       breath: lerp(prev.breath, bass, breathSmooth),
       flow: lerp(prev.flow, energy, flowSmooth),
+      bpm: bpmNow,
+      beatPhase,
+      barPhase,
     };
   });
 

@@ -153,10 +153,13 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
 
     paletteShiftRef.current = (paletteShiftRef.current + delta * shiftRate) % 1;
 
+    // Bar-aware brightness flash: spikes at the downbeat, decays in <0.5 beats.
+    const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 7) : 0;
+
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uZoom!.value = zoomRef.current;
     mat.uniforms.uPaletteShift!.value = paletteShiftRef.current;
-    mat.uniforms.uBassPulse!.value = m.bass + m.beat * 0.35;
+    mat.uniforms.uBassPulse!.value = m.bass + m.beat * 0.35 + barFlash * 0.4;
     mat.uniforms.uHigh!.value = m.high;
     mat.uniforms.uFade!.value = fadeRef.current;
     (mat.uniforms.uBassColor!.value as THREE.Color).set(palette.bass);

@@ -58,10 +58,13 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
     torus.rotation.y += flowSpeed * 0.4;
     torus.rotation.x += delta * (0.03 + m.high * 0.2);
 
+    // Downbeat flash: peaks at the start of each 4/4 bar then decays in <0.5 beats.
+    const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 8) : 0;
+
     const torusMat = torus.material;
     if (torusMat && !Array.isArray(torusMat) && 'emissiveIntensity' in torusMat) {
       (torusMat as THREE.MeshStandardMaterial).emissiveIntensity =
-        0.1 + m.breath * 0.5 + m.beat * 0.3;
+        0.1 + m.breath * 0.5 + m.beat * 0.3 + barFlash * 0.7;
     }
 
     pointsMat.size = 0.02 + m.energy * 0.05;
