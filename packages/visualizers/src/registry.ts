@@ -10,8 +10,10 @@ import { OutrunGridScene } from './presets/OutrunGrid';
 import { LiquidChromeScene } from './presets/LiquidChrome';
 import { LiquidBlobScene } from './presets/LiquidBlob';
 import { MandelbrotZoomScene } from './presets/MandelbrotZoom';
+import { AnimaScene } from './presets/Anima';
 
 export type VisualizerId =
+  | 'anima'
   | 'torus_field'
   | 'particle_storm'
   | 'spectral_tunnel'
@@ -53,6 +55,12 @@ export interface VisualizerDefinition {
  * See CONTRIBUTING.md.
  */
 export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
+  anima: {
+    id: 'anima',
+    label: 'Anima',
+    hint: 'The living creature ? aurora curtains + soul core, listens with you.',
+    Scene: AnimaScene,
+  },
   torus_field: {
     id: 'torus_field',
     label: 'Torus Field',

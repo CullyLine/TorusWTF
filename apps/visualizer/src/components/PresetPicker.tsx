@@ -11,6 +11,7 @@ interface PresetPickerProps {
 const PRESET_IDS = Object.keys(VISUALIZERS) as VisualizerId[];
 
 const PRESET_COLORS: Record<VisualizerId, string> = {
+  anima: '#FBBF24',
   torus_field: '#FF2D95',
   particle_storm: '#22D3CE',
   spectral_tunnel: '#F7E08C',
