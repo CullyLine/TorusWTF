@@ -50,6 +50,8 @@ interface VisualizerCanvasProps {
   bpmRef?: MutableRefObject<number | null>;
   /** Last onset timestamp ref from useBPM, anchors beat/bar phase. */
   lastOnsetRef?: MutableRefObject<number>;
+  /** Anima life amount. 0 = dead-reactive, 1 = full breathing. */
+  anima?: number;
 }
 
 export function VisualizerCanvas({
@@ -78,6 +80,7 @@ export function VisualizerCanvas({
   midMaxHz,
   bpmRef,
   lastOnsetRef,
+  anima,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -126,6 +129,8 @@ export function VisualizerCanvas({
                 bloomIntensity={bloomIntensity}
                 cameraMode={cameraMode}
                 bassShake={bassShake}
+                anima={anima}
+                creature={creature}
               />
               <group scale={scale}>
                 <def.Scene analyser={analyser} palette={palette} tier={tier} scale={scale} />

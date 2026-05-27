@@ -6,6 +6,8 @@ import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import type { PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useCameraZoomDistanceRef } from './cameraZoom';
+import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
+import type { CreaturePersonality } from './dsp/creature';
 
 export type CameraMode = 'still' | 'drift' | 'orbit' | 'dive';
 
@@ -17,6 +19,10 @@ interface SceneRigProps {
   cameraMode?: CameraMode;
   /** 0 = off, 1 = noticeable, 3 = subwoofer-in-a-car. */
   bassShake?: number;
+  /** 0 = dead-reactive (no breathing); 1 = full Anima life. Default 0.5. */
+  anima?: number;
+  /** Optional creature personality for tempo-biased heartbeat. */
+  creature?: CreaturePersonality;
 }
 
 /**
@@ -29,6 +35,8 @@ export function SceneRig({
   bloomIntensity,
   cameraMode = 'drift',
   bassShake = 0,
+  anima = 0.5,
+  creature,
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
   const bassLight = useRef<PointLight>(null);
@@ -36,6 +44,7 @@ export function SceneRig({
   const highLight = useRef<PointLight>(null);
   const zoomDistanceRef = useCameraZoomDistanceRef();
   const fallbackZ = embedded ? 3.2 : 4;
+  const animaState = useRef<AnimaState>({ ...NEUTRAL_ANIMA });
 
   useFrame((state) => {
     const m = metricsRef.current;
@@ -91,7 +100,18 @@ export function SceneRig({
       state.camera.position.z += Math.sin(t * 52.7 + 0.9) * amp * 0.3;
     }
 
-    state.camera.lookAt(0, 0, 0);
+    // Anima — the always-living layer. Even in silence the creature breathes.
+    if (anima > 0) {
+      updateAnima(animaState.current, t, creature);
+      const a = animaState.current;
+      const animaAmp = anima;
+      // Heartbeat: subtle z-axis breathing (in/out of the scene).
+      state.camera.position.z += a.heartbeat * 0.025 * animaAmp;
+      // Drift: subtle look-target offset for a "head turning slowly" feel.
+      state.camera.lookAt(a.driftYaw * 0.6 * animaAmp, a.driftPitch * 0.6 * animaAmp, 0);
+    } else {
+      state.camera.lookAt(0, 0, 0);
+    }
   });
 
   const tierBloom = tier === 'low' ? 0.8 : 1.1;

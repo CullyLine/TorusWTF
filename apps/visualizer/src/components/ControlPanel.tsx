@@ -57,6 +57,7 @@ export function ControlPanel({
     { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05 },
     { key: 'smoothness', label: 'Smoothness', min: 0, max: 0.95, step: 0.01 },
     { key: 'scale', label: 'Scale', min: 0.2, max: 5, step: 0.05 },
+    { key: 'anima', label: 'Anima', min: 0, max: 1, step: 0.01 },
   ];
 
   const saved = unlocked ? loadSavedPresets() : [];
@@ -68,9 +69,10 @@ export function ControlPanel({
 
       <div className="space-y-3">
         {sliders.map(({ key, label, min, max, step }, idx) => {
-          // Smoothness/Scale/BassShake were added later, so older persisted
-          // controls may not have them. Default to a sensible per-slider value.
-          const value = controls[key] ?? (key === 'scale' ? 1 : 0);
+          // Smoothness/Scale/BassShake/Anima were added later, so older
+          // persisted controls may not have them. Default per-slider.
+          const fallback = key === 'scale' ? 1 : key === 'anima' ? 0.5 : 0;
+          const value = controls[key] ?? fallback;
           const outOfRange = value < min || value > max;
           const sliderValue = Math.max(min, Math.min(max, value));
           const sliderEl = (

@@ -34,6 +34,7 @@ export interface SavedPreset {
   bassShake?: number;
   bassMaxHz?: number;
   midMaxHz?: number;
+  anima?: number;
 }
 
 export interface VisualizerControls {
@@ -51,6 +52,8 @@ export interface VisualizerControls {
   bassMaxHz?: number;
   /** Upper edge of the mid band in Hz. */
   midMaxHz?: number;
+  /** Anima life amount. 0 = dead-reactive, 1 = full breathing creature. */
+  anima?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -66,6 +69,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   bassShake: 0,
   bassMaxHz: 250,
   midMaxHz: 2000,
+  anima: 0.5,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };
