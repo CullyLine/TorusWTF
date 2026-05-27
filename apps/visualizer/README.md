@@ -1,14 +1,48 @@
 # torus visualizer
 
-Turn any local audio into beautiful 3D visuals and export for Reels, Shorts, and portfolios.
+Turn any audio into beautiful 3D visuals and export for Reels, Shorts, and portfolios.
 
-Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in production.
+Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in production. Currently deployed at `torus-fm-visualizer.vercel.app` until DNS is migrated.
 
-## Free vs paid
+## What's in the box
+
+### Audio sources (4)
+
+- **File** — drag-and-drop any local MP3, WAV, FLAC, OGG, Opus, M4A, or AAC
+- **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
+- **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
+- **WTF** — picks a random track from [`@animegirlfarts69`](https://soundcloud.com/animegirlfarts69) on SoundCloud. Tracks are downloaded at build time, so the WTF button always has full reactivity (no cross-origin iframe limits).
+
+### Presets (9)
+
+| ID | Name | Vibe |
+|---|---|---|
+| `torus_field` | Torus Field | Default — flowing torus with bass-reactive bloom |
+| `particle_storm` | Particle Storm | High-density particles, beat-driven bursts |
+| `spectral_tunnel` | Spectral Tunnel | Warp-speed tunnel flythrough with FFT rings and chromatic flash on beats |
+| `volumetric_waveform` | Volumetric Waveform | Time-domain ribbon in 3D |
+| `cosmic_mandala` | Cosmic Mandala | Radial symmetry, dreamlike |
+| `star_field` | Star Field | Face-on spiral galaxy with twinkles and beat-driven camera punches |
+| `outrun_grid` | Outrun Grid | Real 3D wireframe terrain receding to a banded synthwave sun |
+| `liquid_chrome` | Liquid Chrome | GPU-shader chrome blob with fresnel + procedural env reflection |
+| `mandelbrot_zoom` | Mandelbrot Zoom | Smooth looped fractal zoom, audio-reactive colors and speed |
+
+### UI features
+
+- **Full-bleed viewport** — visuals take the whole screen below the header. Controls float on the left as a translucent glass panel that auto-hides when the cursor is idle (3s) or leaves the window.
+- **Gain slider** — boost visual intensity without changing audio volume
+- **Custom 3-band palette** (unlocked tier) — bass/mid/high colors persist per preset
+- **Saved presets** (unlocked tier) — stash settings combinations to localStorage
+- **Snapshot** — PNG of the current frame
+- **BPM detection** — optional overlay using a fast tempogram on file sources
+- **Hardware acceleration warning** — dismissible banner detects software WebGL rendering
+- **Feedback button** — pre-fills a GitHub issue with category/title/body
+
+### Free vs paid
 
 | Feature | Free | Full ($10 one-time) |
 | --- | --- | --- |
-| All 4 presets + live preview | Yes | Yes |
+| All 9 presets + live preview | Yes | Yes |
 | Export length | Unlimited | Unlimited |
 | Export resolution | 720p | Up to 4K |
 | Export FPS | 30 | Up to 240 |
@@ -28,7 +62,15 @@ pnpm install
 pnpm --filter @torus/visualizer dev
 ```
 
-Open http://localhost:3001
+Open <http://localhost:3001>.
+
+### Building locally (with WTF prefetch)
+
+```powershell
+pnpm --filter @torus/visualizer build
+```
+
+This runs `scripts/fetch-demos.mjs` first, which downloads the latest 10 public tracks from the configured SoundCloud account into `public/demos/`. If SoundCloud is unreachable, the build continues without WTF tracks (button hides itself in the UI).
 
 ## Environment variables
 
@@ -39,6 +81,9 @@ Add to the root `.env`:
 POLAR_API_KEY=
 POLAR_VISUALIZER_PRODUCT_ID=
 NEXT_PUBLIC_POLAR_CHECKOUT_URL=
+
+# Optional — base URL used in OG metadata / canonical URLs
+NEXT_PUBLIC_SITE_URL=https://visualizer.torus.wtf
 ```
 
 ### Manual Polar setup
@@ -52,30 +97,31 @@ NEXT_PUBLIC_POLAR_CHECKOUT_URL=
 
 ## Deploy
 
-Deploy `apps/visualizer` to Vercel or Cloudflare Pages. Point `visualizer.torus.wtf` CNAME at the deploy target.
+Vercel-first. Project root in the Vercel dashboard should point at `apps/visualizer`. Build command and install command are wired in `apps/visualizer/vercel.json`.
 
-Build command: `pnpm --filter @torus/visualizer build`
-Output: `apps/visualizer/.next`
+```
+Build:   pnpm --filter @torus/visualizer build
+Install: pnpm install --frozen-lockfile --filter @torus/visualizer...
+Output:  apps/visualizer/.next
+```
 
-## Audio sources
-
-- **File** — drag-and-drop MP3/WAV/FLAC/OGG/Opus
-- **Mic** — microphone or line-in
-- **Tab** — Chrome/Edge tab audio via screen share (requires sharing a tab with audio)
-- **Demo** — click "Try with demo audio" on the landing state (uses `public/demo.mp3`)
-
-The bundled `public/demo.mp3` is a placeholder sine-tone sequence generated for development. Replace it with a curated royalty-free loop before launch.
+Point the production domain (`visualizer.torus.wtf` once DNS migrates) as a custom domain on the Vercel project.
 
 ## Export format
 
-v1 exports WebM (VP9 + Opus) for broad browser support. MP4 when `MediaRecorder.isTypeSupported('video/mp4')` returns true.
+Exports are WebM (VP9 + Opus) for the widest browser support. MP4 (H.264 + AAC) is used when `MediaRecorder.isTypeSupported('video/mp4; codecs="avc1, mp4a.40.2"')` returns true.
 
 ## Keyboard shortcuts
 
-- `Space` — play/pause (file mode)
-- `F` — fullscreen viewport
-- `R` — random preset
+| Key | Action |
+|---|---|
+| `Space` | Play / pause (file source) |
+| `F` | Fullscreen viewport |
+| `R` | Random preset |
+| `←` / `→` | Seek ±5s (file source) |
+| `Shift+←` / `Shift+→` | Seek ±15s (file source) |
+| `?` | Show shortcuts modal |
 
 ## License
 
-AGPL-3.0-or-later (monorepo root). The visualizer shares `@torus/visualizers` with torus.wtf.
+AGPL-3.0-or-later (monorepo root). The visualizer shares `@torus/visualizers` with the torus.wtf clip-sharing app, so any improvement to a preset benefits both.

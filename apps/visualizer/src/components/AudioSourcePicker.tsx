@@ -9,20 +9,24 @@ interface AudioSourcePickerProps {
   hasSource: boolean;
   error: string | null;
   desktopSupported: boolean;
+  demoTracksAvailable: boolean;
+  wtfActiveTitle: string | null;
   onSelectKind: (kind: SourceKind) => void;
   onDesktopSelect: () => void;
   onShowDesktopGuide: () => void;
   onFile: (file: File) => void;
   onTryDemo: () => void;
+  onPlayDemoTrack: () => void;
 }
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac';
 
-const SOURCE_BUTTONS: { kind: SourceKind; label: string }[] = [
-  { kind: 'file', label: 'File' },
-  { kind: 'mic', label: 'Mic' },
-  { kind: 'tab', label: 'Desktop' },
-];
+type ButtonKey = SourceKind | 'wtf';
+
+interface PickerButton {
+  key: ButtonKey;
+  label: string;
+}
 
 export function AudioSourcePicker({
   activeKind,
@@ -30,11 +34,14 @@ export function AudioSourcePicker({
   hasSource,
   error,
   desktopSupported,
+  demoTracksAvailable,
+  wtfActiveTitle,
   onSelectKind,
   onDesktopSelect,
   onShowDesktopGuide,
   onFile,
   onTryDemo,
+  onPlayDemoTrack,
 }: AudioSourcePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,39 +55,82 @@ export function AudioSourcePicker({
   );
 
   const handleKindClick = useCallback(
-    (kind: SourceKind) => {
-      if (kind === 'tab') {
+    (key: ButtonKey) => {
+      if (key === 'wtf') {
+        onPlayDemoTrack();
+        return;
+      }
+      if (key === 'tab') {
         onDesktopSelect();
         return;
       }
-      onSelectKind(kind);
+      onSelectKind(key);
     },
-    [onDesktopSelect, onSelectKind],
+    [onDesktopSelect, onPlayDemoTrack, onSelectKind],
   );
 
+  const buttons: PickerButton[] = [
+    { key: 'file', label: 'File' },
+    { key: 'mic', label: 'Mic' },
+    { key: 'tab', label: 'Desktop' },
+  ];
+  if (demoTracksAvailable) buttons.push({ key: 'wtf', label: 'WTF' });
+
+  const wtfActive = Boolean(wtfActiveTitle);
+
   return (
-    <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
+    <section className="rounded-xl border border-torus-border bg-torus-surface/80 p-4 backdrop-blur-md">
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Audio source</h2>
       <div className="mb-3 flex flex-wrap gap-2">
-        {SOURCE_BUTTONS.map(({ kind, label }) => (
-          <button
-            key={kind}
-            type="button"
-            disabled={kind === 'tab' && !desktopSupported}
-            onClick={() => handleKindClick(kind)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-              activeKind === kind
+        {buttons.map(({ key, label }) => {
+          const isActive =
+            key === 'wtf' ? wtfActive : activeKind === key && !(key === 'file' && wtfActive);
+          const disabled = key === 'tab' && !desktopSupported;
+          const accentForWtf =
+            key === 'wtf'
+              ? isActive
+                ? 'bg-torus-bass/20 text-torus-bass border border-torus-bass/40'
+                : 'border border-torus-bass/30 text-torus-bass hover:border-torus-bass/60'
+              : isActive
                 ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
-                : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong'
-            } ${kind === 'tab' && !desktopSupported ? 'opacity-40 cursor-not-allowed' : ''}`}
-            title={kind === 'tab' && !desktopSupported ? 'Requires Chrome or Edge' : undefined}
-          >
-            {label}
-          </button>
-        ))}
+                : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong';
+
+          return (
+            <button
+              key={key}
+              type="button"
+              disabled={disabled}
+              onClick={() => handleKindClick(key)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${accentForWtf} ${
+                disabled ? 'opacity-40 cursor-not-allowed' : ''
+              }`}
+              title={
+                key === 'tab' && !desktopSupported
+                  ? 'Requires Chrome or Edge'
+                  : key === 'wtf'
+                    ? 'Play a random demo track'
+                    : undefined
+              }
+            >
+              {label}
+            </button>
+          );
+        })}
       </div>
 
-      {activeKind === 'file' || activeKind === null ? (
+      {wtfActive ? (
+        <div className="rounded-lg border border-torus-bass/30 bg-torus-bass/5 px-3 py-3 text-xs">
+          <p className="text-torus-bass">Now playing</p>
+          <p className="mt-1 truncate text-torus-fg">{wtfActiveTitle}</p>
+          <button
+            type="button"
+            onClick={onPlayDemoTrack}
+            className="mt-2 text-[10px] text-torus-bass hover:underline"
+          >
+            Roll another →
+          </button>
+        </div>
+      ) : activeKind === 'file' || activeKind === null ? (
         <div
           role="button"
           tabIndex={0}

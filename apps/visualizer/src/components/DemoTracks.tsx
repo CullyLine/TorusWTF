@@ -17,12 +17,13 @@ interface DemoManifest {
   tracks: DemoTrack[];
 }
 
-interface WtfButtonProps {
-  onPlay: (track: DemoTrack) => void;
-  activeTitle: string | null;
+export interface UseDemoTracksResult {
+  tracks: DemoTrack[];
+  available: boolean;
+  pickRandom: () => DemoTrack | null;
 }
 
-export function WtfButton({ onPlay, activeTitle }: WtfButtonProps) {
+export function useDemoTracks(): UseDemoTracksResult {
   const [tracks, setTracks] = useState<DemoTrack[]>([]);
   const playedRef = useRef<string[]>([]);
 
@@ -35,28 +36,17 @@ export function WtfButton({ onPlay, activeTitle }: WtfButtonProps) {
       .catch(() => {});
   }, []);
 
-  const pickRandom = useCallback(() => {
-    if (tracks.length === 0) return;
+  const pickRandom = useCallback((): DemoTrack | null => {
+    if (tracks.length === 0) return null;
     const pool = tracks.filter((t) => !playedRef.current.includes(t.id));
     const candidates = pool.length > 0 ? pool : tracks;
     if (pool.length === 0) playedRef.current = [];
     const track = candidates[Math.floor(Math.random() * candidates.length)]!;
     playedRef.current.push(track.id);
-    onPlay(track);
-  }, [tracks, onPlay]);
+    return track;
+  }, [tracks]);
 
-  if (tracks.length === 0) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={pickRandom}
-      className="rounded-full border border-torus-mid/40 bg-torus-mid/10 px-3 py-1.5 text-xs font-semibold text-torus-mid hover:bg-torus-mid/20"
-      title="Play a random demo track"
-    >
-      {activeTitle ? `♫ ${activeTitle}` : 'WTF'}
-    </button>
-  );
+  return { tracks, available: tracks.length > 0, pickRandom };
 }
 
 export function DemoAttribution() {

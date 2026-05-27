@@ -13,7 +13,7 @@ import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { HwAccelBanner } from '@/components/HwAccelBanner';
-import { DemoAttribution, WtfButton, type DemoTrack } from '@/components/WtfButton';
+import { DemoAttribution, useDemoTracks } from '@/components/DemoTracks';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
@@ -74,6 +74,7 @@ export function VisualizerApp() {
   const unlock = useUnlock();
   const exportHook = useExport(unlock.unlocked);
   const { toast, prompt } = useToast();
+  const demoTracks = useDemoTracks();
 
   const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'torus_field');
   const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
@@ -91,7 +92,6 @@ export function VisualizerApp() {
     SOURCE_KIND_KEY,
     null,
   );
-  const [fullscreen, setFullscreen] = useState(false);
   const [heroCollapsed, setHeroCollapsed] = useState(false);
   const [presetsVersion, setPresetsVersion] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -133,6 +133,7 @@ export function VisualizerApp() {
 
   const handleSelectKind = useCallback(
     async (kind: SourceKind) => {
+      setWtfTrackTitle(null);
       setSourceKind(kind);
       if (kind === 'mic') await audio.startMic();
       if (kind === 'tab') await audio.startTab();
@@ -159,6 +160,7 @@ export function VisualizerApp() {
 
   const handleFile = useCallback(
     (file: File) => {
+      setWtfTrackTitle(null);
       setSourceKind('file');
       audio.loadFile(file);
       setHeroCollapsed(true);
@@ -177,15 +179,14 @@ export function VisualizerApp() {
     }
   }, [handleFile, toast]);
 
-  const handleWtfPlay = useCallback(
-    (track: DemoTrack) => {
-      setSourceKind('file');
-      setHeroCollapsed(true);
-      setWtfTrackTitle(track.title);
-      audio.playUrl(track.file, { title: track.title, sourceLink: track.permalink });
-    },
-    [audio],
-  );
+  const handlePlayDemoTrack = useCallback(() => {
+    const track = demoTracks.pickRandom();
+    if (!track) return;
+    setSourceKind('file');
+    setHeroCollapsed(true);
+    setWtfTrackTitle(track.title);
+    audio.playUrl(track.file, { title: track.title, sourceLink: track.permalink });
+  }, [audio, demoTracks, setSourceKind]);
 
   const handleRandomPreset = useCallback(() => {
     setPreset(pickRandomVisualizerPreset());
@@ -262,12 +263,23 @@ export function VisualizerApp() {
   const isRecording = exportHook.state === 'recording';
   const previewAspect = `${exportSize.width} / ${exportSize.height}`;
   const previewPortrait = aspect === '9:16' || aspect === '4:5';
-  const { uiVisible: overlayVisible, reveal: revealOverlay } = useIdleHide({
+  const { uiVisible: overlayVisible, reveal: revealOverlay, hide: hideOverlay } = useIdleHide({
     forceVisible: isRecording,
+  });
+  const { uiVisible: sidebarVisible, reveal: revealSidebar, hide: hideSidebar } = useIdleHide({
+    forceVisible: isRecording,
+    idleMs: 3_000,
   });
   const { bpm, confident } = useBPM(audio.analyser, showBpm && Boolean(audio.source));
   const overlayFade = reducedMotion ? '' : 'transition-opacity duration-250';
   const overlayHidden = overlayVisible ? 'opacity-100' : 'opacity-0 pointer-events-none';
+  const sidebarFade = reducedMotion ? '' : 'transition-opacity duration-300';
+  const sidebarHidden = sidebarVisible ? 'opacity-100' : 'opacity-0 pointer-events-none';
+
+  const revealAll = useCallback(() => {
+    revealOverlay();
+    revealSidebar();
+  }, [revealOverlay, revealSidebar]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -305,12 +317,6 @@ export function VisualizerApp() {
   }, [audio, handleRandomPreset]);
 
   useEffect(() => {
-    const onFs = () => setFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onFs);
-    return () => document.removeEventListener('fullscreenchange', onFs);
-  }, []);
-
-  useEffect(() => {
     if (!isRecording || audio.source?.kind !== 'file') return;
     const el = audio.audioRef.current;
     if (!el) return;
@@ -319,127 +325,84 @@ export function VisualizerApp() {
     return () => el.removeEventListener('ended', onEnded);
   }, [isRecording, audio.source, audio.audioRef, exportHook]);
 
-  return (
-    <div className={`min-h-dvh ${!unlock.unlocked ? 'pb-12' : ''}`}>
-      <HwAccelBanner />
-      {!heroCollapsed ? (
-        <header className="border-b border-torus-border px-4 py-8 md:px-8">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <Logo size={48} wordmark href={null} color="var(--color-torus-mid)" />
-              <h1 className="mt-4 text-2xl font-semibold tracking-tight">torus visualizer</h1>
-              <p className="mt-2 max-w-xl text-sm text-torus-fg-dim">
-                Turn any audio into beautiful 3D visuals. Drop a track, use your mic, or capture a
-                browser tab — then export for Reels, Shorts, and portfolios.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-3 text-xs">
-                <span className="rounded-full border border-torus-border px-3 py-1">Free: 720p / 30 FPS</span>
-                <span className="rounded-full border border-torus-mid/30 px-3 py-1 text-torus-mid">
-                  Full: $10 one-time — 4K / 240 FPS, no watermark
-                </span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setHeroCollapsed(true)}
-              className="self-start rounded-full border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40"
-            >
-              Open the app →
-            </button>
-          </div>
-        </header>
-      ) : (
-        <header className="flex items-center justify-between border-b border-torus-border px-4 py-3">
-          <div className="flex flex-col gap-0.5">
-            <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
-            <DemoAttribution />
-          </div>
-          <div className="flex items-center gap-2">
-            <WtfButton onPlay={handleWtfPlay} activeTitle={wtfTrackTitle} />
-            <FeedbackButton />
-            <button
-              type="button"
-              onClick={() => setHeroCollapsed(false)}
-              className="text-xs text-torus-fg-faint hover:text-torus-mid"
-            >
-              About
-            </button>
-          </div>
-        </header>
-      )}
+  useEffect(() => {
+    if (!heroCollapsed) return;
+    const onMouseOut = (e: MouseEvent) => {
+      if (e.relatedTarget === null && !isRecording) {
+        hideSidebar();
+        hideOverlay();
+      }
+    };
+    document.addEventListener('mouseout', onMouseOut);
+    return () => document.removeEventListener('mouseout', onMouseOut);
+  }, [heroCollapsed, isRecording, hideOverlay, hideSidebar]);
 
-      <main className="mx-auto grid max-w-6xl gap-4 p-4 lg:grid-cols-[320px_1fr]">
-        <aside className="space-y-4">
-          <AudioSourcePicker
-            activeKind={sourceKind}
-            fileName={audio.source?.kind === 'file' ? audio.source.fileName : null}
-            hasSource={Boolean(audio.source)}
-            error={audio.error}
-            desktopSupported={desktopSupported}
-            onSelectKind={handleSelectKind}
-            onDesktopSelect={handleDesktopSelect}
-            onShowDesktopGuide={() => setDesktopGuideOpen(true)}
-            onFile={handleFile}
-            onTryDemo={() => void handleTryDemo()}
-          />
-          <PresetPicker active={preset} onChange={setPreset} onRandom={handleRandomPreset} />
-          <ControlPanel
-            controls={controls}
-            onChange={(patch) => setControls((c) => ({ ...c, ...patch }))}
-            palette={palette}
-            onPaletteChange={setPalette}
-            showBpm={showBpm}
-            onShowBpmChange={setShowBpm}
-            unlocked={unlock.unlocked}
-            onLoadSaved={handleLoadSaved}
-            onSavePreset={handleSavePreset}
-            presetsVersion={presetsVersion}
-            onPresetsChange={() => setPresetsVersion((v) => v + 1)}
-          />
-          <ExportPanel
-            unlocked={unlock.unlocked}
-            resolution={resolution}
-            aspect={aspect}
-            fps={fps}
-            onResolutionChange={setResolution}
-            onAspectChange={setAspect}
-            onFpsChange={setFps}
-            recording={isRecording}
-            rendering={exportHook.state === 'rendering'}
-            elapsedSec={exportHook.elapsedSec}
-            hasSource={Boolean(audio.source)}
-            onStart={() => void startExport()}
-            onStop={exportHook.stop}
-            onSnapshot={() => void handleSnapshot()}
-          />
-          {!unlock.unlocked ? (
-            <p className="text-center text-xs text-torus-fg-faint">
-              <Link href="/unlock" className="text-torus-mid hover:underline">
-                Unlock full version ($10)
-              </Link>
-            </p>
-          ) : null}
-        </aside>
+  const sidebarPanels = (
+    <>
+      <AudioSourcePicker
+        activeKind={sourceKind}
+        fileName={audio.source?.kind === 'file' ? audio.source.fileName : null}
+        hasSource={Boolean(audio.source)}
+        error={audio.error}
+        desktopSupported={desktopSupported}
+        demoTracksAvailable={demoTracks.available}
+        wtfActiveTitle={wtfTrackTitle}
+        onSelectKind={handleSelectKind}
+        onDesktopSelect={handleDesktopSelect}
+        onShowDesktopGuide={() => setDesktopGuideOpen(true)}
+        onFile={handleFile}
+        onTryDemo={() => void handleTryDemo()}
+        onPlayDemoTrack={handlePlayDemoTrack}
+      />
+      <PresetPicker active={preset} onChange={setPreset} onRandom={handleRandomPreset} />
+      <ControlPanel
+        controls={controls}
+        onChange={(patch) => setControls((c) => ({ ...c, ...patch }))}
+        palette={palette}
+        onPaletteChange={setPalette}
+        showBpm={showBpm}
+        onShowBpmChange={setShowBpm}
+        unlocked={unlock.unlocked}
+        onLoadSaved={handleLoadSaved}
+        onSavePreset={handleSavePreset}
+        presetsVersion={presetsVersion}
+        onPresetsChange={() => setPresetsVersion((v) => v + 1)}
+      />
+      <ExportPanel
+        unlocked={unlock.unlocked}
+        resolution={resolution}
+        aspect={aspect}
+        fps={fps}
+        onResolutionChange={setResolution}
+        onAspectChange={setAspect}
+        onFpsChange={setFps}
+        recording={isRecording}
+        rendering={exportHook.state === 'rendering'}
+        elapsedSec={exportHook.elapsedSec}
+        hasSource={Boolean(audio.source)}
+        onStart={() => void startExport()}
+        onStop={exportHook.stop}
+        onSnapshot={() => void handleSnapshot()}
+      />
+      {!unlock.unlocked ? (
+        <p className="text-center text-xs text-torus-fg-faint">
+          <Link href="/unlock" className="text-torus-mid hover:underline">
+            Unlock full version ($10)
+          </Link>
+        </p>
+      ) : null}
+    </>
+  );
 
-        <section
-          ref={viewportRef}
-          className={`relative flex flex-col overflow-hidden rounded-xl border border-torus-border bg-torus-bg ${
-            fullscreen ? 'h-dvh' : 'min-h-[420px] lg:min-h-[560px]'
-          }`}
-          onPointerMove={revealOverlay}
-          onPointerDown={revealOverlay}
-          onClick={revealOverlay}
-          onWheel={revealOverlay}
-          onKeyDown={revealOverlay}
-        >
-          <div className="relative min-h-0 flex-1">
-          {audio.source ? (
-            <>
-              <div className="flex h-full w-full items-center justify-center">
-                <div
-                  className={`relative ${previewPortrait ? 'h-full max-w-full' : 'w-full max-h-full'}`}
-                  style={{ aspectRatio: previewAspect }}
-                >
+  const viewportCanvas = (
+    <>
+      {audio.source ? (
+        <>
+          <div className="flex h-full w-full items-center justify-center">
+            <div
+              className={`relative ${previewPortrait ? 'h-full max-w-full' : 'w-full max-h-full'}`}
+              style={{ aspectRatio: previewAspect }}
+            >
               <VisualizerCanvas
                 audioRef={audio.source.kind === 'file' ? audio.audioRef : undefined}
                 analyserOverride={audio.source.kind !== 'file' ? audio.analyser : undefined}
@@ -459,60 +422,164 @@ export function VisualizerApp() {
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
               />
-                </div>
-              </div>
-              {audio.source.kind === 'file' ? (
-                <div
-                  className={`absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-torus-border bg-torus-bg/80 px-3 py-1.5 text-xs backdrop-blur-sm ${overlayFade} ${overlayHidden}`}
-                >
-                  <button type="button" onClick={audio.togglePlay} className="text-torus-mid">
-                    {audio.isPlaying ? 'pause' : 'play'}
-                  </button>
-                  <span className="text-torus-fg-faint truncate max-w-[200px]">
-                    {audio.source.fileName}
-                  </span>
-                </div>
-              ) : null}
-              {isRecording ? (
-                <div
-                  className={`absolute top-3 right-3 rounded-full bg-torus-bass/20 px-3 py-1 text-xs text-torus-bass border border-torus-bass/40 ${overlayFade} ${overlayHidden}`}
-                >
-                  REC {formatTime(exportHook.elapsedSec)}
-                </div>
-              ) : null}
-              <BPMIndicator
-                bpm={bpm}
-                confident={confident}
-                visible={showBpm}
-                fileSource={audio.source.kind === 'file'}
-                className={`${overlayFade} ${overlayHidden}`}
-              />
-            </>
-          ) : (
-            <EmptyStateHero
-              reducedMotion={reducedMotion}
-              onTryDemo={() => void handleTryDemo()}
-            />
-          )}
+            </div>
           </div>
+          {audio.source.kind === 'file' ? (
+            <div
+              className={`absolute bottom-3 left-1/2 z-30 -translate-x-1/2 flex items-center gap-2 rounded-full border border-torus-border bg-torus-bg/80 px-3 py-1.5 text-xs backdrop-blur-sm ${overlayFade} ${overlayHidden}`}
+            >
+              <button type="button" onClick={audio.togglePlay} className="text-torus-mid">
+                {audio.isPlaying ? 'pause' : 'play'}
+              </button>
+              <span className="text-torus-fg-faint truncate max-w-[200px]">
+                {audio.source.fileName}
+              </span>
+            </div>
+          ) : null}
+          {isRecording ? (
+            <div
+              className={`absolute top-3 right-3 z-30 rounded-full bg-torus-bass/20 px-3 py-1 text-xs text-torus-bass border border-torus-bass/40 ${overlayFade} ${overlayHidden}`}
+            >
+              REC {formatTime(exportHook.elapsedSec)}
+            </div>
+          ) : null}
+          <BPMIndicator
+            bpm={bpm}
+            confident={confident}
+            visible={showBpm}
+            fileSource={audio.source.kind === 'file'}
+            className={`${overlayFade} ${overlayHidden}`}
+          />
+        </>
+      ) : (
+        <EmptyStateHero
+          reducedMotion={reducedMotion}
+          onTryDemo={() => void handleTryDemo()}
+        />
+      )}
+    </>
+  );
+
+  if (!heroCollapsed) {
+    return (
+      <div className={`min-h-dvh ${!unlock.unlocked ? 'pb-12' : ''}`}>
+        <HwAccelBanner />
+        <header className="border-b border-torus-border px-4 py-8 md:px-8">
+          <div className="mx-auto flex max-w-6xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <Logo size={48} wordmark href={null} color="var(--color-torus-mid)" />
+              <h1 className="mt-4 text-2xl font-semibold tracking-tight">torus visualizer</h1>
+              <p className="mt-2 max-w-xl text-sm text-torus-fg-dim">
+                Turn any audio into beautiful 3D visuals. Drop a track, use your mic, capture
+                desktop audio, or hit WTF for a random demo — then export for Reels, Shorts, and
+                portfolios.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3 text-xs">
+                <span className="rounded-full border border-torus-border px-3 py-1">Free: 720p / 30 FPS</span>
+                <span className="rounded-full border border-torus-mid/30 px-3 py-1 text-torus-mid">
+                  Full: $10 one-time — 4K / 240 FPS, no watermark
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHeroCollapsed(true)}
+              className="self-start rounded-full border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40"
+            >
+              Open the app →
+            </button>
+          </div>
+        </header>
+
+        <main className="mx-auto grid max-w-6xl gap-4 p-4 lg:grid-cols-[320px_1fr]">
+          <aside className="space-y-4">{sidebarPanels}</aside>
+          <section className="relative flex min-h-[420px] flex-col overflow-hidden rounded-xl border border-torus-border bg-torus-bg lg:min-h-[560px]">
+            <div className="relative min-h-0 flex-1">{viewportCanvas}</div>
+          </section>
+        </main>
+
+        {!unlock.unlocked && !unlock.checking ? <UnlockBanner /> : null}
+        <ShortcutsModal
+          open={shortcutsOpen}
+          onClose={() => setShortcutsOpen(false)}
+          hasFileSource={audio.source?.kind === 'file'}
+        />
+        <DesktopAudioGuide
+          open={desktopGuideOpen}
+          reducedMotion={reducedMotion}
+          onClose={() => setDesktopGuideOpen(false)}
+          onConfirm={handleDesktopGuideConfirm}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-dvh flex-col">
+      <HwAccelBanner />
+      <header className="flex items-center justify-between border-b border-torus-border px-4 py-3">
+        <div className="flex flex-col gap-0.5">
+          <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
+          <DemoAttribution />
+        </div>
+        <div className="flex items-center gap-2">
+          <FeedbackButton />
+          <button
+            type="button"
+            onClick={() => setHeroCollapsed(false)}
+            className="text-xs text-torus-fg-faint hover:text-torus-mid"
+          >
+            About
+          </button>
+        </div>
+      </header>
+
+      <main
+        ref={viewportRef}
+        className="relative flex-1 overflow-hidden bg-torus-bg"
+        onPointerMove={revealAll}
+        onPointerDown={revealAll}
+        onClick={revealAll}
+        onWheel={revealAll}
+        onKeyDown={revealAll}
+      >
+        <section className="absolute inset-0 flex flex-col">
+          <div className="relative min-h-0 flex-1">{viewportCanvas}</div>
           {audio.source?.kind === 'file' ? (
-            <Scrubber
-              currentTime={audio.currentTime}
-              duration={audio.duration}
-              onSeek={audio.seek}
-            />
+            <div className={`absolute bottom-0 left-0 right-0 z-30 ${overlayFade} ${overlayHidden}`}>
+              <Scrubber
+                currentTime={audio.currentTime}
+                duration={audio.duration}
+                onSeek={audio.seek}
+              />
+            </div>
           ) : null}
         </section>
+
+        <aside
+          aria-label="Visualizer controls"
+          onPointerEnter={revealSidebar}
+          onPointerMove={revealSidebar}
+          className={`absolute left-4 top-4 bottom-4 z-20 hidden w-[320px] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-y-auto rounded-xl border border-torus-border bg-torus-surface/70 p-4 shadow-2xl backdrop-blur-md md:flex ${sidebarFade} ${sidebarHidden}`}
+        >
+          {sidebarPanels}
+        </aside>
+
+        {/* Mobile fallback: inline sidebar drawer at the bottom */}
+        <aside
+          aria-label="Visualizer controls (mobile)"
+          className="absolute inset-x-0 bottom-0 z-20 flex max-h-[55dvh] flex-col gap-4 overflow-y-auto border-t border-torus-border bg-torus-surface/90 p-4 backdrop-blur-md md:hidden"
+        >
+          {sidebarPanels}
+        </aside>
       </main>
 
       {!unlock.unlocked && !unlock.checking ? <UnlockBanner /> : null}
-
       <ShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
         hasFileSource={audio.source?.kind === 'file'}
       />
-
       <DesktopAudioGuide
         open={desktopGuideOpen}
         reducedMotion={reducedMotion}

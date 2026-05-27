@@ -1,23 +1,30 @@
 # torus.wtf
 
-> **Share the loop.** Drop any audio, get an instant link.
+> **Share the loop. Visualize anything.**
 
-A modern, open-source audio clip sharing site — built for producers, musicians, and anyone who wants a no-bullshit way to share short audio clips.
+An open-source audio toolkit built for producers, musicians, and the terminally online — split across two sibling web apps:
 
-## What it is
+- **[torus.wtf](apps/web)** — drop any audio, get an instant share link with a beautiful waveform
+- **[visualizer.torus.wtf](apps/visualizer)** — turn any audio (Spotify, Ableton, Splice, mic, your own files, or a random track from our SoundCloud) into 3D visuals you can export
 
+No ads. No algorithmic feeds. No engagement metrics shoved in your face. No tracking cookies. No proprietary telemetry by default. No premium-only core features. No VC funding. See [`PRINCIPLES.md`](./PRINCIPLES.md).
+
+## What it does
+
+### Clip sharing (`apps/web`)
 - **One-click upload** — drag-and-drop or click-to-browse, anywhere in the app
 - **Instant share code** — `torus.wtf/kT9mFq2x` copied to clipboard the moment the upload finishes
 - **Beautiful waveforms** — frequency-band-colored 2D waveform fingerprint on every clip
-- **Optional 3D visualizers** — four GPU-accelerated presets (Torus Field, Particle Storm, Spectral Tunnel, Volumetric Waveform)
+- **Optional 3D visualizers** in the clip player
 - **Community front page** — weekly-voted top clips, anonymous-friendly uploads
 - **Self-hostable** — single `docker compose up -d` runs the entire stack
 
-## What it is not
-
-See [`PRINCIPLES.md`](./PRINCIPLES.md) for the no-bullshit charter.
-
-No ads. No algorithmic feeds. No engagement metrics shoved in your face. No tracking cookies. No proprietary telemetry by default. No premium-only core features. No VC funding.
+### Visualizer (`apps/visualizer`)
+- **9 GPU-accelerated presets** — Torus Field, Particle Storm, Spectral Tunnel (warp), Volumetric Waveform, Cosmic Mandala, Star Field (face-on galaxy), Outrun Grid (3D synthwave terrain), Liquid Chrome (GPU shader), Mandelbrot Zoom (infinite fractal)
+- **4 audio sources** — local file, microphone, desktop tab capture (Chrome/Edge), or **WTF** for a random track auto-pulled from our SoundCloud at build time
+- **Full-bleed viewport** — visuals take the whole screen, controls float on top as a glass panel that fades out when idle
+- **Export** — WebM (VP9 + Opus) or MP4 where supported, up to 4K / 240fps with the $10 one-time unlock
+- **Gain slider, custom palettes, saved presets, snapshot, BPM detection, keyboard shortcuts**
 
 ## Quick start
 
@@ -55,23 +62,24 @@ pnpm db:migrate
 pnpm dev
 ```
 
-Open <http://localhost:3000>. Dev starts **both** the web app and the audio worker (required for waveforms). If you only run the web app, uploads stay stuck on “preparing waveform…”. Caught magic-link emails appear at <http://localhost:8025> (Mailhog). MinIO console at <http://localhost:9001> (`minioadmin` / `minioadmin`).
+Open <http://localhost:3000> for the clip-sharing site and <http://localhost:3001> for the visualizer. Dev starts the web app, the visualizer, and the audio worker (required for waveforms). Caught magic-link emails appear at <http://localhost:8025> (Mailhog). MinIO console at <http://localhost:9001> (`minioadmin` / `minioadmin`).
 
 ## Repo layout
 
 ```
 apps/
-  web/         Next.js 15 app (UI + API via Route Handlers)
+  web/         Next.js 15 app for clip sharing (torus.wtf)
+  visualizer/  Next.js 15 standalone visualizer app (visualizer.torus.wtf)
   worker/      BullMQ worker for audio processing
 packages/
   db/          Drizzle SQLite schema + migrations
   storage/     S3-compatible Storage interface + drivers (minio, s3, azure, gcs)
   shared/      Zod schemas, share-code generator, types
-  ui/          Tailwind components (Waveform, UploadDropzone, etc.)
-  visualizers/ R3F 3D visualizer presets
+  ui/          Tailwind components (Logo, Waveform, UploadDropzone, ShareCard)
+  visualizers/ React-Three-Fiber 3D preset library, shared by both apps
 infra/
   docker-compose.yml       local dev stack
-  docker-compose.prod.yml  prod stack with 8TB drive bind mounts + Litestream
+  docker-compose.prod.yml  prod stack with bind mounts + Litestream
   Caddyfile                reverse proxy with auto-HTTPS
 ```
 
@@ -84,6 +92,7 @@ infra/
 - **ffmpeg** + **audiowaveform** (BBC) for audio processing
 - **wavesurfer.js** + custom Canvas overlay for 2D waveforms
 - **react-three-fiber** + **drei** + **postprocessing** for 3D visualizers
+- **soundcloud-downloader** for the visualizer's build-time WTF track prefetch
 - **Caddy** reverse proxy for auto-HTTPS in prod
 
 ## License
@@ -92,8 +101,8 @@ infra/
 
 ## Contributing
 
-We love contributors. See [`CONTRIBUTING.md`](./CONTRIBUTING.md). The 3D visualizer system in particular is a great place to start — each preset is a single self-contained R3F file.
+We love contributors. See [`CONTRIBUTING.md`](./CONTRIBUTING.md). The 3D visualizer system in particular is a great place to start — each preset is a single self-contained R3F file in `packages/visualizers/src/presets/`.
 
 ## Sustainability
 
-torus.wtf is run as a passion project, not a startup. We accept donations via [GitHub Sponsors](#) and [Open Collective](#), and a tiny optional [Supporter tier](#) ($3/mo) gets you a custom subdomain. **[torus visualizer](apps/visualizer/)** — a sibling web app for 3D audio visuals and export — offers a $10 one-time unlock for higher export quality. No ads, no data sales, no VC funding — see [`PRINCIPLES.md`](./PRINCIPLES.md).
+torus.wtf is run as a passion project, not a startup. We accept donations via [GitHub Sponsors](#) and [Open Collective](#), and a tiny optional [Supporter tier](#) ($3/mo) gets you a custom subdomain. The visualizer offers a $10 one-time unlock for higher export quality. No ads, no data sales, no VC funding — see [`PRINCIPLES.md`](./PRINCIPLES.md).

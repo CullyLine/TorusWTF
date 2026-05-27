@@ -31,6 +31,12 @@ export function useIdleHide({ forceVisible = false, idleMs = DEFAULT_IDLE_MS }: 
     scheduleHide();
   }, [scheduleHide]);
 
+  const hide = useCallback(() => {
+    if (forceVisible) return;
+    clearTimer();
+    setUiVisible(false);
+  }, [clearTimer, forceVisible]);
+
   useEffect(() => {
     if (forceVisible) {
       setUiVisible(true);
@@ -44,5 +50,6 @@ export function useIdleHide({ forceVisible = false, idleMs = DEFAULT_IDLE_MS }: 
   return {
     uiVisible: forceVisible || uiVisible,
     reveal,
+    hide,
   };
 }
