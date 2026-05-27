@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /hd
+Disallow: /api/hd/
