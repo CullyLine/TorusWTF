@@ -38,6 +38,8 @@ interface VisualizerCanvasProps {
   cameraMode?: CameraMode;
   /** Multiplies the rendered scene size. 1 = default. */
   scale?: number;
+  /** Subwoofer-style camera rumble keyed to bass. 0 = off, 1 = noticeable, 3 = car shaking. */
+  bassShake?: number;
   /** Hidden per-browser personality vector that subtly biases reactivity. */
   creature?: CreaturePersonality;
 }
@@ -62,6 +64,7 @@ export function VisualizerCanvas({
   bloomIntensity,
   cameraMode,
   scale = 1,
+  bassShake = 0,
   creature,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
@@ -106,6 +109,7 @@ export function VisualizerCanvas({
                 embedded={embedded}
                 bloomIntensity={bloomIntensity}
                 cameraMode={cameraMode}
+                bassShake={bassShake}
               />
               <group scale={scale}>
                 <def.Scene analyser={analyser} palette={palette} tier={tier} scale={scale} />

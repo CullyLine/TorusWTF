@@ -226,6 +226,7 @@ export function VisualizerApp() {
       speed: saved.speed,
       smoothness: saved.smoothness ?? 0,
       scale: saved.scale ?? 1,
+      bassShake: saved.bassShake ?? 0,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -462,6 +463,7 @@ export function VisualizerApp() {
                 speed={controls.speed}
                 smoothness={controls.smoothness ?? 0}
                 scale={controls.scale ?? 1}
+                bassShake={controls.bassShake ?? 0}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}

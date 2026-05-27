@@ -49,6 +49,7 @@ export function ControlPanel({
     { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05 },
     { key: 'midMix', label: 'Mid', min: 0, max: 10, step: 0.05 },
     { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05 },
+    { key: 'bassShake', label: 'Bass Shake', min: 0, max: 3, step: 0.05 },
     { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 12.5, step: 0.05 },
     { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05 },
     { key: 'smoothness', label: 'Smoothness', min: 0, max: 0.95, step: 0.01 },
@@ -64,8 +65,8 @@ export function ControlPanel({
 
       <div className="space-y-3">
         {sliders.map(({ key, label, min, max, step }) => {
-          // Smoothness and Scale were added later, so older persisted controls
-          // may not have them. Default to a sensible per-slider value.
+          // Smoothness/Scale/BassShake were added later, so older persisted
+          // controls may not have them. Default to a sensible per-slider value.
           const value = controls[key] ?? (key === 'scale' ? 1 : 0);
           const outOfRange = value < min || value > max;
           const sliderValue = Math.max(min, Math.min(max, value));

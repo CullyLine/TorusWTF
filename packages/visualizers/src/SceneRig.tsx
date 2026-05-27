@@ -15,6 +15,8 @@ interface SceneRigProps {
   embedded?: boolean;
   bloomIntensity?: number;
   cameraMode?: CameraMode;
+  /** 0 = off, 1 = noticeable, 3 = subwoofer-in-a-car. */
+  bassShake?: number;
 }
 
 /**
@@ -26,6 +28,7 @@ export function SceneRig({
   embedded,
   bloomIntensity,
   cameraMode = 'drift',
+  bassShake = 0,
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
   const bassLight = useRef<PointLight>(null);
@@ -74,6 +77,18 @@ export function SceneRig({
         state.camera.position.y = Math.cos(t * 14.3) * shake * 0.7;
         state.camera.position.z = baseZ + Math.sin(t * 11.1) * shake * 0.4;
         break;
+    }
+
+    // Subwoofer rumble: high-frequency low-amplitude wobble that scales with
+    // current bass + recent beat. Lives ON TOP of cameraMode placement.
+    if (bassShake > 0) {
+      const bassPunch = m.bass * 0.6 + m.beat * 1.4;
+      const amp = bassShake * bassPunch * (embedded ? 0.04 : 0.07);
+      // Two slightly desynced sines so it doesn't feel like a clean wave;
+      // y dominates because real subs you feel in your chest vertically.
+      state.camera.position.y += Math.sin(t * 87.3) * amp;
+      state.camera.position.x += Math.sin(t * 63.1 + 1.7) * amp * 0.45;
+      state.camera.position.z += Math.sin(t * 52.7 + 0.9) * amp * 0.3;
     }
 
     state.camera.lookAt(0, 0, 0);

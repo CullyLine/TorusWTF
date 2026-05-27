@@ -31,6 +31,7 @@ export interface SavedPreset {
   speed: number;
   smoothness?: number;
   scale?: number;
+  bassShake?: number;
 }
 
 export interface VisualizerControls {
@@ -42,6 +43,8 @@ export interface VisualizerControls {
   /** Optional for backwards-compat with localStorage from before these fields existed. */
   smoothness?: number;
   scale?: number;
+  /** Subwoofer-style camera rumble keyed to bass. 0 = off, 1 = noticeable, 3 = car shaking. */
+  bassShake?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -54,6 +57,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   speed: 1,
   smoothness: 0,
   scale: 1,
+  bassShake: 0,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };
