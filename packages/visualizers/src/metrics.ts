@@ -92,11 +92,11 @@ export function AudioMetricsProvider({
     prevEnergy.current = lerp(prevEnergy.current, energy, energySmooth);
 
     metricsRef.current = {
-      bass: clamp01(bass),
-      mid: clamp01(mid),
-      high: clamp01(high),
-      energy: clamp01(energy),
-      beat: Math.min(1, beat),
+      bass: softCap(bass),
+      mid: softCap(mid),
+      high: softCap(high),
+      energy: softCap(energy),
+      beat: Math.min(METRIC_CEILING, beat),
       breath: lerp(metricsRef.current.breath, bass, breathSmooth),
       flow: lerp(metricsRef.current.flow, energy, flowSmooth),
     };
@@ -115,6 +115,9 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function clamp01(v: number): number {
-  return Math.max(0, Math.min(1, v));
+// Soft cap with 10x headroom: lets cranked-up sliders push past the
+// "everything looks normal" 0..1 range without ever going NaN/Infinity.
+const METRIC_CEILING = 10;
+function softCap(v: number): number {
+  return Math.max(0, Math.min(METRIC_CEILING, v));
 }

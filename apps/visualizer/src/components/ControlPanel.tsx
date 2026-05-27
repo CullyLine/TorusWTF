@@ -2,6 +2,7 @@
 
 import type { CameraMode } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
+import { EditableNumber } from '@/components/EditableNumber';
 import { BUILTIN_PALETTES } from '@/lib/palettes';
 import type { SavedPreset, VisualizerControls } from '@/lib/storage';
 import { loadSavedPresets, persistSavedPresets } from '@/lib/storage';
@@ -44,12 +45,12 @@ export function ControlPanel({
     max: number;
     step: number;
   }> = [
-    { key: 'reactivity', label: 'Gain', min: 0.2, max: 2.5, step: 0.05 },
-    { key: 'bassMix', label: 'Bass', min: 0, max: 2, step: 0.05 },
-    { key: 'midMix', label: 'Mid', min: 0, max: 2, step: 0.05 },
-    { key: 'highMix', label: 'High', min: 0, max: 2, step: 0.05 },
-    { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 2.5, step: 0.05 },
-    { key: 'speed', label: 'Speed', min: 0.3, max: 2.5, step: 0.05 },
+    { key: 'reactivity', label: 'Gain', min: 0.2, max: 12.5, step: 0.05 },
+    { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05 },
+    { key: 'midMix', label: 'Mid', min: 0, max: 10, step: 0.05 },
+    { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05 },
+    { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 12.5, step: 0.05 },
+    { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05 },
   ];
 
   const saved = unlocked ? loadSavedPresets() : [];
@@ -60,23 +61,33 @@ export function ControlPanel({
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Controls</h2>
 
       <div className="space-y-3">
-        {sliders.map(({ key, label, min, max, step }) => (
-          <label key={key} className="block text-xs text-torus-fg-dim">
-            <div className="mb-1 flex justify-between">
-              <span>{label}</span>
-              <span>{controls[key].toFixed(2)}</span>
+        {sliders.map(({ key, label, min, max, step }) => {
+          const value = controls[key];
+          const outOfRange = value < min || value > max;
+          const sliderValue = Math.max(min, Math.min(max, value));
+          return (
+            <div key={key} className="block text-xs text-torus-fg-dim">
+              <div className="mb-1 flex justify-between">
+                <span>{label}</span>
+                <EditableNumber
+                  value={value}
+                  onCommit={(v) => onChange({ [key]: v })}
+                  ariaLabel={label}
+                  outOfRange={outOfRange}
+                />
+              </div>
+              <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={sliderValue}
+                onChange={(e) => onChange({ [key]: Number(e.target.value) })}
+                className="w-full accent-torus-mid"
+              />
             </div>
-            <input
-              type="range"
-              min={min}
-              max={max}
-              step={step}
-              value={controls[key]}
-              onChange={(e) => onChange({ [key]: Number(e.target.value) })}
-              className="w-full accent-torus-mid"
-            />
-          </label>
-        ))}
+          );
+        })}
 
         <label className="block text-xs text-torus-fg-dim">
           Camera motion

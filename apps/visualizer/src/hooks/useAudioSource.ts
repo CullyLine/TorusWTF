@@ -6,12 +6,14 @@ import { VOLUME_KEY } from '@/lib/storage';
 import { useMicCapture } from './useMicCapture';
 import { useTabCapture } from './useTabCapture';
 
+const DEFAULT_VOLUME = 0.4;
+
 function readInitialVolume(): number {
-  if (typeof window === 'undefined') return 1;
+  if (typeof window === 'undefined') return DEFAULT_VOLUME;
   const raw = window.localStorage.getItem(VOLUME_KEY);
-  if (raw === null) return 1;
+  if (raw === null) return DEFAULT_VOLUME;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return 1;
+  if (!Number.isFinite(parsed)) return DEFAULT_VOLUME;
   return Math.max(0, Math.min(1, parsed));
 }
 
