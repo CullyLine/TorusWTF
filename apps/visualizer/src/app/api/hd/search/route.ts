@@ -22,6 +22,13 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+/**
+ * Pin near HD's customer-experience infrastructure (Atlanta). Their
+ * Akamai/edge config is more permissive for traffic from the US East
+ * region; iad1 (Washington DC) is the closest Vercel region to the
+ * HD edge POPs.
+ */
+export const preferredRegion = ['iad1', 'cle1'];
 
 const PAGE_SIZE = 24;
 const MAX_ENRICH_PARALLEL = 8;
@@ -47,7 +54,7 @@ async function enrichItems(items: HdItem[], signal: AbortSignal): Promise<HdItem
             'productClientOnlyProduct',
             PRODUCT_QUERY,
             { storeId: HD_STORE_ID, itemId: it.itemId },
-            { signal },
+            { signal, currentUrl: `/p/${it.itemId}` },
           );
           const found = extractAisleBay(data.product);
           out[idx] = applyEnrichment(it, found);
@@ -100,7 +107,11 @@ export async function GET(req: Request) {
         storefilter: storefilterParam ?? 'IN_STORE',
         channel: 'DESKTOP',
       },
-      { signal: req.signal, debug: upstreamDebug },
+      {
+        signal: req.signal,
+        debug: upstreamDebug,
+        currentUrl: `/s/${encodeURIComponent(q).replace(/%20/g, '+')}`,
+      },
     );
 
     const { items, total } = normalizeSearch(data);

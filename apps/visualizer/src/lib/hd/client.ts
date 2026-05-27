@@ -13,7 +13,31 @@
  */
 const HD_HOST = 'https://apionline.homedepot.com/federation-gateway/graphql';
 
-function buildHeaders(operationName: string): Record<string, string> {
+/**
+ * Build a v4 UUID for the guest customer token. THD's own JS generates
+ * one per browsing session and re-uses it across requests — we mint a
+ * fresh one per server call, which their subgraphs accept as a guest.
+ */
+function uuid(): string {
+  // randomUUID exists on Node 22 globalThis.crypto.
+  const g = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (g?.randomUUID) return g.randomUUID();
+  // Fallback — extremely unlikely path on Vercel Node runtime.
+  const hex = '0123456789abcdef';
+  let s = '';
+  for (let i = 0; i < 36; i++) {
+    if (i === 8 || i === 13 || i === 18 || i === 23) s += '-';
+    else if (i === 14) s += '4';
+    else if (i === 19) s += hex[(Math.random() * 4) | (0 + 8)];
+    else s += hex[(Math.random() * 16) | 0];
+  }
+  return s;
+}
+
+function buildHeaders(
+  operationName: string,
+  ctx: { currentUrl: string; customerToken: string },
+): Record<string, string> {
   // x-experience-name and apollographql-client-name are scoped per
   // operation. For searchModel both are literally "search" — using
   // anything else makes the federation gateway return its "Generic
@@ -26,7 +50,7 @@ function buildHeaders(operationName: string): Record<string, string> {
     Accept: '*/*',
     'Accept-Language': 'en-US,en;q=0.9',
     Origin: 'https://www.homedepot.com',
-    Referer: 'https://www.homedepot.com/',
+    Referer: `https://www.homedepot.com${ctx.currentUrl}`,
     'User-Agent':
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
     'sec-ch-ua':
@@ -39,8 +63,12 @@ function buildHeaders(operationName: string): Record<string, string> {
     'apollographql-client-name': clientName,
     'apollographql-client-version': '1.0.0',
     'x-experience-name': experience,
+    'x-experience-id': operationName === 'searchModel' ? 'customer_search' : 'general_merchandise',
     'x-debug': 'false',
     'x-thd-channel': 'desktop',
+    'x-thd-customer-token': ctx.customerToken,
+    'x-current-url': ctx.currentUrl,
+    'x-segment-customer-id': ctx.customerToken,
   };
 }
 
@@ -94,15 +122,26 @@ export async function hdGraphql<T>(
   operationName: string,
   query: string,
   variables: Record<string, unknown>,
-  init?: { signal?: AbortSignal; debug?: HdGraphqlDebug[] },
+  init?: {
+    signal?: AbortSignal;
+    debug?: HdGraphqlDebug[];
+    /** Synthetic referer path (e.g. `/s/screws`). Defaults to `/`. */
+    currentUrl?: string;
+    /** Override the guest customer token (rare — usually leave undefined). */
+    customerToken?: string;
+  },
 ): Promise<T> {
   const url = `${HD_HOST}?opname=${operationName}`;
+  const ctx = {
+    currentUrl: init?.currentUrl ?? '/',
+    customerToken: init?.customerToken ?? uuid(),
+  };
 
   let res: Response;
   try {
     res = await fetch(url, {
       method: 'POST',
-      headers: buildHeaders(operationName),
+      headers: buildHeaders(operationName, ctx),
       body: JSON.stringify({ operationName, query, variables }),
       cache: 'no-store',
       signal: init?.signal,
