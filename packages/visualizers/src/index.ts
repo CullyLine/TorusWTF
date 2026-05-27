@@ -6,3 +6,9 @@ export { VISUALIZERS, type VisualizerId, type VisualizerDefinition } from './reg
 export { pickRandomVisualizerPreset } from './pickRandomPreset';
 export type { AudioMetrics, MetricsScales } from './metrics';
 export type { CameraMode } from './SceneRig';
+export {
+  createCreature,
+  NEUTRAL_PERSONALITY,
+  type Creature,
+  type CreaturePersonality,
+} from './dsp/creature';

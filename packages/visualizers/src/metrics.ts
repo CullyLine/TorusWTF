@@ -10,6 +10,13 @@ import {
 } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { AnalyserHandle } from './audio';
+import {
+  applyCreatureBass,
+  applyCreatureHigh,
+  applyCreatureMid,
+  NEUTRAL_PERSONALITY,
+  type CreaturePersonality,
+} from './dsp/creature';
 
 export interface AudioMetrics {
   bass: number;
@@ -51,6 +58,8 @@ export interface MetricsScales {
    * Acts as an exponential easing constant on bass/mid/high/energy/beat.
    */
   smoothness?: number;
+  /** Per-browser seeded bias vector. Subtle ±15% tilt on bass/mid/high. */
+  creature?: CreaturePersonality;
 }
 
 export function AudioMetricsProvider({
@@ -62,6 +71,7 @@ export function AudioMetricsProvider({
   highMix = 1,
   speed = 1,
   smoothness = 0,
+  creature = NEUTRAL_PERSONALITY,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
@@ -86,6 +96,9 @@ export function AudioMetricsProvider({
         mid = (avg(freqBuf.current, s1, s2) / 255) * midMix * reactivity;
         high = (avg(freqBuf.current, s2, bins) / 255) * highMix * reactivity;
         energy = (avg(freqBuf.current, 0, bins) / 255) * reactivity;
+        bass = applyCreatureBass(bass, creature);
+        mid = applyCreatureMid(mid, creature);
+        high = applyCreatureHigh(high, creature);
       }
     }
 
