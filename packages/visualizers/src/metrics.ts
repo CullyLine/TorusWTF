@@ -33,6 +33,14 @@ export interface AudioMetrics {
   beatPhase: number;
   /** 0..1 phase within the current 4/4 bar. */
   barPhase: number;
+  /** 0..1 "is there drum content right now" — transient bursts in mid/high. */
+  drumActivity: number;
+  /** 0..1 "is there vocal content" — energy concentrated in vocal formant range. */
+  vocalActivity: number;
+  /** 0..1 sustained bass-band energy (smoother than `bass`). */
+  bassActivity: number;
+  /** 0..1 sustained tonal mid+high content (instruments/synths). */
+  leadActivity: number;
 }
 
 export const DEFAULT_METRICS: AudioMetrics = {
@@ -46,6 +54,10 @@ export const DEFAULT_METRICS: AudioMetrics = {
   bpm: null,
   beatPhase: 0,
   barPhase: 0,
+  drumActivity: 0,
+  vocalActivity: 0,
+  bassActivity: 0,
+  leadActivity: 0,
 };
 
 const MetricsRefContext = createContext<MutableRefObject<AudioMetrics> | null>(null);
@@ -102,12 +114,23 @@ export function AudioMetricsProvider({
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const prevBass = useRef(0.15);
   const prevEnergy = useRef(0.15);
+  // Stem-detection state.
+  const prevHigh = useRef(0.15);
+  const prevMid = useRef(0.15);
+  const sustainedBass = useRef(0.15);
+  const sustainedLead = useRef(0.15);
 
   useFrame(() => {
     let bass = 0.15;
     let mid = 0.15;
     let high = 0.15;
     let energy = 0.15;
+
+    // Stem activity scratch.
+    let drumActivity = 0;
+    let vocalActivity = 0;
+    let bassActivity = 0;
+    let leadActivity = 0;
 
     if (analyser) {
       const bins = analyser.getFrequencyData(freqBuf.current);
@@ -123,6 +146,36 @@ export function AudioMetricsProvider({
         bass = applyCreatureBass(bass, creature);
         mid = applyCreatureMid(mid, creature);
         high = applyCreatureHigh(high, creature);
+
+        // --- Heuristic stem detection (no ML, just band patterns) ---
+        // Drums: spectral flux at mid/high — transient bursts (snare, hat).
+        const midFlux = Math.max(0, mid - prevMid.current);
+        const highFlux = Math.max(0, high - prevHigh.current);
+        drumActivity = Math.min(1, (midFlux * 3 + highFlux * 4) * 1.2);
+
+        // Vocals: energy concentrated in vocal formant range (~200-3000Hz).
+        // We compute a vocal-band ratio against the rest of the spectrum.
+        const vocalLo = Math.max(1, Math.round((200 / nyquist) * bins));
+        const vocalHi = Math.max(vocalLo + 1, Math.round((3000 / nyquist) * bins));
+        const vocalE = avg(freqBuf.current, vocalLo, vocalHi) / 255;
+        const restE = energy > 0.001 ? energy / reactivity : 0.001;
+        const vocalRatio = vocalE / Math.max(0.05, restE);
+        // Ratio peaks ~1.2-1.5 when vocals dominate; clamp + map to 0..1.
+        vocalActivity = Math.min(1, Math.max(0, (vocalRatio - 0.6) * 1.5));
+
+        // Sustained bass: low-passed bass (slow attack/release).
+        sustainedBass.current = sustainedBass.current * 0.85 + bass * 0.15;
+        bassActivity = Math.min(1, sustainedBass.current);
+
+        // Lead: mid+high tonal content minus vocals (so synths/instruments,
+        // not voices). Smoothed so transients don't dominate.
+        const tonalNow = Math.min(1, (mid + high * 0.6) * 0.5);
+        const leadNow = Math.max(0, tonalNow - vocalActivity * 0.4);
+        sustainedLead.current = sustainedLead.current * 0.8 + leadNow * 0.2;
+        leadActivity = Math.min(1, sustainedLead.current);
+
+        prevMid.current = mid;
+        prevHigh.current = high;
       }
     }
 
@@ -169,6 +222,10 @@ export function AudioMetricsProvider({
       bpm: bpmNow,
       beatPhase,
       barPhase,
+      drumActivity: lerp(prev.drumActivity, drumActivity, Math.max(respond, 0.3)),
+      vocalActivity: lerp(prev.vocalActivity, vocalActivity, Math.max(respond, 0.15)),
+      bassActivity: lerp(prev.bassActivity, bassActivity, Math.max(respond, 0.2)),
+      leadActivity: lerp(prev.leadActivity, leadActivity, Math.max(respond, 0.2)),
     };
   });
 
