@@ -11,6 +11,7 @@ import {
 import type { WaveformPalette } from '@torus/shared';
 import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
+import { HwAccelBanner } from '@/components/HwAccelBanner';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
@@ -307,6 +308,7 @@ export function VisualizerApp() {
 
   return (
     <div className={`min-h-dvh ${!unlock.unlocked ? 'pb-12' : ''}`}>
+      <HwAccelBanner />
       {!heroCollapsed ? (
         <header className="border-b border-torus-border px-4 py-8 md:px-8">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
