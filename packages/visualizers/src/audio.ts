@@ -6,6 +6,8 @@ export interface AnalyserHandle {
   getFrequencyData: (out: Uint8Array) => number;
   getTimeDomainData: (out: Uint8Array) => number;
   fftBinCount: number;
+  /** Audio context sample rate in Hz. Used for Hz <-> FFT bin index math. */
+  sampleRate: number;
 }
 
 interface AudioGraph {
@@ -82,6 +84,9 @@ function createAnalyserHandle(
     },
     get fftBinCount() {
       return getAnalyser()?.frequencyBinCount ?? fftSize / 2;
+    },
+    get sampleRate() {
+      return getAnalyser()?.context.sampleRate ?? 44100;
     },
   };
 }

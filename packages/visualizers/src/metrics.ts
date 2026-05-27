@@ -60,6 +60,10 @@ export interface MetricsScales {
   smoothness?: number;
   /** Per-browser seeded bias vector. Subtle ±15% tilt on bass/mid/high. */
   creature?: CreaturePersonality;
+  /** Upper edge of the bass band in Hz. Default 250Hz. */
+  bassMaxHz?: number;
+  /** Upper edge of the mid band in Hz. Default 2000Hz. */
+  midMaxHz?: number;
 }
 
 export function AudioMetricsProvider({
@@ -72,6 +76,8 @@ export function AudioMetricsProvider({
   speed = 1,
   smoothness = 0,
   creature = NEUTRAL_PERSONALITY,
+  bassMaxHz = 250,
+  midMaxHz = 2000,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
@@ -90,8 +96,10 @@ export function AudioMetricsProvider({
     if (analyser) {
       const bins = analyser.getFrequencyData(freqBuf.current);
       if (bins > 0) {
-        const s1 = Math.floor(bins * 0.08);
-        const s2 = Math.floor(bins * 0.35);
+        const nyquist = analyser.sampleRate / 2;
+        // Convert Hz crossovers to bin indices. Clamp to keep bands non-empty.
+        const s1 = Math.max(1, Math.min(bins - 2, Math.round((bassMaxHz / nyquist) * bins)));
+        const s2 = Math.max(s1 + 1, Math.min(bins - 1, Math.round((midMaxHz / nyquist) * bins)));
         bass = (avg(freqBuf.current, 0, s1) / 255) * bassMix * reactivity;
         mid = (avg(freqBuf.current, s1, s2) / 255) * midMix * reactivity;
         high = (avg(freqBuf.current, s2, bins) / 255) * highMix * reactivity;

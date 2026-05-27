@@ -42,6 +42,10 @@ interface VisualizerCanvasProps {
   bassShake?: number;
   /** Hidden per-browser personality vector that subtly biases reactivity. */
   creature?: CreaturePersonality;
+  /** Upper edge of the bass band in Hz. */
+  bassMaxHz?: number;
+  /** Upper edge of the mid band in Hz. */
+  midMaxHz?: number;
 }
 
 export function VisualizerCanvas({
@@ -66,6 +70,8 @@ export function VisualizerCanvas({
   scale = 1,
   bassShake = 0,
   creature,
+  bassMaxHz,
+  midMaxHz,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -82,6 +88,8 @@ export function VisualizerCanvas({
     speed,
     smoothness,
     creature,
+    bassMaxHz,
+    midMaxHz,
   };
 
   const containerStyle = exportSize

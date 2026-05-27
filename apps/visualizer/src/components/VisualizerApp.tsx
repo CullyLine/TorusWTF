@@ -227,6 +227,8 @@ export function VisualizerApp() {
       smoothness: saved.smoothness ?? 0,
       scale: saved.scale ?? 1,
       bassShake: saved.bassShake ?? 0,
+      bassMaxHz: saved.bassMaxHz ?? 250,
+      midMaxHz: saved.midMaxHz ?? 2000,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -409,6 +411,7 @@ export function VisualizerApp() {
         onSavePreset={handleSavePreset}
         presetsVersion={presetsVersion}
         onPresetsChange={() => setPresetsVersion((v) => v + 1)}
+        analyser={audio.analyser}
       />
       <ExportPanel
         unlocked={unlock.unlocked}
@@ -464,6 +467,8 @@ export function VisualizerApp() {
                 smoothness={controls.smoothness ?? 0}
                 scale={controls.scale ?? 1}
                 bassShake={controls.bassShake ?? 0}
+                bassMaxHz={controls.bassMaxHz ?? 250}
+                midMaxHz={controls.midMaxHz ?? 2000}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}

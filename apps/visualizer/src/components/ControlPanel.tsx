@@ -1,7 +1,8 @@
 'use client';
 
-import type { CameraMode } from '@torus/visualizers';
+import type { AnalyserHandle, CameraMode } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
+import { BandSplitter } from '@/components/BandSplitter';
 import { EditableNumber } from '@/components/EditableNumber';
 import { BUILTIN_PALETTES } from '@/lib/palettes';
 import type { SavedPreset, VisualizerControls } from '@/lib/storage';
@@ -19,6 +20,7 @@ interface ControlPanelProps {
   onSavePreset: () => void;
   presetsVersion: number;
   onPresetsChange: () => void;
+  analyser: AnalyserHandle | null;
 }
 
 const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive'];
@@ -37,6 +39,7 @@ export function ControlPanel({
   onSavePreset,
   presetsVersion,
   onPresetsChange,
+  analyser,
 }: ControlPanelProps) {
   const sliders: Array<{
     key: SliderKey;
@@ -64,13 +67,13 @@ export function ControlPanel({
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Controls</h2>
 
       <div className="space-y-3">
-        {sliders.map(({ key, label, min, max, step }) => {
+        {sliders.map(({ key, label, min, max, step }, idx) => {
           // Smoothness/Scale/BassShake were added later, so older persisted
           // controls may not have them. Default to a sensible per-slider value.
           const value = controls[key] ?? (key === 'scale' ? 1 : 0);
           const outOfRange = value < min || value > max;
           const sliderValue = Math.max(min, Math.min(max, value));
-          return (
+          const sliderEl = (
             <div key={key} className="block text-xs text-torus-fg-dim">
               <div className="mb-1 flex justify-between">
                 <span>{label}</span>
@@ -92,6 +95,22 @@ export function ControlPanel({
               />
             </div>
           );
+          // Insert the BandSplitter UI right after Gain (the first slider).
+          if (idx === 0) {
+            return (
+              <div key="gain-and-bands" className="space-y-3">
+                {sliderEl}
+                <BandSplitter
+                  analyser={analyser}
+                  palette={palette}
+                  bassMaxHz={controls.bassMaxHz ?? 250}
+                  midMaxHz={controls.midMaxHz ?? 2000}
+                  onChange={onChange}
+                />
+              </div>
+            );
+          }
+          return sliderEl;
         })}
 
         <label className="block text-xs text-torus-fg-dim">

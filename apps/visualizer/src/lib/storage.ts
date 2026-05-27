@@ -32,6 +32,8 @@ export interface SavedPreset {
   smoothness?: number;
   scale?: number;
   bassShake?: number;
+  bassMaxHz?: number;
+  midMaxHz?: number;
 }
 
 export interface VisualizerControls {
@@ -45,6 +47,10 @@ export interface VisualizerControls {
   scale?: number;
   /** Subwoofer-style camera rumble keyed to bass. 0 = off, 1 = noticeable, 3 = car shaking. */
   bassShake?: number;
+  /** Upper edge of the bass band in Hz. */
+  bassMaxHz?: number;
+  /** Upper edge of the mid band in Hz. */
+  midMaxHz?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -58,6 +64,8 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   smoothness: 0,
   scale: 1,
   bassShake: 0,
+  bassMaxHz: 250,
+  midMaxHz: 2000,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };
