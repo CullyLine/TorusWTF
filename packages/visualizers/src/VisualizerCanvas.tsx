@@ -32,6 +32,7 @@ interface VisualizerCanvasProps {
   midMix?: number;
   highMix?: number;
   speed?: number;
+  smoothness?: number;
   bloomIntensity?: number;
   cameraMode?: CameraMode;
 }
@@ -52,6 +53,7 @@ export function VisualizerCanvas({
   midMix,
   highMix,
   speed,
+  smoothness,
   bloomIntensity,
   cameraMode,
 }: VisualizerCanvasProps) {
@@ -68,6 +70,7 @@ export function VisualizerCanvas({
     midMix,
     highMix,
     speed,
+    smoothness,
   };
 
   const containerStyle = exportSize

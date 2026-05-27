@@ -45,6 +45,12 @@ export interface MetricsScales {
   midMix?: number;
   highMix?: number;
   speed?: number;
+  /**
+   * 0 = snap to each frame's value (sharp/pointy at high gain).
+   * 1 = barely move at all (gooey/floaty).
+   * Acts as an exponential easing constant on bass/mid/high/energy/beat.
+   */
+  smoothness?: number;
 }
 
 export function AudioMetricsProvider({
@@ -55,6 +61,7 @@ export function AudioMetricsProvider({
   midMix = 1,
   highMix = 1,
   speed = 1,
+  smoothness = 0,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
@@ -91,14 +98,22 @@ export function AudioMetricsProvider({
     prevBass.current = lerp(prevBass.current, bass, bassSmooth);
     prevEnergy.current = lerp(prevEnergy.current, energy, energySmooth);
 
+    // Smoothness 0..1 → response rate 1..~0.02 (frame-rate-independent enough
+    // at typical 60fps; we treat it as a per-frame lerp factor).
+    const smoothClamped = Math.max(0, Math.min(0.99, smoothness));
+    const respond = 1 - smoothClamped * 0.98;
+
+    const prev = metricsRef.current;
     metricsRef.current = {
-      bass: softCap(bass),
-      mid: softCap(mid),
-      high: softCap(high),
-      energy: softCap(energy),
-      beat: Math.min(METRIC_CEILING, beat),
-      breath: lerp(metricsRef.current.breath, bass, breathSmooth),
-      flow: lerp(metricsRef.current.flow, energy, flowSmooth),
+      bass: lerp(prev.bass, softCap(bass), respond),
+      mid: lerp(prev.mid, softCap(mid), respond),
+      high: lerp(prev.high, softCap(high), respond),
+      energy: lerp(prev.energy, softCap(energy), respond),
+      // Beats are spikes; smoothing them too hard kills the impulse, so we
+      // only apply a small fraction of the smoothness.
+      beat: lerp(prev.beat, Math.min(METRIC_CEILING, beat), Math.max(respond, 0.4)),
+      breath: lerp(prev.breath, bass, breathSmooth),
+      flow: lerp(prev.flow, energy, flowSmooth),
     };
   });
 

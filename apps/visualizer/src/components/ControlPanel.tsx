@@ -51,6 +51,7 @@ export function ControlPanel({
     { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05 },
     { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 12.5, step: 0.05 },
     { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05 },
+    { key: 'smoothness', label: 'Smoothness', min: 0, max: 0.95, step: 0.01 },
   ];
 
   const saved = unlocked ? loadSavedPresets() : [];
@@ -62,7 +63,8 @@ export function ControlPanel({
 
       <div className="space-y-3">
         {sliders.map(({ key, label, min, max, step }) => {
-          const value = controls[key];
+          // Smoothness was added later, so older persisted controls won't have it.
+          const value = controls[key] ?? 0;
           const outOfRange = value < min || value > max;
           const sliderValue = Math.max(min, Math.min(max, value));
           return (

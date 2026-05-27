@@ -29,18 +29,20 @@ void main() {
   float twinkle = sin(uTime * (3.0 + aPhase * 5.0) + aPhase * 40.0) * 0.5 + 0.5;
   twinkle *= 0.35 + uHigh * 0.65;
 
-  float burst = step(0.92, fract(aPhase * 17.0 + uTime * (0.5 + uMid)));
-  float sizeBoost = 1.0 + uBass * 0.8 + uBeat * 0.6 + burst * uMid * 4.0;
+  float burst = step(0.97, fract(aPhase * 17.0 + uTime * (0.5 + uMid)));
+  float sizeBoost = 1.0 + uBass * 0.4 + uBeat * 0.35 + burst * uMid * 1.8;
 
   float core = 1.0 - smoothstep(0.0, 2.5, aRadius);
   float rim = smoothstep(1.5, 5.0, aRadius);
   vec3 hotCore = mix(vec3(0.55, 0.75, 1.0), vec3(1.0, 0.95, 0.85), core);
   vec3 warm = mix(vec3(1.0, 0.85, 0.45), vec3(0.9, 0.35, 0.25), rim);
-  vColor = mix(hotCore, warm, rim) * (1.0 + twinkle * 0.35 + core * uBass * 0.5);
-  vAlpha = 0.35 + twinkle * 0.35 + core * 0.35 + uEnergy * 0.25;
+  vColor = mix(hotCore, warm, rim) * (0.85 + twinkle * 0.25 + core * uBass * 0.2);
+  vAlpha = 0.28 + twinkle * 0.32 + core * 0.25 + uEnergy * 0.12;
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = (2.0 + sizeBoost * 3.5) * (220.0 / -mvPosition.z);
+  // Base size kept small: 50k+ additively-blended points saturate the framebuffer
+  // (and the bloom pass) instantly if individual sprites get too large.
+  gl_PointSize = (1.2 + sizeBoost * 1.4) * (22.0 / -mvPosition.z);
   gl_Position = projectionMatrix * mvPosition;
 }
 `;

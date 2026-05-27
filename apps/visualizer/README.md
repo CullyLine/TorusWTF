@@ -13,7 +13,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 - **WTF** — picks a random track from [`@animegirlfarts69`](https://soundcloud.com/animegirlfarts69) on SoundCloud. Tracks are downloaded at build time, so the WTF button always has full reactivity (no cross-origin iframe limits).
 
-### Presets (9)
+### Presets (10)
 
 | ID | Name | Vibe |
 |---|---|---|
@@ -25,12 +25,13 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `star_field` | Star Field | Face-on spiral galaxy with twinkles and beat-driven camera punches |
 | `outrun_grid` | Outrun Grid | Real 3D wireframe terrain receding to a banded synthwave sun |
 | `liquid_chrome` | Liquid Chrome | GPU-shader chrome blob with fresnel + procedural env reflection |
-| `mandelbrot_zoom` | Mandelbrot Zoom | Smooth looped fractal zoom, audio-reactive colors and speed |
+| `liquid_blob` | Liquid Blob | Raymarched metaballs (5-sphere smin field) — amorphous, no spiky vertices |
+| `mandelbrot_zoom` | Mandelbrot Zoom | Smooth looped fractal zoom, palette-locked colors, audio-reactive speed |
 
 ### UI features
 
 - **Full-bleed viewport** — visuals take the whole screen below the header. Controls float on the left as a translucent glass panel that auto-hides when the cursor is idle (3s) or leaves the window.
-- **Gain slider** — boost visual intensity without changing audio volume
+- **Mad-scientist controls** — Gain, Bass/Mid/High mix, Bloom, Speed, and Smoothness with 5x slider headroom. Double-click any value above a slider to type any number with no clamp (out-of-range values display in the bass accent and the slider thumb pins at its nearest edge). Smoothness eases the audio metrics over time so visuals don't snap pointy at high gain.
 - **Custom 3-band palette** (unlocked tier) — bass/mid/high colors persist per preset
 - **Saved presets** (unlocked tier) — stash settings combinations to localStorage
 - **Snapshot** — PNG of the current frame
