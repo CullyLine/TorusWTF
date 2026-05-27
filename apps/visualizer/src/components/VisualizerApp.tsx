@@ -11,6 +11,7 @@ import {
 import type { WaveformPalette } from '@torus/shared';
 import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
+import { FeedbackButton } from '@/components/FeedbackButton';
 import { HwAccelBanner } from '@/components/HwAccelBanner';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
@@ -338,13 +339,16 @@ export function VisualizerApp() {
       ) : (
         <header className="flex items-center justify-between border-b border-torus-border px-4 py-3">
           <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
-          <button
-            type="button"
-            onClick={() => setHeroCollapsed(false)}
-            className="text-xs text-torus-fg-faint hover:text-torus-mid"
-          >
-            About
-          </button>
+          <div className="flex items-center gap-2">
+            <FeedbackButton />
+            <button
+              type="button"
+              onClick={() => setHeroCollapsed(false)}
+              className="text-xs text-torus-fg-faint hover:text-torus-mid"
+            >
+              About
+            </button>
+          </div>
         </header>
       )}
 
