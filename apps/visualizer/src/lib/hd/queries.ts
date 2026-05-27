@@ -14,6 +14,15 @@
  * "—" rather than failing the whole page.
  */
 
+/**
+ * Deliberately minimal — only fields independently verified to exist
+ * across multiple working Home Depot scrapers (cirkit/Apify,
+ * scrapyspider, projected1 gist). Speculative fields like
+ * `metadata.stores`, `info.classNumber`, `pricing.alternatePriceDisplay`,
+ * `fulfillment...fulfillable`, and `media.images.subType` were dropped
+ * because including any of them triggers the federation gateway's
+ * "Generic Errors API" response.
+ */
 export const SEARCH_MODEL_QUERY = /* GraphQL */ `
   query searchModel(
     $storeId: String
@@ -29,27 +38,14 @@ export const SEARCH_MODEL_QUERY = /* GraphQL */ `
       storeId: $storeId
       channel: $channel
     ) {
-      metadata {
-        searchRedirect
-        canonicalUrl
-        clearAllRefinementsURL
-        contentType
-        stores {
-          storeId
-          storeName
-        }
-      }
       searchReport {
         totalProducts
-        didYouMean
-        correctedKeyword
         keyword
         pageSize
         startIndex
       }
       products(startIndex: $startIndex, pageSize: $pageSize) {
         itemId
-        dataSources
         identifiers {
           storeSkuNumber
           productLabel
@@ -62,24 +58,16 @@ export const SEARCH_MODEL_QUERY = /* GraphQL */ `
             url
             sizes
             type
-            subType
           }
         }
         pricing(storeId: $storeId) {
           value
           original
           unitOfMeasure
-          alternatePriceDisplay
-        }
-        info {
-          productDepartment
-          productDepartmentId
-          classNumber
         }
         fulfillment(storeId: $storeId) {
           fulfillmentOptions {
             type
-            fulfillable
             services {
               type
               locations {
@@ -114,7 +102,7 @@ export const SEARCH_MODEL_QUERY = /* GraphQL */ `
  */
 export const PRODUCT_QUERY = /* GraphQL */ `
   query productClientOnlyProduct($storeId: String!, $itemId: String!) {
-    product(itemId: $itemId, dataSource: "searchNova") {
+    product(itemId: $itemId) {
       itemId
       identifiers {
         storeSkuNumber
@@ -123,13 +111,6 @@ export const PRODUCT_QUERY = /* GraphQL */ `
       }
       info {
         productDepartment
-        productDepartmentId
-        productSubType {
-          name
-          link
-        }
-        classNumber
-        subClassNumber
       }
       fulfillment(storeId: $storeId) {
         fulfillmentOptions {
