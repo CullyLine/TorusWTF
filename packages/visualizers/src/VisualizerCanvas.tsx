@@ -35,6 +35,8 @@ interface VisualizerCanvasProps {
   smoothness?: number;
   bloomIntensity?: number;
   cameraMode?: CameraMode;
+  /** Multiplies the rendered scene size. 1 = default. */
+  scale?: number;
 }
 
 export function VisualizerCanvas({
@@ -56,6 +58,7 @@ export function VisualizerCanvas({
   smoothness,
   bloomIntensity,
   cameraMode,
+  scale = 1,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -99,7 +102,9 @@ export function VisualizerCanvas({
                 bloomIntensity={bloomIntensity}
                 cameraMode={cameraMode}
               />
-              <def.Scene analyser={analyser} palette={palette} tier={tier} />
+              <group scale={scale}>
+                <def.Scene analyser={analyser} palette={palette} tier={tier} scale={scale} />
+              </group>
             </AudioMetricsProvider>
           </Canvas>
         </div>

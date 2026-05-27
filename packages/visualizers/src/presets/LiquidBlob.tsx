@@ -32,6 +32,7 @@ uniform float uMid;
 uniform float uHigh;
 uniform float uEnergy;
 uniform float uBeat;
+uniform float uScale;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -46,38 +47,40 @@ float smin(float a, float b, float k) {
 }
 
 // 5-blob field: one anchor + four orbiting satellites that fuse and split.
-float scene(vec3 p) {
+// Sized small at uScale=1 so the default render is intimate rather than
+// screen-filling; the Scale slider multiplies the whole field uniformly.
+float sceneInner(vec3 p) {
   float t = uTime * (0.35 + uEnergy * 0.25);
 
-  // Anchor blob, inflates with bass.
-  float r0 = 0.78 + uBass * 0.45 + uBeat * 0.18;
+  float r0 = 0.42 + uBass * 0.28 + uBeat * 0.12;
   float d = sdSphere(p, r0);
 
-  // Smooth-minimum fusion constant: larger = blobbier merge. Inflated by
-  // smoothness-like behavior already at the metrics level; here we just keep
-  // it generous so the blobs always look glued together.
-  float k = 0.55 + uMid * 0.25 + uHigh * 0.15;
+  float k = 0.32 + uMid * 0.18 + uHigh * 0.1;
 
-  // Satellites orbit in 3D, radii pulse on mids/highs.
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
     float a = t * (0.55 + fi * 0.12) + fi * 1.7;
     float b = t * (0.31 + fi * 0.08) + fi * 0.9;
     float c = t * (0.42 + fi * 0.05) + fi * 2.3;
-    float orbit = 0.95 + 0.25 * sin(t * 0.7 + fi);
+    float orbit = 0.55 + 0.16 * sin(t * 0.7 + fi);
     vec3 center = vec3(
       cos(a) * orbit,
       sin(b) * orbit * 0.8,
       sin(c) * orbit * 0.9
     );
-    float rr = 0.32 + uMid * 0.18 + uHigh * 0.12 + 0.08 * sin(t * 1.4 + fi * 2.1);
+    float rr = 0.20 + uMid * 0.12 + uHigh * 0.08 + 0.05 * sin(t * 1.4 + fi * 2.1);
     d = smin(d, sdSphere(p - center, rr), k);
   }
 
-  // Subtle large-scale wobble so the surface is never perfectly spherical.
-  d += 0.02 * sin(p.x * 3.2 + t) * cos(p.y * 2.7 + t * 1.1) * sin(p.z * 2.9 + t * 0.8);
+  d += 0.012 * sin(p.x * 5.0 + t) * cos(p.y * 4.4 + t * 1.1) * sin(p.z * 4.7 + t * 0.8);
 
   return d;
+}
+
+// Standard SDF uniform scaling: shrink/grow space, then rescale the distance.
+float scene(vec3 p) {
+  float s = max(uScale, 0.05);
+  return sceneInner(p / s) * s;
 }
 
 vec3 calcNormal(vec3 p) {
@@ -165,7 +168,7 @@ void main() {
 }
 `;
 
-export function LiquidBlobScene({ analyser, palette, tier }: VisualizerSceneProps) {
+export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: VisualizerSceneProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
@@ -183,6 +186,7 @@ export function LiquidBlobScene({ analyser, palette, tier }: VisualizerSceneProp
       uHigh: { value: 0 },
       uEnergy: { value: 0 },
       uBeat: { value: 0 },
+      uScale: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -201,6 +205,7 @@ export function LiquidBlobScene({ analyser, palette, tier }: VisualizerSceneProp
     mat.uniforms.uHigh!.value = m.high;
     mat.uniforms.uEnergy!.value = m.energy;
     mat.uniforms.uBeat!.value = m.beat;
+    mat.uniforms.uScale!.value = scale;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
