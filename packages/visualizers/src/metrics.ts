@@ -18,6 +18,7 @@ import {
   NEUTRAL_PERSONALITY,
   type CreaturePersonality,
 } from './dsp/creature';
+import { createMacroState, updateMacro, type MacroState } from './dsp/macro';
 
 export interface AudioMetrics {
   bass: number;
@@ -41,6 +42,12 @@ export interface AudioMetrics {
   bassActivity: number;
   /** 0..1 sustained tonal mid+high content (instruments/synths). */
   leadActivity: number;
+  /** 0..1: 1 = sustained quiet, 0 = active audio. Honors empty bars. */
+  silence: number;
+  /** 0..1: rising tension before a drop (sweep, build, snare roll). */
+  tension: number;
+  /** 0..1: pulses on detected bass drop, decays over ~2 beats. */
+  dropEvent: number;
 }
 
 export const DEFAULT_METRICS: AudioMetrics = {
@@ -58,6 +65,9 @@ export const DEFAULT_METRICS: AudioMetrics = {
   vocalActivity: 0,
   bassActivity: 0,
   leadActivity: 0,
+  silence: 0,
+  tension: 0,
+  dropEvent: 0,
 };
 
 const MetricsRefContext = createContext<MutableRefObject<AudioMetrics> | null>(null);
@@ -119,8 +129,9 @@ export function AudioMetricsProvider({
   const prevMid = useRef(0.15);
   const sustainedBass = useRef(0.15);
   const sustainedLead = useRef(0.15);
+  const macroState = useRef<MacroState>(createMacroState());
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     let bass = 0.15;
     let mid = 0.15;
     let high = 0.15;
@@ -131,6 +142,7 @@ export function AudioMetricsProvider({
     let vocalActivity = 0;
     let bassActivity = 0;
     let leadActivity = 0;
+    let centroidHz = 0;
 
     if (analyser) {
       const bins = analyser.getFrequencyData(freqBuf.current);
@@ -174,6 +186,17 @@ export function AudioMetricsProvider({
         sustainedLead.current = sustainedLead.current * 0.8 + leadNow * 0.2;
         leadActivity = Math.min(1, sustainedLead.current);
 
+        // Spectral centroid (in Hz) for macro tension detection.
+        let centroidSum = 0;
+        let magSum = 0;
+        for (let i = 0; i < bins; i++) {
+          const mag = freqBuf.current[i]! / 255;
+          centroidSum += i * mag;
+          magSum += mag;
+        }
+        const centroidBin = magSum > 0.001 ? centroidSum / magSum : 0;
+        centroidHz = (centroidBin / bins) * nyquist;
+
         prevMid.current = mid;
         prevHigh.current = high;
       }
@@ -192,6 +215,22 @@ export function AudioMetricsProvider({
     // at typical 60fps; we treat it as a per-frame lerp factor).
     const smoothClamped = Math.max(0, Math.min(0.99, smoothness));
     const respond = 1 - smoothClamped * 0.98;
+
+    // Macro state update — silence, tension, dropEvent.
+    const bpmForMacro = bpmRef?.current ?? null;
+    updateMacro(
+      macroState.current,
+      {
+        energy,
+        bass,
+        high,
+        centroidHz,
+        drumActivity,
+        bpm: bpmForMacro,
+      },
+      Math.min(delta, 0.1),
+      performance.now() / 1000,
+    );
 
     // BPM phase tracking. We tick phase from the most recent detected onset
     // so it stays musical even when there's a brief detection gap.
@@ -226,6 +265,9 @@ export function AudioMetricsProvider({
       vocalActivity: lerp(prev.vocalActivity, vocalActivity, Math.max(respond, 0.15)),
       bassActivity: lerp(prev.bassActivity, bassActivity, Math.max(respond, 0.2)),
       leadActivity: lerp(prev.leadActivity, leadActivity, Math.max(respond, 0.2)),
+      silence: macroState.current.silence,
+      tension: macroState.current.tension,
+      dropEvent: macroState.current.dropEvent,
     };
   });
 

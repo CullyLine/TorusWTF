@@ -155,11 +155,14 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
 
     // Bar-aware brightness flash: spikes at the downbeat, decays in <0.5 beats.
     const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 7) : 0;
+    // Drop punch: explosive brightness on detected bass drops.
+    const dropPunch = m.dropEvent * 1.0;
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uZoom!.value = zoomRef.current;
     mat.uniforms.uPaletteShift!.value = paletteShiftRef.current;
-    mat.uniforms.uBassPulse!.value = m.bass + m.beat * 0.35 + barFlash * 0.4;
+    mat.uniforms.uBassPulse!.value =
+      (m.bass + m.beat * 0.35 + barFlash * 0.4 + dropPunch) * (1 - m.silence * 0.7);
     mat.uniforms.uHigh!.value = m.high;
     mat.uniforms.uFade!.value = fadeRef.current;
     (mat.uniforms.uBassColor!.value as THREE.Color).set(palette.bass);

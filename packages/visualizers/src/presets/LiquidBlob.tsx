@@ -40,6 +40,10 @@ uniform float uBeat;
 uniform float uScale;
 // 0..1 phase within current 4/4 bar. 0 = downbeat.
 uniform float uBarPhase;
+// 0..1 pulse on detected bass drops.
+uniform float uDrop;
+// 0..1 sustained silence — mutes color punch when high.
+uniform float uSilence;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -167,9 +171,10 @@ void main() {
     col += vec3(spec) * mix(uColorMid, uColorHigh, 0.5);
     col += rim * fres * 0.45;
 
-    // Beat injection + downbeat flash — entire blob brightens momentarily.
+    // Beat injection + downbeat flash + drop punch.
     float barFlash = uBarPhase > 0.0 ? pow(1.0 - uBarPhase, 6.0) : 0.0;
-    col += uColorHigh * (uBeat * 0.35 + uEnergy * 0.12 + barFlash * 0.4);
+    float silenceMute = 1.0 - uSilence * 0.7;
+    col += uColorHigh * (uBeat * 0.35 + uEnergy * 0.12 + barFlash * 0.4 + uDrop * 0.9) * silenceMute;
 
     // Soft AO via distance to the next hit (cheap fake).
     float ao = clamp(0.6 + 0.4 * dot(n, V), 0.0, 1.0);
@@ -211,6 +216,8 @@ export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: Visualiz
       uBeat: { value: 0 },
       uScale: { value: 1 },
       uBarPhase: { value: 0 },
+      uDrop: { value: 0 },
+      uSilence: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -238,6 +245,8 @@ export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: Visualiz
     mat.uniforms.uBeat!.value = m.beat;
     mat.uniforms.uScale!.value = scale;
     mat.uniforms.uBarPhase!.value = m.barPhase;
+    mat.uniforms.uDrop!.value = m.dropEvent;
+    mat.uniforms.uSilence!.value = m.silence;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);

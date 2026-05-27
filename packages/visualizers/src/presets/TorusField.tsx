@@ -60,11 +60,15 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
 
     // Downbeat flash: peaks at the start of each 4/4 bar then decays in <0.5 beats.
     const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 8) : 0;
+    // Drop punch: big momentary flare when a bass drop is detected.
+    const dropPunch = m.dropEvent * 1.4;
+    // Silence mute: ease emissive down during sustained silence.
+    const silenceMute = 1 - m.silence * 0.75;
 
     const torusMat = torus.material;
     if (torusMat && !Array.isArray(torusMat) && 'emissiveIntensity' in torusMat) {
       (torusMat as THREE.MeshStandardMaterial).emissiveIntensity =
-        0.1 + m.breath * 0.5 + m.beat * 0.3 + barFlash * 0.7;
+        (0.1 + m.breath * 0.5 + m.beat * 0.3 + barFlash * 0.7 + dropPunch) * silenceMute;
     }
 
     pointsMat.size = 0.02 + m.energy * 0.05;
