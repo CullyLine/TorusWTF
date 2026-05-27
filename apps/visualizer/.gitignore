@@ -1,0 +1,3 @@
+# Generated demo audio from SoundCloud prefetch
+public/demos/*.mp3
+public/demos/manifest.json

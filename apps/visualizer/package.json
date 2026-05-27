@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3001",
-    "build": "next build",
+    "prefetch:demos": "node scripts/fetch-demos.mjs",
+    "build": "pnpm prefetch:demos && next build",
     "start": "next start --port 3001",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,7 @@
     "next": "15.5.18",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "soundcloud-downloader": "github:zackradisic/node-soundcloud-downloader",
     "zod": "^3.24.1"
   },
   "devDependencies": {
