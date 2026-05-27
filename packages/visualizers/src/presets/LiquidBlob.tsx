@@ -27,6 +27,11 @@ function buildFragmentShader(steps: number): string {
 
 uniform vec2 uResolution;
 uniform float uTime;
+// Monotonic JS-accumulated motion phase. Always grows; never decreases
+// when audio energy drops. Replaces the older approach of multiplying
+// uTime by an energy-dependent factor, which made satellites visibly
+// walk backward on energy drops.
+uniform float uPhase;
 uniform float uBass;
 uniform float uMid;
 uniform float uHigh;
@@ -50,29 +55,42 @@ float smin(float a, float b, float k) {
 // Sized small at uScale=1 so the default render is intimate rather than
 // screen-filling; the Scale slider multiplies the whole field uniformly.
 float sceneInner(vec3 p) {
-  float t = uTime * (0.35 + uEnergy * 0.25);
+  // Single monotonic phase from JS, plus the absolute wall clock for the
+  // surface wobble (which is fine to tie to uTime because it isn't position-
+  // critical and the wobble already moves on its own).
+  float t = uPhase;
+  float tw = uTime;
 
   float r0 = 0.42 + uBass * 0.28 + uBeat * 0.12;
   float d = sdSphere(p, r0);
 
   float k = 0.32 + uMid * 0.18 + uHigh * 0.1;
 
+  // Irrational-ish ratios for x/y/z rates so the three axes don't
+  // recurrently align into the same standing pattern.
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float a = t * (0.55 + fi * 0.12) + fi * 1.7;
-    float b = t * (0.31 + fi * 0.08) + fi * 0.9;
-    float c = t * (0.42 + fi * 0.05) + fi * 2.3;
-    float orbit = 0.55 + 0.16 * sin(t * 0.7 + fi);
-    vec3 center = vec3(
+    float a = t * (0.71 + fi * 0.13) + fi * 1.731;
+    float b = t * (0.47 + fi * 0.09) + fi * 2.397;
+    float c = t * (0.59 + fi * 0.07) + fi * 0.973;
+    // Per-satellite center bias so orbits don't all pass through origin —
+    // breaks the "every satellite stalls at the same point" symmetry.
+    vec3 bias = vec3(
+      sin(fi * 2.13) * 0.09,
+      cos(fi * 1.71) * 0.07,
+      sin(fi * 3.31) * 0.08
+    );
+    float orbit = 0.55 + 0.16 * sin(t * 0.61 + fi * 1.9);
+    vec3 center = bias + vec3(
       cos(a) * orbit,
       sin(b) * orbit * 0.8,
       sin(c) * orbit * 0.9
     );
-    float rr = 0.20 + uMid * 0.12 + uHigh * 0.08 + 0.05 * sin(t * 1.4 + fi * 2.1);
+    float rr = 0.20 + uMid * 0.12 + uHigh * 0.08 + 0.05 * sin(t * 1.37 + fi * 2.13);
     d = smin(d, sdSphere(p - center, rr), k);
   }
 
-  d += 0.012 * sin(p.x * 5.0 + t) * cos(p.y * 4.4 + t * 1.1) * sin(p.z * 4.7 + t * 0.8);
+  d += 0.012 * sin(p.x * 5.0 + tw) * cos(p.y * 4.4 + tw * 1.1) * sin(p.z * 4.7 + tw * 0.8);
 
   return d;
 }
@@ -173,6 +191,7 @@ export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: Visualiz
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const { size } = useThree();
+  const phaseRef = useRef(0);
 
   const steps = tier === 'high' ? RAY_STEPS_HIGH : tier === 'mid' ? RAY_STEPS_MID : RAY_STEPS_LOW;
   const fragmentShader = useMemo(() => buildFragmentShader(steps), [steps]);
@@ -181,6 +200,7 @@ export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: Visualiz
     () => ({
       uResolution: { value: new THREE.Vector2(1, 1) },
       uTime: { value: 0 },
+      uPhase: { value: 0 },
       uBass: { value: 0 },
       uMid: { value: 0 },
       uHigh: { value: 0 },
@@ -194,12 +214,19 @@ export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: Visualiz
     [palette.bass, palette.mid, palette.high],
   );
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const mat = matRef.current;
     if (!mat) return;
     const m = metricsRef.current;
+    // Forward-only motion phase. Speed modulates with energy but the phase
+    // itself never decreases, which prevents satellites from oscillating
+    // when energy fluctuates rapidly.
+    const speed = 0.35 + Math.min(m.energy, 1.5) * 0.18;
+    phaseRef.current += Math.min(delta, 0.05) * speed;
+
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = state.clock.elapsedTime;
+    mat.uniforms.uPhase!.value = phaseRef.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
