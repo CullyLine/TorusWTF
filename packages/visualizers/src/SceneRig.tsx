@@ -104,11 +104,19 @@ export function SceneRig({
       state.camera.position.z += Math.sin(t * 52.7 + 0.9) * amp * 0.3;
     }
 
+    // Choreography — creature emotional motion. Independent of audio reactivity.
+    // leanIn dollies camera inward; release dollies outward (the exhale);
+    // holdBreath dampens motion (the listener's stillness).
+    const leanZ = -m.leanIn * 0.35;
+    const releaseZ = m.release * 0.5;
+    const stillness = 1 - m.holdBreath * 0.85;
+    state.camera.position.z += leanZ + releaseZ;
+
     // Anima — the always-living layer. Even in silence the creature breathes.
     if (anima > 0) {
       updateAnima(animaState.current, t, creature);
       const a = animaState.current;
-      const animaAmp = anima;
+      const animaAmp = anima * stillness;
       // Heartbeat: subtle z-axis breathing (in/out of the scene).
       state.camera.position.z += a.heartbeat * 0.025 * animaAmp;
       // Drift: subtle look-target offset for a "head turning slowly" feel.

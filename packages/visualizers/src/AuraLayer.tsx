@@ -142,11 +142,20 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const glowMat = glowMatRef.current;
     if (glowMat) {
       const autoBreath = 0.18 + 0.06 * Math.sin(now * 0.4);
-      glowMat.uniforms.uIntensity!.value = (autoBreath + m.bass * 0.5 + m.beat * 0.3) * amount;
+      // Tenderness expands the glow softly; silence quiets it; drops punch through.
+      const tenderExpand = 1 + m.tenderness * 0.7;
+      const silenceMute = 1 - m.silence * 0.6;
+      glowMat.uniforms.uIntensity!.value =
+        (autoBreath + m.bass * 0.5 + m.beat * 0.3 + m.release * 0.5) *
+        amount *
+        silenceMute *
+        tenderExpand;
+      // Warm vs cool target color depends on moodValence and tenderness.
+      const warmth = 0.5 + m.moodValence * 0.35 + m.tenderness * 0.2;
       (glowMat.uniforms.uColor!.value as THREE.Color).lerpColors(
         new THREE.Color(palette.bass),
         new THREE.Color(palette.mid),
-        0.5 + m.mid * 0.3,
+        Math.max(0, Math.min(1, warmth)),
       );
     }
   });

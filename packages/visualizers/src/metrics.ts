@@ -19,6 +19,11 @@ import {
   type CreaturePersonality,
 } from './dsp/creature';
 import { createMacroState, updateMacro, type MacroState } from './dsp/macro';
+import {
+  createChoreographyState,
+  updateChoreography,
+  type ChoreographyState,
+} from './dsp/choreography';
 
 export interface AudioMetrics {
   bass: number;
@@ -54,6 +59,18 @@ export interface AudioMetrics {
   valence: number;
   /** 0..1: confidence in the valence read. Drops on percussive/noisy passages. */
   moodConfidence: number;
+  /** 0..1: creature leaning forward to listen as tension climbs. */
+  leanIn: number;
+  /** 0..1: creature holding still during silence, paying close attention. */
+  holdBreath: number;
+  /** 0..1: pulses on drop, decays slowly afterward (the exhale). */
+  release: number;
+  /** 0..1: response to gentle vocal passages. */
+  tenderness: number;
+  /** Long-EMA arousal in 0..1. The creature's current state of being. */
+  moodArousal: number;
+  /** Long-EMA valence in -1..1. */
+  moodValence: number;
 }
 
 export const DEFAULT_METRICS: AudioMetrics = {
@@ -77,6 +94,12 @@ export const DEFAULT_METRICS: AudioMetrics = {
   arousal: 0.2,
   valence: 0,
   moodConfidence: 0,
+  leanIn: 0,
+  holdBreath: 0,
+  release: 0,
+  tenderness: 0,
+  moodArousal: 0.2,
+  moodValence: 0,
 };
 
 const MetricsRefContext = createContext<MutableRefObject<AudioMetrics> | null>(null);
@@ -139,6 +162,7 @@ export function AudioMetricsProvider({
   const sustainedBass = useRef(0.15);
   const sustainedLead = useRef(0.15);
   const macroState = useRef<MacroState>(createMacroState());
+  const choreographyState = useRef<ChoreographyState>(createChoreographyState());
 
   useFrame((_state, delta) => {
     let bass = 0.15;
@@ -241,6 +265,36 @@ export function AudioMetricsProvider({
       performance.now() / 1000,
     );
 
+    // Compute instantaneous arousal/valence for choreography input.
+    const arousalNow = Math.min(
+      1,
+      energy * 0.5 + Math.min(1, centroidHz / 3000) * 0.3 + drumActivity * 0.2,
+    );
+    const valenceNow = Math.max(
+      -1,
+      Math.min(
+        1,
+        (Math.min(1, centroidHz / 3000) - 0.4) * 0.9 +
+          vocalActivity * 0.3 -
+          (bassActivity > 0.4 && centroidHz < 800 ? 0.25 : 0),
+      ),
+    );
+
+    // Choreography — turn signals into intent.
+    updateChoreography(
+      choreographyState.current,
+      {
+        tension: macroState.current.tension,
+        silence: macroState.current.silence,
+        dropEvent: macroState.current.dropEvent,
+        arousal: arousalNow,
+        valence: valenceNow,
+        vocalActivity,
+      },
+      Math.min(delta, 0.1),
+      creature === NEUTRAL_PERSONALITY ? undefined : creature,
+    );
+
     // BPM phase tracking. We tick phase from the most recent detected onset
     // so it stays musical even when there's a brief detection gap.
     const bpmNow = bpmRef?.current ?? null;
@@ -277,28 +331,19 @@ export function AudioMetricsProvider({
       silence: macroState.current.silence,
       tension: macroState.current.tension,
       dropEvent: macroState.current.dropEvent,
-      arousal: lerp(
-        prev.arousal,
-        Math.min(1, energy * 0.5 + Math.min(1, centroidHz / 3000) * 0.3 + drumActivity * 0.2),
-        Math.max(respond, 0.05),
+      arousal: lerp(prev.arousal, arousalNow, Math.max(respond, 0.05)),
+      valence: lerp(prev.valence, valenceNow, Math.max(respond, 0.02)),
+      moodConfidence: lerp(
+        prev.moodConfidence,
+        Math.max(0, 1 - drumActivity * 0.8),
+        Math.max(respond, 0.1),
       ),
-      // Valence heuristic: brightness (centroid) + vocal presence biases warm,
-      // sustained low-end without highs biases cool. Range -1..+1.
-      valence: lerp(
-        prev.valence,
-        Math.max(
-          -1,
-          Math.min(
-            1,
-            (Math.min(1, centroidHz / 3000) - 0.4) * 0.9 +
-              vocalActivity * 0.3 -
-              (bassActivity > 0.4 && centroidHz < 800 ? 0.25 : 0),
-          ),
-        ),
-        Math.max(respond, 0.02),
-      ),
-      // Confidence drops when percussive content dominates (snares mask tonality).
-      moodConfidence: lerp(prev.moodConfidence, Math.max(0, 1 - drumActivity * 0.8), Math.max(respond, 0.1)),
+      leanIn: choreographyState.current.leanIn,
+      holdBreath: choreographyState.current.holdBreath,
+      release: choreographyState.current.release,
+      tenderness: choreographyState.current.tenderness,
+      moodArousal: choreographyState.current.moodMemory.arousal,
+      moodValence: choreographyState.current.moodMemory.valence,
     };
   });
 
