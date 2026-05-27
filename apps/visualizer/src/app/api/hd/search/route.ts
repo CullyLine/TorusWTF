@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { hdGraphql } from '@/lib/hd/client';
+import { hdGraphql, type HdGraphqlDebug } from '@/lib/hd/client';
 import { extractAisleBay } from '@/lib/hd/enrich';
 import { applyEnrichment, normalizeSearch } from '@/lib/hd/normalize';
 import { PRODUCT_QUERY, SEARCH_MODEL_QUERY } from '@/lib/hd/queries';
@@ -68,6 +68,9 @@ export async function GET(req: Request) {
   const page = Math.max(1, Number.parseInt(pageParam ?? '1', 10) || 1);
   const enrichParam = url.searchParams.get('enrich');
   const enrich = enrichParam === '0' || enrichParam === 'false' ? false : true;
+  const debug =
+    url.searchParams.get('debug') === '1' || url.searchParams.get('debug') === 'true';
+  const storefilterParam = url.searchParams.get('storefilter');
 
   if (q.length < 2) {
     const empty: HdSearchOk = {
@@ -83,6 +86,8 @@ export async function GET(req: Request) {
     });
   }
 
+  const upstreamDebug: HdGraphqlDebug[] = [];
+
   try {
     const data = await hdGraphql<Parameters<typeof normalizeSearch>[0]>(
       'searchModel',
@@ -92,13 +97,29 @@ export async function GET(req: Request) {
         startIndex: (page - 1) * PAGE_SIZE,
         pageSize: PAGE_SIZE,
         keyword: q,
-        storefilter: 'IN_STORE',
+        storefilter: storefilterParam ?? 'IN_STORE',
         channel: 'DESKTOP',
       },
-      { signal: req.signal },
+      { signal: req.signal, debug: upstreamDebug },
     );
 
     const { items, total } = normalizeSearch(data);
+
+    if (debug) {
+      return NextResponse.json(
+        {
+          ok: true,
+          query: q,
+          storeId: HD_STORE_ID,
+          storefilter: storefilterParam ?? 'IN_STORE',
+          normalized: { total, itemCount: items.length, firstItem: items[0] ?? null },
+          upstream: upstreamDebug,
+          raw: data,
+        },
+        { headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
     const enriched = enrich ? await enrichItems(items, req.signal) : items;
 
     const body: HdSearchOk = {
@@ -112,6 +133,21 @@ export async function GET(req: Request) {
     return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown Home Depot error';
+
+    if (debug) {
+      return NextResponse.json(
+        {
+          ok: false,
+          query: q,
+          storeId: HD_STORE_ID,
+          storefilter: storefilterParam ?? 'IN_STORE',
+          error: message,
+          upstream: upstreamDebug,
+        },
+        { status: 502, headers: { 'Cache-Control': 'no-store' } },
+      );
+    }
+
     const body: HdSearchErr = {
       ok: false,
       storeId: HD_STORE_ID,
@@ -119,8 +155,6 @@ export async function GET(req: Request) {
       query: q,
       error: message,
     };
-    // Surface the failure to the client but use a real HTTP error code
-    // so frontend `fetch().ok` checks behave naturally.
     return NextResponse.json(body, {
       status: 502,
       headers: { 'Cache-Control': 'no-store' },
