@@ -2,8 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioAnalyser, useStreamAnalyser, type AnalyserHandle } from '@torus/visualizers';
+import { VOLUME_KEY } from '@/lib/storage';
 import { useMicCapture } from './useMicCapture';
 import { useTabCapture } from './useTabCapture';
+
+function readInitialVolume(): number {
+  if (typeof window === 'undefined') return 1;
+  const raw = window.localStorage.getItem(VOLUME_KEY);
+  if (raw === null) return 1;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(0, Math.min(1, parsed));
+}
 
 export type SourceKind = 'file' | 'mic' | 'tab';
 
@@ -28,6 +38,10 @@ export function useAudioSource() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [volume, setVolumeState] = useState<number>(readInitialVolume);
+  const [muted, setMutedState] = useState(false);
+  const volumeRef = useRef(volume);
+  const mutedRef = useRef(muted);
 
   const mic = useMicCapture();
   const tab = useTabCapture();
@@ -79,6 +93,8 @@ export function useAudioSource() {
       audio.src = objectUrl;
       audio.crossOrigin = 'anonymous';
       audio.loop = false;
+      audio.volume = volumeRef.current;
+      audio.muted = mutedRef.current;
 
       const onPlay = () => setIsPlaying(true);
       const onPause = () => setIsPlaying(false);
@@ -107,6 +123,8 @@ export function useAudioSource() {
       audio.src = url;
       audio.crossOrigin = 'anonymous';
       audio.loop = false;
+      audio.volume = volumeRef.current;
+      audio.muted = mutedRef.current;
 
       const onPlay = () => setIsPlaying(true);
       const onPause = () => setIsPlaying(false);
@@ -179,6 +197,26 @@ export function useAudioSource() {
     [source],
   );
 
+  const setVolume = useCallback((next: number) => {
+    const clamped = Math.max(0, Math.min(1, next));
+    volumeRef.current = clamped;
+    setVolumeState(clamped);
+    if (audioRef.current) audioRef.current.volume = clamped;
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(VOLUME_KEY, String(clamped));
+    }
+  }, []);
+
+  const setMuted = useCallback((next: boolean) => {
+    mutedRef.current = next;
+    setMutedState(next);
+    if (audioRef.current) audioRef.current.muted = next;
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    setMuted(!mutedRef.current);
+  }, [setMuted]);
+
   useEffect(() => {
     if (source?.kind !== 'file') {
       setCurrentTime(0);
@@ -248,6 +286,11 @@ export function useAudioSource() {
     seek,
     currentTime,
     duration,
+    volume,
+    muted,
+    setVolume,
+    setMuted,
+    toggleMute,
     getAudioStreamForExport,
   };
 }
