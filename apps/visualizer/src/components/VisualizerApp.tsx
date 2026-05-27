@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { Logo } from '@torus/ui';
 import {
   pickRandomVisualizerPreset,
+  type Creature,
   type VisualizerId,
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
+import { loadCreature, rerollCreature } from '@/lib/creatureStorage';
 import { AudioControls } from '@/components/AudioControls';
 import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
@@ -104,9 +106,29 @@ export function VisualizerApp() {
   const [desktopGuideOpen, setDesktopGuideOpen] = useState(false);
   const [desktopSupported, setDesktopSupported] = useState(false);
   const [wtfTrackTitle, setWtfTrackTitle] = useState<string | null>(null);
+  const [creature, setCreature] = useState<Creature | null>(null);
 
   useEffect(() => {
     setDesktopSupported(isChromium());
+  }, []);
+
+  useEffect(() => {
+    const c = loadCreature();
+    setCreature(c);
+    if (typeof window === 'undefined') return;
+    const w = window as unknown as {
+      __torus?: { creature: Creature; rerollCreature: () => Creature };
+    };
+    const handle = {
+      creature: c,
+      rerollCreature: () => {
+        const fresh = rerollCreature();
+        setCreature(fresh);
+        if (w.__torus) w.__torus.creature = fresh;
+        return fresh;
+      },
+    };
+    w.__torus = handle;
   }, []);
 
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -442,6 +464,7 @@ export function VisualizerApp() {
                 scale={controls.scale ?? 1}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
+                creature={creature?.personality}
               />
             </div>
           </div>

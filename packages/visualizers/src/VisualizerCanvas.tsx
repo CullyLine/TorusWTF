@@ -9,6 +9,7 @@ import { AudioMetricsProvider, type MetricsScales } from './metrics';
 import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 import type { AnalyserHandle } from './audio';
+import type { CreaturePersonality } from './dsp/creature';
 
 interface VisualizerCanvasProps {
   audioRef?: RefObject<HTMLAudioElement | null>;
@@ -37,6 +38,8 @@ interface VisualizerCanvasProps {
   cameraMode?: CameraMode;
   /** Multiplies the rendered scene size. 1 = default. */
   scale?: number;
+  /** Hidden per-browser personality vector that subtly biases reactivity. */
+  creature?: CreaturePersonality;
 }
 
 export function VisualizerCanvas({
@@ -59,6 +62,7 @@ export function VisualizerCanvas({
   bloomIntensity,
   cameraMode,
   scale = 1,
+  creature,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -74,6 +78,7 @@ export function VisualizerCanvas({
     highMix,
     speed,
     smoothness,
+    creature,
   };
 
   const containerStyle = exportSize
