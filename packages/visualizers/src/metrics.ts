@@ -48,6 +48,12 @@ export interface AudioMetrics {
   tension: number;
   /** 0..1: pulses on detected bass drop, decays over ~2 beats. */
   dropEvent: number;
+  /** 0..1: how energetic/intense the moment feels. Reliable. */
+  arousal: number;
+  /** -1..1: best-guess warmth (cool < 0 < warm). Heuristic; check confidence. */
+  valence: number;
+  /** 0..1: confidence in the valence read. Drops on percussive/noisy passages. */
+  moodConfidence: number;
 }
 
 export const DEFAULT_METRICS: AudioMetrics = {
@@ -68,6 +74,9 @@ export const DEFAULT_METRICS: AudioMetrics = {
   silence: 0,
   tension: 0,
   dropEvent: 0,
+  arousal: 0.2,
+  valence: 0,
+  moodConfidence: 0,
 };
 
 const MetricsRefContext = createContext<MutableRefObject<AudioMetrics> | null>(null);
@@ -268,6 +277,28 @@ export function AudioMetricsProvider({
       silence: macroState.current.silence,
       tension: macroState.current.tension,
       dropEvent: macroState.current.dropEvent,
+      arousal: lerp(
+        prev.arousal,
+        Math.min(1, energy * 0.5 + Math.min(1, centroidHz / 3000) * 0.3 + drumActivity * 0.2),
+        Math.max(respond, 0.05),
+      ),
+      // Valence heuristic: brightness (centroid) + vocal presence biases warm,
+      // sustained low-end without highs biases cool. Range -1..+1.
+      valence: lerp(
+        prev.valence,
+        Math.max(
+          -1,
+          Math.min(
+            1,
+            (Math.min(1, centroidHz / 3000) - 0.4) * 0.9 +
+              vocalActivity * 0.3 -
+              (bassActivity > 0.4 && centroidHz < 800 ? 0.25 : 0),
+          ),
+        ),
+        Math.max(respond, 0.02),
+      ),
+      // Confidence drops when percussive content dominates (snares mask tonality).
+      moodConfidence: lerp(prev.moodConfidence, Math.max(0, 1 - drumActivity * 0.8), Math.max(respond, 0.1)),
     };
   });
 
