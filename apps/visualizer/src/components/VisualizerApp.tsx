@@ -203,6 +203,7 @@ export function VisualizerApp() {
       highMix: saved.highMix,
       speed: saved.speed,
       smoothness: saved.smoothness ?? 0,
+      scale: saved.scale ?? 1,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -438,6 +439,7 @@ export function VisualizerApp() {
                 highMix={controls.highMix}
                 speed={controls.speed}
                 smoothness={controls.smoothness ?? 0}
+                scale={controls.scale ?? 1}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
               />

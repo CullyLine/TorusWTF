@@ -27,6 +27,13 @@ export interface VisualizerSceneProps {
   analyser: AnalyserHandle | null;
   palette: { bass: string; mid: string; high: string };
   tier: 'high' | 'mid' | 'low';
+  /**
+   * Scene scale multiplier. Most mesh-based presets are auto-scaled by a
+   * `<group scale>` wrapper in `VisualizerCanvas` and can ignore this prop.
+   * Fullscreen-shader presets (Liquid Blob) read it as a uniform because
+   * their vertex shaders bypass the model matrix.
+   */
+  scale?: number;
 }
 
 export interface VisualizerDefinition {

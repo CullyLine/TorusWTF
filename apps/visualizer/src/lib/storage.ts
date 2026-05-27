@@ -30,6 +30,7 @@ export interface SavedPreset {
   bloomIntensity: number;
   speed: number;
   smoothness?: number;
+  scale?: number;
 }
 
 export interface VisualizerControls {
@@ -38,8 +39,9 @@ export interface VisualizerControls {
   midMix: number;
   highMix: number;
   speed: number;
-  /** Optional for backwards-compat with localStorage from before this field existed. */
+  /** Optional for backwards-compat with localStorage from before these fields existed. */
   smoothness?: number;
+  scale?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -51,6 +53,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   highMix: 1,
   speed: 1,
   smoothness: 0,
+  scale: 1,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };
