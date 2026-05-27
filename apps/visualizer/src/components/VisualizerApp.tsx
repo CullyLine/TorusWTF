@@ -9,6 +9,7 @@ import {
   type VisualizerId,
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
+import { AudioControls } from '@/components/AudioControls';
 import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
 import { FeedbackButton } from '@/components/FeedbackButton';
@@ -354,6 +355,22 @@ export function VisualizerApp() {
         onTryDemo={() => void handleTryDemo()}
         onPlayDemoTrack={handlePlayDemoTrack}
       />
+      {audio.source?.kind === 'file' ? (
+        <AudioControls
+          isPlaying={audio.isPlaying}
+          currentTime={audio.currentTime}
+          duration={audio.duration}
+          volume={audio.volume}
+          muted={audio.muted}
+          onTogglePlay={audio.togglePlay}
+          onSeek={audio.seek}
+          onVolumeChange={(v) => {
+            if (audio.muted) audio.setMuted(false);
+            audio.setVolume(v);
+          }}
+          onToggleMute={audio.toggleMute}
+        />
+      ) : null}
       <PresetPicker active={preset} onChange={setPreset} onRandom={handleRandomPreset} />
       <ControlPanel
         controls={controls}
