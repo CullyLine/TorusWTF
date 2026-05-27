@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
@@ -15,8 +15,9 @@ function buildFragmentShader(maxIter: number): string {
   return /* glsl */ `
 #define MAX_ITER ${maxIter}
 
+uniform vec2 uResolution;
 uniform float uZoom;
-uniform float uHueShift;
+uniform float uPaletteShift;
 uniform float uBassPulse;
 uniform float uHigh;
 uniform float uFade;
@@ -25,30 +26,26 @@ uniform vec3 uMidColor;
 uniform vec3 uHighColor;
 varying vec2 vUv;
 
-vec3 rgb2hsv(vec3 c) {
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-vec3 hsv2rgb(vec3 c) {
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
-vec3 paletteGradient(float t) {
-  t = clamp(t, 0.0, 1.0);
-  vec3 col = mix(uBassColor, uMidColor, smoothstep(0.0, 0.55, t));
-  col = mix(col, uHighColor, smoothstep(0.45, 1.0, t));
-  return col;
+// Three-stop palette ramp scrolled by uPaletteShift (audio-driven, [0,1)).
+// Stays inside the user palette (bass -> mid -> high -> bass) instead of
+// rotating through full HSV.
+vec3 paletteRamp(float t) {
+  t = fract(t + uPaletteShift);
+  // Three equal stops at 0, 1/3, 2/3, looping back at 1.
+  if (t < 1.0 / 3.0) {
+    return mix(uBassColor, uMidColor, smoothstep(0.0, 1.0, t * 3.0));
+  } else if (t < 2.0 / 3.0) {
+    return mix(uMidColor, uHighColor, smoothstep(0.0, 1.0, (t - 1.0 / 3.0) * 3.0));
+  } else {
+    return mix(uHighColor, uBassColor, smoothstep(0.0, 1.0, (t - 2.0 / 3.0) * 3.0));
+  }
 }
 
 void main() {
-  vec2 uv = (vUv - 0.5) * vec2(1.78, 1.0);
+  // Aspect-correct sampling using the actual viewport so the fractal is not
+  // distorted on portrait or ultrawide aspect ratios.
+  vec2 res = uResolution;
+  vec2 uv = (vUv - 0.5) * vec2(max(res.x / res.y, 1.0), max(res.y / res.x, 1.0));
   vec2 c = vec2(${CENTER_X}, ${CENTER_Y}) + uv * (4.0 / uZoom);
 
   vec2 z = vec2(0.0);
@@ -61,14 +58,12 @@ void main() {
 
   vec3 col;
   if (iter >= float(MAX_ITER) - 0.5) {
-    col = uBassColor * 0.05;
+    // Interior of the set: a deep tint of the bass color. No black background.
+    col = uBassColor * 0.08;
   } else {
     float t = iter / float(MAX_ITER);
-    col = paletteGradient(t);
-    vec3 hsv = rgb2hsv(col);
-    hsv.x = fract(hsv.x + uHueShift);
-    hsv.y = clamp(hsv.y + uBassPulse * 0.35, 0.0, 1.0);
-    col = hsv2rgb(hsv);
+    col = paletteRamp(t);
+    // Audio-reactive brightness + tiny chromatic-aberration on highs.
     float aberr = uHigh * 0.012 * (1.0 - t);
     col.r += aberr;
     col.b -= aberr;
@@ -94,9 +89,10 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const zoomRef = useRef(2.0);
-  const hueRef = useRef(0);
+  const paletteShiftRef = useRef(0);
   const fadeRef = useRef(0);
   const fadePhaseRef = useRef<'idle' | 'out' | 'in'>('idle');
+  const { size, viewport } = useThree();
 
   const maxIter = tier === 'high' ? 192 : tier === 'mid' ? 128 : 72;
   const reducedMotion = useMemo(() => {
@@ -108,8 +104,9 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
 
   const uniforms = useMemo(
     () => ({
+      uResolution: { value: new THREE.Vector2(1, 1) },
       uZoom: { value: 2.0 },
-      uHueShift: { value: 0 },
+      uPaletteShift: { value: 0 },
       uBassPulse: { value: 0 },
       uHigh: { value: 0 },
       uFade: { value: 0 },
@@ -126,10 +123,12 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
 
     const m = metricsRef.current;
     let zoomRate = 0.18 + m.energy * 0.45 + m.beat * 0.6;
-    let hueRate = 0.15 + m.mid * 0.8;
+    // Drift the palette around the ramp slowly, faster on mids. Stays inside
+    // the bass/mid/high palette regardless of value.
+    let shiftRate = 0.04 + m.mid * 0.18;
     if (reducedMotion) {
       zoomRate = Math.min(zoomRate, 0.08);
-      hueRate /= 3;
+      shiftRate /= 3;
     }
 
     if (fadePhaseRef.current === 'idle') {
@@ -152,10 +151,11 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
       }
     }
 
-    hueRef.current = (hueRef.current + delta * hueRate) % 1;
+    paletteShiftRef.current = (paletteShiftRef.current + delta * shiftRate) % 1;
 
+    mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uZoom!.value = zoomRef.current;
-    mat.uniforms.uHueShift!.value = hueRef.current;
+    mat.uniforms.uPaletteShift!.value = paletteShiftRef.current;
     mat.uniforms.uBassPulse!.value = m.bass + m.beat * 0.35;
     mat.uniforms.uHigh!.value = m.high;
     mat.uniforms.uFade!.value = fadeRef.current;
@@ -166,9 +166,15 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
+  // Size the plane to cover the full viewport at z=0 so no canvas background
+  // ever shows through. `viewport.width/height` give world units at the focal
+  // plane; multiply by a safety factor for camera shake / aspect changes.
+  const planeW = viewport.width * 1.6;
+  const planeH = viewport.height * 1.6;
+
   return (
     <mesh position={[0, 0, 0]}>
-      <planeGeometry args={[3.8, 3.8]} />
+      <planeGeometry args={[planeW, planeH]} />
       <shaderMaterial
         ref={matRef}
         vertexShader={vertexShader}

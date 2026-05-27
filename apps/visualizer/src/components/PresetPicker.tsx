@@ -19,6 +19,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   star_field: '#60A5FA',
   outrun_grid: '#FB7185',
   liquid_chrome: '#C4B5FD',
+  liquid_blob: '#F472B6',
   mandelbrot_zoom: '#34D399',
 };
 

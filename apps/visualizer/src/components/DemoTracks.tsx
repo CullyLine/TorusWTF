@@ -48,16 +48,3 @@ export function useDemoTracks(): UseDemoTracksResult {
 
   return { tracks, available: tracks.length > 0, pickRandom };
 }
-
-export function DemoAttribution() {
-  return (
-    <a
-      href="https://soundcloud.com/animegirlfarts69"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-[10px] text-torus-fg-faint hover:text-torus-mid"
-    >
-      Demos by @animegirlfarts69
-    </a>
-  );
-}

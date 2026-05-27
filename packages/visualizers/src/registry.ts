@@ -8,6 +8,7 @@ import { CosmicMandalaScene } from './presets/CosmicMandala';
 import { StarFieldScene } from './presets/StarField';
 import { OutrunGridScene } from './presets/OutrunGrid';
 import { LiquidChromeScene } from './presets/LiquidChrome';
+import { LiquidBlobScene } from './presets/LiquidBlob';
 import { MandelbrotZoomScene } from './presets/MandelbrotZoom';
 
 export type VisualizerId =
@@ -19,6 +20,7 @@ export type VisualizerId =
   | 'star_field'
   | 'outrun_grid'
   | 'liquid_chrome'
+  | 'liquid_blob'
   | 'mandelbrot_zoom';
 
 export interface VisualizerSceneProps {
@@ -91,6 +93,12 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Liquid Chrome',
     hint: 'Metallic blob morphing with bass and beats ? high-gloss centerpiece.',
     Scene: LiquidChromeScene,
+  },
+  liquid_blob: {
+    id: 'liquid_blob',
+    label: 'Liquid Blob',
+    hint: 'Amorphous raymarched metaballs that fuse and split. Pure goo, no edges.',
+    Scene: LiquidBlobScene,
   },
   mandelbrot_zoom: {
     id: 'mandelbrot_zoom',

@@ -14,7 +14,7 @@ import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { HwAccelBanner } from '@/components/HwAccelBanner';
-import { DemoAttribution, useDemoTracks } from '@/components/DemoTracks';
+import { useDemoTracks } from '@/components/DemoTracks';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
@@ -202,6 +202,7 @@ export function VisualizerApp() {
       midMix: saved.midMix,
       highMix: saved.highMix,
       speed: saved.speed,
+      smoothness: saved.smoothness ?? 0,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -436,6 +437,7 @@ export function VisualizerApp() {
                 midMix={controls.midMix}
                 highMix={controls.highMix}
                 speed={controls.speed}
+                smoothness={controls.smoothness ?? 0}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
               />
@@ -535,10 +537,7 @@ export function VisualizerApp() {
     <div className="flex h-dvh flex-col">
       <HwAccelBanner />
       <header className="flex items-center justify-between border-b border-torus-border px-4 py-3">
-        <div className="flex flex-col gap-0.5">
-          <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
-          <DemoAttribution />
-        </div>
+        <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
         <div className="flex items-center gap-2">
           <FeedbackButton />
           <button

@@ -20,11 +20,12 @@ No ads. No algorithmic feeds. No engagement metrics shoved in your face. No trac
 - **Self-hostable** — single `docker compose up -d` runs the entire stack
 
 ### Visualizer (`apps/visualizer`)
-- **9 GPU-accelerated presets** — Torus Field, Particle Storm, Spectral Tunnel (warp), Volumetric Waveform, Cosmic Mandala, Star Field (face-on galaxy), Outrun Grid (3D synthwave terrain), Liquid Chrome (GPU shader), Mandelbrot Zoom (infinite fractal)
+- **10 GPU-accelerated presets** — Torus Field, Particle Storm, Spectral Tunnel (warp), Volumetric Waveform, Cosmic Mandala, Star Field (face-on galaxy), Outrun Grid (3D synthwave terrain), Liquid Chrome (GPU shader), Liquid Blob (raymarched metaballs), Mandelbrot Zoom (infinite fractal)
 - **4 audio sources** — local file, microphone, desktop tab capture (Chrome/Edge), or **WTF** for a random track auto-pulled from our SoundCloud at build time
 - **Full-bleed viewport** — visuals take the whole screen, controls float on top as a glass panel that fades out when idle
 - **Export** — WebM (VP9 + Opus) or MP4 where supported, up to 4K / 240fps with the $10 one-time unlock
-- **Gain slider, custom palettes, saved presets, snapshot, BPM detection, keyboard shortcuts**
+- **Mad-scientist controls** — Gain, Bass/Mid/High mix, Bloom, Speed, and Smoothness sliders with 5x headroom; double-click any value to type any number with no clamp
+- **Custom palettes, saved presets, snapshot, BPM detection, keyboard shortcuts**
 
 ## Quick start
 
