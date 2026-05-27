@@ -11,6 +11,8 @@ export interface FileSourceState {
   kind: 'file';
   fileName: string;
   objectUrl: string;
+  isRemote?: boolean;
+  sourceLink?: string;
 }
 
 export interface StreamSourceState {
@@ -56,7 +58,7 @@ export function useAudioSource() {
       audioRef.current.removeAttribute('src');
       audioRef.current.load();
     }
-    if (source?.kind === 'file') {
+    if (source?.kind === 'file' && !source.isRemote) {
       URL.revokeObjectURL(source.objectUrl);
     }
     mic.stop();
@@ -86,9 +88,43 @@ export function useAudioSource() {
       audio.addEventListener('pause', onPause);
       audio.addEventListener('ended', onEnded);
 
-      setSource({ kind: 'file', fileName: file.name, objectUrl });
+      setSource({ kind: 'file', fileName: file.name, objectUrl, isRemote: false });
       void audio.play().catch(() => {
         setError('Could not play this file. Try another format.');
+      });
+    },
+    [clearSource],
+  );
+
+  const playUrl = useCallback(
+    (
+      url: string,
+      meta: { title: string; sourceLink?: string },
+    ) => {
+      clearSource();
+      const audio = audioRef.current ?? new Audio();
+      audioRef.current = audio;
+      audio.src = url;
+      audio.crossOrigin = 'anonymous';
+      audio.loop = false;
+
+      const onPlay = () => setIsPlaying(true);
+      const onPause = () => setIsPlaying(false);
+      const onEnded = () => setIsPlaying(false);
+
+      audio.addEventListener('play', onPlay);
+      audio.addEventListener('pause', onPause);
+      audio.addEventListener('ended', onEnded);
+
+      setSource({
+        kind: 'file',
+        fileName: meta.title,
+        objectUrl: url,
+        isRemote: true,
+        sourceLink: meta.sourceLink,
+      });
+      void audio.play().catch(() => {
+        setError('Could not play this track.');
       });
     },
     [clearSource],
@@ -189,7 +225,7 @@ export function useAudioSource() {
 
   useEffect(
     () => () => {
-      if (source?.kind === 'file') URL.revokeObjectURL(source.objectUrl);
+      if (source?.kind === 'file' && !source.isRemote) URL.revokeObjectURL(source.objectUrl);
     },
     [source],
   );
@@ -201,6 +237,7 @@ export function useAudioSource() {
     isPlaying,
     error,
     loadFile,
+    playUrl,
     startMic,
     startTab,
     clearSource,

@@ -13,6 +13,7 @@ import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { HwAccelBanner } from '@/components/HwAccelBanner';
+import { DemoAttribution, WtfButton, type DemoTrack } from '@/components/WtfButton';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
@@ -101,6 +102,7 @@ export function VisualizerApp() {
   );
   const [desktopGuideOpen, setDesktopGuideOpen] = useState(false);
   const [desktopSupported, setDesktopSupported] = useState(false);
+  const [wtfTrackTitle, setWtfTrackTitle] = useState<string | null>(null);
 
   useEffect(() => {
     setDesktopSupported(isChromium());
@@ -174,6 +176,16 @@ export function VisualizerApp() {
       toast({ message: 'Could not load demo audio', variant: 'error' });
     }
   }, [handleFile, toast]);
+
+  const handleWtfPlay = useCallback(
+    (track: DemoTrack) => {
+      setSourceKind('file');
+      setHeroCollapsed(true);
+      setWtfTrackTitle(track.title);
+      audio.playUrl(track.file, { title: track.title, sourceLink: track.permalink });
+    },
+    [audio],
+  );
 
   const handleRandomPreset = useCallback(() => {
     setPreset(pickRandomVisualizerPreset());
@@ -338,8 +350,12 @@ export function VisualizerApp() {
         </header>
       ) : (
         <header className="flex items-center justify-between border-b border-torus-border px-4 py-3">
-          <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
+          <div className="flex flex-col gap-0.5">
+            <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
+            <DemoAttribution />
+          </div>
           <div className="flex items-center gap-2">
+            <WtfButton onPlay={handleWtfPlay} activeTitle={wtfTrackTitle} />
             <FeedbackButton />
             <button
               type="button"
