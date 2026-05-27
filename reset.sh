@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==========================================================
-#  torus.fm — DESTRUCTIVE reset (Unix)
+#  torus.wtf — DESTRUCTIVE reset (Unix)
 # ==========================================================
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 cat <<'EOF'
 
 ================================================
-  torus.fm — DESTRUCTIVE reset
+  torus.wtf — DESTRUCTIVE reset
 ================================================
 
   This will permanently delete:

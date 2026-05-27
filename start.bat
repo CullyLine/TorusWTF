@@ -5,7 +5,7 @@ pushd "%~dp0"
 
 echo.
 echo ================================================
-echo   torus.fm dev startup
+echo   torus.wtf dev startup
 echo ================================================
 echo.
 
@@ -45,7 +45,7 @@ start "" http://localhost:3000
 
 echo.
 echo ================================================
-echo   torus.fm is starting up
+echo   torus.wtf is starting up
 echo ================================================
 echo.
 echo   Web        http://localhost:3000

@@ -3,7 +3,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 
 export const metadata = {
   title: 'privacy',
-  description: 'How torus.fm handles your data.',
+  description: 'How torus.wtf handles your data.',
 };
 
 export default function PrivacyPage() {
@@ -14,7 +14,7 @@ export default function PrivacyPage() {
 
       <section className="mt-8 space-y-4 text-sm leading-relaxed text-torus-fg-dim">
         <p>
-          torus.fm is built to collect as little as possible. We do not run ads, sell data, or use
+          torus.wtf is built to collect as little as possible. We do not run ads, sell data, or use
           third-party analytics by default. See{' '}
           <Link href="/principles" className="text-torus-mid underline">
             our principles
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
           browser so you can manage them later.
         </p>
         <p>
-          <strong className="text-torus-fg">Self-hosting:</strong> torus.fm is AGPL. You can run
+          <strong className="text-torus-fg">Self-hosting:</strong> torus.wtf is AGPL. You can run
           your own instance and keep data on your infrastructure.
         </p>
       </section>

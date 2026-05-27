@@ -5,7 +5,7 @@ pushd "%~dp0"
 
 echo.
 echo ================================================
-echo   torus.fm - stopping Docker services
+echo   torus.wtf - stopping Docker services
 echo ================================================
 echo.
 

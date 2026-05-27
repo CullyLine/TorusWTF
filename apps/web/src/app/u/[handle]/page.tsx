@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!profile) return { title: 'not found' };
   return {
     title: `@${profile.user.handle}`,
-    description: profile.user.bio ?? `${profile.user.handle} on torus.fm`,
+    description: profile.user.bio ?? `${profile.user.handle} on torus.wtf`,
   };
 }
 
@@ -166,7 +166,7 @@ export default async function ProfilePage({ params }: PageProps) {
                       {clip.title ?? <span className="opacity-50">untitled</span>}
                     </div>
                     <div className="mt-1 font-mono text-xs text-torus-fg-faint">
-                      torus.fm/{clip.shareCode}
+                      torus.wtf/{clip.shareCode}
                       {clip.durationMs ? ` · ${formatDuration(clip.durationMs)}` : ''}
                       {clip.playCount ? ` · ${clip.playCount} plays` : ''}
                     </div>

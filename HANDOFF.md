@@ -1,12 +1,12 @@
 # HANDOFF — for future agents (and future-you)
 
-This file is the orientation packet for anyone picking up work on torus.fm with a fresh context. Read this end-to-end before doing anything else.
+This file is the orientation packet for anyone picking up work on torus.wtf with a fresh context. Read this end-to-end before doing anything else.
 
 ---
 
 ## 0. TL;DR — the project in three sentences
 
-**torus.fm** is a no-bullshit, open-source, self-hostable audio clip sharing site. Drag a file in, get an instant short share link, beautiful frequency-band-colored waveform, optional fullscreen 3D visualizers (Torus Field, Particle Storm, Spectral Tunnel, Volumetric Waveform). Monorepo: Next.js 15 web app + BullMQ worker + Drizzle on SQLite (+ Litestream backup) + pluggable Storage (MinIO/S3/Azure/GCS).
+**torus.wtf** is a no-bullshit, open-source, self-hostable audio clip sharing site. Drag a file in, get an instant short share link, beautiful frequency-band-colored waveform, optional fullscreen 3D visualizers (Torus Field, Particle Storm, Spectral Tunnel, Volumetric Waveform). Monorepo: Next.js 15 web app + BullMQ worker + Drizzle on SQLite (+ Litestream backup) + pluggable Storage (MinIO/S3/Azure/GCS).
 
 ---
 
@@ -28,12 +28,12 @@ The user is on **Windows 10, AMD Ryzen 5 3600, PowerShell**. Docker Desktop is i
 ## 2. Brand context (do not lose this)
 
 - **Name**: `torus` (always lowercase, never "Torus FM" or "TorusFM")
-- **URL**: `torus.fm` (not registered yet — user will register on Porkbun)
+- **URL**: `torus.wtf` (not registered yet — user will register on Porkbun)
 - **Defensive grabs recommended**: `torus.audio`, `torus.app`
 - **Why this name**: the geometric form of a loop = the medium of music. Also a meaningful nod to the user's first musical influence, an EDM producer named Torus.
 - **Visual language**:
   - Color palette: `#0A0B1E` (cosmic indigo bg) + `#FF2D95` (bass magenta) / `#22D3CE` (mid teal) / `#F7E08C` (high gold) — these are also the frequency-band colors on the waveform
-  - Primary logo: minimal donut ring outline + `torus.fm` wordmark beneath (`.fm` smaller/lighter). Reference: `assets/torus-logo-1-minimal-ring-v2.png`. There are three other variants in `assets/`.
+  - Primary logo: minimal donut ring outline + `torus.wtf` wordmark beneath (`.fm` smaller/lighter). Reference: `assets/torus-logo-1-minimal-ring-v2.png`. There are three other variants in `assets/`.
 - **Sacred-geometry energy-flow concept**: the user cares about this. Don't dismiss it as window dressing — it's why the Torus Field 3D preset exists and why the brand mark is what it is.
 
 ---
@@ -202,7 +202,7 @@ fix: actually boot — route conflict, .js imports, single DB path
 fix: pnpm native module approvals + start.bat resilience
 fix: .bat scripts use CRLF, pure ASCII, and goto-based ifs
 feat: one-double-click dev scripts (start/stop/reset/update)
-feat: initial torus.fm monorepo
+feat: initial torus.wtf monorepo
 ```
 
 **Verified working end-to-end** (as of last fix):
@@ -218,7 +218,7 @@ feat: initial torus.fm monorepo
 - The worker's actual processing pipeline (ffmpeg + audiowaveform) hasn't run end-to-end yet in user testing. Watch for issues with ffmpeg path, Goertzel FFT correctness, sharp/svg rendering.
 - No real e2e test exists yet (Playwright config is there but only smoke tests).
 - No GitHub repo yet — user will create one and push when ready.
-- No domain registered. `torus.fm` availability already verified, just needs purchase.
+- No domain registered. `torus.wtf` availability already verified, just needs purchase.
 - `.env.example` defaults assume local MinIO — production env requires real `MINIO_ACCESS_KEY`, `SESSION_SECRET`, `DOMAIN`, `LETSENCRYPT_EMAIL`.
 
 ---
@@ -239,7 +239,7 @@ Stop and ask the user first. Things that count as scope changes:
 
 - Adding any new dependency that isn't on the existing approved list
 - Adding analytics, telemetry, or any third-party SDK
-- Changing the public URL shape (`torus.fm/XXXXXXXX`)
+- Changing the public URL shape (`torus.wtf/XXXXXXXX`)
 - Changing the data model in a way that requires a migration
 - Touching `PRINCIPLES.md`
 - Anything in `SUCCESSION.md`

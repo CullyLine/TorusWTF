@@ -6,7 +6,7 @@ Be kind. Give credit. Assume good faith. Lift others up. Producers helping produ
 
 ## The full version
 
-We are committed to making participation in torus.fm a respectful, welcoming experience for everyone — regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
+We are committed to making participation in torus.wtf a respectful, welcoming experience for everyone — regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
 ### Expected behavior
 
@@ -35,7 +35,7 @@ Maintainers are responsible for clarifying standards and are expected to take fa
 
 ### Reporting
 
-Report unacceptable behavior to `conduct@torus.fm` (or DM a maintainer on Discord). All complaints will be reviewed promptly and confidentially. The maintainer team is obligated to maintain confidentiality with regard to the reporter of an incident.
+Report unacceptable behavior to `conduct@torus.wtf` (or DM a maintainer on Discord). All complaints will be reviewed promptly and confidentially. The maintainer team is obligated to maintain confidentiality with regard to the reporter of an incident.
 
 ### Attribution
 

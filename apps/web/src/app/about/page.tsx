@@ -3,24 +3,24 @@ import { SiteHeader } from '@/components/SiteHeader';
 
 export const metadata = {
   title: 'about',
-  description: 'What torus.fm is, what it is not, and why it exists.',
+  description: 'What torus.wtf is, what it is not, and why it exists.',
 };
 
 export default function AboutPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-12">
       <SiteHeader />
-      <h1 className="mt-12 text-3xl font-semibold tracking-tight">about torus.fm</h1>
+      <h1 className="mt-12 text-3xl font-semibold tracking-tight">about torus.wtf</h1>
 
       <section className="mt-8 space-y-5 text-sm leading-relaxed text-torus-fg-dim">
         <p>
-          torus.fm is a no-bullshit way to share audio clips with your friends and the community.
+          torus.wtf is a no-bullshit way to share audio clips with your friends and the community.
           Drag a file in. Get a link. Send it. That's it.
         </p>
 
         <p>
           The internet used to have more small, lovingly-maintained corners for sharing sound.
-          Many of them are gone. torus.fm is our attempt to bring that spirit back — without ads,
+          Many of them are gone. torus.wtf is our attempt to bring that spirit back — without ads,
           without growth hacks, without selling your data.
         </p>
 

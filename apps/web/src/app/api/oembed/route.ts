@@ -25,7 +25,7 @@ export async function GET(req: Request) {
 
   const segment = parsed.pathname.slice(1).split('/')[0] ?? '';
   if (!isValidShareCode(segment)) {
-    return NextResponse.json({ error: 'URL does not look like a torus.fm clip.' }, { status: 404 });
+    return NextResponse.json({ error: 'URL does not look like a torus.wtf clip.' }, { status: 404 });
   }
   const code = normalizeShareCode(segment);
 
@@ -40,10 +40,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     version: '1.0',
     type: 'rich',
-    provider_name: 'torus.fm',
+    provider_name: 'torus.wtf',
     provider_url: parsed.origin,
     title: clip.title ?? 'untitled',
-    author_name: 'torus.fm',
+    author_name: 'torus.wtf',
     html,
     width: 480,
     height: 180,

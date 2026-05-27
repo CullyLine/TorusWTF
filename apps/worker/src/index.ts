@@ -80,7 +80,7 @@ worker.on('error', (err) => {
 
 startHealthWebhook();
 
-console.info(`[worker] torus.fm worker started, concurrency=${CONCURRENCY}`);
+console.info(`[worker] torus.wtf worker started, concurrency=${CONCURRENCY}`);
 
 async function shutdown(signal: string) {
   console.info(`[worker] received ${signal}, draining...`);

@@ -257,7 +257,7 @@ export function SharePageClient(props: SharePageClientProps) {
 
       <footer className="mt-12 pt-6 text-center text-xs text-torus-fg-faint">
         <Link href="/" className="hover:text-torus-fg">
-          torus.fm
+          torus.wtf
         </Link>{' '}
         · share the loop
       </footer>

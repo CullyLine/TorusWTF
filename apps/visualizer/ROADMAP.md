@@ -45,7 +45,7 @@ All five must pass clean before you open the PR. Pre-existing lint *warnings* in
 2. **Never push to `main`.** Always a feature branch + PR.
 3. **Never modify** `PRINCIPLES.md`, `LICENSE`, `SUCCESSION.md`, `THREAT_MODEL.md`, or `SECURITY.md`.
 4. **Never add** analytics, tracking, third-party SDKs, ad scripts, telemetry, or any external script tag.
-5. **Never break** the torus.fm clip player (`apps/web/src/components/ClipPlayer.tsx` + `VisualizerViewport.tsx`). New `@torus/visualizers` props must be optional and default to current behavior.
+5. **Never break** the torus.wtf clip player (`apps/web/src/components/ClipPlayer.tsx` + `VisualizerViewport.tsx`). New `@torus/visualizers` props must be optional and default to current behavior.
 6. **Never change** the `VisualizerSceneProps` shape (would break existing presets). Add new optional props on `VisualizerCanvas` only.
 7. **Never gate live preview** behind the paid unlock. Only export quality / format / extras are paid.
 8. **Respect `prefers-reduced-motion`** in any new animated UI.

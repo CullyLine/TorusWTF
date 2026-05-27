@@ -33,8 +33,8 @@ export function ShareCard({ shareUrl, title }: ShareCardProps) {
     }
     try {
       await navigator.share({
-        title: title ? `${title} · torus.fm` : 'torus.fm clip',
-        text: title ?? 'Listen on torus.fm',
+        title: title ? `${title} · torus.wtf` : 'torus.wtf clip',
+        text: title ?? 'Listen on torus.wtf',
         url: shareUrl,
       });
     } catch (err) {

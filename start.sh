@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==========================================================
-#  torus.fm — one-click dev environment startup (Unix)
+#  torus.wtf — one-click dev environment startup (Unix)
 # ==========================================================
 #
 #  Mirrors start.bat for Linux + macOS. See its header for what
@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 
 echo
 echo "================================================"
-echo "  torus.fm dev startup"
+echo "  torus.wtf dev startup"
 echo "================================================"
 echo
 
@@ -68,7 +68,7 @@ fi
 cat <<EOF
 
 ================================================
-  torus.fm is starting up
+  torus.wtf is starting up
 ================================================
 
   Web:        http://localhost:3000

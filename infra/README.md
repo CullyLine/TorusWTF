@@ -25,7 +25,7 @@ Then back in the repo root: `pnpm dev`.
 ```bash
 # 1. Mount your data drive (8TB recommended)
 # 2. Write a .env with:
-#    DOMAIN=torus.fm
+#    DOMAIN=torus.wtf
 #    LETSENCRYPT_EMAIL=you@example.com
 #    SESSION_SECRET=...           # 64 random chars
 #    MINIO_ACCESS_KEY=...

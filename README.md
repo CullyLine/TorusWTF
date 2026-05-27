@@ -1,4 +1,4 @@
-# torus.fm
+# torus.wtf
 
 > **Share the loop.** Drop any audio, get an instant link.
 
@@ -7,7 +7,7 @@ A modern, open-source audio clip sharing site — built for producers, musicians
 ## What it is
 
 - **One-click upload** — drag-and-drop or click-to-browse, anywhere in the app
-- **Instant share code** — `torus.fm/kT9mFq2x` copied to clipboard the moment the upload finishes
+- **Instant share code** — `torus.wtf/kT9mFq2x` copied to clipboard the moment the upload finishes
 - **Beautiful waveforms** — frequency-band-colored 2D waveform fingerprint on every clip
 - **Optional 3D visualizers** — four GPU-accelerated presets (Torus Field, Particle Storm, Spectral Tunnel, Volumetric Waveform)
 - **Community front page** — weekly-voted top clips, anonymous-friendly uploads
@@ -96,4 +96,4 @@ We love contributors. See [`CONTRIBUTING.md`](./CONTRIBUTING.md). The 3D visuali
 
 ## Sustainability
 
-torus.fm is run as a passion project, not a startup. We accept donations via [GitHub Sponsors](#) and [Open Collective](#), and a tiny optional [Supporter tier](#) ($3/mo) gets you a custom subdomain. **[torus visualizer](apps/visualizer/)** — a sibling web app for 3D audio visuals and export — offers a $10 one-time unlock for higher export quality. No ads, no data sales, no VC funding — see [`PRINCIPLES.md`](./PRINCIPLES.md).
+torus.wtf is run as a passion project, not a startup. We accept donations via [GitHub Sponsors](#) and [Open Collective](#), and a tiny optional [Supporter tier](#) ($3/mo) gets you a custom subdomain. **[torus visualizer](apps/visualizer/)** — a sibling web app for 3D audio visuals and export — offers a $10 one-time unlock for higher export quality. No ads, no data sales, no VC funding — see [`PRINCIPLES.md`](./PRINCIPLES.md).

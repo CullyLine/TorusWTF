@@ -45,7 +45,7 @@ export default async function SignInPage({ searchParams }: PageProps) {
       </div>
 
       <p className="mt-12 text-xs text-torus-fg-faint">
-        By signing in you agree to torus.fm’s{' '}
+        By signing in you agree to torus.wtf’s{' '}
         <Link href="/about" className="underline">
           principles
         </Link>

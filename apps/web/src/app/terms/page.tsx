@@ -3,7 +3,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 
 export const metadata = {
   title: 'terms',
-  description: 'Terms of use for torus.fm.',
+  description: 'Terms of use for torus.wtf.',
 };
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
 
       <section className="mt-8 space-y-4 text-sm leading-relaxed text-torus-fg-dim">
         <p>
-          By using torus.fm you agree not to upload illegal content or abuse the service. Operators
+          By using torus.wtf you agree not to upload illegal content or abuse the service. Operators
           may remove clips and ban accounts per the public{' '}
           <Link href="/moderation" className="text-torus-mid underline">
             moderation log
@@ -30,7 +30,7 @@ export default function TermsPage() {
           (mirrored at /principles) for what we will never do.
         </p>
         <p>
-          <strong className="text-torus-fg">Software license:</strong> the torus.fm codebase is
+          <strong className="text-torus-fg">Software license:</strong> the torus.wtf codebase is
           licensed under AGPL-3.0-or-later. Self-hosted instances must comply with AGPL when
           offering network access to modified versions.
         </p>

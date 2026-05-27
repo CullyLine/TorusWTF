@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==========================================================
-#  torus.fm — pull latest + reinstall + migrate (Unix)
+#  torus.wtf — pull latest + reinstall + migrate (Unix)
 # ==========================================================
 set -euo pipefail
 cd "$(dirname "$0")"
 
 echo
 echo "================================================"
-echo "  torus.fm — update"
+echo "  torus.wtf — update"
 echo "================================================"
 echo
 

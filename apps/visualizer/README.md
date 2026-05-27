@@ -2,7 +2,7 @@
 
 Turn any local audio into beautiful 3D visuals and export for Reels, Shorts, and portfolios.
 
-Sibling app to [torus.fm](../web) — lives at `visualizer.torus.fm` in production.
+Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in production.
 
 ## Free vs paid
 
@@ -48,11 +48,11 @@ NEXT_PUBLIC_POLAR_CHECKOUT_URL=
 3. Enable **license keys** as a benefit
 4. Copy product ID → `POLAR_VISUALIZER_PRODUCT_ID`
 5. Copy hosted checkout URL → `NEXT_PUBLIC_POLAR_CHECKOUT_URL`
-6. Reuse `POLAR_API_KEY` from torus.fm if already set
+6. Reuse `POLAR_API_KEY` from torus.wtf if already set
 
 ## Deploy
 
-Deploy `apps/visualizer` to Vercel or Cloudflare Pages. Point `visualizer.torus.fm` CNAME at the deploy target.
+Deploy `apps/visualizer` to Vercel or Cloudflare Pages. Point `visualizer.torus.wtf` CNAME at the deploy target.
 
 Build command: `pnpm --filter @torus/visualizer build`
 Output: `apps/visualizer/.next`
@@ -78,4 +78,4 @@ v1 exports WebM (VP9 + Opus) for broad browser support. MP4 when `MediaRecorder.
 
 ## License
 
-AGPL-3.0-or-later (monorepo root). The visualizer shares `@torus/visualizers` with torus.fm.
+AGPL-3.0-or-later (monorepo root). The visualizer shares `@torus/visualizers` with torus.wtf.

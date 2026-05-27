@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * Custom-subdomain routing.
  *
- * If a request hits `yourname.torus.fm`, we rewrite to `/u/yourname` so
+ * If a request hits `yourname.torus.wtf`, we rewrite to `/u/yourname` so
  * supporter profiles get a vanity URL. Apex domain + reserved subdomains
  * (www, api, media, etc.) pass through unchanged.
  *

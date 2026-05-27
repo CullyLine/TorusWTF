@@ -1,4 +1,4 @@
-# torus.fm — production stack for self-hosting
+# torus.wtf — production stack for self-hosting
 #
 # Bind-mounts your 8TB drive for MinIO data + SQLite + backups.
 # Adds Caddy for auto-HTTPS, Litestream for continuous SQLite replication, and
@@ -6,7 +6,7 @@
 #
 # Customize:
 #   - TORUS_DRIVE_PATH — path to your data drive (default: /mnt/torus-8tb)
-#   - DOMAIN          — your public domain (default: torus.fm)
+#   - DOMAIN          — your public domain (default: torus.wtf)
 #   - LETSENCRYPT_EMAIL
 #
 # Deploy:

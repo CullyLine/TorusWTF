@@ -40,7 +40,7 @@ export function EmbedClient({ shareCode, title, audioUrl, peaksUrl, palette }: E
         >
           {title ?? 'untitled'} ↗
         </a>
-        <span className="text-[10px] text-torus-fg-faint">torus.fm</span>
+        <span className="text-[10px] text-torus-fg-faint">torus.wtf</span>
       </div>
       <Waveform
         peaks={peaks ?? undefined}

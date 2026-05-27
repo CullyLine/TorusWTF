@@ -82,7 +82,7 @@ export function RecentTile({ entry }: { entry: ClipListEntry }) {
             {entry.title ?? <span className="opacity-50">untitled</span>}
           </div>
           <div className="mt-0.5 font-mono text-[10px] text-torus-fg-faint">
-            torus.fm/{entry.shareCode}
+            torus.wtf/{entry.shareCode}
           </div>
         </div>
       </Link>
