@@ -40,9 +40,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Data (local dev)
-data/
-storage/
+# Data (local dev) -- anchored to repo root so it doesn't match packages/storage
+/data/
+/storage/
 *.db
 *.db-journal
 *.db-shm
