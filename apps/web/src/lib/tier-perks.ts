@@ -9,7 +9,7 @@ export const PERKS = {
   custom_subdomain: {
     id: 'custom_subdomain',
     label: 'Custom subdomain',
-    description: 'Use yourname.torus.fm as your profile page.',
+    description: 'Use yourname.torus.wtf as your profile page.',
     requires: 'supporter' as UserTier,
   },
   // Add new perks here. v1 ships with just one — intentionally.

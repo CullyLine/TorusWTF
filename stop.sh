@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ==========================================================
-#  torus.fm — stop Docker services (Unix)
+#  torus.wtf — stop Docker services (Unix)
 # ==========================================================
 set -euo pipefail
 cd "$(dirname "$0")"
 
 echo
 echo "================================================"
-echo "  torus.fm — stopping Docker services"
+echo "  torus.wtf — stopping Docker services"
 echo "================================================"
 echo
 

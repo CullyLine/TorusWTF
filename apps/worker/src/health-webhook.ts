@@ -91,7 +91,7 @@ export function startHealthWebhook(): void {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          content: `**torus.fm health alert**\n${alerts
+          content: `**torus.wtf health alert**\n${alerts
             .map((a) => `${a.level === 'error' ? '🔴' : '🟡'} *${a.title}* — ${a.detail}`)
             .join('\n')}`,
         }),

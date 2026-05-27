@@ -13,7 +13,7 @@ export default function NotFound() {
         href="/"
         className="mt-10 rounded-full bg-torus-fg px-6 py-3 text-sm font-medium text-torus-bg hover:opacity-90"
       >
-        back to torus.fm
+        back to torus.wtf
       </Link>
     </main>
   );

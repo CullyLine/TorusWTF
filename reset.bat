@@ -5,7 +5,7 @@ pushd "%~dp0"
 
 echo.
 echo ================================================
-echo   torus.fm - DESTRUCTIVE reset
+echo   torus.wtf - DESTRUCTIVE reset
 echo ================================================
 echo.
 echo   This will permanently delete:

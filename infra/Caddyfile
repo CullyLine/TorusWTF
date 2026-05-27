@@ -1,11 +1,11 @@
-# torus.fm reverse proxy with auto-HTTPS via Let's Encrypt
+# torus.wtf reverse proxy with auto-HTTPS via Let's Encrypt
 #
 # Substitutes $DOMAIN and $LETSENCRYPT_EMAIL from env vars in docker-compose.prod.yml
 #
 # Routes:
-#   torus.fm           -> web app
-#   *.torus.fm         -> web app (wildcard for supporter custom subdomains)
-#   media.torus.fm     -> MinIO bucket (audio + waveform image serving)
+#   torus.wtf           -> web app
+#   *.torus.wtf         -> web app (wildcard for supporter custom subdomains)
+#   media.torus.wtf     -> MinIO bucket (audio + waveform image serving)
 
 {
 	email {$LETSENCRYPT_EMAIL}

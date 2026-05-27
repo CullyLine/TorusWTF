@@ -1,6 +1,6 @@
-# Contributing to torus.fm
+# Contributing to torus.wtf
 
-First — thank you. torus.fm is a passion project, and every PR matters.
+First — thank you. torus.wtf is a passion project, and every PR matters.
 
 ## Dev setup (one command after prereqs)
 

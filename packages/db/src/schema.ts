@@ -9,7 +9,7 @@ import {
 import { sql } from 'drizzle-orm';
 
 /**
- * torus.fm — SQLite schema.
+ * torus.wtf — SQLite schema.
  *
  * Conventions:
  *   - Primary keys are text CUIDs (generated app-side via @torus/shared).

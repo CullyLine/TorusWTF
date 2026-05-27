@@ -5,7 +5,7 @@ import { SettingsForm } from './SettingsForm';
 
 export const metadata = {
   title: 'settings',
-  description: 'Profile and account settings for torus.fm.',
+  description: 'Profile and account settings for torus.wtf.',
 };
 
 export default async function SettingsPage() {

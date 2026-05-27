@@ -2,11 +2,11 @@
 
 ## Reporting a vulnerability
 
-If you believe you have found a security vulnerability in torus.fm, please report it privately.
+If you believe you have found a security vulnerability in torus.wtf, please report it privately.
 
 **Do not** open a public GitHub issue.
 
-Email: **security@torus.fm** (or DM a maintainer on Discord if you can't reach the address).
+Email: **security@torus.wtf** (or DM a maintainer on Discord if you can't reach the address).
 
 Please include:
 
@@ -27,7 +27,7 @@ We do not pay bounties (passion-project budget) but we do publicly credit respon
 
 ## Supported versions
 
-torus.fm follows rolling-release `main`. Only the latest `main` and the most recent tagged release receive security fixes. Self-hosters should keep their Docker images on `latest` with Watchtower or pin to the most recent tag.
+torus.wtf follows rolling-release `main`. Only the latest `main` and the most recent tagged release receive security fixes. Self-hosters should keep their Docker images on `latest` with Watchtower or pin to the most recent tag.
 
 ## Hardening checklist for self-hosters
 

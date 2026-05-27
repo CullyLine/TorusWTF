@@ -18,7 +18,7 @@ A clear description of what's wrong.
 **Environment**
 
 - Browser / device:
-- Instance (torus.fm or self-hosted):
+- Instance (torus.wtf or self-hosted):
 - Version / commit (if known):
 
 **Screenshots / logs (optional)**

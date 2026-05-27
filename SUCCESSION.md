@@ -1,6 +1,6 @@
 # Succession plan
 
-A passion project should outlive any individual maintainer. This document is the "what happens if the bus comes" plan for torus.fm.
+A passion project should outlive any individual maintainer. This document is the "what happens if the bus comes" plan for torus.wtf.
 
 If you are reading this because the founder has stepped away — **welcome**, and thank you. Here's the runbook.
 
@@ -8,7 +8,7 @@ If you are reading this because the founder has stepped away — **welcome**, an
 
 | Asset                                                    | Where it lives              | Who can transfer                                                                       |
 | -------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------- |
-| Domain (`torus.fm`, defensive registrations)             | Registrar account (Porkbun) | Founder; backup account holder listed in private vault                                 |
+| Domain (`torus.wtf`, defensive registrations)             | Registrar account (Porkbun) | Founder; backup account holder listed in private vault                                 |
 | Hosting (8TB drive + home server)                        | Founder's location          | Replaceable — any cloud VPS + S3-compatible bucket will work                           |
 | GitHub org                                               | github.com/YOUR_ORG         | Founder + listed co-maintainers                                                        |
 | Discord (community)                                      | discord.gg/...              | Founder + 2 community mods                                                             |
@@ -16,7 +16,7 @@ If you are reading this because the founder has stepped away — **welcome**, an
 
 ## 2. If the main hub goes down
 
-1. **Self-hosters keep the protocol alive.** Anyone running their own torus.fm instance can continue serving their community indefinitely. Share-codes don't depend on the main hub.
+1. **Self-hosters keep the protocol alive.** Anyone running their own torus.wtf instance can continue serving their community indefinitely. Share-codes don't depend on the main hub.
 2. **All public artifacts are on GitHub** under [`YOUR_ORG/torus`](https://github.com/YOUR_ORG/torus). The repo is AGPL-3.0 — fork it, run it, modify it.
 3. **The latest published Docker images** (`ghcr.io/YOUR_ORG/torus-web`, `ghcr.io/YOUR_ORG/torus-worker`) remain pullable until the registry's retention policy expires (typically 6+ months).
 

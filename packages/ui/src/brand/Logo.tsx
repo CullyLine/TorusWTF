@@ -10,6 +10,8 @@ interface LogoProps {
   style?: CSSProperties;
   /** Link target; defaults to home. Pass `null` if an ancestor is already a link. */
   href?: string | null;
+  /** Accent color for the .wtf tail. Defaults to torus-bass magenta. */
+  accentColor?: string;
 }
 
 const VIEWBOX_W = 200;
@@ -26,6 +28,7 @@ export function Logo({
   className,
   style,
   href = '/',
+  accentColor = '#FF2D95',
 }: LogoProps) {
   const markHeight = Math.round(size * (VIEWBOX_H / VIEWBOX_W));
 
@@ -58,9 +61,22 @@ export function Logo({
             color,
             lineHeight: 1.2,
             whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'baseline',
+            gap: '0.05em',
           }}
         >
-          torus<span style={{ opacity: 0.55, fontSize: '0.7em', marginLeft: '0.2em' }}>.fm</span>
+          torus
+          <span
+            style={{
+              color: accentColor,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textShadow: `0 0 8px ${accentColor}40`,
+            }}
+          >
+            .wtf
+          </span>
         </span>
       ) : null}
     </>
@@ -76,7 +92,7 @@ export function Logo({
 
   if (href == null) {
     return (
-      <div className={className} style={boxStyle} aria-label="torus.fm">
+      <div className={className} style={boxStyle} aria-label="torus.wtf">
         {content}
       </div>
     );
@@ -92,7 +108,7 @@ export function Logo({
         color: 'inherit',
         cursor: 'pointer',
       }}
-      aria-label="torus.fm home"
+      aria-label="torus.wtf home"
     >
       {content}
     </a>

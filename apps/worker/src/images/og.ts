@@ -52,7 +52,7 @@ function buildSvg(input: OgInput): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">
   <rect width="${WIDTH}" height="${HEIGHT}" fill="${BG}"/>
   <g font-family="Inter, system-ui, sans-serif">
-    <text x="${padding}" y="${padding + 14}" font-size="22" fill="${FG_DIM}" letter-spacing="6">TORUS.FM</text>
+    <text x="${padding}" y="${padding + 14}" font-size="22" fill="${FG_DIM}" letter-spacing="6">TORUS.WTF</text>
     <text x="${padding}" y="${padding + 100}" font-size="56" font-weight="600" fill="${FG}">${escapedTitle}</text>
     <text x="${padding}" y="${HEIGHT - padding}" font-size="20" fill="${FG_DIM}">${duration}</text>
   </g>

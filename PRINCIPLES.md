@@ -1,10 +1,10 @@
 # Principles
 
-This document is the **no-bullshit charter** for torus.fm. It is a hard contract with users. Any feature proposed for the project must be justified against this list. Any PR that violates these principles will be closed.
+This document is the **no-bullshit charter** for torus.wtf. It is a hard contract with users. Any feature proposed for the project must be justified against this list. Any PR that violates these principles will be closed.
 
 ## Who this is for
 
-torus.fm exists for **producers, musicians, and anyone who wants a no-bullshit way to share audio clips with their friends and the community**. We are not building a startup. We are not chasing scale. We are not optimizing for engagement.
+torus.wtf exists for **producers, musicians, and anyone who wants a no-bullshit way to share audio clips with their friends and the community**. We are not building a startup. We are not chasing scale. We are not optimizing for engagement.
 
 We are building something good and keeping it good.
 
@@ -40,7 +40,7 @@ Account deletion is a single button that works the first time. Unsubscribe is on
 
 ### Will never take VC funding
 
-VC funding forces unsustainable growth and inevitably leads to enshittification. torus.fm survives on donations, the Supporter tier, and self-hosted instances. If that's not enough to keep the main hub running, we will gracefully sunset it before betraying these principles.
+VC funding forces unsustainable growth and inevitably leads to enshittification. torus.wtf survives on donations, the Supporter tier, and self-hosted instances. If that's not enough to keep the main hub running, we will gracefully sunset it before betraying these principles.
 
 ### Will never use tracking cookies / proprietary analytics by default
 
@@ -60,7 +60,7 @@ See above. Upload, share, listen, vote, comment, follow — forever free.
 
 ### Always self-hostable
 
-Anyone can spin up their own torus.fm instance. The main hub at `torus.fm` is just one instance. The code is AGPL-3.0 so any modified public instance must share its changes back.
+Anyone can spin up their own torus.wtf instance. The main hub at `torus.wtf` is just one instance. The code is AGPL-3.0 so any modified public instance must share its changes back.
 
 ### Always open source
 

@@ -30,7 +30,7 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default('torus.fm <noreply@torus.fm>'),
+  SMTP_FROM: z.string().default('torus.wtf <noreply@torus.wtf>'),
   SMTP_SECURE: z
     .string()
     .default('false')

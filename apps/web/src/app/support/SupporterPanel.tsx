@@ -80,7 +80,7 @@ function SubdomainEditor({ initial }: { initial: string }) {
           placeholder="yourname"
           className="rounded-full border border-torus-border-strong bg-transparent px-4 py-2 font-mono text-sm text-torus-fg outline-none focus:border-torus-mid"
         />
-        <span className="font-mono text-torus-fg-dim">.torus.fm</span>
+        <span className="font-mono text-torus-fg-dim">.torus.wtf</span>
       </label>
       <button
         type="submit"
@@ -92,7 +92,7 @@ function SubdomainEditor({ initial }: { initial: string }) {
       {error ? <p className="text-xs text-torus-bass">{error}</p> : null}
       {saved ? (
         <p className="text-xs text-torus-fg-dim">
-          Live at <span className="font-mono">{saved}.torus.fm</span>.
+          Live at <span className="font-mono">{saved}.torus.wtf</span>.
         </p>
       ) : null}
     </form>

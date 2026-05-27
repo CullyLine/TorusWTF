@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     ? storage.publicUrl(clip.ogImageKey)
     : `${baseUrl}/og-default.png`;
   const title = clip.title ?? 'untitled clip';
-  const description = clip.description ?? 'Share the loop. torus.fm';
+  const description = clip.description ?? 'Share the loop. torus.wtf';
   const canonical = `${baseUrl}/${clip.shareCode}`;
 
   return {
@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       url: canonical,
       images: [{ url: ogImageUrl, width: 1200, height: 630, alt: title }],
-      siteName: 'torus.fm',
+      siteName: 'torus.wtf',
     },
     twitter: {
       card: 'summary_large_image',

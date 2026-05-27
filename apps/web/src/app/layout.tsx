@@ -4,21 +4,21 @@ import { Providers } from '@/components/Providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: 'torus.fm', template: '%s · torus.fm' },
+  title: { default: 'torus.wtf', template: '%s · torus.wtf' },
   description: 'Share the loop. Drop any audio, get an instant link.',
-  applicationName: 'torus.fm',
-  authors: [{ name: 'torus.fm contributors' }],
+  applicationName: 'torus.wtf',
+  authors: [{ name: 'torus.wtf contributors' }],
   themeColor: '#0a0b1e',
   openGraph: {
     type: 'website',
-    siteName: 'torus.fm',
-    title: 'torus.fm',
+    siteName: 'torus.wtf',
+    title: 'torus.wtf',
     description: 'Share the loop. Drop any audio, get an instant link.',
-    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'torus.fm' }],
+    images: [{ url: '/og-default.png', width: 1200, height: 630, alt: 'torus.wtf' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'torus.fm',
+    title: 'torus.wtf',
     description: 'Share the loop. Drop any audio, get an instant link.',
   },
   icons: {

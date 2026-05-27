@@ -1,4 +1,4 @@
-# torus.fm — local development stack
+# torus.wtf — local development stack
 # Brings up Redis, MinIO, and mailhog (fake SMTP) for hacking on the app locally.
 # The Next.js web app and the worker run on your host (`pnpm dev`).
 #

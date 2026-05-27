@@ -43,13 +43,13 @@ export async function sendMagicLinkEmail(opts: {
   loginUrl: string;
   expiresMinutes: number;
 }): Promise<void> {
-  const from = process.env.SMTP_FROM ?? 'torus.fm <noreply@torus.fm>';
+  const from = process.env.SMTP_FROM ?? 'torus.wtf <noreply@torus.wtf>';
   await getMailer().sendMail({
     from,
     to: opts.to,
-    subject: 'Your torus.fm sign-in link',
+    subject: 'Your torus.wtf sign-in link',
     text: [
-      'Click the link below to sign in to torus.fm:',
+      'Click the link below to sign in to torus.wtf:',
       '',
       opts.loginUrl,
       '',
@@ -57,7 +57,7 @@ export async function sendMagicLinkEmail(opts: {
     ].join('\n'),
     html: `
       <div style="font-family: -apple-system, system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; color: #0a0b1e;">
-        <h1 style="margin: 0 0 16px; font-size: 22px;">Sign in to torus.fm</h1>
+        <h1 style="margin: 0 0 16px; font-size: 22px;">Sign in to torus.wtf</h1>
         <p style="margin: 0 0 24px; color: #444;">Click the button below to finish signing in.</p>
         <a href="${opts.loginUrl}"
            style="display: inline-block; padding: 14px 28px; background: #0a0b1e; color: #fff; border-radius: 999px; text-decoration: none; font-weight: 500;">Sign in</a>
@@ -72,12 +72,12 @@ export async function sendAnonymizeRescueEmail(opts: {
   to: string;
   links: { shareCode: string; url: string }[];
 }): Promise<void> {
-  const from = process.env.SMTP_FROM ?? 'torus.fm <noreply@torus.fm>';
+  const from = process.env.SMTP_FROM ?? 'torus.wtf <noreply@torus.wtf>';
   const lines = opts.links.map(
     (l) => `  ${l.shareCode} — ${l.url}`,
   );
   const textBody = [
-    'Your torus.fm account was deleted, but your clips are still online as Anonymous.',
+    'Your torus.wtf account was deleted, but your clips are still online as Anonymous.',
     '',
     'Use these rescue links to manage or delete individual clips (open each link in the same browser):',
     '',
@@ -96,7 +96,7 @@ export async function sendAnonymizeRescueEmail(opts: {
   await getMailer().sendMail({
     from,
     to: opts.to,
-    subject: 'Your torus.fm clips — rescue links',
+    subject: 'Your torus.wtf clips — rescue links',
     text: textBody,
     html: `
       <div style="font-family: -apple-system, system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; color: #0a0b1e;">

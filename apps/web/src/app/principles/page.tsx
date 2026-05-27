@@ -3,7 +3,7 @@ import { SiteHeader } from '@/components/SiteHeader';
 
 export const metadata = {
   title: 'principles',
-  description: 'The no-bullshit charter that defines what torus.fm will and will not do.',
+  description: 'The no-bullshit charter that defines what torus.wtf will and will not do.',
 };
 
 export default function PrinciplesPage() {

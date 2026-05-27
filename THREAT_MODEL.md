@@ -75,4 +75,4 @@ A short, practical threat model for a self-hostable audio-sharing service. We tr
 
 ## Reporting
 
-Vulnerabilities to `security@torus.fm`. See [`SECURITY.md`](./SECURITY.md).
+Vulnerabilities to `security@torus.wtf`. See [`SECURITY.md`](./SECURITY.md).

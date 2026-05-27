@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test';
  * and is added separately in a future PR.
  */
 
-test.describe('torus.fm smoke', () => {
+test.describe('torus.wtf smoke', () => {
   test('landing page renders the hero', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'share the loop' })).toBeVisible();

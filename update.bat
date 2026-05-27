@@ -5,7 +5,7 @@ pushd "%~dp0"
 
 echo.
 echo ================================================
-echo   torus.fm - update
+echo   torus.wtf - update
 echo ================================================
 echo.
 
