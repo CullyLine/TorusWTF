@@ -52,6 +52,8 @@ interface VisualizerCanvasProps {
   lastOnsetRef?: MutableRefObject<number>;
   /** Anima life amount. 0 = dead-reactive, 1 = full breathing. */
   anima?: number;
+  /** Aura amount. 0 = no wisps/glow, 1 = full presence. */
+  aura?: number;
 }
 
 export function VisualizerCanvas({
@@ -81,6 +83,7 @@ export function VisualizerCanvas({
   bpmRef,
   lastOnsetRef,
   anima,
+  aura,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -130,6 +133,7 @@ export function VisualizerCanvas({
                 cameraMode={cameraMode}
                 bassShake={bassShake}
                 anima={anima}
+                aura={aura}
                 creature={creature}
               />
               <group scale={scale}>

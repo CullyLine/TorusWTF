@@ -35,6 +35,7 @@ export interface SavedPreset {
   bassMaxHz?: number;
   midMaxHz?: number;
   anima?: number;
+  aura?: number;
 }
 
 export interface VisualizerControls {
@@ -54,6 +55,8 @@ export interface VisualizerControls {
   midMaxHz?: number;
   /** Anima life amount. 0 = dead-reactive, 1 = full breathing creature. */
   anima?: number;
+  /** Aura amount. 0 = no wisps/glow, 1 = full presence. */
+  aura?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -70,6 +73,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   bassMaxHz: 250,
   midMaxHz: 2000,
   anima: 0.5,
+  aura: 0.4,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };

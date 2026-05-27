@@ -230,6 +230,7 @@ export function VisualizerApp() {
       bassMaxHz: saved.bassMaxHz ?? 250,
       midMaxHz: saved.midMaxHz ?? 2000,
       anima: saved.anima ?? 0.5,
+      aura: saved.aura ?? 0.4,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -476,6 +477,7 @@ export function VisualizerApp() {
                 bassMaxHz={controls.bassMaxHz ?? 250}
                 midMaxHz={controls.midMaxHz ?? 2000}
                 anima={controls.anima ?? 0.5}
+                aura={controls.aura ?? 0.4}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}

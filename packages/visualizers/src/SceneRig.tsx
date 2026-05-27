@@ -8,6 +8,7 @@ import { useMetricsRef } from './metrics';
 import { useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
+import { AuraLayer } from './AuraLayer';
 
 export type CameraMode = 'still' | 'drift' | 'orbit' | 'dive';
 
@@ -21,6 +22,8 @@ interface SceneRigProps {
   bassShake?: number;
   /** 0 = dead-reactive (no breathing); 1 = full Anima life. Default 0.5. */
   anima?: number;
+  /** 0 = no aura, 1 = full wisp cloud + soul glow. Default 0.4. */
+  aura?: number;
   /** Optional creature personality for tempo-biased heartbeat. */
   creature?: CreaturePersonality;
 }
@@ -36,6 +39,7 @@ export function SceneRig({
   cameraMode = 'drift',
   bassShake = 0,
   anima = 0.5,
+  aura = 0.4,
   creature,
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
@@ -131,6 +135,8 @@ export function SceneRig({
         color={palette.mid}
         distance={14}
       />
+
+      <AuraLayer palette={palette} amount={aura} tier={tier} />
 
       {tier !== 'low' ? (
         <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
