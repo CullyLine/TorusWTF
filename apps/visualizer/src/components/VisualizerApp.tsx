@@ -93,7 +93,7 @@ export function VisualizerApp() {
     SOURCE_KIND_KEY,
     null,
   );
-  const [heroCollapsed, setHeroCollapsed] = useState(false);
+  const [heroCollapsed, setHeroCollapsed] = useState(true);
   const [presetsVersion, setPresetsVersion] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [showBpm, setShowBpm] = usePersistedState<boolean>(SHOW_BPM_KEY, false);
