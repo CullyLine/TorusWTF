@@ -52,10 +52,7 @@ export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) 
               style={{ background: PRESET_COLORS[id] }}
               aria-hidden
             />
-            <span>
-              <span className="block font-medium text-torus-fg">{VISUALIZERS[id].label}</span>
-              <span className="block text-[10px] opacity-70">{VISUALIZERS[id].hint}</span>
-            </span>
+            <span className="block font-medium text-torus-fg">{VISUALIZERS[id].label}</span>
           </button>
         ))}
       </div>
