@@ -5,10 +5,25 @@ export interface LicenseValidationResult {
 }
 
 /**
+ * Developer/test license key. Always treated as valid by the verify endpoint
+ * regardless of whether Polar is configured, so we can exercise the pro
+ * paths (4K/240fps, custom palette, saved presets, watermark removal,
+ * pre-render unlocked output) without setting up real billing.
+ *
+ * If you want to disable this in production builds, gate the early-return
+ * below on `process.env.NODE_ENV !== 'production'`.
+ */
+export const TEST_LICENSE_KEY = 'TORUS-WTF-TEST-UNLOCK';
+
+/**
  * Validates a Polar license key against the Polar API.
  * See https://docs.polar.sh for endpoint details.
  */
 export async function validateLicenseKey(key: string): Promise<LicenseValidationResult> {
+  if (key === TEST_LICENSE_KEY) {
+    return { valid: true };
+  }
+
   const apiKey = process.env.POLAR_API_KEY;
   const productId = process.env.POLAR_VISUALIZER_PRODUCT_ID;
 

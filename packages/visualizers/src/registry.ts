@@ -36,6 +36,12 @@ export interface VisualizerSceneProps {
    * their vertex shaders bypass the model matrix.
    */
   scale?: number;
+  /**
+   * Liquid-Blob-specific deformation control. 0 = pure stretch (taffy-pull
+   * along a wobble axis); 1 = pure inflate (uniform radial puff). Default
+   * 0.5. Other presets ignore this prop.
+   */
+  inflate?: number;
 }
 
 export interface VisualizerDefinition {

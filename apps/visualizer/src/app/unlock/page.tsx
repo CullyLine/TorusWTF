@@ -8,6 +8,11 @@ import { useUnlock } from '@/hooks/useUnlock';
 
 const checkoutUrl = process.env.NEXT_PUBLIC_POLAR_CHECKOUT_URL;
 
+// Mirrors `TEST_LICENSE_KEY` in `apps/visualizer/src/lib/polar.ts`. The
+// server-side verify endpoint always returns valid for this key so we can
+// test the pro paths without a real license.
+const TEST_LICENSE_KEY = 'TORUS-WTF-TEST-UNLOCK';
+
 export default function UnlockPage() {
   const router = useRouter();
   const { activate } = useUnlock();
@@ -15,17 +20,26 @@ export default function UnlockPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const runActivate = async (incoming: string) => {
     setLoading(true);
     setError(null);
-    const result = await activate(key);
+    const result = await activate(incoming);
     setLoading(false);
     if (result.ok) {
       router.push('/');
       return;
     }
     setError(result.reason ?? 'Invalid license key.');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await runActivate(key);
+  };
+
+  const handleTestUnlock = async () => {
+    setKey(TEST_LICENSE_KEY);
+    await runActivate(TEST_LICENSE_KEY);
   };
 
   return (
@@ -73,6 +87,20 @@ export default function UnlockPage() {
           {loading ? 'Verifying…' : 'Activate'}
         </button>
       </form>
+
+      <div className="mt-4 rounded-lg border border-torus-border/60 bg-torus-bg/40 p-3">
+        <p className="text-[11px] text-torus-fg-faint">
+          Testing the pro features without a real license?
+        </p>
+        <button
+          type="button"
+          onClick={() => void handleTestUnlock()}
+          disabled={loading}
+          className="mt-2 w-full rounded-full border border-torus-border bg-transparent py-1.5 text-xs text-torus-fg-dim hover:border-torus-mid/40 hover:text-torus-mid disabled:opacity-40"
+        >
+          {loading ? 'Activating…' : 'Activate test mode'}
+        </button>
+      </div>
 
       <p className="mt-6 text-xs text-torus-fg-faint">
         Lost your key? Check your purchase email.{' '}

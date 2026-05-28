@@ -1,6 +1,6 @@
 'use client';
 
-import type { AnalyserHandle, CameraMode } from '@torus/visualizers';
+import type { AnalyserHandle, CameraMode, VisualizerId } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import { BandSplitter } from '@/components/BandSplitter';
 import { EditableNumber } from '@/components/EditableNumber';
@@ -21,6 +21,7 @@ interface ControlPanelProps {
   presetsVersion: number;
   onPresetsChange: () => void;
   analyser: AnalyserHandle | null;
+  activePreset: VisualizerId;
 }
 
 const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive', 'cinematic'];
@@ -44,14 +45,16 @@ export function ControlPanel({
   presetsVersion,
   onPresetsChange,
   analyser,
+  activePreset,
 }: ControlPanelProps) {
-  const sliders: Array<{
+  type SliderDef = {
     key: SliderKey;
     label: string;
     min: number;
     max: number;
     step: number;
-  }> = [
+  };
+  const allSliders: SliderDef[] = [
     { key: 'reactivity', label: 'Gain', min: 0.2, max: 12.5, step: 0.05 },
     { key: 'energy', label: 'Energy', min: 0, max: 2, step: 0.05 },
     { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05 },
@@ -64,7 +67,12 @@ export function ControlPanel({
     { key: 'scale', label: 'Scale', min: 0.2, max: 5, step: 0.05 },
     { key: 'anima', label: 'Anima', min: 0, max: 1, step: 0.01 },
     { key: 'aura', label: 'Aura', min: 0, max: 1, step: 0.01 },
+    // Liquid-Blob-specific. Filtered out below when a different preset is active.
+    { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01 },
   ];
+  const sliders: SliderDef[] = allSliders.filter(
+    (s) => s.key !== 'inflate' || activePreset === 'liquid_blob',
+  );
 
   const saved = unlocked ? loadSavedPresets() : [];
   void presetsVersion;
@@ -75,10 +83,18 @@ export function ControlPanel({
 
       <div className="space-y-3">
         {sliders.map(({ key, label, min, max, step }, idx) => {
-          // Smoothness/Scale/BassShake/Anima/Aura were added later, so
-          // older persisted controls may not have them. Default per-slider.
+          // Smoothness/Scale/BassShake/Anima/Aura/Inflate were added later,
+          // so older persisted controls may not have them. Default per-slider.
           const fallback =
-            key === 'scale' ? 1 : key === 'anima' ? 0.5 : key === 'aura' ? 0.4 : 0;
+            key === 'scale'
+              ? 1
+              : key === 'anima'
+                ? 0.5
+                : key === 'aura'
+                  ? 0.4
+                  : key === 'inflate'
+                    ? 0.5
+                    : 0;
           const value = controls[key] ?? fallback;
           const outOfRange = value < min || value > max;
           const sliderValue = Math.max(min, Math.min(max, value));

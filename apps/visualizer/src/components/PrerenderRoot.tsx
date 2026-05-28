@@ -99,6 +99,7 @@ export function PrerenderRoot({
         aura={controls.aura ?? 0.4}
         cinematicSpeed={controls.cinematicSpeed ?? 1}
         energy={controls.energy ?? 0}
+        inflate={controls.inflate ?? 0.5}
         bloomIntensity={controls.bloomIntensity}
         cameraMode={controls.cameraMode}
         creature={creature}

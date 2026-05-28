@@ -32,12 +32,20 @@ uniform float uTime;
 // uTime by an energy-dependent factor, which made satellites visibly
 // walk backward on energy drops.
 uniform float uPhase;
+// Separate monotonic phase whose rate is heavily mid/high/beat-driven.
+// Drives the satellite orbits so they whip around the blob in time with
+// the music without bleeding back into the surface wobble.
+uniform float uOrbitPhase;
 uniform float uBass;
 uniform float uMid;
 uniform float uHigh;
 uniform float uEnergy;
 uniform float uBeat;
 uniform float uScale;
+// 0..1 — how much of the bass response is *inflation* (uniform radial
+// growth) vs *stretching* (anisotropic elongation along a wobble axis).
+// 0 = pure stretch like elastic material being pulled; 1 = pure puff.
+uniform float uInflate;
 // 0..1 phase within current 4/4 bar. 0 = downbeat.
 uniform float uBarPhase;
 // 0..1 pulse on detected bass drops.
@@ -66,19 +74,35 @@ float sceneInner(vec3 p) {
   // critical and the wobble already moves on its own).
   float t = uPhase;
   float tw = uTime;
+  float ot = uOrbitPhase;
 
-  float r0 = 0.42 + uBass * 0.28 + uBeat * 0.12;
+  // Anchor sphere — bass contributes here ONLY through the Inflate slider.
+  // The beat still gets a small pop so taps register no matter where the
+  // user has Inflate set.
+  float r0 = 0.42 + uBass * 0.28 * uInflate + uBeat * 0.12;
   float d = sdSphere(p, r0);
 
   float k = 0.32 + uMid * 0.18 + uHigh * 0.1;
+
+  // Stretch axis: a slowly tumbling unit vector. When Inflate is LOW the
+  // bass elongates the satellite cluster along this axis instead of puffing
+  // the spheres — it pulls the blob like soft material being tugged.
+  vec3 stretchAxis = normalize(vec3(
+    sin(t * 0.31 + 0.7),
+    cos(t * 0.27 + 1.3),
+    sin(t * 0.41 + 2.1)
+  ));
+  float stretchAmt = uBass * (1.0 - uInflate) * 0.55;
 
   // Irrational-ish ratios for x/y/z rates so the three axes don't
   // recurrently align into the same standing pattern.
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
-    float a = t * (0.71 + fi * 0.13) + fi * 1.731;
-    float b = t * (0.47 + fi * 0.09) + fi * 2.397;
-    float c = t * (0.59 + fi * 0.07) + fi * 0.973;
+    // Orbital angle uses the music-driven phase — satellites whip around the
+    // anchor on busy passages and slow down on quiet ones.
+    float a = ot * (0.71 + fi * 0.13) + fi * 1.731;
+    float b = ot * (0.47 + fi * 0.09) + fi * 2.397;
+    float c = ot * (0.59 + fi * 0.07) + fi * 0.973;
     // Per-satellite center bias so orbits don't all pass through origin —
     // breaks the "every satellite stalls at the same point" symmetry.
     vec3 bias = vec3(
@@ -86,13 +110,20 @@ float sceneInner(vec3 p) {
       cos(fi * 1.71) * 0.07,
       sin(fi * 3.31) * 0.08
     );
-    float orbit = 0.55 + 0.16 * sin(t * 0.61 + fi * 1.9);
+    // Orbit radius itself swells slightly with bass when inflate is up.
+    float orbit = 0.55 + 0.16 * sin(t * 0.61 + fi * 1.9) + uBass * 0.18 * uInflate;
     vec3 center = bias + vec3(
       cos(a) * orbit,
       sin(b) * orbit * 0.8,
       sin(c) * orbit * 0.9
     );
-    float rr = 0.20 + uMid * 0.12 + uHigh * 0.08 + 0.05 * sin(t * 1.37 + fi * 2.13);
+    // Stretch pulls satellites along the axis. Phase-shifted so opposing
+    // satellites get pushed in opposite directions, which reads as
+    // taffy-pull instead of a uniform drift.
+    center += stretchAxis * stretchAmt * cos(a + fi * 1.7) * 1.1;
+
+    float rr = 0.20 + (uMid * 0.12 + uHigh * 0.08) * (0.45 + uInflate * 0.55)
+             + 0.05 * sin(t * 1.37 + fi * 2.13);
     d = smin(d, sdSphere(p - center, rr), k);
   }
 
@@ -194,12 +225,19 @@ void main() {
 }
 `;
 
-export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: VisualizerSceneProps) {
+export function LiquidBlobScene({
+  analyser,
+  palette,
+  tier,
+  scale = 1,
+  inflate = 0.5,
+}: VisualizerSceneProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const { size } = useThree();
   const phaseRef = useRef(0);
+  const orbitPhaseRef = useRef(0);
 
   const steps = tier === 'high' ? RAY_STEPS_HIGH : tier === 'mid' ? RAY_STEPS_MID : RAY_STEPS_LOW;
   const fragmentShader = useMemo(() => buildFragmentShader(steps), [steps]);
@@ -209,12 +247,14 @@ export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: Visualiz
       uResolution: { value: new THREE.Vector2(1, 1) },
       uTime: { value: 0 },
       uPhase: { value: 0 },
+      uOrbitPhase: { value: 0 },
       uBass: { value: 0 },
       uMid: { value: 0 },
       uHigh: { value: 0 },
       uEnergy: { value: 0 },
       uBeat: { value: 0 },
       uScale: { value: 1 },
+      uInflate: { value: 0.5 },
       uBarPhase: { value: 0 },
       uDrop: { value: 0 },
       uSilence: { value: 0 },
@@ -235,15 +275,26 @@ export function LiquidBlobScene({ analyser, palette, tier, scale = 1 }: Visualiz
     const speed = 0.35 + Math.min(m.energy, 1.5) * 0.18;
     phaseRef.current += Math.min(delta, 0.05) * speed;
 
+    // Orbit phase: heavily mid/high/beat-driven so the satellites visibly
+    // whip around the blob on busy passages. Floored so it never stalls.
+    const orbitSpeed =
+      0.6 +
+      Math.min(m.mid, 2) * 1.6 +
+      Math.min(m.high, 2) * 0.9 +
+      m.beat * 0.7;
+    orbitPhaseRef.current += Math.min(delta, 0.05) * orbitSpeed;
+
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = state.clock.elapsedTime;
     mat.uniforms.uPhase!.value = phaseRef.current;
+    mat.uniforms.uOrbitPhase!.value = orbitPhaseRef.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
     mat.uniforms.uEnergy!.value = m.energy;
     mat.uniforms.uBeat!.value = m.beat;
     mat.uniforms.uScale!.value = scale;
+    mat.uniforms.uInflate!.value = Math.max(0, Math.min(1, inflate));
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uDrop!.value = m.dropEvent;
     mat.uniforms.uSilence!.value = m.silence;

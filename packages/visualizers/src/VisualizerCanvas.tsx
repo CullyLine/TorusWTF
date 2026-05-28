@@ -73,6 +73,8 @@ interface VisualizerCanvasProps {
   cinematicSpeed?: number;
   /** Dynamic-range expansion. 0 = unchanged, 1 = peaks 3x their deviation. */
   energy?: number;
+  /** Liquid Blob: 0 = pure stretch, 1 = pure inflate. Other presets ignore. */
+  inflate?: number;
 }
 
 export function VisualizerCanvas({
@@ -105,6 +107,7 @@ export function VisualizerCanvas({
   aura,
   cinematicSpeed = 1,
   energy,
+  inflate,
   frameloop = 'always',
   glOverrides,
   onR3FState,
@@ -170,7 +173,13 @@ export function VisualizerCanvas({
                 cinematicSpeed={cinematicSpeed}
               />
               <group scale={scale}>
-                <def.Scene analyser={analyser} palette={palette} tier={tier} scale={scale} />
+                <def.Scene
+                  analyser={analyser}
+                  palette={palette}
+                  tier={tier}
+                  scale={scale}
+                  inflate={inflate}
+                />
               </group>
             </AudioMetricsProvider>
           </Canvas>

@@ -237,6 +237,7 @@ export function VisualizerApp() {
       aura: saved.aura ?? 0.4,
       cinematicSpeed: saved.cinematicSpeed ?? 1,
       energy: saved.energy ?? 0,
+      inflate: saved.inflate ?? 0.5,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -481,6 +482,7 @@ export function VisualizerApp() {
         presetsVersion={presetsVersion}
         onPresetsChange={() => setPresetsVersion((v) => v + 1)}
         analyser={audio.analyser}
+        activePreset={preset}
       />
       <ExportPanel
         unlocked={unlock.unlocked}
@@ -550,6 +552,7 @@ export function VisualizerApp() {
                 aura={controls.aura ?? 0.4}
                 cinematicSpeed={controls.cinematicSpeed ?? 1}
                 energy={controls.energy ?? 0}
+                inflate={controls.inflate ?? 0.5}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}

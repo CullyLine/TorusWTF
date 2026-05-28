@@ -139,7 +139,13 @@ export function StarFieldScene({ analyser, tier }: VisualizerSceneProps) {
   });
 
   return (
-    <points ref={pointsRef} rotation={[Math.PI / 2.05, 0, 0]}>
+    // Previously [PI/2.05, 0, 0] which put the galaxy nearly face-on. The
+    // disc is so thin that face-on read as a flat 2D smear — the user
+    // perceived it as "horizontal" / lacking depth. Tilting the disc 30°
+    // away from face-on (and adding a slight Y twist) reveals the spiral
+    // arms in 3D: the far arms recede into the distance, near arms come
+    // forward, and you can clearly see the disc curl around in space.
+    <points ref={pointsRef} rotation={[Math.PI / 3, Math.PI / 10, 0]}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} count={count} itemSize={3} />
         <bufferAttribute attach="attributes-aPhase" args={[phases, 1]} count={count} itemSize={1} />

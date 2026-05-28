@@ -38,6 +38,7 @@ export interface SavedPreset {
   aura?: number;
   cinematicSpeed?: number;
   energy?: number;
+  inflate?: number;
 }
 
 export interface VisualizerControls {
@@ -66,6 +67,11 @@ export interface VisualizerControls {
    * Different from Gain (reactivity) which scales everything uniformly.
    */
   energy?: number;
+  /**
+   * Liquid Blob deformation balance. 0 = pure stretch (taffy-pull),
+   * 1 = pure inflate (radial puff). Default 0.5. Only Liquid Blob uses it.
+   */
+  inflate?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -85,6 +91,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   aura: 0.4,
   cinematicSpeed: 1,
   energy: 0,
+  inflate: 0.5,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };

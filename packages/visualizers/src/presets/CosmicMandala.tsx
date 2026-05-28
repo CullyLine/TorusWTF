@@ -56,12 +56,21 @@ export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneP
 
     const breath = 1 + m.bass * 0.22 + m.breath * 0.12 + pulseRef.current * 0.18;
     root.scale.setScalar(breath);
-    root.rotation.y += delta * (0.08 + m.mid * 0.35);
+    // Whole-mandala spin: now picks up mid + high + beat so the wheel
+    // visibly turns at normal listening gain instead of waiting for the
+    // user to crank everything to mad-scientist mode.
+    root.rotation.y +=
+      delta * (0.18 + m.mid * 0.65 + m.high * 0.28 + m.beat * 0.5);
 
     rings.children.forEach((child, i) => {
-      const speed = 0.12 + i * 0.04 + m.mid * 0.5;
+      // Per-ring spin: was 0.12 + i*0.04 + m.mid*0.5. That made the inner
+      // rings barely turn unless gain was huge. Tripled the music-driven
+      // term and added high + beat so each ring flies on energy.
+      const speed =
+        0.22 + i * 0.05 + m.mid * 1.7 + m.high * 0.95 + m.beat * 0.6;
       child.rotation.z += delta * speed * (i % 2 === 0 ? 1 : -1);
-      child.rotation.x = Math.sin(_state.clock.elapsedTime * 0.4 + i) * m.high * 0.15;
+      child.rotation.x =
+        Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12);
       const mat = (child as THREE.Mesh).material;
       if (mat && !Array.isArray(mat) && 'emissiveIntensity' in mat) {
         (mat as THREE.MeshStandardMaterial).emissiveIntensity =
@@ -72,7 +81,9 @@ export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneP
     if (shimmer && shimmerMat) {
       shimmerMat.size = 0.02 + m.high * 0.05 + pulseRef.current * 0.03;
       shimmerMat.opacity = 0.35 + m.high * 0.5;
-      shimmer.rotation.y -= delta * (0.2 + m.high);
+      // Counter-rotating shimmer cloud — also bumped up so it streaks
+      // visibly across the rings on busy passages.
+      shimmer.rotation.y -= delta * (0.35 + m.high * 1.6 + m.mid * 0.5);
     }
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
