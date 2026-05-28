@@ -53,6 +53,7 @@ export function ControlPanel({
     step: number;
   }> = [
     { key: 'reactivity', label: 'Gain', min: 0.2, max: 12.5, step: 0.05 },
+    { key: 'energy', label: 'Energy', min: 0, max: 2, step: 0.05 },
     { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05 },
     { key: 'midMix', label: 'Mid', min: 0, max: 10, step: 0.05 },
     { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05 },

@@ -232,6 +232,7 @@ export function VisualizerApp() {
       anima: saved.anima ?? 0.5,
       aura: saved.aura ?? 0.4,
       cinematicSpeed: saved.cinematicSpeed ?? 1,
+      energy: saved.energy ?? 0,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -480,6 +481,7 @@ export function VisualizerApp() {
                 anima={controls.anima ?? 0.5}
                 aura={controls.aura ?? 0.4}
                 cinematicSpeed={controls.cinematicSpeed ?? 1}
+                energy={controls.energy ?? 0}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}

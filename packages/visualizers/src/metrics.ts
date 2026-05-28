@@ -132,6 +132,13 @@ export interface MetricsScales {
   bpmRef?: RefObject<number | null>;
   /** Optional last-onset-timestamp ref (from useBPM). Anchors phase wrapping. */
   lastOnsetRef?: RefObject<number>;
+  /**
+   * Dynamic-range expansion. 0 = unchanged. 1 = peaks reach 3x their
+   * deviation from the slow baseline. Unlike `reactivity` (Gain) this
+   * does NOT raise the quiet baseline, so quiet music stays quiet
+   * between hits but punches harder on the hits themselves.
+   */
+  energy?: number;
 }
 
 export function AudioMetricsProvider({
@@ -148,6 +155,7 @@ export function AudioMetricsProvider({
   midMaxHz = 2000,
   bpmRef,
   lastOnsetRef,
+  energy: energyExpand = 0,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
@@ -161,6 +169,11 @@ export function AudioMetricsProvider({
   const prevMid = useRef(0.15);
   const sustainedBass = useRef(0.15);
   const sustainedLead = useRef(0.15);
+  // Slow per-band EMA baselines used by the Energy expander.
+  const baselineBassRef = useRef(0.15);
+  const baselineMidRef = useRef(0.15);
+  const baselineHighRef = useRef(0.15);
+  const baselineEnergyRef = useRef(0.15);
   const macroState = useRef<MacroState>(createMacroState());
   const choreographyState = useRef<ChoreographyState>(createChoreographyState());
 
@@ -191,6 +204,38 @@ export function AudioMetricsProvider({
         bass = applyCreatureBass(bass, creature);
         mid = applyCreatureMid(mid, creature);
         high = applyCreatureHigh(high, creature);
+
+        // --- Energy expander (dynamic-range expansion) ---
+        // Tracks a slow ~1.5s baseline per band, then amplifies the deviation
+        // around that baseline. At energyExpand=0 the values are unchanged;
+        // at 1, deviations are 3x. The baseline itself is unchanged, so
+        // quiet passages stay quiet and only the peaks punch harder.
+        if (energyExpand > 0) {
+          const baseAlpha = Math.min(1, delta / 1.5);
+          const expand = 1 + energyExpand * 2;
+          baselineBassRef.current += (bass - baselineBassRef.current) * baseAlpha;
+          baselineMidRef.current += (mid - baselineMidRef.current) * baseAlpha;
+          baselineHighRef.current += (high - baselineHighRef.current) * baseAlpha;
+          baselineEnergyRef.current += (energy - baselineEnergyRef.current) * baseAlpha;
+          bass = baselineBassRef.current + (bass - baselineBassRef.current) * expand;
+          mid = baselineMidRef.current + (mid - baselineMidRef.current) * expand;
+          high = baselineHighRef.current + (high - baselineHighRef.current) * expand;
+          energy = baselineEnergyRef.current + (energy - baselineEnergyRef.current) * expand;
+          // Clamp so the expander can't push values past the soft ceiling
+          // that softCap() later enforces.
+          bass = Math.max(0, Math.min(METRIC_CEILING, bass));
+          mid = Math.max(0, Math.min(METRIC_CEILING, mid));
+          high = Math.max(0, Math.min(METRIC_CEILING, high));
+          energy = Math.max(0, Math.min(METRIC_CEILING, energy));
+        } else {
+          // Still keep the baselines warm so toggling the slider on later
+          // doesn't cause a one-shot glitch.
+          const baseAlpha = Math.min(1, delta / 1.5);
+          baselineBassRef.current += (bass - baselineBassRef.current) * baseAlpha;
+          baselineMidRef.current += (mid - baselineMidRef.current) * baseAlpha;
+          baselineHighRef.current += (high - baselineHighRef.current) * baseAlpha;
+          baselineEnergyRef.current += (energy - baselineEnergyRef.current) * baseAlpha;
+        }
 
         // --- Heuristic stem detection (no ML, just band patterns) ---
         // Drums: spectral flux at mid/high — transient bursts (snare, hat).

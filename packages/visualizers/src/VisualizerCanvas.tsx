@@ -56,6 +56,8 @@ interface VisualizerCanvasProps {
   aura?: number;
   /** Cinematic playback rate (only used when cameraMode === 'cinematic'). */
   cinematicSpeed?: number;
+  /** Dynamic-range expansion. 0 = unchanged, 1 = peaks 3x their deviation. */
+  energy?: number;
 }
 
 export function VisualizerCanvas({
@@ -87,6 +89,7 @@ export function VisualizerCanvas({
   anima,
   aura,
   cinematicSpeed = 1,
+  energy,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -107,6 +110,7 @@ export function VisualizerCanvas({
     midMaxHz,
     bpmRef,
     lastOnsetRef,
+    energy,
   };
 
   const containerStyle = exportSize

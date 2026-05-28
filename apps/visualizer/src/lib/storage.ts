@@ -37,6 +37,7 @@ export interface SavedPreset {
   anima?: number;
   aura?: number;
   cinematicSpeed?: number;
+  energy?: number;
 }
 
 export interface VisualizerControls {
@@ -60,6 +61,11 @@ export interface VisualizerControls {
   aura?: number;
   /** Cinematic playback rate. 1 = normal, only used when cameraMode === 'cinematic'. */
   cinematicSpeed?: number;
+  /**
+   * Dynamic-range expansion. 0 = off; raises peaks without raising baseline.
+   * Different from Gain (reactivity) which scales everything uniformly.
+   */
+  energy?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -78,6 +84,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   anima: 0.5,
   aura: 0.4,
   cinematicSpeed: 1,
+  energy: 0,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };
