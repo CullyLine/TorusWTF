@@ -39,6 +39,7 @@ export interface SavedPreset {
   cinematicSpeed?: number;
   energy?: number;
   inflate?: number;
+  appendages?: number;
 }
 
 export interface VisualizerControls {
@@ -72,6 +73,10 @@ export interface VisualizerControls {
    * 1 = pure inflate (radial puff). Default 0.5. Only Liquid Blob uses it.
    */
   inflate?: number;
+  /**
+   * Liquid Blob: number of orbiting "appendage" spheres (0–10). Default 4.
+   */
+  appendages?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -92,6 +97,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   cinematicSpeed: 1,
   energy: 0,
   inflate: 0.5,
+  appendages: 4,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };

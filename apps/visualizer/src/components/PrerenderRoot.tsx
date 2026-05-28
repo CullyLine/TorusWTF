@@ -100,6 +100,7 @@ export function PrerenderRoot({
         cinematicSpeed={controls.cinematicSpeed ?? 1}
         energy={controls.energy ?? 0}
         inflate={controls.inflate ?? 0.5}
+        appendages={controls.appendages ?? 4}
         bloomIntensity={controls.bloomIntensity}
         cameraMode={controls.cameraMode}
         creature={creature}

@@ -42,6 +42,12 @@ export interface VisualizerSceneProps {
    * 0.5. Other presets ignore this prop.
    */
   inflate?: number;
+  /**
+   * Liquid-Blob-specific: number of orbiting satellite spheres
+   * ("appendages") that fuse into the blob. Default 4, capped at 10 in
+   * the shader. Other presets ignore this prop.
+   */
+  appendages?: number;
 }
 
 export interface VisualizerDefinition {

@@ -69,9 +69,11 @@ export function ControlPanel({
     { key: 'aura', label: 'Aura', min: 0, max: 1, step: 0.01 },
     // Liquid-Blob-specific. Filtered out below when a different preset is active.
     { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01 },
+    { key: 'appendages', label: 'Appendages', min: 0, max: 10, step: 1 },
   ];
+  const blobOnly: Array<keyof VisualizerControls> = ['inflate', 'appendages'];
   const sliders: SliderDef[] = allSliders.filter(
-    (s) => s.key !== 'inflate' || activePreset === 'liquid_blob',
+    (s) => !blobOnly.includes(s.key) || activePreset === 'liquid_blob',
   );
 
   const saved = unlocked ? loadSavedPresets() : [];
@@ -83,8 +85,9 @@ export function ControlPanel({
 
       <div className="space-y-3">
         {sliders.map(({ key, label, min, max, step }, idx) => {
-          // Smoothness/Scale/BassShake/Anima/Aura/Inflate were added later,
-          // so older persisted controls may not have them. Default per-slider.
+          // Smoothness/Scale/BassShake/Anima/Aura/Inflate/Appendages were
+          // added later, so older persisted controls may not have them.
+          // Default per-slider.
           const fallback =
             key === 'scale'
               ? 1
@@ -94,7 +97,9 @@ export function ControlPanel({
                   ? 0.4
                   : key === 'inflate'
                     ? 0.5
-                    : 0;
+                    : key === 'appendages'
+                      ? 4
+                      : 0;
           const value = controls[key] ?? fallback;
           const outOfRange = value < min || value > max;
           const sliderValue = Math.max(min, Math.min(max, value));

@@ -21,9 +21,16 @@ const RAY_STEPS_HIGH = 96;
 const RAY_STEPS_MID = 64;
 const RAY_STEPS_LOW = 40;
 
+// Hard cap on orbiting satellites. The for-loop in `sceneInner` runs at
+// every raymarch step, so this directly controls worst-case shader cost.
+// 10 is enough variety to look "many limbs" without making 1080p high-tier
+// renders crawl on integrated GPUs.
+const MAX_APPENDAGES = 10;
+
 function buildFragmentShader(steps: number): string {
   return /* glsl */ `
 #define RAY_STEPS ${steps}
+#define MAX_APPENDAGES ${MAX_APPENDAGES}
 
 uniform vec2 uResolution;
 uniform float uTime;
@@ -46,6 +53,9 @@ uniform float uScale;
 // growth) vs *stretching* (anisotropic elongation along a wobble axis).
 // 0 = pure stretch like elastic material being pulled; 1 = pure puff.
 uniform float uInflate;
+// How many orbiting satellite spheres ("appendages") fuse into the blob.
+// 0 = just the anchor sphere alone. Clamped to MAX_APPENDAGES.
+uniform int uAppendages;
 // 0..1 phase within current 4/4 bar. 0 = downbeat.
 uniform float uBarPhase;
 // 0..1 pulse on detected bass drops.
@@ -95,8 +105,11 @@ float sceneInner(vec3 p) {
   float stretchAmt = uBass * (1.0 - uInflate) * 0.55;
 
   // Irrational-ish ratios for x/y/z rates so the three axes don't
-  // recurrently align into the same standing pattern.
-  for (int i = 0; i < 4; i++) {
+  // recurrently align into the same standing pattern. GLSL needs a
+  // constant loop bound, so we walk the max and break once we've placed
+  // the requested number of satellites.
+  for (int i = 0; i < MAX_APPENDAGES; i++) {
+    if (i >= uAppendages) break;
     float fi = float(i);
     // Orbital angle uses the music-driven phase — satellites whip around the
     // anchor on busy passages and slow down on quiet ones.
@@ -231,6 +244,7 @@ export function LiquidBlobScene({
   tier,
   scale = 1,
   inflate = 0.5,
+  appendages = 4,
 }: VisualizerSceneProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -255,6 +269,7 @@ export function LiquidBlobScene({
       uBeat: { value: 0 },
       uScale: { value: 1 },
       uInflate: { value: 0.5 },
+      uAppendages: { value: 4 },
       uBarPhase: { value: 0 },
       uDrop: { value: 0 },
       uSilence: { value: 0 },
@@ -295,6 +310,11 @@ export function LiquidBlobScene({
     mat.uniforms.uBeat!.value = m.beat;
     mat.uniforms.uScale!.value = scale;
     mat.uniforms.uInflate!.value = Math.max(0, Math.min(1, inflate));
+    // Round + clamp to the shader's hard cap. 0 = anchor sphere alone.
+    mat.uniforms.uAppendages!.value = Math.max(
+      0,
+      Math.min(MAX_APPENDAGES, Math.round(appendages)),
+    );
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uDrop!.value = m.dropEvent;
     mat.uniforms.uSilence!.value = m.silence;

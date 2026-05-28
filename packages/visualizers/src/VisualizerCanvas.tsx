@@ -75,6 +75,8 @@ interface VisualizerCanvasProps {
   energy?: number;
   /** Liquid Blob: 0 = pure stretch, 1 = pure inflate. Other presets ignore. */
   inflate?: number;
+  /** Liquid Blob: number of orbiting satellite spheres (0–10). */
+  appendages?: number;
 }
 
 export function VisualizerCanvas({
@@ -108,6 +110,7 @@ export function VisualizerCanvas({
   cinematicSpeed = 1,
   energy,
   inflate,
+  appendages,
   frameloop = 'always',
   glOverrides,
   onR3FState,
@@ -179,6 +182,7 @@ export function VisualizerCanvas({
                   tier={tier}
                   scale={scale}
                   inflate={inflate}
+                  appendages={appendages}
                 />
               </group>
             </AudioMetricsProvider>

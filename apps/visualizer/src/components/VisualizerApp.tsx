@@ -83,7 +83,7 @@ export function VisualizerApp() {
   const { toast, prompt } = useToast();
   const demoTracks = useDemoTracks();
 
-  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'torus_field');
+  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'liquid_blob');
   const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
   const [controls, setControls] = usePersistedState<VisualizerControls>(
     CONTROLS_KEY,
@@ -238,6 +238,7 @@ export function VisualizerApp() {
       cinematicSpeed: saved.cinematicSpeed ?? 1,
       energy: saved.energy ?? 0,
       inflate: saved.inflate ?? 0.5,
+      appendages: saved.appendages ?? 4,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -553,6 +554,7 @@ export function VisualizerApp() {
                 cinematicSpeed={controls.cinematicSpeed ?? 1}
                 energy={controls.energy ?? 0}
                 inflate={controls.inflate ?? 0.5}
+                appendages={controls.appendages ?? 4}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}
