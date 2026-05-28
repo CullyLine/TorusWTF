@@ -27,10 +27,16 @@ const RAY_STEPS_LOW = 40;
 // renders crawl on integrated GPUs.
 const MAX_APPENDAGES = 10;
 
+// Hard cap on sub-spheres. These are gated by a high-transient envelope
+// so they spend most of the time at radius ~0 (cheap) and only flare up
+// briefly on hi-hats / cymbals / vocal sibilance.
+const MAX_SUB_SPHERES = 8;
+
 function buildFragmentShader(steps: number): string {
   return /* glsl */ `
 #define RAY_STEPS ${steps}
 #define MAX_APPENDAGES ${MAX_APPENDAGES}
+#define MAX_SUB_SPHERES ${MAX_SUB_SPHERES}
 
 uniform vec2 uResolution;
 uniform float uTime;
@@ -56,6 +62,14 @@ uniform float uInflate;
 // How many orbiting satellite spheres ("appendages") fuse into the blob.
 // 0 = just the anchor sphere alone. Clamped to MAX_APPENDAGES.
 uniform int uAppendages;
+// Maximum number of sub-spheres that can pop on high-freq transients.
+// These are gated by uSubAmount so when transients are quiet they
+// shrink to nothing and the cost goes to ~0.
+uniform int uSubSphereCount;
+// 0..1 envelope driven by detected high-frequency transients. Snaps
+// up on hi-hat / cymbal / sibilant hits and decays slowly. Controls
+// sub-sphere radius (so they fade smoothly into the main blob).
+uniform float uSubAmount;
 // 0..1 phase within current 4/4 bar. 0 = downbeat.
 uniform float uBarPhase;
 // 0..1 pulse on detected bass drops.
@@ -73,6 +87,44 @@ float sdSphere(vec3 p, float r) {
 float smin(float a, float b, float k) {
   float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
   return mix(b, a, h) - k * h * (1.0 - h);
+}
+
+// Sub-sphere field — small fast-orbiting blobs that pop on high-freq
+// transients and merge back into the main blob.
+//
+// IMPORTANT: returns the SDF of the sub-spheres ALONE (no main blob
+// component) so we can reuse it at the hit point to decide how much
+// to tint the surface toward the High palette colour. When uSubAmount
+// is ~0 the radius collapses and every distance becomes huge — that's
+// the desired "disappeared back into the blob" state.
+float subField(vec3 p) {
+  if (uSubSphereCount <= 0 || uSubAmount < 0.01) return 1e9;
+  // Sub-spheres rotate ~1.8x faster than appendages so they read as
+  // a distinct fast-twitch layer rather than just smaller appendages.
+  float ot = uOrbitPhase * 1.8;
+  float d = 1e9;
+  for (int i = 0; i < MAX_SUB_SPHERES; i++) {
+    if (i >= uSubSphereCount) break;
+    float fi = float(i);
+    float a = ot * (1.13 + fi * 0.19) + fi * 2.41;
+    float b = ot * (0.97 + fi * 0.23) + fi * 1.71;
+    float c = ot * (1.31 + fi * 0.17) + fi * 0.97;
+    // Tighter orbits than appendages — they cluster closer to the
+    // anchor so they look like they emerged FROM the blob.
+    float orbit = 0.40 + 0.16 * sin(ot * 0.6 + fi * 1.3);
+    vec3 center = vec3(
+      cos(a) * orbit,
+      sin(b) * orbit * 0.85,
+      sin(c) * orbit * 0.75
+    );
+    // Radius scales with uSubAmount so they disappear into the main
+    // blob when the high envelope is quiet. The extra uHigh term
+    // makes them visibly throb on sustained hi-hat patterns.
+    float baseR = 0.06 + 0.04 * sin(ot * 2.1 + fi);
+    float rr = baseR * uSubAmount * (0.7 + uHigh * 0.35);
+    d = min(d, sdSphere(p - center, rr));
+  }
+  return d;
 }
 
 // 5-blob field: one anchor + four orbiting satellites that fuse and split.
@@ -139,6 +191,13 @@ float sceneInner(vec3 p) {
              + 0.05 * sin(t * 1.37 + fi * 2.13);
     d = smin(d, sdSphere(p - center, rr), k);
   }
+
+  // Fold sub-spheres into the field with a tighter k than appendages.
+  // The smaller smoothing window makes them read as distinct bumps
+  // when they're at full radius, then they melt smoothly back into the
+  // surface as uSubAmount decays toward 0.
+  float sd = subField(p);
+  d = smin(d, sd, 0.10);
 
   d += 0.012 * sin(p.x * 5.0 + tw) * cos(p.y * 4.4 + tw * 1.1) * sin(p.z * 4.7 + tw * 0.8);
 
@@ -215,6 +274,21 @@ void main() {
     col += vec3(spec) * mix(uColorMid, uColorHigh, 0.5);
     col += rim * fres * 0.45;
 
+    // Sub-sphere tint: if the hit point sits on (or near) a sub-sphere
+    // surface we push the colour hard toward the High palette colour so
+    // the sub-spheres read as the same "voice" as the high transients
+    // that spawned them. subWeight is 1 when the ray hit landed ON a
+    // sub-sphere surface, 0 when we're well into the main body.
+    //
+    // We sample subField in normalized "inner" space — the same space
+    // subField was defined in — because sceneInner is called with
+    // pre-scaled coordinates everywhere else in this shader.
+    float s = max(uScale, 0.05);
+    vec3 pInner = p / s;
+    float subAtHit = subField(pInner) * s;
+    float subWeight = smoothstep(0.10, -0.02, subAtHit);
+    col = mix(col, uColorHigh * (1.4 + uHigh * 0.6), subWeight * 0.55);
+
     // Beat injection + downbeat flash + drop punch.
     float barFlash = uBarPhase > 0.0 ? pow(1.0 - uBarPhase, 6.0) : 0.0;
     float silenceMute = 1.0 - uSilence * 0.7;
@@ -245,6 +319,7 @@ export function LiquidBlobScene({
   scale = 1,
   inflate = 0.5,
   appendages = 4,
+  subSpheres = 6,
 }: VisualizerSceneProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -252,6 +327,11 @@ export function LiquidBlobScene({
   const { size } = useThree();
   const phaseRef = useRef(0);
   const orbitPhaseRef = useRef(0);
+  // Sub-sphere envelope: snaps up on detected high-freq transients,
+  // decays exponentially. Kept in JS (not the shader) so we can do
+  // proper edge-detection against the previous frame's high value.
+  const subAmountRef = useRef(0);
+  const prevHighRef = useRef(0);
 
   const steps = tier === 'high' ? RAY_STEPS_HIGH : tier === 'mid' ? RAY_STEPS_MID : RAY_STEPS_LOW;
   const fragmentShader = useMemo(() => buildFragmentShader(steps), [steps]);
@@ -270,6 +350,8 @@ export function LiquidBlobScene({
       uScale: { value: 1 },
       uInflate: { value: 0.5 },
       uAppendages: { value: 4 },
+      uSubSphereCount: { value: 6 },
+      uSubAmount: { value: 0 },
       uBarPhase: { value: 0 },
       uDrop: { value: 0 },
       uSilence: { value: 0 },
@@ -315,6 +397,32 @@ export function LiquidBlobScene({
       0,
       Math.min(MAX_APPENDAGES, Math.round(appendages)),
     );
+
+    // Sub-sphere transient envelope.
+    //
+    // We detect a rising-edge transient in the High band: if the
+    // current frame's high reading exceeds a decayed version of the
+    // previous frame, that *delta* is treated as a fresh transient.
+    // A small floor on absolute high handles sustained hi-hat washes
+    // so the sub-spheres don't completely vanish during constant-hat
+    // sections of a track.
+    const highNow = m.high;
+    const transient = Math.max(0, highNow - prevHighRef.current * 0.72);
+    prevHighRef.current = highNow;
+    const sustain = Math.max(0, highNow - 0.45) * 0.45;
+    const target = Math.min(1, transient * 2.4 + sustain);
+
+    // Fast attack (snap up to target), slow exponential decay.
+    const dt = Math.min(delta, 0.05);
+    const prevSub = subAmountRef.current;
+    const next = target > prevSub ? target : prevSub * Math.exp(-dt * 2.8);
+    subAmountRef.current = Math.max(0, Math.min(1, next));
+
+    mat.uniforms.uSubSphereCount!.value = Math.max(
+      0,
+      Math.min(MAX_SUB_SPHERES, Math.round(subSpheres)),
+    );
+    mat.uniforms.uSubAmount!.value = subAmountRef.current;
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uDrop!.value = m.dropEvent;
     mat.uniforms.uSilence!.value = m.silence;

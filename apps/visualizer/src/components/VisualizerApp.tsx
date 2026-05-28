@@ -239,6 +239,7 @@ export function VisualizerApp() {
       energy: saved.energy ?? 0,
       inflate: saved.inflate ?? 0.5,
       appendages: saved.appendages ?? 4,
+      subSpheres: saved.subSpheres ?? 6,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -555,6 +556,7 @@ export function VisualizerApp() {
                 energy={controls.energy ?? 0}
                 inflate={controls.inflate ?? 0.5}
                 appendages={controls.appendages ?? 4}
+                subSpheres={controls.subSpheres ?? 6}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}

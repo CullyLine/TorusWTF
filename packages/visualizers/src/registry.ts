@@ -48,6 +48,13 @@ export interface VisualizerSceneProps {
    * the shader. Other presets ignore this prop.
    */
   appendages?: number;
+  /**
+   * Liquid-Blob-specific: maximum number of tight fast-orbit sub-spheres
+   * that pop on detected high-frequency transients (hi-hats / cymbals /
+   * sibilance) and melt back into the main blob between hits. Default 6,
+   * capped at 8 in the shader. Other presets ignore this prop.
+   */
+  subSpheres?: number;
 }
 
 export interface VisualizerDefinition {

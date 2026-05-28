@@ -77,6 +77,8 @@ interface VisualizerCanvasProps {
   inflate?: number;
   /** Liquid Blob: number of orbiting satellite spheres (0–10). */
   appendages?: number;
+  /** Liquid Blob: max sub-spheres that pop on high-frequency transients (0–8). */
+  subSpheres?: number;
 }
 
 export function VisualizerCanvas({
@@ -111,6 +113,7 @@ export function VisualizerCanvas({
   energy,
   inflate,
   appendages,
+  subSpheres,
   frameloop = 'always',
   glOverrides,
   onR3FState,
@@ -183,6 +186,7 @@ export function VisualizerCanvas({
                   scale={scale}
                   inflate={inflate}
                   appendages={appendages}
+                  subSpheres={subSpheres}
                 />
               </group>
             </AudioMetricsProvider>

@@ -70,8 +70,13 @@ export function ControlPanel({
     // Liquid-Blob-specific. Filtered out below when a different preset is active.
     { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01 },
     { key: 'appendages', label: 'Appendages', min: 0, max: 10, step: 1 },
+    { key: 'subSpheres', label: 'Sub-spheres', min: 0, max: 8, step: 1 },
   ];
-  const blobOnly: Array<keyof VisualizerControls> = ['inflate', 'appendages'];
+  const blobOnly: Array<keyof VisualizerControls> = [
+    'inflate',
+    'appendages',
+    'subSpheres',
+  ];
   const sliders: SliderDef[] = allSliders.filter(
     (s) => !blobOnly.includes(s.key) || activePreset === 'liquid_blob',
   );
@@ -99,7 +104,9 @@ export function ControlPanel({
                     ? 0.5
                     : key === 'appendages'
                       ? 4
-                      : 0;
+                      : key === 'subSpheres'
+                        ? 6
+                        : 0;
           const value = controls[key] ?? fallback;
           const outOfRange = value < min || value > max;
           const sliderValue = Math.max(min, Math.min(max, value));

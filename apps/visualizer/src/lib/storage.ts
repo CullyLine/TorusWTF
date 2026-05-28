@@ -40,6 +40,7 @@ export interface SavedPreset {
   energy?: number;
   inflate?: number;
   appendages?: number;
+  subSpheres?: number;
 }
 
 export interface VisualizerControls {
@@ -77,29 +78,44 @@ export interface VisualizerControls {
    * Liquid Blob: number of orbiting "appendage" spheres (0–10). Default 4.
    */
   appendages?: number;
+  /**
+   * Liquid Blob: max number of tight fast-orbit sub-spheres that pop on
+   * high-frequency transients (hi-hats / sibilance) and melt back into
+   * the main blob between hits. 0 = disabled. Default 6.
+   */
+  subSpheres?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
 
+/**
+ * First-load defaults are tuned specifically for the Liquid Blob preset
+ * (the new default preset). Bass/mid/high mixes + Gain + Energy are very
+ * hot and Bloom is off, which makes the blob feel alive but can wash out
+ * other presets. If a visitor switches to e.g. Torus Field or Star Field
+ * they may want to drop Gain/Energy/Bass-Mid-High back toward 1 and turn
+ * Bloom back up.
+ */
 export const DEFAULT_CONTROLS: VisualizerControls = {
-  reactivity: 1,
-  bassMix: 1,
-  midMix: 1,
-  highMix: 1,
-  speed: 1,
-  smoothness: 0,
-  scale: 1,
-  bassShake: 0,
-  bassMaxHz: 250,
-  midMaxHz: 2000,
-  anima: 0.5,
-  aura: 0.4,
-  cinematicSpeed: 1,
-  energy: 0,
-  inflate: 0.5,
+  reactivity: 2.5,
+  bassMix: 8.8,
+  midMix: 8.85,
+  highMix: 9.75,
+  speed: 5.95,
+  smoothness: 0.95,
+  scale: 0.15,
+  bassShake: 2.55,
+  bassMaxHz: 175,
+  midMaxHz: 2500,
+  anima: 1,
+  aura: 0,
+  cinematicSpeed: 3,
+  energy: 2,
+  inflate: 0.32,
   appendages: 4,
-  bloomIntensity: 1.1,
-  cameraMode: 'drift',
+  subSpheres: 6,
+  bloomIntensity: 0,
+  cameraMode: 'cinematic',
 };
 
 export function loadSavedPresets(): SavedPreset[] {
