@@ -231,6 +231,7 @@ export function VisualizerApp() {
       midMaxHz: saved.midMaxHz ?? 2000,
       anima: saved.anima ?? 0.5,
       aura: saved.aura ?? 0.4,
+      cinematicSpeed: saved.cinematicSpeed ?? 1,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -478,6 +479,7 @@ export function VisualizerApp() {
                 midMaxHz={controls.midMaxHz ?? 2000}
                 anima={controls.anima ?? 0.5}
                 aura={controls.aura ?? 0.4}
+                cinematicSpeed={controls.cinematicSpeed ?? 1}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}

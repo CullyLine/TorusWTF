@@ -36,6 +36,7 @@ export interface SavedPreset {
   midMaxHz?: number;
   anima?: number;
   aura?: number;
+  cinematicSpeed?: number;
 }
 
 export interface VisualizerControls {
@@ -57,6 +58,8 @@ export interface VisualizerControls {
   anima?: number;
   /** Aura amount. 0 = no wisps/glow, 1 = full presence. */
   aura?: number;
+  /** Cinematic playback rate. 1 = normal, only used when cameraMode === 'cinematic'. */
+  cinematicSpeed?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -74,6 +77,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   midMaxHz: 2000,
   anima: 0.5,
   aura: 0.4,
+  cinematicSpeed: 1,
   bloomIntensity: 1.1,
   cameraMode: 'drift',
 };

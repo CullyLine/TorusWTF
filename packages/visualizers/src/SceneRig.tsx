@@ -9,8 +9,13 @@ import { useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
 import { AuraLayer } from './AuraLayer';
+import {
+  createCinematicState,
+  updateCinematicCamera,
+  type CinematicState,
+} from './dsp/cinematic';
 
-export type CameraMode = 'still' | 'drift' | 'orbit' | 'dive';
+export type CameraMode = 'still' | 'drift' | 'orbit' | 'dive' | 'cinematic';
 
 interface SceneRigProps {
   palette: { bass: string; mid: string; high: string };
@@ -26,6 +31,8 @@ interface SceneRigProps {
   aura?: number;
   /** Optional creature personality for tempo-biased heartbeat. */
   creature?: CreaturePersonality;
+  /** Cinematic playback rate (only used when cameraMode === 'cinematic'). */
+  cinematicSpeed?: number;
 }
 
 /**
@@ -41,6 +48,7 @@ export function SceneRig({
   anima = 0.5,
   aura = 0.4,
   creature,
+  cinematicSpeed = 1,
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
   const bassLight = useRef<PointLight>(null);
@@ -49,6 +57,7 @@ export function SceneRig({
   const zoomDistanceRef = useCameraZoomDistanceRef();
   const fallbackZ = embedded ? 3.2 : 4;
   const animaState = useRef<AnimaState>({ ...NEUTRAL_ANIMA });
+  const cinematicState = useRef<CinematicState>(createCinematicState());
 
   useFrame((state) => {
     const m = metricsRef.current;
@@ -68,6 +77,12 @@ export function SceneRig({
 
     const shake = m.beat * (embedded ? 0.06 : 0.1) + m.bass * 0.02;
 
+    // Look-at target the rest of the rig will use. Cinematic overrides this;
+    // every other mode leaves it at the scene origin.
+    let lookTargetX = 0;
+    let lookTargetY = 0;
+    let lookTargetZ = 0;
+
     switch (cameraMode) {
       case 'still':
         state.camera.position.set(0, 0, baseZ);
@@ -84,6 +99,14 @@ export function SceneRig({
         state.camera.position.y = Math.cos(t * 9.7) * shake * 0.35;
         state.camera.position.z = baseZ - m.bass * 1.4 - m.beat * 0.6;
         break;
+      case 'cinematic': {
+        const cine = updateCinematicCamera(cinematicState.current, t, m.bpm, cinematicSpeed);
+        state.camera.position.set(cine.pos.x, cine.pos.y, cine.pos.z);
+        lookTargetX = cine.look.x;
+        lookTargetY = cine.look.y;
+        lookTargetZ = cine.look.z;
+        break;
+      }
       case 'drift':
       default:
         state.camera.position.x = Math.sin(t * 18.7) * shake;
@@ -120,9 +143,13 @@ export function SceneRig({
       // Heartbeat: subtle z-axis breathing (in/out of the scene).
       state.camera.position.z += a.heartbeat * 0.025 * animaAmp;
       // Drift: subtle look-target offset for a "head turning slowly" feel.
-      state.camera.lookAt(a.driftYaw * 0.6 * animaAmp, a.driftPitch * 0.6 * animaAmp, 0);
+      state.camera.lookAt(
+        lookTargetX + a.driftYaw * 0.6 * animaAmp,
+        lookTargetY + a.driftPitch * 0.6 * animaAmp,
+        lookTargetZ,
+      );
     } else {
-      state.camera.lookAt(0, 0, 0);
+      state.camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
     }
   });
 

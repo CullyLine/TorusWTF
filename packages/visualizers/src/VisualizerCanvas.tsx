@@ -54,6 +54,8 @@ interface VisualizerCanvasProps {
   anima?: number;
   /** Aura amount. 0 = no wisps/glow, 1 = full presence. */
   aura?: number;
+  /** Cinematic playback rate (only used when cameraMode === 'cinematic'). */
+  cinematicSpeed?: number;
 }
 
 export function VisualizerCanvas({
@@ -84,6 +86,7 @@ export function VisualizerCanvas({
   lastOnsetRef,
   anima,
   aura,
+  cinematicSpeed = 1,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -135,6 +138,7 @@ export function VisualizerCanvas({
                 anima={anima}
                 aura={aura}
                 creature={creature}
+                cinematicSpeed={cinematicSpeed}
               />
               <group scale={scale}>
                 <def.Scene analyser={analyser} palette={palette} tier={tier} scale={scale} />

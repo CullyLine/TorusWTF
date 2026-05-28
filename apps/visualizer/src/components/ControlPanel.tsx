@@ -23,7 +23,11 @@ interface ControlPanelProps {
   analyser: AnalyserHandle | null;
 }
 
-const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive'];
+const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive', 'cinematic'];
+
+const CINEMATIC_SPEED_MIN = 0.25;
+const CINEMATIC_SPEED_MAX = 3;
+const CINEMATIC_SPEED_STEP = 0.05;
 
 type SliderKey = Exclude<keyof VisualizerControls, 'cameraMode'>;
 
@@ -131,6 +135,41 @@ export function ControlPanel({
             ))}
           </select>
         </label>
+
+        {controls.cameraMode === 'cinematic'
+          ? (() => {
+              const v = controls.cinematicSpeed ?? 1;
+              const clamped = Math.max(
+                CINEMATIC_SPEED_MIN,
+                Math.min(CINEMATIC_SPEED_MAX, v),
+              );
+              const outOfRange = v < CINEMATIC_SPEED_MIN || v > CINEMATIC_SPEED_MAX;
+              return (
+                <div className="block text-xs text-torus-fg-dim">
+                  <div className="mb-1 flex justify-between">
+                    <span>Cinematic speed</span>
+                    <EditableNumber
+                      value={v}
+                      onCommit={(next) => onChange({ cinematicSpeed: next })}
+                      ariaLabel="Cinematic speed"
+                      outOfRange={outOfRange}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min={CINEMATIC_SPEED_MIN}
+                    max={CINEMATIC_SPEED_MAX}
+                    step={CINEMATIC_SPEED_STEP}
+                    value={clamped}
+                    onChange={(e) =>
+                      onChange({ cinematicSpeed: Number(e.target.value) })
+                    }
+                    className="w-full accent-torus-mid"
+                  />
+                </div>
+              );
+            })()
+          : null}
 
         <label className="flex items-center gap-2 text-xs text-torus-fg-dim">
           <input
