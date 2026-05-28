@@ -23,9 +23,18 @@ interface ExportPanelProps {
   rendering: boolean;
   elapsedSec: number;
   hasSource: boolean;
+  /** True if the current source is a file/WTF (pre-renderable). */
+  hasFileSource: boolean;
   onStart: () => void;
   onStop: () => void;
   onSnapshot: () => void;
+  onPrerender: () => void;
+  onCancelPrerender: () => void;
+  prerenderSupported: boolean;
+  prerenderActive: boolean;
+  prerenderProgressPercent: number;
+  prerenderProgressMessage: string;
+  prerenderError: string | null;
 }
 
 const RESOLUTIONS: ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
@@ -43,9 +52,17 @@ export function ExportPanel({
   rendering,
   elapsedSec,
   hasSource,
+  hasFileSource,
   onStart,
   onStop,
   onSnapshot,
+  onPrerender,
+  onCancelPrerender,
+  prerenderSupported,
+  prerenderActive,
+  prerenderProgressPercent,
+  prerenderProgressMessage,
+  prerenderError,
 }: ExportPanelProps) {
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
@@ -131,11 +148,69 @@ export function ExportPanel({
         </p>
       ) : null}
 
+      <div className="mb-3">
+        {prerenderActive ? (
+          <div className="rounded-lg border border-torus-mid/40 bg-torus-mid/10 p-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-xs font-medium text-torus-mid">
+                Pre-rendering MP4…
+              </span>
+              <button
+                type="button"
+                onClick={onCancelPrerender}
+                className="text-[10px] text-torus-fg-dim hover:text-torus-bass"
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-torus-border/40">
+              <div
+                className="h-full bg-torus-mid transition-all"
+                style={{ width: `${Math.round(prerenderProgressPercent * 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[10px] text-torus-fg-dim">
+              {prerenderProgressMessage || 'Working…'}
+            </p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            disabled={
+              !hasFileSource ||
+              recording ||
+              rendering ||
+              !prerenderSupported
+            }
+            onClick={onPrerender}
+            className="w-full rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-sm font-medium text-torus-mid disabled:opacity-40"
+            title={
+              !prerenderSupported
+                ? 'Pre-render needs Chrome/Edge or Firefox 130+ (WebCodecs). Use Record export instead.'
+                : !hasFileSource
+                  ? 'Pre-render works on uploaded files and WTF demos only.'
+                  : 'Render the full song to MP4 without playing it through.'
+            }
+          >
+            Export Pre-Rendered Video
+          </button>
+        )}
+        {!prerenderSupported ? (
+          <p className="mt-2 text-[10px] text-torus-fg-faint">
+            Pre-render needs Chrome/Edge or Firefox 130+. Use Record export
+            below as a fallback.
+          </p>
+        ) : null}
+        {prerenderError ? (
+          <p className="mt-2 text-[10px] text-torus-bass">{prerenderError}</p>
+        ) : null}
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         {!recording ? (
           <button
             type="button"
-            disabled={!hasSource || rendering}
+            disabled={!hasSource || rendering || prerenderActive}
             onClick={onStart}
             className="rounded-full bg-torus-mid/20 px-4 py-2 text-sm font-medium text-torus-mid border border-torus-mid/40 disabled:opacity-40"
           >
@@ -152,7 +227,7 @@ export function ExportPanel({
         )}
         <button
           type="button"
-          disabled={!hasSource || recording || rendering}
+          disabled={!hasSource || recording || rendering || prerenderActive}
           onClick={onSnapshot}
           className="rounded-full border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40 hover:text-torus-mid disabled:opacity-40"
         >

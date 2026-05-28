@@ -1,4 +1,4 @@
-export { VisualizerCanvas } from './VisualizerCanvas';
+export { VisualizerCanvas, type RootState } from './VisualizerCanvas';
 export { useAudioAnalyser, useStreamAnalyser } from './audio';
 export type { AnalyserHandle } from './audio';
 export { detectTier, type DeviceTier } from './tier';

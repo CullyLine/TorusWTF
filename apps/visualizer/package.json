@@ -18,6 +18,8 @@
     "@torus/ui": "workspace:*",
     "@torus/visualizers": "workspace:*",
     "dotenv": "^17.0.0",
+    "fft.js": "^4.0.4",
+    "mp4-muxer": "^5.2.2",
     "next": "15.5.18",
     "react": "19.0.0",
     "react-dom": "19.0.0",

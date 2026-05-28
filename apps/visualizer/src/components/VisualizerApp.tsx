@@ -24,9 +24,11 @@ import { ShortcutsModal } from '@/components/ShortcutsModal';
 import { BPMIndicator } from '@/components/BPMIndicator';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ExportPanel } from '@/components/ExportPanel';
+import { PrerenderRoot } from '@/components/PrerenderRoot';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import { useExport } from '@/hooks/useExport';
+import { usePrerender } from '@/hooks/usePrerender';
 import { useBPM } from '@/hooks/useBPM';
 import { useIdleHide } from '@/hooks/useIdleHide';
 import { usePersistedState } from '@/hooks/usePersistedState';
@@ -37,6 +39,7 @@ import { downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
 import {
   FREE_MAX_FPS,
   FREE_MAX_RES,
+  bitrateFor,
   dimensionsFor,
   isFpsLocked,
   isResolutionLocked,
@@ -76,6 +79,7 @@ export function VisualizerApp() {
   const audio = useAudioSource();
   const unlock = useUnlock();
   const exportHook = useExport(unlock.unlocked);
+  const prerender = usePrerender();
   const { toast, prompt } = useToast();
   const demoTracks = useDemoTracks();
 
@@ -291,6 +295,62 @@ export function VisualizerApp() {
     }
   }, [audio.source, toast]);
 
+  const handlePrerender = useCallback(async () => {
+    if (audio.source?.kind !== 'file') return;
+    const fileSource = audio.source;
+    try {
+      // Pause live playback so the user isn't also hearing the song while
+      // the offscreen render runs. We resume only if they originally had
+      // it playing — but for simplicity we just leave it paused; they
+      // can hit play again.
+      audio.pause();
+
+      // Fetch + decode the audio. The objectUrl works for both blob: URLs
+      // (uploaded files) and remote URLs (WTF demos).
+      const res = await fetch(fileSource.objectUrl);
+      if (!res.ok) throw new Error(`Failed to fetch audio (${res.status})`);
+      const arrayBuffer = await res.arrayBuffer();
+      const ctx = new AudioContext();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      void ctx.close();
+
+      const dims = dimensionsFor(resolution, aspect);
+      await prerender.start({
+        audioBuffer,
+        fileName: fileSource.fileName,
+        preset,
+        palette,
+        controls,
+        creature: creature?.personality,
+        width: dims.width,
+        height: dims.height,
+        fps,
+        videoBitrate: bitrateFor(resolution),
+        watermark: !unlock.unlocked,
+      });
+      if (prerender.progress.stage === 'done') {
+        toast({ message: 'MP4 download ready', variant: 'success' });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Pre-render failed';
+      if (message !== 'cancelled') {
+        toast({ message, variant: 'error' });
+      }
+    }
+  }, [
+    audio,
+    aspect,
+    controls,
+    creature,
+    fps,
+    palette,
+    preset,
+    prerender,
+    resolution,
+    toast,
+    unlock.unlocked,
+  ]);
+
   const exportSize = dimensionsFor(resolution, aspect);
   const isRecording = exportHook.state === 'recording';
   const previewAspect = `${exportSize.width} / ${exportSize.height}`;
@@ -434,9 +494,17 @@ export function VisualizerApp() {
         rendering={exportHook.state === 'rendering'}
         elapsedSec={exportHook.elapsedSec}
         hasSource={Boolean(audio.source)}
+        hasFileSource={audio.source?.kind === 'file'}
         onStart={() => void startExport()}
         onStop={exportHook.stop}
         onSnapshot={() => void handleSnapshot()}
+        onPrerender={() => void handlePrerender()}
+        onCancelPrerender={prerender.cancel}
+        prerenderSupported={prerender.supported}
+        prerenderActive={prerender.rootMount !== null}
+        prerenderProgressPercent={prerender.progress.percent}
+        prerenderProgressMessage={prerender.progress.message ?? ''}
+        prerenderError={prerender.error}
       />
       {!unlock.unlocked ? (
         <p className="text-center text-xs text-torus-fg-faint">
@@ -576,6 +644,7 @@ export function VisualizerApp() {
           onClose={() => setDesktopGuideOpen(false)}
           onConfirm={handleDesktopGuideConfirm}
         />
+        {prerender.rootMount ? <PrerenderRoot {...prerender.rootMount} /> : null}
       </div>
     );
   }
@@ -649,6 +718,7 @@ export function VisualizerApp() {
         onClose={() => setDesktopGuideOpen(false)}
         onConfirm={handleDesktopGuideConfirm}
       />
+      {prerender.rootMount ? <PrerenderRoot {...prerender.rootMount} /> : null}
     </div>
   );
 }

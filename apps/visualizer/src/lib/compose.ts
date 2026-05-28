@@ -45,7 +45,11 @@ export function createCompositor(
   };
 }
 
-function drawWatermark(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+export function drawWatermark(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
   const fontSize = Math.max(12, Math.round(width * 0.022));
   const pad = Math.round(fontSize * 0.8);
   const text = 'torus.wtf';

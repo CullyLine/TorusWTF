@@ -1,7 +1,9 @@
 'use client';
 
 import { useMemo, type MutableRefObject, type RefObject } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, type RootState } from '@react-three/fiber';
+
+export type { RootState } from '@react-three/fiber';
 import { useAudioAnalyser } from './audio';
 import { detectTier } from './tier';
 import { VISUALIZERS, type VisualizerId } from './registry';
@@ -28,6 +30,19 @@ interface VisualizerCanvasProps {
   pixelRatio?: number;
   /** Called when the WebGL canvas is ready (for export compositing). */
   onGlCanvasReady?: (canvas: HTMLCanvasElement) => void;
+  /**
+   * R3F render loop mode. Default 'always'. Set to 'never' for offline
+   * pre-rendering where the caller drives `state.advance()` manually.
+   */
+  frameloop?: 'always' | 'never' | 'demand';
+  /**
+   * Optional WebGL context overrides applied via `gl` prop. Used by the
+   * pre-render canvas to enable `preserveDrawingBuffer` so VideoFrame
+   * can capture the rendered pixels.
+   */
+  glOverrides?: Record<string, unknown>;
+  /** Receives the R3F root state once the canvas is created. */
+  onR3FState?: (state: RootState) => void;
   reactivity?: number;
   bassMix?: number;
   midMix?: number;
@@ -90,6 +105,9 @@ export function VisualizerCanvas({
   aura,
   cinematicSpeed = 1,
   energy,
+  frameloop = 'always',
+  glOverrides,
+  onR3FState,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
   const fftSize = tier === 'low' ? 256 : 1024;
@@ -124,10 +142,17 @@ export function VisualizerCanvas({
           <Canvas
             camera={{ position: [0, 0, defaultZ], fov: embedded ? 55 : 50 }}
             dpr={pixelRatio ?? (tier === 'high' ? [1, 2] : 1)}
-            gl={{ antialias: tier !== 'low', powerPreference: 'high-performance', alpha: true }}
+            gl={{
+              antialias: tier !== 'low',
+              powerPreference: 'high-performance',
+              alpha: true,
+              ...(glOverrides ?? {}),
+            }}
+            frameloop={frameloop}
             style={{ width: '100%', height: '100%', background: 'transparent' }}
-            onCreated={({ gl }) => {
-              onGlCanvasReady?.(gl.domElement);
+            onCreated={(state) => {
+              onGlCanvasReady?.(state.gl.domElement);
+              onR3FState?.(state);
             }}
           >
             <color attach="background" args={['#0a0b1e']} />
