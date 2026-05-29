@@ -13,7 +13,8 @@
  */
 
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
-import { drawWatermark } from '@/lib/compose';
+import { drawTitleOverlay, drawWatermark } from '@/lib/compose';
+import type { TitleOverlay } from '@/lib/storage';
 
 const AUDIO_BITRATE = 192_000;
 const AUDIO_CHUNK_SAMPLES = 1024; // AAC frame size
@@ -25,6 +26,8 @@ export interface PrerenderEncoderOptions {
   videoBitrate: number;
   audioBuffer: AudioBuffer;
   watermark: boolean;
+  titleOverlay?: TitleOverlay | null;
+  unlocked?: boolean;
 }
 
 export interface PrerenderEncoder {
@@ -50,6 +53,8 @@ export async function createPrerenderEncoder(
   opts: PrerenderEncoderOptions,
 ): Promise<PrerenderEncoder> {
   const { width, height, fps, videoBitrate, audioBuffer, watermark } = opts;
+  const titleOverlay = opts.titleOverlay ?? null;
+  const unlocked = opts.unlocked ?? false;
   const sampleRate = audioBuffer.sampleRate;
   const channels = Math.min(2, audioBuffer.numberOfChannels);
 
@@ -156,6 +161,7 @@ export async function createPrerenderEncoder(
 
       ctx.clearRect(0, 0, width, height);
       ctx.drawImage(sourceCanvas, 0, 0, width, height);
+      if (titleOverlay) drawTitleOverlay(ctx, width, height, titleOverlay, unlocked);
       if (watermark) drawWatermark(ctx, width, height);
 
       // VideoFrame timestamp is in microseconds.

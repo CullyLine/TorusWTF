@@ -24,6 +24,7 @@ import { ShortcutsModal } from '@/components/ShortcutsModal';
 import { BPMIndicator } from '@/components/BPMIndicator';
 import { ControlPanel } from '@/components/ControlPanel';
 import { ExportPanel } from '@/components/ExportPanel';
+import { TitleOverlayPanel } from '@/components/TitleOverlayPanel';
 import { PrerenderRoot } from '@/components/PrerenderRoot';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
@@ -60,9 +61,12 @@ import {
   SHOW_BPM_KEY,
   SOURCE_KIND_KEY,
   DESKTOP_GUIDE_SEEN_KEY,
+  TITLE_OVERLAY_KEY,
+  DEFAULT_TITLE_OVERLAY,
   loadSavedPresets,
   persistSavedPresets,
   type SavedPreset,
+  type TitleOverlay,
   type VisualizerControls,
 } from '@/lib/storage';
 
@@ -105,6 +109,10 @@ export function VisualizerApp() {
   const [presetsVersion, setPresetsVersion] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [showBpm, setShowBpm] = usePersistedState<boolean>(SHOW_BPM_KEY, false);
+  const [titleOverlay, setTitleOverlay] = usePersistedState<TitleOverlay>(
+    TITLE_OVERLAY_KEY,
+    DEFAULT_TITLE_OVERLAY,
+  );
   const [desktopGuideSeen, setDesktopGuideSeen] = usePersistedState<boolean>(
     DESKTOP_GUIDE_SEEN_KEY,
     false,
@@ -190,6 +198,17 @@ export function VisualizerApp() {
   const applyEmbeddedTags = useCallback(
     async (file: File) => {
       const tags = await readAudioTags(file);
+
+      // Auto-fill the title card from embedded tags, but never clobber a
+      // title the user has already typed.
+      if (tags.title) {
+        setTitleOverlay((o) =>
+          o.title.trim()
+            ? o
+            : { ...o, title: tags.title ?? '', subtitle: tags.artist ?? o.subtitle, enabled: true },
+        );
+      }
+
       if (!tags.cover) return;
       try {
         const blob = new Blob([tags.cover.data as unknown as BlobPart], {
@@ -202,7 +221,7 @@ export function VisualizerApp() {
         // Cover art that can't be decoded just leaves the palette untouched.
       }
     },
-    [setPalette, toast],
+    [setPalette, setTitleOverlay, toast],
   );
 
   const handleFile = useCallback(
@@ -246,8 +265,11 @@ export function VisualizerApp() {
     setSourceKind('file');
     setHeroCollapsed(true);
     setWtfTrackTitle(track.title);
+    setTitleOverlay((o) =>
+      o.title.trim() ? o : { ...o, title: track.title, enabled: true },
+    );
     audio.playUrl(track.file, { title: track.title, sourceLink: track.permalink });
-  }, [audio, demoTracks, setSourceKind]);
+  }, [audio, demoTracks, setSourceKind, setTitleOverlay]);
 
   const handleRandomPreset = useCallback(() => {
     setPreset(pickRandomVisualizerPreset());
@@ -311,6 +333,7 @@ export function VisualizerApp() {
       resolution,
       aspect,
       fps,
+      titleOverlay,
       onBeforeRecord: async () => {
         if (audio.source?.kind === 'file') {
           await audio.restartFile();
@@ -318,7 +341,7 @@ export function VisualizerApp() {
       },
       onFileEnded: () => exportHook.stop(),
     });
-  }, [audio, exportHook, resolution, aspect, fps]);
+  }, [audio, exportHook, resolution, aspect, fps, titleOverlay]);
 
   const handleSnapshot = useCallback(async () => {
     const canvas = glCanvasRef.current;
@@ -364,6 +387,8 @@ export function VisualizerApp() {
         fps,
         videoBitrate: bitrateFor(resolution),
         watermark: !unlock.unlocked,
+        titleOverlay,
+        unlocked: unlock.unlocked,
       });
       if (prerender.progress.stage === 'done') {
         toast({ message: 'MP4 download ready', variant: 'success' });
@@ -384,6 +409,7 @@ export function VisualizerApp() {
     preset,
     prerender,
     resolution,
+    titleOverlay,
     toast,
     unlock.unlocked,
   ]);
@@ -520,6 +546,11 @@ export function VisualizerApp() {
         analyser={audio.analyser}
         activePreset={preset}
         onPickPaletteImage={handlePickPaletteImage}
+      />
+      <TitleOverlayPanel
+        overlay={titleOverlay}
+        onChange={(patch) => setTitleOverlay((o) => ({ ...o, ...patch }))}
+        unlocked={unlock.unlocked}
       />
       <ExportPanel
         unlocked={unlock.unlocked}

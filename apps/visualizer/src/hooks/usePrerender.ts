@@ -8,7 +8,7 @@ import { precomputeFftFrames } from '@/lib/prerender/fftPipeline';
 import { prescanBpm } from '@/lib/prerender/bpmPrescan';
 import { createSyntheticAnalyser, type SyntheticAnalyser } from '@/lib/prerender/syntheticAnalyser';
 import { createPrerenderEncoder, isPrerenderSupported } from '@/lib/prerender/encoder';
-import type { VisualizerControls } from '@/lib/storage';
+import type { TitleOverlay, VisualizerControls } from '@/lib/storage';
 
 export type PrerenderStage =
   | 'idle'
@@ -41,6 +41,8 @@ export interface PrerenderStartOptions {
   fps: number;
   videoBitrate: number;
   watermark: boolean;
+  titleOverlay?: TitleOverlay | null;
+  unlocked?: boolean;
 }
 
 /**
@@ -210,6 +212,8 @@ export function usePrerender(): PrerenderHookResult {
         videoBitrate: options.videoBitrate,
         audioBuffer: options.audioBuffer,
         watermark: options.watermark,
+        titleOverlay: options.titleOverlay,
+        unlocked: options.unlocked,
       });
 
       // ---- Stage 6: Render + encode every frame ----

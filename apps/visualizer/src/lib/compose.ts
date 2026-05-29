@@ -1,7 +1,10 @@
 /**
  * Composites the R3F WebGL canvas onto an offscreen 2D canvas each frame.
- * Optionally draws a corner watermark for free-tier exports.
+ * Optionally draws a corner watermark for free-tier exports and a
+ * lower-third title overlay.
  */
+
+import type { TitleOverlay } from '@/lib/storage';
 
 export interface CompositorHandle {
   canvas: HTMLCanvasElement;
@@ -14,6 +17,8 @@ export function createCompositor(
   width: number,
   height: number,
   watermark: boolean,
+  titleOverlay?: TitleOverlay | null,
+  unlocked = false,
 ): CompositorHandle {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -25,6 +30,10 @@ export function createCompositor(
 
   const draw = () => {
     ctx.drawImage(sourceCanvas, 0, 0, width, height);
+
+    if (titleOverlay) {
+      drawTitleOverlay(ctx, width, height, titleOverlay, unlocked);
+    }
 
     if (watermark) {
       drawWatermark(ctx, width, height);
@@ -71,6 +80,75 @@ export function drawWatermark(
   ctx.fillStyle = '#f5f5fa';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x + pad, y + boxH / 2);
+  ctx.restore();
+}
+
+const BRAND_INDIGO = '13, 13, 35';
+
+export function drawTitleOverlay(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  overlay: TitleOverlay,
+  unlocked: boolean,
+): void {
+  const title = overlay.title.trim();
+  const subtitle = overlay.subtitle.trim();
+  if (!overlay.enabled || (!title && !subtitle)) return;
+
+  // Free tier is clamped to brand defaults; paid unlocks customization.
+  const position = unlocked ? overlay.position : 'bottom-left';
+  const textColor = unlocked ? overlay.textColor : '#f5f5fa';
+  const bgOpacity = unlocked ? Math.max(0, Math.min(1, overlay.bgOpacity)) : 0.55;
+
+  const titleSize = Math.max(16, Math.round(width * 0.03));
+  const subtitleSize = Math.round(titleSize * 0.62);
+  const padX = Math.round(titleSize * 0.85);
+  const padY = Math.round(titleSize * 0.6);
+  const gap = subtitle ? Math.round(titleSize * 0.3) : 0;
+  const margin = Math.round(width * 0.035);
+
+  const titleFont = `600 ${titleSize}px Inter, system-ui, sans-serif`;
+  const subtitleFont = `400 ${subtitleSize}px Inter, system-ui, sans-serif`;
+
+  ctx.save();
+  ctx.font = titleFont;
+  const titleWidth = title ? ctx.measureText(title).width : 0;
+  ctx.font = subtitleFont;
+  const subtitleWidth = subtitle ? ctx.measureText(subtitle).width : 0;
+
+  const contentWidth = Math.max(titleWidth, subtitleWidth);
+  const contentHeight =
+    (title ? titleSize : 0) + (subtitle ? subtitleSize : 0) + gap;
+  const boxW = contentWidth + padX * 2;
+  const boxH = contentHeight + padY * 2;
+
+  const isBottom = position === 'bottom-left' || position === 'bottom-center';
+  const x =
+    position === 'bottom-center'
+      ? Math.round((width - boxW) / 2)
+      : position === 'top-right'
+        ? width - boxW - margin
+        : margin;
+  const y = isBottom ? height - boxH - margin : margin;
+
+  ctx.fillStyle = `rgba(${BRAND_INDIGO}, ${bgOpacity})`;
+  roundRect(ctx, x, y, boxW, boxH, Math.round(titleSize * 0.35));
+  ctx.fill();
+
+  ctx.fillStyle = textColor;
+  ctx.textBaseline = 'top';
+  let cursorY = y + padY;
+  if (title) {
+    ctx.font = titleFont;
+    ctx.fillText(title, x + padX, cursorY);
+    cursorY += titleSize + gap;
+  }
+  if (subtitle) {
+    ctx.globalAlpha = 0.85;
+    ctx.font = subtitleFont;
+    ctx.fillText(subtitle, x + padX, cursorY);
+  }
   ctx.restore();
 }
 
