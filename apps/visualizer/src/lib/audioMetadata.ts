@@ -123,7 +123,6 @@ function parseId3v2(bytes: Uint8Array, base = 0): AudioTags {
 
   const result: AudioTags = {};
   const idLen = major === 2 ? 3 : 4;
-  const sizeLen = major === 2 ? 3 : 4;
   const frameHeaderLen = major === 2 ? 6 : 10;
 
   while (pos + frameHeaderLen <= end) {

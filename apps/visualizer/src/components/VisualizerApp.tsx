@@ -35,6 +35,8 @@ import { usePersistedState } from '@/hooks/usePersistedState';
 import { useToast } from '@/hooks/useToast';
 import { useUnlock } from '@/hooks/useUnlock';
 import { DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
+import { readAudioTags } from '@/lib/audioMetadata';
+import { extractPaletteFromBlob } from '@/lib/extractPalette';
 import { downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
 import {
   FREE_MAX_FPS,
@@ -185,14 +187,46 @@ export function VisualizerApp() {
     [handleSelectKind, setDesktopGuideSeen],
   );
 
+  const applyEmbeddedTags = useCallback(
+    async (file: File) => {
+      const tags = await readAudioTags(file);
+      if (!tags.cover) return;
+      try {
+        const blob = new Blob([tags.cover.data as unknown as BlobPart], {
+          type: tags.cover.mime,
+        });
+        const extracted = await extractPaletteFromBlob(blob);
+        setPalette(extracted);
+        toast({ message: 'Palette matched to the cover art', variant: 'success' });
+      } catch {
+        // Cover art that can't be decoded just leaves the palette untouched.
+      }
+    },
+    [setPalette, toast],
+  );
+
   const handleFile = useCallback(
     (file: File) => {
       setWtfTrackTitle(null);
       setSourceKind('file');
       audio.loadFile(file);
       setHeroCollapsed(true);
+      void applyEmbeddedTags(file);
     },
-    [audio, setSourceKind],
+    [audio, applyEmbeddedTags, setSourceKind],
+  );
+
+  const handlePickPaletteImage = useCallback(
+    async (file: File) => {
+      try {
+        const extracted = await extractPaletteFromBlob(file);
+        setPalette(extracted);
+        toast({ message: `Palette extracted from ${file.name}`, variant: 'success' });
+      } catch {
+        toast({ message: 'Could not read colors from that image', variant: 'error' });
+      }
+    },
+    [setPalette, toast],
   );
 
   const handleTryDemo = useCallback(async () => {
@@ -485,6 +519,7 @@ export function VisualizerApp() {
         onPresetsChange={() => setPresetsVersion((v) => v + 1)}
         analyser={audio.analyser}
         activePreset={preset}
+        onPickPaletteImage={handlePickPaletteImage}
       />
       <ExportPanel
         unlocked={unlock.unlocked}
