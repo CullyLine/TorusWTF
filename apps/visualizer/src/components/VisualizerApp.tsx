@@ -38,7 +38,7 @@ import { useUnlock } from '@/hooks/useUnlock';
 import { DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
 import { readAudioTags } from '@/lib/audioMetadata';
 import { extractPaletteFromBlob } from '@/lib/extractPalette';
-import { downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
+import { captureThumbnailDataUrl, downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
 import {
   FREE_MAX_FPS,
   FREE_MAX_RES,
@@ -63,6 +63,8 @@ import {
   DESKTOP_GUIDE_SEEN_KEY,
   TITLE_OVERLAY_KEY,
   DEFAULT_TITLE_OVERLAY,
+  THUMBNAIL_STORAGE_BUDGET_BYTES,
+  estimateLocalStorageBytes,
   loadSavedPresets,
   persistSavedPresets,
   type SavedPreset,
@@ -304,12 +306,25 @@ export function VisualizerApp() {
   const handleSavePreset = useCallback(async () => {
     if (!unlock.unlocked) return;
     const name = await prompt({ message: 'Preset name', placeholder: 'My preset' });
-    if (!name?.trim()) return;
+    const trimmed = name?.trim();
+    if (!trimmed) return;
+
+    let thumbnail: string | undefined;
+    const canvas = glCanvasRef.current;
+    if (canvas && estimateLocalStorageBytes() < THUMBNAIL_STORAGE_BUDGET_BYTES) {
+      try {
+        thumbnail = captureThumbnailDataUrl(canvas);
+      } catch {
+        thumbnail = undefined;
+      }
+    }
+
     const saved = loadSavedPresets();
     const entry: SavedPreset = {
       id: crypto.randomUUID(),
-      name: name.trim(),
+      name: trimmed,
       createdAt: new Date().toISOString(),
+      thumbnail,
       presetId: preset,
       palette,
       ...controls,
@@ -317,9 +332,21 @@ export function VisualizerApp() {
     try {
       persistSavedPresets([entry, ...saved]);
       setPresetsVersion((v) => v + 1);
-      toast({ message: `Saved "${name.trim()}"`, variant: 'success' });
+      toast({ message: `Saved "${trimmed}"`, variant: 'success' });
     } catch {
-      toast({ message: 'Could not save preset', variant: 'error' });
+      // A quota error usually comes from the embedded thumbnail — retry lean.
+      const lean = { ...entry };
+      delete lean.thumbnail;
+      try {
+        persistSavedPresets([lean, ...saved]);
+        setPresetsVersion((v) => v + 1);
+        toast({
+          message: `Saved "${trimmed}" without a thumbnail — storage is full`,
+          variant: 'info',
+        });
+      } catch {
+        toast({ message: 'Could not save preset', variant: 'error' });
+      }
     }
   }, [unlock.unlocked, preset, palette, controls, prompt, toast]);
 
