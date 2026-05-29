@@ -20,11 +20,13 @@ No ads. No algorithmic feeds. No engagement metrics shoved in your face. No trac
 - **Self-hostable** — single `docker compose up -d` runs the entire stack
 
 ### Visualizer (`apps/visualizer`)
-- **10 GPU-accelerated presets** — Torus Field, Particle Storm, Spectral Tunnel (warp), Volumetric Waveform, Cosmic Mandala, Star Field (face-on galaxy), Outrun Grid (3D synthwave terrain), Liquid Chrome (GPU shader), Liquid Blob (raymarched metaballs), Mandelbrot Zoom (infinite fractal)
+- **11 GPU-accelerated presets** — Liquid Blob (raymarched metaballs, the default), Anima (living creature), Torus Field, Particle Storm, Spectral Tunnel (warp), Volumetric Waveform, Cosmic Mandala, Star Field (face-on galaxy), Outrun Grid (3D synthwave terrain), Liquid Chrome (GPU shader), Mandelbrot Zoom (infinite fractal)
 - **4 audio sources** — local file, microphone, desktop tab capture (Chrome/Edge), or **WTF** for a random track auto-pulled from our SoundCloud at build time
 - **Full-bleed viewport** — visuals take the whole screen, controls float on top as a glass panel that fades out when idle
-- **Export** — WebM (VP9 + Opus) or MP4 where supported, up to 4K / 240fps with the $10 one-time unlock
+- **Export** — real-time WebM (VP9 + Opus), or broadcast-quality pre-rendered MP4 (H.264 + AAC via WebCodecs) for file/WTF sources, up to 4K / 240fps with the $10 one-time unlock
 - **Mad-scientist controls** — Gain, Bass/Mid/High mix, Bloom, Speed, and Smoothness sliders with 5x headroom; double-click any value to type any number with no clamp
+- **Smart palette** — pull bass/mid/high colors from album art or any image, automatically matched from a track's embedded cover on upload
+- **Title cards** — burn a lower-third track/artist overlay into exports, auto-filled from embedded tags
 - **Custom palettes, saved presets, snapshot, BPM detection, keyboard shortcuts**
 
 ## Quick start
