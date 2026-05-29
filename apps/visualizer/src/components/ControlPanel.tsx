@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import type { AnalyserHandle, CameraMode, VisualizerId } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import { BandSplitter } from '@/components/BandSplitter';
@@ -22,6 +23,7 @@ interface ControlPanelProps {
   onPresetsChange: () => void;
   analyser: AnalyserHandle | null;
   activePreset: VisualizerId;
+  onPickPaletteImage: (file: File) => void;
 }
 
 const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive', 'cinematic'];
@@ -46,7 +48,9 @@ export function ControlPanel({
   onPresetsChange,
   analyser,
   activePreset,
+  onPickPaletteImage,
 }: ControlPanelProps) {
+  const paletteImageInputRef = useRef<HTMLInputElement>(null);
   type SliderDef = {
     key: SliderKey;
     label: string;
@@ -224,6 +228,25 @@ export function ControlPanel({
               {p.label}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => paletteImageInputRef.current?.click()}
+            className="rounded-full border border-torus-mid/30 px-2 py-1 text-[10px] text-torus-mid hover:border-torus-mid/60"
+            title="Pull bass / mid / high colors from any image (or album art)"
+          >
+            From image…
+          </button>
+          <input
+            ref={paletteImageInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onPickPaletteImage(file);
+              e.target.value = '';
+            }}
+          />
         </div>
 
         {unlocked ? (

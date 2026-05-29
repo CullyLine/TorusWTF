@@ -15,6 +15,37 @@ export const SHOW_BPM_KEY = 'torus-visualizer-show-bpm';
 export const DESKTOP_GUIDE_SEEN_KEY = 'torus-visualizer-desktop-guide-seen';
 export const HWACCEL_BANNER_DISMISSED_KEY = 'torus-visualizer-hwaccel-banner-dismissed';
 export const VOLUME_KEY = 'torus-visualizer-volume';
+export const TITLE_OVERLAY_KEY = 'torus-visualizer-title-overlay';
+
+export type OverlayPosition =
+  | 'bottom-left'
+  | 'bottom-center'
+  | 'top-left'
+  | 'top-right';
+
+/**
+ * Lower-third title card burned into exports (not the live preview).
+ * `position`, `textColor`, and `bgOpacity` are paid-tier customizations;
+ * free exports are clamped to bottom-left / brand defaults at draw time.
+ */
+export interface TitleOverlay {
+  enabled: boolean;
+  title: string;
+  subtitle: string;
+  position: OverlayPosition;
+  textColor: string;
+  /** Background bar opacity, 0–1. */
+  bgOpacity: number;
+}
+
+export const DEFAULT_TITLE_OVERLAY: TitleOverlay = {
+  enabled: false,
+  title: '',
+  subtitle: '',
+  position: 'bottom-left',
+  textColor: '#f5f5fa',
+  bgOpacity: 0.55,
+};
 
 export interface SavedPreset {
   id: string;

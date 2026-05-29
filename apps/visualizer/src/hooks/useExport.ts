@@ -11,6 +11,7 @@ import {
   type ExportFps,
   type ExportResolution,
 } from '@/lib/export-config';
+import type { TitleOverlay } from '@/lib/storage';
 
 export type ExportState = 'idle' | 'recording' | 'rendering';
 
@@ -63,6 +64,7 @@ export function useExport(unlocked: boolean) {
       resolution: ExportResolution;
       aspect?: AspectRatio;
       fps: ExportFps;
+      titleOverlay?: TitleOverlay | null;
       onBeforeRecord?: () => Promise<void>;
       onFileEnded?: () => void;
     }) => {
@@ -70,7 +72,14 @@ export function useExport(unlocked: boolean) {
 
       const { width, height } = dimensionsFor(opts.resolution, opts.aspect ?? '16:9');
       const watermark = !unlocked;
-      const compositor = createCompositor(opts.glCanvas, width, height, watermark);
+      const compositor = createCompositor(
+        opts.glCanvas,
+        width,
+        height,
+        watermark,
+        opts.titleOverlay ?? null,
+        unlocked,
+      );
       compositorRef.current = compositor;
       compositor.start();
 

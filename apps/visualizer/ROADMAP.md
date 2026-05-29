@@ -455,7 +455,7 @@ For every preset:
 
 ### Advanced export — biggest paid-tier value drivers
 
-#### - [ ] 14. Pre-render export mode for file sources (was #15)
+#### - [x] shipped 14. Pre-render export mode for file sources (was #15)
 
 **Why:** Real-time `MediaRecorder` at 4K stutters and looks bad. Pre-rendering frame-by-frame from a file gives broadcast-quality output.
 
@@ -492,7 +492,14 @@ For every preset:
 
 ---
 
-#### - [ ] 15. MP4 export via ffmpeg.wasm (was #14)
+#### - [x] shipped 15. MP4 export (delivered via WebCodecs, not ffmpeg.wasm) (was #14)
+
+**Delivered differently than specced:** MP4 is produced by the pre-render pipeline
+(item 14) using the browser-native WebCodecs `VideoEncoder`/`AudioEncoder` muxed
+with `mp4-muxer`, instead of bundling the ~30MB `@ffmpeg/ffmpeg` wasm. This avoids
+the large lazy-loaded dependency entirely while still giving creators true MP4
+(H.264 + AAC). Real-time Record still emits MP4 when `MediaRecorder` supports it.
+ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 
 **Why:** WebM is technically fine but creators expect MP4. Removes a real friction point.
 
@@ -524,7 +531,7 @@ For every preset:
 
 ---
 
-#### - [ ] 16. Lower-third title overlay for exports (was #16)
+#### - [x] shipped 16. Lower-third title overlay for exports (was #16)
 
 **Why:** Creators want their track name + artist branded onto the export.
 
@@ -557,7 +564,7 @@ For every preset:
 
 ### Smart features
 
-#### - [ ] 17. Smart palette from album art (was #17)
+#### - [x] shipped 17. Smart palette from album art (was #17)
 
 **Why:** Producers drop a track and want the visuals to match their cover art. One-click palette extraction is a delight feature.
 
@@ -788,3 +795,7 @@ Every PR Composer opens should use this body structure:
 - 2026-05-21 | Item 18 (BPM detection) | commit 11bb485
 - 2026-05-26 | Item 20 (Desktop audio source) | commit 85b4068, PR #1
 - 2026-05-26 | Item 21 (Mandelbrot Zoom) | commit 5ae5b2d, PR #2
+- 2026-05-29 | Item 14 (Pre-render MP4 export) | commit d37d250
+- 2026-05-29 | Item 15 (MP4 export — via WebCodecs, not ffmpeg.wasm) | commit d37d250
+- 2026-05-29 | Item 17 (Smart palette from album art / image) | branch feat/v2-export-extras
+- 2026-05-29 | Item 16 (Lower-third title card) | branch feat/v2-export-extras
