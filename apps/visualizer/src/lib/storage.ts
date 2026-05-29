@@ -51,6 +51,8 @@ export interface SavedPreset {
   id: string;
   name: string;
   createdAt: string;
+  /** 16:9 JPEG data URL captured at save time. Absent for legacy presets. */
+  thumbnail?: string;
   presetId: VisualizerId;
   palette: WaveformPalette;
   reactivity: number;
@@ -164,3 +166,18 @@ export function loadSavedPresets(): SavedPreset[] {
 export function persistSavedPresets(presets: SavedPreset[]): void {
   localStorage.setItem(SAVED_PRESETS_KEY, JSON.stringify(presets));
 }
+
+/** Rough total size of everything in localStorage, in bytes (UTF-16 ≈ 2 bytes/char). */
+export function estimateLocalStorageBytes(): number {
+  if (typeof window === 'undefined') return 0;
+  let chars = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key === null) continue;
+    chars += key.length + (localStorage.getItem(key)?.length ?? 0);
+  }
+  return chars * 2;
+}
+
+/** Soft cap before we stop embedding new preset thumbnails. */
+export const THUMBNAIL_STORAGE_BUDGET_BYTES = 4 * 1024 * 1024;

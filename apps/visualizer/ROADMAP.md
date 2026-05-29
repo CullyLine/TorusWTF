@@ -624,7 +624,7 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 
 ---
 
-#### - [ ] 19. Saved-preset thumbnails (was #19)
+#### - [x] shipped 19. Saved-preset thumbnails (was #19)
 
 **Why:** Saved presets are currently a text list. A visual grid is far more usable.
 
@@ -798,4 +798,6 @@ Every PR Composer opens should use this body structure:
 - 2026-05-29 | Item 14 (Pre-render MP4 export) | commit d37d250
 - 2026-05-29 | Item 15 (MP4 export — via WebCodecs, not ffmpeg.wasm) | commit d37d250
 - 2026-05-29 | Item 17 (Smart palette from album art / image) | branch feat/v2-export-extras
-- 2026-05-29 | Item 16 (Lower-third title card) | branch feat/v2-export-extras
+- 2026-05-29 | Item 16 (Lower-third title card) | branch feat/v2-export-extras, PR #7
+- 2026-05-29 | Item 17 (Smart palette) | branch feat/v2-export-extras, PR #7
+- 2026-05-29 | Item 19 (Saved-preset thumbnails) | branch feat/v2-19-preset-thumbnails

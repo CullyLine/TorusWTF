@@ -283,15 +283,57 @@ export function ControlPanel({
           {saved.length === 0 ? (
             <p className="text-[10px] text-torus-fg-faint">No saved presets yet.</p>
           ) : (
-            <ul className="space-y-1">
+            <div className="grid grid-cols-2 gap-2">
               {saved.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-2">
+                <div
+                  key={p.id}
+                  className="group relative overflow-hidden rounded-lg border border-torus-border bg-torus-bg"
+                >
                   <button
                     type="button"
                     onClick={() => onLoadSaved(p)}
-                    className="truncate text-left text-xs text-torus-fg hover:text-torus-mid"
+                    className="block w-full text-left"
+                    title={`Load "${p.name}"`}
                   >
-                    {p.name}
+                    <div className="relative aspect-video w-full">
+                      {p.thumbnail ? (
+                        <img
+                          src={p.thumbnail}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <svg
+                            width="28"
+                            height="28"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                          >
+                            <ellipse
+                              cx="12"
+                              cy="12"
+                              rx="9"
+                              ry="4.5"
+                              stroke="var(--color-torus-mid)"
+                              strokeWidth="1.5"
+                              opacity="0.7"
+                            />
+                            <circle
+                              cx="12"
+                              cy="12"
+                              r="2.3"
+                              fill="var(--color-torus-mid)"
+                              opacity="0.5"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <span className="block truncate px-2 py-1 text-[11px] text-torus-fg group-hover:text-torus-mid">
+                      {p.name}
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -299,13 +341,14 @@ export function ControlPanel({
                       persistSavedPresets(saved.filter((s) => s.id !== p.id));
                       onPresetsChange();
                     }}
-                    className="text-[10px] text-torus-fg-faint hover:text-torus-bass"
+                    aria-label={`Delete "${p.name}"`}
+                    className="absolute right-1 top-1 rounded-full bg-torus-bg/80 px-1.5 py-0.5 text-[10px] leading-none text-torus-fg-faint backdrop-blur-sm hover:text-torus-bass"
                   >
-                    delete
+                    ✕
                   </button>
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       ) : null}
