@@ -1,4 +1,4 @@
-import type { CameraMode, VisualizerId } from '@torus/visualizers';
+import type { BackgroundMode, CameraMode, VisualizerId } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 
 export const LICENSE_STORAGE_KEY = 'torus-visualizer-license';
@@ -16,6 +16,19 @@ export const DESKTOP_GUIDE_SEEN_KEY = 'torus-visualizer-desktop-guide-seen';
 export const HWACCEL_BANNER_DISMISSED_KEY = 'torus-visualizer-hwaccel-banner-dismissed';
 export const VOLUME_KEY = 'torus-visualizer-volume';
 export const TITLE_OVERLAY_KEY = 'torus-visualizer-title-overlay';
+export const BACKGROUND_KEY = 'torus-visualizer-background';
+
+/** Reactive backdrop behind the preset. `none` = current behavior. */
+export interface BackgroundSettings {
+  mode: BackgroundMode;
+  /** Master visibility 0..1 (always contrast-capped per-mode). */
+  intensity: number;
+}
+
+export const DEFAULT_BACKGROUND: BackgroundSettings = {
+  mode: 'none',
+  intensity: 0.6,
+};
 
 export type OverlayPosition =
   | 'bottom-left'

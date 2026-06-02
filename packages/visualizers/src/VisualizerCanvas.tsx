@@ -6,7 +6,8 @@ import { Canvas, type RootState } from '@react-three/fiber';
 export type { RootState } from '@react-three/fiber';
 import { useAudioAnalyser } from './audio';
 import { detectTier } from './tier';
-import { VISUALIZERS, type VisualizerId } from './registry';
+import { VISUALIZERS, FULLSCREEN_SHADER_PRESETS, type VisualizerId } from './registry';
+import { BackgroundLayer, type BackgroundMode } from './BackgroundLayer';
 import { AudioMetricsProvider, type MetricsScales } from './metrics';
 import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
@@ -81,6 +82,14 @@ interface VisualizerCanvasProps {
   appendages?: number;
   /** Liquid Blob: max sub-spheres that pop on high-frequency transients (0–8). */
   subSpheres?: number;
+  /**
+   * Optional reactive background behind the preset. Default 'none' keeps the
+   * clip player and all current presets unchanged. Skipped automatically for
+   * fullscreen-shader presets that would occlude it.
+   */
+  background?: BackgroundMode;
+  /** Background visibility 0..1. Default 0.6. */
+  backgroundIntensity?: number;
 }
 
 export function VisualizerCanvas({
@@ -117,6 +126,8 @@ export function VisualizerCanvas({
   inflate,
   appendages,
   subSpheres,
+  background = 'none',
+  backgroundIntensity = 0.6,
   frameloop = 'always',
   glOverrides,
   onR3FState,
@@ -182,6 +193,14 @@ export function VisualizerCanvas({
                 creature={creature}
                 cinematicSpeed={cinematicSpeed}
               />
+              {background !== 'none' && !FULLSCREEN_SHADER_PRESETS.has(preset) ? (
+                <BackgroundLayer
+                  mode={background}
+                  intensity={backgroundIntensity}
+                  palette={palette}
+                  tier={tier}
+                />
+              ) : null}
               <group scale={scale}>
                 <def.Scene
                   analyser={analyser}

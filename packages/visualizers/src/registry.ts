@@ -25,6 +25,18 @@ export type VisualizerId =
   | 'liquid_blob'
   | 'mandelbrot_zoom';
 
+/**
+ * Presets that paint their own fullscreen background (raymarched / fractal /
+ * shader curtains) and would fully occlude a 3D BackgroundLayer behind them.
+ * BackgroundLayer is therefore skipped for these and applied to the
+ * mesh-based presets first.
+ */
+export const FULLSCREEN_SHADER_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
+  'liquid_blob',
+  'anima',
+  'mandelbrot_zoom',
+]);
+
 export interface VisualizerSceneProps {
   analyser: AnalyserHandle | null;
   palette: { bass: string; mid: string; high: string };

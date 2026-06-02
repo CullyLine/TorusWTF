@@ -2,7 +2,18 @@ export { VisualizerCanvas, type RootState } from './VisualizerCanvas';
 export { useAudioAnalyser, useStreamAnalyser } from './audio';
 export type { AnalyserHandle } from './audio';
 export { detectTier, type DeviceTier } from './tier';
-export { VISUALIZERS, type VisualizerId, type VisualizerDefinition } from './registry';
+export {
+  VISUALIZERS,
+  FULLSCREEN_SHADER_PRESETS,
+  type VisualizerId,
+  type VisualizerDefinition,
+} from './registry';
+export {
+  BackgroundLayer,
+  BACKGROUND_MODES,
+  type BackgroundMode,
+  type BackgroundLayerProps,
+} from './BackgroundLayer';
 export { pickRandomVisualizerPreset } from './pickRandomPreset';
 export type { AudioMetrics, MetricsScales } from './metrics';
 export type { CameraMode } from './SceneRig';
