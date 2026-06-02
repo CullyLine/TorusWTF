@@ -99,6 +99,7 @@ export function PrerenderRoot({
         aura={controls.aura ?? 0.4}
         cinematicSpeed={controls.cinematicSpeed ?? 1}
         energy={controls.energy ?? 0}
+        autoGain={controls.autoGain ?? true}
         inflate={controls.inflate ?? 0.5}
         appendages={controls.appendages ?? 4}
         subSpheres={controls.subSpheres ?? 6}

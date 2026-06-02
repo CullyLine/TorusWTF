@@ -32,7 +32,7 @@ const CINEMATIC_SPEED_MIN = 0.25;
 const CINEMATIC_SPEED_MAX = 3;
 const CINEMATIC_SPEED_STEP = 0.05;
 
-type SliderKey = Exclude<keyof VisualizerControls, 'cameraMode'>;
+type SliderKey = Exclude<keyof VisualizerControls, 'cameraMode' | 'autoGain'>;
 
 export function ControlPanel({
   controls,
@@ -58,9 +58,10 @@ export function ControlPanel({
     max: number;
     step: number;
   };
+  const autoGain = controls.autoGain ?? true;
   const allSliders: SliderDef[] = [
-    { key: 'reactivity', label: 'Gain', min: 0.2, max: 12.5, step: 0.05 },
-    { key: 'energy', label: 'Energy', min: 0, max: 2, step: 0.05 },
+    { key: 'reactivity', label: autoGain ? 'Gain (trim)' : 'Gain', min: 0.2, max: 12.5, step: 0.05 },
+    { key: 'energy', label: 'Energy (punch)', min: 0, max: 2, step: 0.05 },
     { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05 },
     { key: 'midMix', label: 'Mid', min: 0, max: 10, step: 0.05 },
     { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05 },
@@ -140,6 +141,20 @@ export function ControlPanel({
           if (idx === 0) {
             return (
               <div key="gain-and-bands" className="space-y-3">
+                <label className="flex items-center justify-between gap-2 text-xs text-torus-fg-dim">
+                  <span className="flex flex-col">
+                    <span>Auto sensitivity</span>
+                    <span className="text-[10px] text-torus-fg-faint">
+                      Levels any track automatically — Gain just trims it
+                    </span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={autoGain}
+                    onChange={(e) => onChange({ autoGain: e.target.checked })}
+                    className="accent-torus-mid"
+                  />
+                </label>
                 {sliderEl}
                 <BandSplitter
                   analyser={analyser}

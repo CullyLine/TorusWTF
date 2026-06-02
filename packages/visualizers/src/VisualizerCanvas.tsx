@@ -73,6 +73,8 @@ interface VisualizerCanvasProps {
   cinematicSpeed?: number;
   /** Dynamic-range expansion. 0 = unchanged, 1 = peaks 3x their deviation. */
   energy?: number;
+  /** Auto-gain (AGC). Default on; normalizes loudness so any song reacts well. */
+  autoGain?: boolean;
   /** Liquid Blob: 0 = pure stretch, 1 = pure inflate. Other presets ignore. */
   inflate?: number;
   /** Liquid Blob: number of orbiting satellite spheres (0–10). */
@@ -111,6 +113,7 @@ export function VisualizerCanvas({
   aura,
   cinematicSpeed = 1,
   energy,
+  autoGain,
   inflate,
   appendages,
   subSpheres,
@@ -138,6 +141,7 @@ export function VisualizerCanvas({
     bpmRef,
     lastOnsetRef,
     energy,
+    autoGain,
   };
 
   const containerStyle = exportSize

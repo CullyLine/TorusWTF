@@ -24,6 +24,7 @@ import {
   updateChoreography,
   type ChoreographyState,
 } from './dsp/choreography';
+import { extractBands } from './dsp/bands';
 
 export interface AudioMetrics {
   bass: number;
@@ -139,6 +140,14 @@ export interface MetricsScales {
    * between hits but punches harder on the hits themselves.
    */
   energy?: number;
+  /**
+   * Auto-gain (AGC). When true (default) a slow loudness envelope is
+   * tracked and the bands are normalized toward a target level, so any
+   * song lands in a usable range without cranking `reactivity`. With AGC
+   * on, `reactivity` acts as a gentle trim on top. Set false to get the
+   * old raw behavior where `reactivity` is the only gain.
+   */
+  autoGain?: boolean;
 }
 
 export function AudioMetricsProvider({
@@ -156,6 +165,7 @@ export function AudioMetricsProvider({
   bpmRef,
   lastOnsetRef,
   energy: energyExpand = 0,
+  autoGain = true,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
@@ -164,6 +174,9 @@ export function AudioMetricsProvider({
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const prevBass = useRef(0.15);
   const prevEnergy = useRef(0.15);
+  // Auto-gain state: slow loudness envelope + the smoothed gain it drives.
+  const agcEnvRef = useRef(AGC_TARGET);
+  const agcGainRef = useRef(1);
   // Stem-detection state.
   const prevHigh = useRef(0.15);
   const prevMid = useRef(0.15);
@@ -194,48 +207,67 @@ export function AudioMetricsProvider({
       const bins = analyser.getFrequencyData(freqBuf.current);
       if (bins > 0) {
         const nyquist = analyser.sampleRate / 2;
-        // Convert Hz crossovers to bin indices. Clamp to keep bands non-empty.
-        const s1 = Math.max(1, Math.min(bins - 2, Math.round((bassMaxHz / nyquist) * bins)));
-        const s2 = Math.max(s1 + 1, Math.min(bins - 1, Math.round((midMaxHz / nyquist) * bins)));
-        bass = (avg(freqBuf.current, 0, s1) / 255) * bassMix * reactivity;
-        mid = (avg(freqBuf.current, s1, s2) / 255) * midMix * reactivity;
-        high = (avg(freqBuf.current, s2, bins) / 255) * highMix * reactivity;
-        energy = (avg(freqBuf.current, 0, bins) / 255) * reactivity;
+        const dt = Math.min(delta, 0.1);
+
+        // Smooth raised-cosine crossover bands + perceptual scaling. Energy
+        // fades continuously across band edges instead of teleporting, and a
+        // continuous full-spectrum "motion" level keeps overall movement
+        // alive even when a single band hops.
+        const levels = extractBands(freqBuf.current, bins, analyser.sampleRate, {
+          bassMaxHz,
+          midMaxHz,
+          crossoverWidth: BAND_CROSSOVER_WIDTH,
+          perceptualExponent: BAND_PERCEPTUAL_EXPONENT,
+        });
+
+        // --- Auto-gain (AGC) ---
+        // Track a slow loudness envelope of the motion signal and normalize
+        // toward a target so any song lands in range. The gain itself moves
+        // slowly to avoid audible "pumping." With AGC off, gain stays 1 and
+        // `reactivity` is the only gain (legacy behavior).
+        let agc = 1;
+        if (autoGain) {
+          const envAlpha = 1 - Math.exp(-dt / AGC_ENVELOPE_TAU);
+          agcEnvRef.current += (levels.full - agcEnvRef.current) * envAlpha;
+          const desired = clamp(
+            AGC_TARGET / Math.max(AGC_FLOOR, agcEnvRef.current),
+            AGC_MIN_GAIN,
+            AGC_MAX_GAIN,
+          );
+          const gainAlpha = 1 - Math.exp(-dt / AGC_GAIN_TAU);
+          agcGainRef.current += (desired - agcGainRef.current) * gainAlpha;
+          agc = agcGainRef.current;
+        } else {
+          agcGainRef.current = 1;
+        }
+
+        bass = levels.bass * agc * bassMix * reactivity;
+        mid = levels.mid * agc * midMix * reactivity;
+        high = levels.high * agc * highMix * reactivity;
+        energy = levels.full * agc * reactivity;
         bass = applyCreatureBass(bass, creature);
         mid = applyCreatureMid(mid, creature);
         high = applyCreatureHigh(high, creature);
 
-        // --- Energy expander (dynamic-range expansion) ---
+        // --- Punch expander (dynamic-range expansion) ---
         // Tracks a slow ~1.5s baseline per band, then amplifies the deviation
-        // around that baseline. At energyExpand=0 the values are unchanged;
-        // at 1, deviations are 3x. The baseline itself is unchanged, so
-        // quiet passages stay quiet and only the peaks punch harder.
-        if (energyExpand > 0) {
-          const baseAlpha = Math.min(1, delta / 1.5);
-          const expand = 1 + energyExpand * 2;
-          baselineBassRef.current += (bass - baselineBassRef.current) * baseAlpha;
-          baselineMidRef.current += (mid - baselineMidRef.current) * baseAlpha;
-          baselineHighRef.current += (high - baselineHighRef.current) * baseAlpha;
-          baselineEnergyRef.current += (energy - baselineEnergyRef.current) * baseAlpha;
-          bass = baselineBassRef.current + (bass - baselineBassRef.current) * expand;
-          mid = baselineMidRef.current + (mid - baselineMidRef.current) * expand;
-          high = baselineHighRef.current + (high - baselineHighRef.current) * expand;
-          energy = baselineEnergyRef.current + (energy - baselineEnergyRef.current) * expand;
-          // Clamp so the expander can't push values past the soft ceiling
-          // that softCap() later enforces.
-          bass = Math.max(0, Math.min(METRIC_CEILING, bass));
-          mid = Math.max(0, Math.min(METRIC_CEILING, mid));
-          high = Math.max(0, Math.min(METRIC_CEILING, high));
-          energy = Math.max(0, Math.min(METRIC_CEILING, energy));
-        } else {
-          // Still keep the baselines warm so toggling the slider on later
-          // doesn't cause a one-shot glitch.
-          const baseAlpha = Math.min(1, delta / 1.5);
-          baselineBassRef.current += (bass - baselineBassRef.current) * baseAlpha;
-          baselineMidRef.current += (mid - baselineMidRef.current) * baseAlpha;
-          baselineHighRef.current += (high - baselineHighRef.current) * baseAlpha;
-          baselineEnergyRef.current += (energy - baselineEnergyRef.current) * baseAlpha;
-        }
+        // around that baseline so the baseline (quiet passages) stays put
+        // while peaks punch harder. A small base amount is always applied so
+        // the visualizer feels alive by default; the Energy slider adds more.
+        const baseAlpha = Math.min(1, delta / 1.5);
+        const expand = 1 + (BASE_PUNCH + energyExpand) * 2;
+        baselineBassRef.current += (bass - baselineBassRef.current) * baseAlpha;
+        baselineMidRef.current += (mid - baselineMidRef.current) * baseAlpha;
+        baselineHighRef.current += (high - baselineHighRef.current) * baseAlpha;
+        baselineEnergyRef.current += (energy - baselineEnergyRef.current) * baseAlpha;
+        bass = baselineBassRef.current + (bass - baselineBassRef.current) * expand;
+        mid = baselineMidRef.current + (mid - baselineMidRef.current) * expand;
+        high = baselineHighRef.current + (high - baselineHighRef.current) * expand;
+        energy = baselineEnergyRef.current + (energy - baselineEnergyRef.current) * expand;
+        bass = Math.max(0, Math.min(METRIC_CEILING, bass));
+        mid = Math.max(0, Math.min(METRIC_CEILING, mid));
+        high = Math.max(0, Math.min(METRIC_CEILING, high));
+        energy = Math.max(0, Math.min(METRIC_CEILING, energy));
 
         // --- Heuristic stem detection (no ML, just band patterns) ---
         // Drums: spectral flux at mid/high — transient bursts (snare, hat).
@@ -248,7 +280,9 @@ export function AudioMetricsProvider({
         const vocalLo = Math.max(1, Math.round((200 / nyquist) * bins));
         const vocalHi = Math.max(vocalLo + 1, Math.round((3000 / nyquist) * bins));
         const vocalE = avg(freqBuf.current, vocalLo, vocalHi) / 255;
-        const restE = energy > 0.001 ? energy / reactivity : 0.001;
+        // Linear full-spectrum reference (independent of AGC/punch gain) so
+        // the vocal-band ratio calibration is stable.
+        const restE = avg(freqBuf.current, 0, bins) / 255;
         const vocalRatio = vocalE / Math.max(0.05, restE);
         // Ratio peaks ~1.2-1.5 when vocals dominate; clamp + map to 0..1.
         vocalActivity = Math.min(1, Math.max(0, (vocalRatio - 0.6) * 1.5));
@@ -280,19 +314,32 @@ export function AudioMetricsProvider({
       }
     }
 
-    const bassSmooth = Math.min(1, 0.35 * speed);
-    const energySmooth = Math.min(1, 0.2 * speed);
     const breathSmooth = Math.min(1, 0.08 * speed);
     const flowSmooth = Math.min(1, 0.12 * speed);
+    const dtClamped = Math.min(delta, 0.1);
 
+    // Fast tracker used only for beat onset detection (independent of the
+    // output smoothing so beats stay crisp at any smoothness).
     const beat = Math.max(0, bass - prevBass.current - 0.04) * 4.5;
-    prevBass.current = lerp(prevBass.current, bass, bassSmooth);
-    prevEnergy.current = lerp(prevEnergy.current, energy, energySmooth);
+    prevBass.current = lerp(prevBass.current, bass, Math.min(1, 0.35 * speed));
+    prevEnergy.current = lerp(prevEnergy.current, energy, Math.min(1, 0.2 * speed));
 
-    // Smoothness 0..1 → response rate 1..~0.02 (frame-rate-independent enough
-    // at typical 60fps; we treat it as a per-frame lerp factor).
+    // Smoothness 0..1 → response rate 1..~0.02. Kept as a per-frame lerp for
+    // the secondary signals (drum/vocal/lead/mood) below.
     const smoothClamped = Math.max(0, Math.min(0.99, smoothness));
     const respond = 1 - smoothClamped * 0.98;
+
+    // Asymmetric attack/release envelope for the headline bands. Attack is
+    // always quick so hits land; release slows with smoothness so motion
+    // glides to rest instead of stalling uniformly. Time-constant based, so
+    // it behaves the same regardless of frame rate.
+    const attackTau = 0.015 + smoothClamped * 0.06;
+    const releaseTau = 0.06 + smoothClamped * 0.85;
+    const envFollow = (prevVal: number, target: number): number => {
+      const tau = target >= prevVal ? attackTau : releaseTau;
+      const a = 1 - Math.exp(-dtClamped / Math.max(1e-4, tau));
+      return prevVal + (target - prevVal) * a;
+    };
 
     // Macro state update — silence, tension, dropEvent.
     const bpmForMacro = bpmRef?.current ?? null;
@@ -357,10 +404,10 @@ export function AudioMetricsProvider({
 
     const prev = metricsRef.current;
     metricsRef.current = {
-      bass: lerp(prev.bass, softCap(bass), respond),
-      mid: lerp(prev.mid, softCap(mid), respond),
-      high: lerp(prev.high, softCap(high), respond),
-      energy: lerp(prev.energy, softCap(energy), respond),
+      bass: envFollow(prev.bass, softCap(bass)),
+      mid: envFollow(prev.mid, softCap(mid)),
+      high: envFollow(prev.high, softCap(high)),
+      energy: envFollow(prev.energy, softCap(energy)),
       // Beats are spikes; smoothing them too hard kills the impulse, so we
       // only apply a small fraction of the smoothness.
       beat: lerp(prev.beat, Math.min(METRIC_CEILING, beat), Math.max(respond, 0.4)),
@@ -404,6 +451,29 @@ function avg(buf: Uint8Array, start: number, end: number): number {
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
+
+function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+// --- Band extraction tuning ---
+// Half-octave-ish crossover fade and a mild perceptual lift so musical
+// detail reaches a usable range at sane gain.
+const BAND_CROSSOVER_WIDTH = 0.5;
+const BAND_PERCEPTUAL_EXPONENT = 0.6;
+
+// --- Auto-gain (AGC) tuning ---
+const AGC_TARGET = 0.32; // desired motion level the envelope normalizes toward
+const AGC_FLOOR = 0.04; // ignore near-silence so we don't blow up the gain
+const AGC_MIN_GAIN = 0.6;
+const AGC_MAX_GAIN = 3;
+const AGC_ENVELOPE_TAU = 2.5; // seconds — how slowly loudness is tracked
+const AGC_GAIN_TAU = 0.6; // seconds — how slowly the gain itself moves
+
+// --- Default punch ---
+// Baseline dynamic-range expansion applied even when the Energy slider is 0,
+// so the visualizer feels reactive out of the box.
+const BASE_PUNCH = 0.3;
 
 // Soft cap with 10x headroom: lets cranked-up sliders push past the
 // "everything looks normal" 0..1 range without ever going NaN/Infinity.
