@@ -74,6 +74,8 @@ export interface SavedPreset {
   inflate?: number;
   appendages?: number;
   subSpheres?: number;
+  /** Auto-gain on/off. Absent for legacy presets → treated as on. */
+  autoGain?: boolean;
 }
 
 export interface VisualizerControls {
@@ -117,23 +119,31 @@ export interface VisualizerControls {
    * the main blob between hits. 0 = disabled. Default 6.
    */
   subSpheres?: number;
+  /**
+   * Auto-gain (AGC). When on (default), loudness is normalized automatically
+   * so any song reacts well without cranking Gain; Gain then trims on top.
+   * Optional for backwards-compat with saved presets from before this field.
+   */
+  autoGain?: boolean;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
 
 /**
- * First-load defaults are tuned specifically for the Liquid Blob preset
- * (the new default preset). Bass/mid/high mixes + Gain + Energy are very
- * hot and Bloom is off, which makes the blob feel alive but can wash out
- * other presets. If a visitor switches to e.g. Torus Field or Star Field
- * they may want to drop Gain/Energy/Bass-Mid-High back toward 1 and turn
- * Bloom back up.
+ * First-load defaults, tuned for the Liquid Blob preset (the default).
+ *
+ * Loudness is now carried by auto-gain (AGC) + perceptual band scaling in
+ * `metrics.ts`, so the gain-related controls sit near 1 instead of the old
+ * extreme values (Gain 2.5, mixes ~9, Energy 2). Gain is a gentle trim,
+ * the mixes nudge band balance, and Energy adds punch on top of the small
+ * base punch that is always applied. The look-and-feel controls
+ * (speed/smoothness/scale/shake/anima) keep their Liquid-Blob tuning.
  */
 export const DEFAULT_CONTROLS: VisualizerControls = {
-  reactivity: 2.5,
-  bassMix: 8.8,
-  midMix: 8.85,
-  highMix: 9.75,
+  reactivity: 1.1,
+  bassMix: 1,
+  midMix: 1,
+  highMix: 1.1,
   speed: 5.95,
   smoothness: 0.95,
   scale: 0.15,
@@ -143,10 +153,11 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   anima: 1,
   aura: 0,
   cinematicSpeed: 3,
-  energy: 2,
+  energy: 0.3,
   inflate: 0.32,
   appendages: 4,
   subSpheres: 6,
+  autoGain: true,
   bloomIntensity: 0,
   cameraMode: 'cinematic',
 };
