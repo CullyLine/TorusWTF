@@ -63,12 +63,15 @@ import {
   DESKTOP_GUIDE_SEEN_KEY,
   TITLE_OVERLAY_KEY,
   DEFAULT_TITLE_OVERLAY,
+  BACKGROUND_KEY,
+  DEFAULT_BACKGROUND,
   THUMBNAIL_STORAGE_BUDGET_BYTES,
   estimateLocalStorageBytes,
   loadSavedPresets,
   persistSavedPresets,
   type SavedPreset,
   type TitleOverlay,
+  type BackgroundSettings,
   type VisualizerControls,
 } from '@/lib/storage';
 
@@ -114,6 +117,10 @@ export function VisualizerApp() {
   const [titleOverlay, setTitleOverlay] = usePersistedState<TitleOverlay>(
     TITLE_OVERLAY_KEY,
     DEFAULT_TITLE_OVERLAY,
+  );
+  const [background, setBackground] = usePersistedState<BackgroundSettings>(
+    BACKGROUND_KEY,
+    DEFAULT_BACKGROUND,
   );
   const [desktopGuideSeen, setDesktopGuideSeen] = usePersistedState<boolean>(
     DESKTOP_GUIDE_SEEN_KEY,
@@ -417,6 +424,7 @@ export function VisualizerApp() {
         watermark: !unlock.unlocked,
         titleOverlay,
         unlocked: unlock.unlocked,
+        background,
       });
       if (prerender.progress.stage === 'done') {
         toast({ message: 'MP4 download ready', variant: 'success' });
@@ -440,6 +448,7 @@ export function VisualizerApp() {
     titleOverlay,
     toast,
     unlock.unlocked,
+    background,
   ]);
 
   const exportSize = dimensionsFor(resolution, aspect);
@@ -574,6 +583,8 @@ export function VisualizerApp() {
         analyser={audio.analyser}
         activePreset={preset}
         onPickPaletteImage={handlePickPaletteImage}
+        background={background}
+        onBackgroundChange={(patch) => setBackground((b) => ({ ...b, ...patch }))}
       />
       <TitleOverlayPanel
         overlay={titleOverlay}
@@ -649,6 +660,8 @@ export function VisualizerApp() {
                 cinematicSpeed={controls.cinematicSpeed ?? 1}
                 energy={controls.energy ?? 0}
                 autoGain={controls.autoGain ?? true}
+                background={background.mode}
+                backgroundIntensity={background.intensity}
                 inflate={controls.inflate ?? 0.5}
                 appendages={controls.appendages ?? 4}
                 subSpheres={controls.subSpheres ?? 6}

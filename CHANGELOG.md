@@ -24,3 +24,5 @@
 - Add saved-preset thumbnail grid captured from the live frame, with a placeholder for legacy presets and a localStorage budget guard
 - Add Open Graph and Twitter social card images, expand SEO metadata, allow display-capture permissions
 - Bump Next.js to 15.5.18 to address upstream CVEs and move typedRoutes out of experimental
+- Smooth out audio reactivity: raised-cosine crossover bands + perceptual scaling fix band "rubberbanding", auto-gain (AGC) levels any track, default punch and fast-attack/slow-release smoothing keep motion alive (Gain becomes a trim, "Auto sensitivity" toggle added)
+- Add reactive backgrounds behind mesh presets (nebula, star field, aurora, glow) — slow, contrast-capped, reduced-motion aware, with a sidebar selector and intensity slider

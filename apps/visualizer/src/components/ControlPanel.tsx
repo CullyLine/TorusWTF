@@ -1,12 +1,18 @@
 'use client';
 
 import { useRef } from 'react';
-import type { AnalyserHandle, CameraMode, VisualizerId } from '@torus/visualizers';
+import {
+  BACKGROUND_MODES,
+  type AnalyserHandle,
+  type BackgroundMode,
+  type CameraMode,
+  type VisualizerId,
+} from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import { BandSplitter } from '@/components/BandSplitter';
 import { EditableNumber } from '@/components/EditableNumber';
 import { BUILTIN_PALETTES } from '@/lib/palettes';
-import type { SavedPreset, VisualizerControls } from '@/lib/storage';
+import type { BackgroundSettings, SavedPreset, VisualizerControls } from '@/lib/storage';
 import { loadSavedPresets, persistSavedPresets } from '@/lib/storage';
 
 interface ControlPanelProps {
@@ -24,9 +30,27 @@ interface ControlPanelProps {
   analyser: AnalyserHandle | null;
   activePreset: VisualizerId;
   onPickPaletteImage: (file: File) => void;
+  background: BackgroundSettings;
+  onBackgroundChange: (patch: Partial<BackgroundSettings>) => void;
 }
 
 const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive', 'cinematic'];
+
+const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
+  none: 'None',
+  nebula: 'Nebula',
+  starfield: 'Star field',
+  aurora: 'Aurora',
+  glow: 'Glow',
+};
+
+// Presets that paint their own fullscreen background — the layer is hidden
+// behind them, so we surface a hint rather than letting it look broken.
+const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
+  'liquid_blob',
+  'anima',
+  'mandelbrot_zoom',
+]);
 
 const CINEMATIC_SPEED_MIN = 0.25;
 const CINEMATIC_SPEED_MAX = 3;
@@ -49,6 +73,8 @@ export function ControlPanel({
   analyser,
   activePreset,
   onPickPaletteImage,
+  background,
+  onBackgroundChange,
 }: ControlPanelProps) {
   const paletteImageInputRef = useRef<HTMLInputElement>(null);
   type SliderDef = {
@@ -218,6 +244,51 @@ export function ControlPanel({
               );
             })()
           : null}
+
+        <div className="space-y-2 border-t border-torus-border pt-3">
+          <label className="block text-xs text-torus-fg-dim">
+            Background
+            <select
+              value={background.mode}
+              onChange={(e) => onBackgroundChange({ mode: e.target.value as BackgroundMode })}
+              className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-2 py-1.5 text-sm text-torus-fg"
+            >
+              {BACKGROUND_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {BACKGROUND_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {background.mode !== 'none' ? (
+            <div className="block text-xs text-torus-fg-dim">
+              <div className="mb-1 flex justify-between">
+                <span>Background intensity</span>
+                <EditableNumber
+                  value={background.intensity}
+                  onCommit={(v) => onBackgroundChange({ intensity: Math.max(0, Math.min(1, v)) })}
+                  ariaLabel="Background intensity"
+                  outOfRange={background.intensity < 0 || background.intensity > 1}
+                />
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={Math.max(0, Math.min(1, background.intensity))}
+                onChange={(e) => onBackgroundChange({ intensity: Number(e.target.value) })}
+                className="w-full accent-torus-mid"
+              />
+            </div>
+          ) : null}
+          {background.mode !== 'none' && FULLSCREEN_PRESETS.has(activePreset) ? (
+            <p className="text-[10px] text-torus-fg-faint">
+              This preset fills the whole frame, so the background sits hidden behind it.
+              Try it with Torus Field, Star Field, or Cosmic Mandala.
+            </p>
+          ) : null}
+        </div>
 
         <label className="flex items-center gap-2 text-xs text-torus-fg-dim">
           <input

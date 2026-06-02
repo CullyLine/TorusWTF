@@ -6,7 +6,7 @@ import { VisualizerCanvas } from '@torus/visualizers';
 import type { VisualizerId, CreaturePersonality, RootState } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import type { SyntheticAnalyser } from '@/lib/prerender/syntheticAnalyser';
-import type { VisualizerControls } from '@/lib/storage';
+import type { BackgroundSettings, VisualizerControls } from '@/lib/storage';
 
 /**
  * Offscreen R3F canvas used by the pre-render pipeline. Rendered into a
@@ -36,6 +36,7 @@ interface PrerenderRootProps {
   syntheticAnalyser: SyntheticAnalyser;
   bpmRef: MutableRefObject<number | null>;
   lastOnsetRef: MutableRefObject<number>;
+  background?: BackgroundSettings;
   onReady: (handle: { state: RootState; canvas: HTMLCanvasElement }) => void;
   /** Called if the canvas unmounts mid-render (cleanup / cancel). */
   onTeardown?: () => void;
@@ -52,6 +53,7 @@ export function PrerenderRoot({
   syntheticAnalyser,
   bpmRef,
   lastOnsetRef,
+  background,
   onReady,
   onTeardown,
 }: PrerenderRootProps) {
@@ -100,6 +102,8 @@ export function PrerenderRoot({
         cinematicSpeed={controls.cinematicSpeed ?? 1}
         energy={controls.energy ?? 0}
         autoGain={controls.autoGain ?? true}
+        background={background?.mode ?? 'none'}
+        backgroundIntensity={background?.intensity ?? 0.6}
         inflate={controls.inflate ?? 0.5}
         appendages={controls.appendages ?? 4}
         subSpheres={controls.subSpheres ?? 6}

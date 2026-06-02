@@ -8,7 +8,7 @@ import { precomputeFftFrames } from '@/lib/prerender/fftPipeline';
 import { prescanBpm } from '@/lib/prerender/bpmPrescan';
 import { createSyntheticAnalyser, type SyntheticAnalyser } from '@/lib/prerender/syntheticAnalyser';
 import { createPrerenderEncoder, isPrerenderSupported } from '@/lib/prerender/encoder';
-import type { TitleOverlay, VisualizerControls } from '@/lib/storage';
+import type { BackgroundSettings, TitleOverlay, VisualizerControls } from '@/lib/storage';
 
 export type PrerenderStage =
   | 'idle'
@@ -43,6 +43,7 @@ export interface PrerenderStartOptions {
   watermark: boolean;
   titleOverlay?: TitleOverlay | null;
   unlocked?: boolean;
+  background?: BackgroundSettings;
 }
 
 /**
@@ -60,6 +61,7 @@ export interface PrerenderRootMount {
   syntheticAnalyser: SyntheticAnalyser;
   bpmRef: MutableRefObject<number | null>;
   lastOnsetRef: MutableRefObject<number>;
+  background?: BackgroundSettings;
   onReady: (handle: { state: RootState; canvas: HTMLCanvasElement }) => void;
   onTeardown?: () => void;
 }
@@ -186,6 +188,7 @@ export function usePrerender(): PrerenderHookResult {
             syntheticAnalyser,
             bpmRef,
             lastOnsetRef,
+            background: options.background,
             onReady: (h) => {
               const r = readyResolverRef.current;
               readyResolverRef.current = null;
