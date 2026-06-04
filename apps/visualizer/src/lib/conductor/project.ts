@@ -97,6 +97,19 @@ export function createTrack(index: number, preset: PresetRef = DEFAULT_PRESET): 
   };
 }
 
+/**
+ * Lowest MIDI channel (0..15) not already taken by an existing track. Keeps
+ * every track on its own channel so presets, volume, mute and solo never
+ * collide (array index alone collides after a remove + add).
+ */
+export function nextFreeChannel(tracks: Track[]): number {
+  const used = new Set(tracks.map((t) => t.channel));
+  for (let c = 0; c < MAX_TRACKS; c++) {
+    if (!used.has(c)) return c;
+  }
+  return tracks.length % MAX_TRACKS;
+}
+
 export function createClip(startTick: number, lengthTick = PPQ * 4, name = 'Clip'): Clip {
   return { id: uid('clp'), name, startTick, lengthTick, notes: [] };
 }
@@ -168,11 +181,14 @@ export function conductorReducer(project: ConductorProject, action: ConductorAct
 
     case 'addTrack': {
       if (project.tracks.length >= MAX_TRACKS) return project;
-      return { ...project, tracks: [...project.tracks, createTrack(project.tracks.length, action.preset)] };
+      const track = createTrack(project.tracks.length, action.preset);
+      track.channel = nextFreeChannel(project.tracks);
+      return { ...project, tracks: [...project.tracks, track] };
     }
     case 'insertTrack': {
       if (project.tracks.length >= MAX_TRACKS) return project;
-      return { ...project, tracks: [...project.tracks, action.track] };
+      const track = { ...action.track, channel: nextFreeChannel(project.tracks) };
+      return { ...project, tracks: [...project.tracks, track] };
     }
     case 'removeTrack':
       return { ...project, tracks: project.tracks.filter((t) => t.id !== action.trackId) };
