@@ -12,14 +12,12 @@ import { conductorEngine } from '@/lib/conductor/engine';
 import { PPQ, type Clip, type Note, type Track } from '@/lib/conductor/project';
 import {
   NOTE_NAMES,
-  SCALE_IDS,
   SCALE_LABELS,
   isInScale,
   isTonic,
   nearestInScale,
   noteName,
   pitchClass,
-  type ScaleId,
 } from '@/lib/conductor/scales';
 import type { ConductorPlayback } from './useConductorPlayback';
 
@@ -202,34 +200,12 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
 
         <div className="mx-1 h-5 w-px bg-torus-border" />
 
-        <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
-          Key
-          <select
-            value={key.tonic}
-            onChange={(e) => dispatch({ type: 'setKey', key: { tonic: Number(e.target.value) } })}
-            className="rounded-md border border-torus-border bg-torus-surface px-1.5 py-1 text-xs text-torus-fg outline-none"
-          >
-            {NOTE_NAMES.map((n, i) => (
-              <option key={n} value={i}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
-          Scale
-          <select
-            value={key.scale}
-            onChange={(e) => dispatch({ type: 'setKey', key: { scale: e.target.value as ScaleId } })}
-            className="rounded-md border border-torus-border bg-torus-surface px-1.5 py-1 text-xs text-torus-fg outline-none"
-          >
-            {SCALE_IDS.map((id) => (
-              <option key={id} value={id}>
-                {SCALE_LABELS[id]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <span
+          className="rounded-md border border-torus-border bg-torus-surface px-2 py-1 text-xs text-torus-fg-dim"
+          title="Set the key in the transport bar"
+        >
+          {NOTE_NAMES[key.tonic]} {SCALE_LABELS[key.scale]}
+        </span>
         <button
           type="button"
           onClick={() => dispatch({ type: 'setScaleLock', locked: !scaleLock })}
@@ -277,13 +253,16 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
             {rows.map((p) => {
               const black = BLACK_KEYS.has(pitchClass(p));
               const tonic = isTonic(p, key);
+              const disabled = scaleLock && !isInScale(p, key);
               return (
                 <div
                   key={p}
-                  onPointerDown={() => preview(p)}
+                  onPointerDown={() => {
+                    if (!disabled) preview(p);
+                  }}
                   className={`flex items-center justify-end border-b border-black/40 pr-1.5 text-[9px] ${
                     black ? 'bg-[#0c0d22] text-torus-fg-faint' : 'bg-[#15172e] text-torus-fg-dim'
-                  } ${tonic ? 'font-semibold text-torus-mid' : ''}`}
+                  } ${tonic ? 'font-semibold text-torus-mid' : ''} ${disabled ? 'opacity-35' : ''}`}
                   style={{ height: ROW_H }}
                 >
                   {pitchClass(p) === 0 || tonic ? noteName(p) : ''}
@@ -298,16 +277,26 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
             {rows.map((p) => {
               const inScale = isInScale(p, key);
               const tonic = isTonic(p, key);
+              const disabled = scaleLock && !inScale;
               const bg = tonic
                 ? 'rgba(34,211,206,0.14)'
                 : inScale
                   ? 'rgba(255,255,255,0.035)'
-                  : 'rgba(0,0,0,0.18)';
+                  : disabled
+                    ? 'rgba(0,0,0,0.5)'
+                    : 'rgba(0,0,0,0.18)';
               return (
                 <div
                   key={p}
                   className="pointer-events-none absolute left-0 right-0 border-b border-white/5"
-                  style={{ top: pitchToY(p), height: ROW_H, background: bg }}
+                  style={{
+                    top: pitchToY(p),
+                    height: ROW_H,
+                    backgroundColor: bg,
+                    backgroundImage: disabled
+                      ? 'repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 4px, transparent 4px 8px)'
+                      : undefined,
+                  }}
                 />
               );
             })}
