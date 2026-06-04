@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --port 3001",
+    "dev": "node scripts/copy-conductor-assets.mjs && next dev --port 3001",
     "prefetch:demos": "node scripts/fetch-demos.mjs",
-    "build": "pnpm prefetch:demos && next build",
+    "prefetch:conductor": "node scripts/copy-conductor-assets.mjs",
+    "build": "pnpm prefetch:demos && pnpm prefetch:conductor && next build",
     "start": "next start --port 3001",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -24,6 +25,8 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "soundcloud-downloader": "github:zackradisic/node-soundcloud-downloader",
+    "spessasynth_core": "^4.3.7",
+    "spessasynth_lib": "^4.3.6",
     "zod": "^3.24.1"
   },
   "devDependencies": {
