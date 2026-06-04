@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConductorScheduler, type LoopRegion } from '@/lib/conductor/scheduler';
+import { ConductorScheduler, applyMix, type LoopRegion } from '@/lib/conductor/scheduler';
 import { projectLengthTicks, type ConductorProject } from '@/lib/conductor/project';
 import { TICKS_PER_BAR } from './layout';
 
@@ -91,6 +91,15 @@ export function useConductorPlayback(project: ConductorProject): ConductorPlayba
   const setLoopRegion = useCallback((startTick: number, endTick: number) => {
     setLoop((l) => ({ ...l, startTick: Math.max(0, startTick), endTick: Math.max(startTick + 1, endTick) }));
   }, []);
+
+  // Keep playback + the live mix in sync with project edits. While playing this
+  // reschedules (new tracks/notes become audible immediately); when stopped it
+  // still applies the solo/mute mix so previews respect it.
+  useEffect(() => {
+    const sched = schedRef.current;
+    if (sched?.playing) sched.resync(project);
+    else applyMix(project);
+  }, [project]);
 
   useEffect(() => () => stop(), [stop]);
 

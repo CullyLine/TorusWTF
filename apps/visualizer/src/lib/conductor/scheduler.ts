@@ -33,11 +33,12 @@ export interface LoopRegion {
   endTick: number;
 }
 
+// Every track's notes are scheduled regardless of mute/solo; audibility is
+// applied as a live channel volume (see applyMix) so toggles take effect
+// during playback instead of only on the next play.
 function buildEvents(project: ConductorProject): SchedEvent[] {
-  const audible = audibleTrackIds(project);
   const events: SchedEvent[] = [];
   for (const track of project.tracks) {
-    if (!audible.has(track.id)) continue;
     for (const clip of track.clips) {
       for (const note of clip.notes) {
         const tick = clip.startTick + note.startTick;
@@ -53,6 +54,19 @@ function buildEvents(project: ConductorProject): SchedEvent[] {
   }
   events.sort((a, b) => a.tick - b.tick);
   return events;
+}
+
+/**
+ * Applies per-track instrument + the solo/mute-aware mix to the synth as live
+ * channel volumes. Safe to call any time (including while playing or stopped)
+ * so the UI can toggle mute/solo and hear it immediately.
+ */
+export function applyMix(project: ConductorProject): void {
+  const audible = audibleTrackIds(project);
+  for (const track of project.tracks) {
+    conductorEngine.setChannelPreset(track.channel, track.preset);
+    conductorEngine.setChannelVolume(track.channel, audible.has(track.id) ? track.volume : 0);
+  }
 }
 
 export class ConductorScheduler {
@@ -86,11 +100,8 @@ export class ConductorScheduler {
     this.events = buildEvents(project);
     this.loop = loop.enabled && loop.endTick > loop.startTick ? loop : { ...loop, enabled: false };
 
-    // Apply per-track instrument + volume so playback (and preview) sound right.
-    for (const track of project.tracks) {
-      conductorEngine.setChannelPreset(track.channel, track.preset);
-      conductorEngine.setChannelVolume(track.channel, track.mute ? 0 : track.volume);
-    }
+    // Apply per-track instrument + the solo/mute-aware mix.
+    applyMix(project);
 
     let start = fromTick;
     if (this.loop.enabled && (start < this.loop.startTick || start >= this.loop.endTick)) {
@@ -115,6 +126,32 @@ export class ConductorScheduler {
     }
     if (this.playing) conductorEngine.stopAll();
     this.playing = false;
+  }
+
+  /**
+   * Re-reads the project mid-playback so newly added/removed tracks, edited
+   * notes and instrument changes take effect without restarting. Already-queued
+   * notes (within the lookahead horizon) are left intact; scheduling resumes at
+   * the current frontier so nothing double-fires.
+   */
+  resync(project: ConductorProject): void {
+    if (!this.playing) {
+      this.project = project;
+      this.events = buildEvents(project);
+      return;
+    }
+    this.project = project;
+    this.events = buildEvents(project);
+    applyMix(project);
+    this.idx = this.firstEventAtOrAfter(this.schedFrontierTick());
+  }
+
+  /** Song tick already covered by the scheduling horizon under the current origin. */
+  private schedFrontierTick(): number {
+    const ctx = conductorEngine.getContext();
+    if (!ctx) return this.originTick;
+    const ahead = ctx.currentTime + LOOKAHEAD_S - this.originCtx;
+    return this.originTick + secondsToTicks(Math.max(0, ahead), this.bpm, this.ppq);
   }
 
   /** Audible song tick for the UI playhead. Accounts for looping. */

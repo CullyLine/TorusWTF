@@ -8,7 +8,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { useConductor } from '@/lib/conductor/store';
-import { conductorEngine } from '@/lib/conductor/engine';
 import {
   MAX_TRACKS,
   PPQ,
@@ -321,11 +320,7 @@ export function ArrangementView({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    const willMute = !track.mute;
-                    dispatch({ type: 'toggleMute', trackId: track.id });
-                    conductorEngine.setChannelVolume(track.channel, willMute ? 0 : track.volume);
-                  }}
+                  onClick={() => dispatch({ type: 'toggleMute', trackId: track.id })}
                   aria-pressed={track.mute}
                   className={`grid h-5 w-5 place-items-center rounded text-[10px] ${
                     track.mute ? 'bg-torus-bass/30 text-torus-bass' : 'bg-torus-surface text-torus-fg-faint hover:text-torus-fg'
