@@ -123,6 +123,7 @@ export type ConductorAction =
   | { type: 'setKey'; key: Partial<KeyLock> }
   | { type: 'setScaleLock'; locked: boolean }
   | { type: 'addTrack'; preset?: PresetRef }
+  | { type: 'insertTrack'; track: Track }
   | { type: 'removeTrack'; trackId: string }
   | { type: 'renameTrack'; trackId: string; name: string }
   | { type: 'setTrackPreset'; trackId: string; preset: PresetRef }
@@ -168,6 +169,10 @@ export function conductorReducer(project: ConductorProject, action: ConductorAct
     case 'addTrack': {
       if (project.tracks.length >= MAX_TRACKS) return project;
       return { ...project, tracks: [...project.tracks, createTrack(project.tracks.length, action.preset)] };
+    }
+    case 'insertTrack': {
+      if (project.tracks.length >= MAX_TRACKS) return project;
+      return { ...project, tracks: [...project.tracks, action.track] };
     }
     case 'removeTrack':
       return { ...project, tracks: project.tracks.filter((t) => t.id !== action.trackId) };

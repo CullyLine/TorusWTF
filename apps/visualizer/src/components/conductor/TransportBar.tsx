@@ -2,6 +2,7 @@
 
 import { useConductor } from '@/lib/conductor/store';
 import { PPQ } from '@/lib/conductor/project';
+import { NOTE_NAMES, SCALE_IDS, SCALE_LABELS, type ScaleId } from '@/lib/conductor/scales';
 import { TICKS_PER_BAR } from './layout';
 import type { ConductorPlayback } from './useConductorPlayback';
 
@@ -86,6 +87,39 @@ export function TransportBar({ playback, onImportMidi, onVisualize }: TransportB
           onChange={(e) => dispatch({ type: 'setBpm', bpm: Number(e.target.value) })}
           className="w-16 rounded-md border border-torus-border bg-torus-surface px-2 py-1 text-sm tabular-nums text-torus-fg outline-none focus:border-torus-border-strong"
         />
+      </label>
+
+      <div className="mx-1 h-6 w-px bg-torus-border" />
+
+      <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
+        Key
+        <select
+          value={project.key.tonic}
+          onChange={(e) => dispatch({ type: 'setKey', key: { tonic: Number(e.target.value) } })}
+          aria-label="Project key"
+          className="rounded-md border border-torus-border bg-torus-surface px-1.5 py-1 text-xs text-torus-fg outline-none focus:border-torus-border-strong"
+        >
+          {NOTE_NAMES.map((n, i) => (
+            <option key={n} value={i}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
+        Scale
+        <select
+          value={project.key.scale}
+          onChange={(e) => dispatch({ type: 'setKey', key: { scale: e.target.value as ScaleId } })}
+          aria-label="Project scale"
+          className="rounded-md border border-torus-border bg-torus-surface px-1.5 py-1 text-xs text-torus-fg outline-none focus:border-torus-border-strong"
+        >
+          {SCALE_IDS.map((id) => (
+            <option key={id} value={id}>
+              {SCALE_LABELS[id]}
+            </option>
+          ))}
+        </select>
       </label>
 
       <div className="ml-auto flex items-center gap-2">
