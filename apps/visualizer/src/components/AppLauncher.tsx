@@ -28,8 +28,15 @@ const APPS: AppEntry[] = [
 
 export function AppLauncher() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
+
+  // Render nothing during SSR/first paint so the overlay chrome can never cause
+  // a hydration mismatch with the static visualizer page it rides on top of.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -55,6 +62,8 @@ export function AppLauncher() {
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href);
+
+  if (!mounted) return null;
 
   return (
     <>

@@ -306,7 +306,7 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
               return (
                 <div
                   key={p}
-                  className="absolute left-0 right-0 border-b border-white/5"
+                  className="pointer-events-none absolute left-0 right-0 border-b border-white/5"
                   style={{ top: pitchToY(p), height: ROW_H, background: bg }}
                 />
               );
@@ -316,14 +316,14 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
             {Array.from({ length: barCount + 1 }, (_, i) => (
               <div
                 key={i}
-                className="absolute top-0 bottom-0 w-px bg-white/15"
+                className="pointer-events-none absolute top-0 bottom-0 w-px bg-white/15"
                 style={{ left: prTickToPx(i * PPQ * 4) }}
               />
             ))}
             {Array.from({ length: barCount * 4 }, (_, i) => (
               <div
                 key={`b${i}`}
-                className="absolute top-0 bottom-0 w-px bg-white/5"
+                className="pointer-events-none absolute top-0 bottom-0 w-px bg-white/5"
                 style={{ left: prTickToPx(i * PPQ) }}
               />
             ))}
