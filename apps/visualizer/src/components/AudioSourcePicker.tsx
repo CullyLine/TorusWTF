@@ -9,19 +9,16 @@ interface AudioSourcePickerProps {
   hasSource: boolean;
   error: string | null;
   desktopSupported: boolean;
-  demoTracksAvailable: boolean;
-  wtfActiveTitle: string | null;
   onSelectKind: (kind: SourceKind) => void;
   onDesktopSelect: () => void;
   onShowDesktopGuide: () => void;
   onFile: (file: File) => void;
   onTryDemo: () => void;
-  onPlayDemoTrack: () => void;
 }
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac';
 
-type ButtonKey = SourceKind | 'wtf';
+type ButtonKey = SourceKind;
 
 interface PickerButton {
   key: ButtonKey;
@@ -34,14 +31,11 @@ export function AudioSourcePicker({
   hasSource,
   error,
   desktopSupported,
-  demoTracksAvailable,
-  wtfActiveTitle,
   onSelectKind,
   onDesktopSelect,
   onShowDesktopGuide,
   onFile,
   onTryDemo,
-  onPlayDemoTrack,
 }: AudioSourcePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -56,17 +50,13 @@ export function AudioSourcePicker({
 
   const handleKindClick = useCallback(
     (key: ButtonKey) => {
-      if (key === 'wtf') {
-        onPlayDemoTrack();
-        return;
-      }
       if (key === 'tab') {
         onDesktopSelect();
         return;
       }
       onSelectKind(key);
     },
-    [onDesktopSelect, onPlayDemoTrack, onSelectKind],
+    [onDesktopSelect, onSelectKind],
   );
 
   const buttons: PickerButton[] = [
@@ -74,26 +64,17 @@ export function AudioSourcePicker({
     { key: 'mic', label: 'Mic' },
     { key: 'tab', label: 'Desktop' },
   ];
-  if (demoTracksAvailable) buttons.push({ key: 'wtf', label: 'WTF' });
-
-  const wtfActive = Boolean(wtfActiveTitle);
 
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface/80 p-4 backdrop-blur-md">
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Audio source</h2>
       <div className="mb-3 flex flex-wrap gap-2">
         {buttons.map(({ key, label }) => {
-          const isActive =
-            key === 'wtf' ? wtfActive : activeKind === key && !(key === 'file' && wtfActive);
+          const isActive = activeKind === key;
           const disabled = key === 'tab' && !desktopSupported;
-          const accentForWtf =
-            key === 'wtf'
-              ? isActive
-                ? 'bg-torus-bass/20 text-torus-bass border border-torus-bass/40'
-                : 'border border-torus-bass/30 text-torus-bass hover:border-torus-bass/60'
-              : isActive
-                ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
-                : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong';
+          const accent = isActive
+            ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
+            : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong';
 
           return (
             <button
@@ -101,16 +82,10 @@ export function AudioSourcePicker({
               type="button"
               disabled={disabled}
               onClick={() => handleKindClick(key)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${accentForWtf} ${
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${accent} ${
                 disabled ? 'opacity-40 cursor-not-allowed' : ''
               }`}
-              title={
-                key === 'tab' && !desktopSupported
-                  ? 'Requires Chrome or Edge'
-                  : key === 'wtf'
-                    ? 'Play a random demo track'
-                    : undefined
-              }
+              title={key === 'tab' && !desktopSupported ? 'Requires Chrome or Edge' : undefined}
             >
               {label}
             </button>
@@ -118,19 +93,7 @@ export function AudioSourcePicker({
         })}
       </div>
 
-      {wtfActive ? (
-        <div className="rounded-lg border border-torus-bass/30 bg-torus-bass/5 px-3 py-3 text-xs">
-          <p className="text-torus-bass">Now playing</p>
-          <p className="mt-1 truncate text-torus-fg">{wtfActiveTitle}</p>
-          <button
-            type="button"
-            onClick={onPlayDemoTrack}
-            className="mt-2 text-[10px] text-torus-bass hover:underline"
-          >
-            Roll another →
-          </button>
-        </div>
-      ) : activeKind === 'file' || activeKind === null ? (
+      {activeKind === 'file' || activeKind === null ? (
         <div
           role="button"
           tabIndex={0}

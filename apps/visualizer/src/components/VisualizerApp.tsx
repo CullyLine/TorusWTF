@@ -16,7 +16,6 @@ import { AudioSourcePicker } from '@/components/AudioSourcePicker';
 import { DesktopAudioGuide } from '@/components/DesktopAudioGuide';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { HwAccelBanner } from '@/components/HwAccelBanner';
-import { useDemoTracks } from '@/components/DemoTracks';
 import { EmptyStateHero } from '@/components/EmptyStateHero';
 import { PresetPicker } from '@/components/PresetPicker';
 import { Scrubber } from '@/components/Scrubber';
@@ -92,7 +91,6 @@ export function VisualizerApp() {
   const exportHook = useExport(unlock.unlocked);
   const prerender = usePrerender();
   const { toast, prompt } = useToast();
-  const demoTracks = useDemoTracks();
 
   const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'liquid_blob');
   const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
@@ -128,7 +126,6 @@ export function VisualizerApp() {
   );
   const [desktopGuideOpen, setDesktopGuideOpen] = useState(false);
   const [desktopSupported, setDesktopSupported] = useState(false);
-  const [wtfTrackTitle, setWtfTrackTitle] = useState<string | null>(null);
   const [creature, setCreature] = useState<Creature | null>(null);
 
   useEffect(() => {
@@ -179,7 +176,6 @@ export function VisualizerApp() {
 
   const handleSelectKind = useCallback(
     async (kind: SourceKind) => {
-      setWtfTrackTitle(null);
       setSourceKind(kind);
       if (kind === 'mic') await audio.startMic();
       if (kind === 'tab') await audio.startTab();
@@ -235,7 +231,6 @@ export function VisualizerApp() {
 
   const handleFile = useCallback(
     (file: File) => {
-      setWtfTrackTitle(null);
       setSourceKind('file');
       audio.loadFile(file);
       setHeroCollapsed(true);
@@ -267,18 +262,6 @@ export function VisualizerApp() {
       toast({ message: 'Could not load demo audio', variant: 'error' });
     }
   }, [handleFile, toast]);
-
-  const handlePlayDemoTrack = useCallback(() => {
-    const track = demoTracks.pickRandom();
-    if (!track) return;
-    setSourceKind('file');
-    setHeroCollapsed(true);
-    setWtfTrackTitle(track.title);
-    setTitleOverlay((o) =>
-      o.title.trim() ? o : { ...o, title: track.title, enabled: true },
-    );
-    audio.playUrl(track.file, { title: track.title, sourceLink: track.permalink });
-  }, [audio, demoTracks, setSourceKind, setTitleOverlay]);
 
   const handleRandomPreset = useCallback(() => {
     setPreset(pickRandomVisualizerPreset());
@@ -401,7 +384,7 @@ export function VisualizerApp() {
       audio.pause();
 
       // Fetch + decode the audio. The objectUrl works for both blob: URLs
-      // (uploaded files) and remote URLs (WTF demos).
+      // (uploaded files) and remote URLs.
       const res = await fetch(fileSource.objectUrl);
       if (!res.ok) throw new Error(`Failed to fetch audio (${res.status})`);
       const arrayBuffer = await res.arrayBuffer();
@@ -542,14 +525,11 @@ export function VisualizerApp() {
         hasSource={Boolean(audio.source)}
         error={audio.error}
         desktopSupported={desktopSupported}
-        demoTracksAvailable={demoTracks.available}
-        wtfActiveTitle={wtfTrackTitle}
         onSelectKind={handleSelectKind}
         onDesktopSelect={handleDesktopSelect}
         onShowDesktopGuide={() => setDesktopGuideOpen(true)}
         onFile={handleFile}
         onTryDemo={() => void handleTryDemo()}
-        onPlayDemoTrack={handlePlayDemoTrack}
       />
       {audio.source?.kind === 'file' ? (
         <AudioControls
@@ -719,9 +699,8 @@ export function VisualizerApp() {
               <Logo size={48} wordmark href={null} color="var(--color-torus-mid)" />
               <h1 className="mt-4 text-2xl font-semibold tracking-tight">torus visualizer</h1>
               <p className="mt-2 max-w-xl text-sm text-torus-fg-dim">
-                Turn any audio into beautiful 3D visuals. Drop a track, use your mic, capture
-                desktop audio, or hit WTF for a random demo — then export for Reels, Shorts, and
-                portfolios.
+                Turn any audio into beautiful 3D visuals. Drop a track, use your mic, or capture
+                desktop audio — then export for Reels, Shorts, and portfolios.
               </p>
               <div className="mt-4 flex flex-wrap gap-3 text-xs">
                 <span className="rounded-full border border-torus-border px-3 py-1">Free: 720p / 30 FPS</span>

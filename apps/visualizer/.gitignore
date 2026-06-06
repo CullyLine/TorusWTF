@@ -1,6 +1,2 @@
-# Generated demo audio from SoundCloud prefetch
-public/demos/*.mp3
-public/demos/manifest.json
-
 # spessasynth worklet — copied from node_modules at build (prefetch:conductor)
 public/conductor/spessasynth_processor.min.js

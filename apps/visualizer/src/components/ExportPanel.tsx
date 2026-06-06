@@ -23,7 +23,7 @@ interface ExportPanelProps {
   rendering: boolean;
   elapsedSec: number;
   hasSource: boolean;
-  /** True if the current source is a file/WTF (pre-renderable). */
+  /** True if the current source is an uploaded file (pre-renderable). */
   hasFileSource: boolean;
   onStart: () => void;
   onStop: () => void;
@@ -188,7 +188,7 @@ export function ExportPanel({
               !prerenderSupported
                 ? 'Pre-render needs Chrome/Edge or Firefox 130+ (WebCodecs). Use Record export instead.'
                 : !hasFileSource
-                  ? 'Pre-render works on uploaded files and WTF demos only.'
+                  ? 'Pre-render works on uploaded files only.'
                   : 'Render the full song to MP4 without playing it through.'
             }
           >

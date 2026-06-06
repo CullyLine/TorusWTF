@@ -6,12 +6,11 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 ## What's in the box
 
-### Audio sources (4)
+### Audio sources (3)
 
 - **File** — drag-and-drop any local MP3, WAV, FLAC, OGG, Opus, M4A, or AAC
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
-- **WTF** — picks a random track from [`@animegirlfarts69`](https://soundcloud.com/animegirlfarts69) on SoundCloud. Tracks are downloaded at build time, so the WTF button always has full reactivity (no cross-origin iframe limits).
 
 ### Presets (11)
 
