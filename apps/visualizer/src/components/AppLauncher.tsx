@@ -24,6 +24,7 @@ interface AppEntry {
 const APPS: AppEntry[] = [
   { href: '/' as Route, name: 'Visualizer', glyph: '\u25ce', hint: 'Turn any audio into 3D visuals' },
   { href: '/conductor' as Route, name: 'Conductor', glyph: '\u25a6', hint: 'SoundFont DAW \u2014 compose music' },
+  { href: '/transcriber' as Route, name: 'Transcriber', glyph: '\u266b', hint: 'Audio \u2192 MIDI, in your browser' },
 ];
 
 export function AppLauncher() {

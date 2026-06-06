@@ -1,2 +1,5 @@
 # spessasynth worklet — copied from node_modules at build (prefetch:conductor)
 public/conductor/spessasynth_processor.min.js
+
+# Basic Pitch model — copied from node_modules at build (prefetch:transcriber)
+public/transcriber/
