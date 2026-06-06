@@ -1,12 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import type { OverlayPosition, TitleOverlay } from '@/lib/storage';
 
 interface TitleOverlayPanelProps {
   overlay: TitleOverlay;
   onChange: (patch: Partial<TitleOverlay>) => void;
-  unlocked: boolean;
 }
 
 const POSITIONS: { id: OverlayPosition; label: string }[] = [
@@ -16,7 +14,7 @@ const POSITIONS: { id: OverlayPosition; label: string }[] = [
   { id: 'top-right', label: 'Top right' },
 ];
 
-export function TitleOverlayPanel({ overlay, onChange, unlocked }: TitleOverlayPanelProps) {
+export function TitleOverlayPanel({ overlay, onChange }: TitleOverlayPanelProps) {
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -55,8 +53,7 @@ export function TitleOverlayPanel({ overlay, onChange, unlocked }: TitleOverlayP
         </label>
       </div>
 
-      {unlocked ? (
-        <div className="mt-3 space-y-3 border-t border-torus-border pt-3">
+      <div className="mt-3 space-y-3 border-t border-torus-border pt-3">
           <label className="block text-xs text-torus-fg-dim">
             Position
             <select
@@ -94,16 +91,7 @@ export function TitleOverlayPanel({ overlay, onChange, unlocked }: TitleOverlayP
               />
             </label>
           </div>
-        </div>
-      ) : (
-        <p className="mt-3 text-[10px] text-torus-fg-faint">
-          Free: bottom-left brand card.{' '}
-          <Link href="/unlock" className="text-torus-mid hover:underline">
-            Unlock
-          </Link>{' '}
-          to move it and recolor it.
-        </p>
-      )}
+      </div>
 
       <p className="mt-3 text-[10px] text-torus-fg-faint">
         Burned into exports only — your live preview stays clean.

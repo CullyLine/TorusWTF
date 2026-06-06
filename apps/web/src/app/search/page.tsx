@@ -68,12 +68,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
                         aria-hidden
                       />
                       <div>
-                        <span className="font-medium">
-                          @{u.handle}
-                          {u.tier === 'supporter' ? (
-                            <span className="ml-1 text-torus-mid">★</span>
-                          ) : null}
-                        </span>
+                        <span className="font-medium">@{u.handle}</span>
                         {u.bio ? (
                           <p className="mt-0.5 line-clamp-1 text-xs text-torus-fg-dim">{u.bio}</p>
                         ) : null}

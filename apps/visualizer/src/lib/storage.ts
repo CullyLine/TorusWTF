@@ -1,8 +1,6 @@
 import type { BackgroundMode, CameraMode, VisualizerId } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 
-export const LICENSE_STORAGE_KEY = 'torus-visualizer-license';
-export const LICENSE_VERIFIED_AT_KEY = 'torus-visualizer-license-verified-at';
 export const SAVED_PRESETS_KEY = 'torus-visualizer-saved-presets';
 export const PRESET_KEY = 'torus-visualizer-preset';
 export const PALETTE_KEY = 'torus-visualizer-palette';

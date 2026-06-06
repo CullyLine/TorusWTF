@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { hasPerk } from '@/lib/tier-perks';
 
 interface SettingsUser {
   id: string;
@@ -10,7 +9,6 @@ interface SettingsUser {
   email: string | null;
   avatarUrl: string | null;
   bio: string | null;
-  tier: 'free' | 'supporter';
   customSubdomain: string | null;
 }
 
@@ -34,8 +32,6 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
   const [confirmHandle, setConfirmHandle] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const supporter = hasPerk(initialUser.tier, 'custom_subdomain');
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -69,7 +65,6 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
 
   async function saveSubdomain(e: React.FormEvent) {
     e.preventDefault();
-    if (!supporter) return;
     setSubBusy(true);
     setSubError(null);
     try {
@@ -171,22 +166,19 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
       <section>
         <h2 className="text-lg font-semibold">Custom subdomain</h2>
         <p className="mt-2 text-sm text-torus-fg-dim">
-          {supporter
-            ? 'Point a subdomain at your profile (Supporter perk).'
-            : 'Custom subdomains are a Supporter perk — see /support.'}
+          Point a subdomain at your profile — free for everyone.
         </p>
         <form onSubmit={(e) => void saveSubdomain(e)} className="mt-4 flex gap-2">
           <input
             type="text"
             value={subdomain}
             onChange={(e) => setSubdomain(e.target.value)}
-            disabled={!supporter}
             placeholder="yourname"
             className="flex-1 rounded-lg border border-torus-border-strong bg-torus-surface px-3 py-2 font-mono text-sm disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={!supporter || subBusy}
+            disabled={subBusy}
             className="rounded-full border border-torus-border-strong px-4 py-2 text-sm disabled:opacity-50"
           >
             {subBusy ? '…' : 'Save'}

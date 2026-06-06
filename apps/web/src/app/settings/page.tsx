@@ -24,7 +24,6 @@ export default async function SettingsPage() {
           email: user.email,
           avatarUrl: user.avatarUrl,
           bio: user.bio,
-          tier: user.tier,
           customSubdomain: user.customSubdomain,
         }}
       />

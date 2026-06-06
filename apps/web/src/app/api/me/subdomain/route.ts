@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { and, eq, not, sql } from 'drizzle-orm';
 import { db, users } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import { hasPerk } from '@/lib/tier-perks';
 
 const Body = z.object({
   subdomain: z
@@ -19,9 +18,6 @@ import { isReservedHandle } from '@/lib/reserved-handles';
 export async function POST(req: Request) {
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
-  if (!hasPerk(user.tier, 'custom_subdomain')) {
-    return NextResponse.json({ error: 'Custom subdomains are a Supporter perk.' }, { status: 402 });
-  }
 
   const body = Body.safeParse(await req.json().catch(() => ({})));
   if (!body.success) {

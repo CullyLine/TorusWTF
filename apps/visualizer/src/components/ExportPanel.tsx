@@ -1,10 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import {
   ASPECT_OPTIONS,
-  isFpsLocked,
-  isResolutionLocked,
   type AspectRatio,
   type ExportFps,
   type ExportResolution,
@@ -12,7 +9,6 @@ import {
 import { QualityWarning } from './QualityWarning';
 
 interface ExportPanelProps {
-  unlocked: boolean;
   resolution: ExportResolution;
   aspect: AspectRatio;
   fps: ExportFps;
@@ -41,7 +37,6 @@ const RESOLUTIONS: ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
 const FPS_OPTIONS: ExportFps[] = [30, 60, 120, 240];
 
 export function ExportPanel({
-  unlocked,
   resolution,
   aspect,
   fps,
@@ -73,17 +68,12 @@ export function ExportPanel({
           Resolution
           <select
             value={resolution}
-            onChange={(e) => {
-              const next = e.target.value as ExportResolution;
-              if (isResolutionLocked(next, unlocked)) return;
-              onResolutionChange(next);
-            }}
+            onChange={(e) => onResolutionChange(e.target.value as ExportResolution)}
             className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-2 py-1.5 text-sm"
           >
             {RESOLUTIONS.map((res) => (
-              <option key={res} value={res} disabled={isResolutionLocked(res, unlocked)}>
+              <option key={res} value={res}>
                 {res}
-                {isResolutionLocked(res, unlocked) ? ' (unlock)' : ''}
               </option>
             ))}
           </select>
@@ -93,17 +83,12 @@ export function ExportPanel({
           FPS
           <select
             value={fps}
-            onChange={(e) => {
-              const next = Number(e.target.value) as ExportFps;
-              if (isFpsLocked(next, unlocked)) return;
-              onFpsChange(next);
-            }}
+            onChange={(e) => onFpsChange(Number(e.target.value) as ExportFps)}
             className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-2 py-1.5 text-sm"
           >
             {FPS_OPTIONS.map((f) => (
-              <option key={f} value={f} disabled={isFpsLocked(f, unlocked)}>
+              <option key={f} value={f}>
                 {f}
-                {isFpsLocked(f, unlocked) ? ' (unlock)' : ''}
               </option>
             ))}
           </select>
@@ -134,19 +119,9 @@ export function ExportPanel({
       <QualityWarning resolution={resolution} fps={fps} />
 
       <p className="mb-3 text-[10px] text-torus-fg-faint">
-        Exports as WebM (VP9 + Opus). MP4 when your browser supports it. Free exports include a
-        small corner watermark.
+        Exports as WebM (VP9 + Opus). MP4 when your browser supports it. Up to 4K / 240 FPS,
+        watermark-free — all free.
       </p>
-
-      {!unlocked ? (
-        <p className="mb-3 text-xs text-torus-fg-dim">
-          Free: 720p / 30 FPS with watermark.{' '}
-          <Link href="/unlock" className="text-torus-mid hover:underline">
-            Unlock $10
-          </Link>{' '}
-          for up to 4K / 240 FPS, no watermark.
-        </p>
-      ) : null}
 
       <div className="mb-3">
         {prerenderActive ? (

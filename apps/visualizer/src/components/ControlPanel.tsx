@@ -22,7 +22,6 @@ interface ControlPanelProps {
   onPaletteChange: (palette: WaveformPalette) => void;
   showBpm: boolean;
   onShowBpmChange: (show: boolean) => void;
-  unlocked: boolean;
   onLoadSaved: (preset: SavedPreset) => void;
   onSavePreset: () => void;
   presetsVersion: number;
@@ -65,7 +64,6 @@ export function ControlPanel({
   onPaletteChange,
   showBpm,
   onShowBpmChange,
-  unlocked,
   onLoadSaved,
   onSavePreset,
   presetsVersion,
@@ -112,7 +110,7 @@ export function ControlPanel({
     (s) => !blobOnly.includes(s.key) || activePreset === 'liquid_blob',
   );
 
-  const saved = unlocked ? loadSavedPresets() : [];
+  const saved = loadSavedPresets();
   void presetsVersion;
 
   return (
@@ -335,27 +333,22 @@ export function ControlPanel({
           />
         </div>
 
-        {unlocked ? (
-          <div className="grid grid-cols-3 gap-2">
-            {(['bass', 'mid', 'high'] as const).map((band) => (
-              <label key={band} className="text-[10px] text-torus-fg-faint">
-                {band}
-                <input
-                  type="color"
-                  value={palette[band]}
-                  onChange={(e) => onPaletteChange({ ...palette, [band]: e.target.value })}
-                  className="mt-1 h-8 w-full cursor-pointer rounded border border-torus-border bg-transparent"
-                />
-              </label>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[10px] text-torus-fg-faint">Custom colors unlock with the full version.</p>
-        )}
+        <div className="grid grid-cols-3 gap-2">
+          {(['bass', 'mid', 'high'] as const).map((band) => (
+            <label key={band} className="text-[10px] text-torus-fg-faint">
+              {band}
+              <input
+                type="color"
+                value={palette[band]}
+                onChange={(e) => onPaletteChange({ ...palette, [band]: e.target.value })}
+                className="mt-1 h-8 w-full cursor-pointer rounded border border-torus-border bg-transparent"
+              />
+            </label>
+          ))}
+        </div>
       </div>
 
-      {unlocked ? (
-        <div className="mt-4 border-t border-torus-border pt-4">
+      <div className="mt-4 border-t border-torus-border pt-4">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-xs font-medium text-torus-fg-dim">Saved presets</h3>
             <button
@@ -436,8 +429,7 @@ export function ControlPanel({
               ))}
             </div>
           )}
-        </div>
-      ) : null}
+      </div>
     </section>
   );
 }

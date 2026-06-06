@@ -101,14 +101,7 @@ export default async function ProfilePage({ params }: PageProps) {
           aria-hidden
         />
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            @{profile.user.handle}
-            {profile.user.tier === 'supporter' ? (
-              <span className="ml-2 align-middle text-torus-mid" title="Supporter">
-                ★
-              </span>
-            ) : null}
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">@{profile.user.handle}</h1>
           {profile.user.bio ? (
             <p className="mt-2 max-w-prose text-sm text-torus-fg-dim">{profile.user.bio}</p>
           ) : null}

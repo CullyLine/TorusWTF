@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import { Logo } from '@torus/ui';
 import {
   pickRandomVisualizerPreset,
@@ -25,7 +24,6 @@ import { ControlPanel } from '@/components/ControlPanel';
 import { ExportPanel } from '@/components/ExportPanel';
 import { TitleOverlayPanel } from '@/components/TitleOverlayPanel';
 import { PrerenderRoot } from '@/components/PrerenderRoot';
-import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import { useExport } from '@/hooks/useExport';
 import { usePrerender } from '@/hooks/usePrerender';
@@ -33,7 +31,6 @@ import { useBPM } from '@/hooks/useBPM';
 import { useIdleHide } from '@/hooks/useIdleHide';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useToast } from '@/hooks/useToast';
-import { useUnlock } from '@/hooks/useUnlock';
 import { DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
 import { readAudioTags } from '@/lib/audioMetadata';
 import { extractPaletteFromBlob } from '@/lib/extractPalette';
@@ -43,8 +40,6 @@ import {
   FREE_MAX_RES,
   bitrateFor,
   dimensionsFor,
-  isFpsLocked,
-  isResolutionLocked,
   type AspectRatio,
   type ExportFps,
   type ExportResolution,
@@ -87,8 +82,7 @@ function formatTime(sec: number): string {
 
 export function VisualizerApp() {
   const audio = useAudioSource();
-  const unlock = useUnlock();
-  const exportHook = useExport(unlock.unlocked);
+  const exportHook = useExport(true);
   const prerender = usePrerender();
   const { toast, prompt } = useToast();
 
@@ -167,12 +161,6 @@ export function VisualizerApp() {
       bloomIntensity: Math.min(c.bloomIntensity, 0.7),
     }));
   }, [reducedMotion, setControls]);
-
-  useEffect(() => {
-    if (unlock.checking || unlock.unlocked) return;
-    if (isResolutionLocked(resolution, false)) setResolution(FREE_MAX_RES);
-    if (isFpsLocked(fps, false)) setFps(FREE_MAX_FPS);
-  }, [unlock.checking, unlock.unlocked, resolution, fps, setResolution, setFps]);
 
   const handleSelectKind = useCallback(
     async (kind: SourceKind) => {
@@ -295,7 +283,6 @@ export function VisualizerApp() {
   }, []);
 
   const handleSavePreset = useCallback(async () => {
-    if (!unlock.unlocked) return;
     const name = await prompt({ message: 'Preset name', placeholder: 'My preset' });
     const trimmed = name?.trim();
     if (!trimmed) return;
@@ -339,7 +326,7 @@ export function VisualizerApp() {
         toast({ message: 'Could not save preset', variant: 'error' });
       }
     }
-  }, [unlock.unlocked, preset, palette, controls, prompt, toast]);
+  }, [preset, palette, controls, prompt, toast]);
 
   const startExport = useCallback(async () => {
     const canvas = glCanvasRef.current;
@@ -404,9 +391,9 @@ export function VisualizerApp() {
         height: dims.height,
         fps,
         videoBitrate: bitrateFor(resolution),
-        watermark: !unlock.unlocked,
+        watermark: false,
         titleOverlay,
-        unlocked: unlock.unlocked,
+        unlocked: true,
         background,
       });
       if (prerender.progress.stage === 'done') {
@@ -430,7 +417,6 @@ export function VisualizerApp() {
     resolution,
     titleOverlay,
     toast,
-    unlock.unlocked,
     background,
   ]);
 
@@ -555,7 +541,6 @@ export function VisualizerApp() {
         onPaletteChange={setPalette}
         showBpm={showBpm}
         onShowBpmChange={setShowBpm}
-        unlocked={unlock.unlocked}
         onLoadSaved={handleLoadSaved}
         onSavePreset={handleSavePreset}
         presetsVersion={presetsVersion}
@@ -569,10 +554,8 @@ export function VisualizerApp() {
       <TitleOverlayPanel
         overlay={titleOverlay}
         onChange={(patch) => setTitleOverlay((o) => ({ ...o, ...patch }))}
-        unlocked={unlock.unlocked}
       />
       <ExportPanel
-        unlocked={unlock.unlocked}
         resolution={resolution}
         aspect={aspect}
         fps={fps}
@@ -595,13 +578,6 @@ export function VisualizerApp() {
         prerenderProgressMessage={prerender.progress.message ?? ''}
         prerenderError={prerender.error}
       />
-      {!unlock.unlocked ? (
-        <p className="text-center text-xs text-torus-fg-faint">
-          <Link href="/unlock" className="text-torus-mid hover:underline">
-            Unlock full version ($10)
-          </Link>
-        </p>
-      ) : null}
     </>
   );
 
@@ -691,7 +667,7 @@ export function VisualizerApp() {
 
   if (!heroCollapsed) {
     return (
-      <div className={`min-h-dvh ${!unlock.unlocked ? 'pb-12' : ''}`}>
+      <div className="min-h-dvh">
         <HwAccelBanner />
         <header className="border-b border-torus-border px-4 py-8 md:px-8">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
@@ -703,9 +679,8 @@ export function VisualizerApp() {
                 desktop audio — then export for Reels, Shorts, and portfolios.
               </p>
               <div className="mt-4 flex flex-wrap gap-3 text-xs">
-                <span className="rounded-full border border-torus-border px-3 py-1">Free: 720p / 30 FPS</span>
                 <span className="rounded-full border border-torus-mid/30 px-3 py-1 text-torus-mid">
-                  Full: $10 one-time — 4K / 240 FPS, no watermark
+                  100% free — up to 4K / 240 FPS, no watermark
                 </span>
               </div>
             </div>
@@ -726,7 +701,6 @@ export function VisualizerApp() {
           </section>
         </main>
 
-        {!unlock.unlocked && !unlock.checking ? <UnlockBanner /> : null}
         <ShortcutsModal
           open={shortcutsOpen}
           onClose={() => setShortcutsOpen(false)}
@@ -800,7 +774,6 @@ export function VisualizerApp() {
         </aside>
       </main>
 
-      {!unlock.unlocked && !unlock.checking ? <UnlockBanner /> : null}
       <ShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}

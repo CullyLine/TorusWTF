@@ -79,7 +79,7 @@ export default function AboutPage() {
             <Link href="/support" className="underline">
               support
             </Link>{' '}
-            — donate or grab the Supporter tier
+            — donate to keep the lights on
           </li>
           <li>
             <Link href="/moderation" className="underline">

@@ -45,14 +45,13 @@ export type ExportFps = 30 | 60 | 120 | 240;
 export const FREE_MAX_RES: ExportResolution = '720p';
 export const FREE_MAX_FPS: ExportFps = 30;
 
-export function isResolutionLocked(res: ExportResolution, unlocked: boolean): boolean {
-  if (unlocked) return false;
-  return res !== FREE_MAX_RES;
+// The Visualizer is fully free: nothing is ever locked.
+export function isResolutionLocked(_res: ExportResolution, _unlocked: boolean): boolean {
+  return false;
 }
 
-export function isFpsLocked(fps: ExportFps, unlocked: boolean): boolean {
-  if (unlocked) return false;
-  return fps > FREE_MAX_FPS;
+export function isFpsLocked(_fps: ExportFps, _unlocked: boolean): boolean {
+  return false;
 }
 
 export function bitrateFor(res: ExportResolution): number {

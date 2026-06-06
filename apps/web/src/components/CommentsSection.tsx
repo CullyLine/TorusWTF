@@ -103,14 +103,7 @@ export function CommentsSection({ shareCode }: { shareCode: string }) {
           {comments.map((c) => (
             <li key={c.id} className="py-4">
               <div className="flex items-baseline gap-2 text-xs text-torus-fg-faint">
-                <span className="font-medium text-torus-fg">
-                  @{c.author.handle}
-                  {c.author.tier === 'supporter' ? (
-                    <span className="ml-1 text-torus-mid" title="Supporter">
-                      ★
-                    </span>
-                  ) : null}
-                </span>
+                <span className="font-medium text-torus-fg">@{c.author.handle}</span>
                 <time dateTime={new Date(c.createdAt).toISOString()}>
                   {formatRelative(c.createdAt)}
                 </time>
