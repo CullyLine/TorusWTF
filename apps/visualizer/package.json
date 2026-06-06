@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/copy-conductor-assets.mjs && next dev --port 3001",
+    "dev": "node scripts/copy-conductor-assets.mjs && node scripts/copy-transcriber-assets.mjs && next dev --port 3001",
     "prefetch:conductor": "node scripts/copy-conductor-assets.mjs",
-    "build": "pnpm prefetch:conductor && next build",
+    "prefetch:transcriber": "node scripts/copy-transcriber-assets.mjs",
+    "build": "pnpm prefetch:conductor && pnpm prefetch:transcriber && next build",
     "start": "next start --port 3001",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -14,6 +15,8 @@
     "clean": "rimraf .next .turbo .tsbuildinfo"
   },
   "dependencies": {
+    "@spotify/basic-pitch": "^1.0.1",
+    "@tonejs/midi": "^2.0.28",
     "@torus/shared": "workspace:*",
     "@torus/ui": "workspace:*",
     "@torus/visualizers": "workspace:*",
