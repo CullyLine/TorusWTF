@@ -29,6 +29,13 @@
       "when": 1779300000000,
       "tag": "0003_handle_history",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780789709630,
+      "tag": "0004_panoramic_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

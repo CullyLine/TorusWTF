@@ -36,6 +36,12 @@ export const users = sqliteTable(
     tierStartedAt: integer('tier_started_at'),
     tierExpiresAt: integer('tier_expires_at'),
     paymentCustomerId: text('payment_customer_id'),
+    /**
+     * Cached credit balance in credits (1 credit = 1 US cent). Source of truth is
+     * the append-only credits_ledger; this is a denormalized cache kept in sync
+     * inside the same transaction as every ledger write for O(1) balance reads.
+     */
+    creditBalance: integer('credit_balance').notNull().default(0),
     customSubdomain: text('custom_subdomain'),
     discordId: text('discord_id'),
     isBanned: integer('is_banned', { mode: 'boolean' }).notNull().default(false),
@@ -314,6 +320,136 @@ export const moderationLog = sqliteTable(
   (t) => [index('moderation_log_created_idx').on(t.createdAt)],
 );
 
+// ---------- Credits economy ----------
+
+/**
+ * Append-only credit ledger. Every credit movement is one row. `delta` is in
+ * credits (1 credit = 1 US cent); positive = added, negative = spent.
+ * `balanceAfter` snapshots the user's running balance for audit + fast history.
+ *
+ * Idempotency: (refType, refId) is unique so a Polar webhook or a job settlement
+ * replay cannot double-apply. NULL refIds are allowed (SQLite treats NULLs as
+ * distinct) for manual adjustments.
+ */
+export const creditsLedger = sqliteTable(
+  'credits_ledger',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    delta: integer('delta').notNull(),
+    balanceAfter: integer('balance_after').notNull(),
+    reason: text('reason', {
+      enum: [
+        'topup',
+        'signup_bonus',
+        'job_reserve',
+        'job_settle',
+        'job_refund',
+        'adjustment',
+      ],
+    }).notNull(),
+    /** What the entry references: 'polar_order' | 'job' | 'manual'. */
+    refType: text('ref_type'),
+    refId: text('ref_id'),
+    /** JSON blob for extra context (provider cost, notes, etc.). */
+    metadata: text('metadata'),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    index('credits_ledger_user_idx').on(t.userId, t.createdAt),
+    uniqueIndex('credits_ledger_ref_unique').on(t.refType, t.refId),
+  ],
+);
+
+/**
+ * API keys for machine / AI-agent access. Only the SHA-256 hash is stored; the
+ * plaintext key is shown once at creation. `prefix` is a short non-secret label
+ * for the UI. Optional per-key spend + rate caps bound the blast radius.
+ */
+export const apiKeys = sqliteTable(
+  'api_keys',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** Non-secret display prefix, e.g. "tk_live_a1b2". */
+    prefix: text('prefix').notNull(),
+    keyHash: text('key_hash').notNull(),
+    /** Max credits this key may spend per UTC day. NULL = no cap. */
+    dailySpendCap: integer('daily_spend_cap'),
+    /** Max requests per minute. NULL = default global limit. */
+    rateLimitPerMin: integer('rate_limit_per_min'),
+    lastUsedAt: integer('last_used_at'),
+    revokedAt: integer('revoked_at'),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => [
+    uniqueIndex('api_keys_hash_unique').on(t.keyHash),
+    index('api_keys_user_idx').on(t.userId),
+  ],
+);
+
+/**
+ * Compute jobs (stem separation, transcription, …). Credits are reserved on
+ * create, then settled (kept) on success or refunded on failure. `provider` +
+ * `providerJobId` let webhooks/pollers map a remote prediction back to a job.
+ */
+export const jobs = sqliteTable(
+  'jobs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Set when the job was created via a machine API key (vs the web UI). */
+    apiKeyId: text('api_key_id').references(() => apiKeys.id, { onDelete: 'set null' }),
+    /** Service identifier, e.g. "stems". */
+    service: text('service').notNull(),
+    status: text('status', {
+      enum: ['pending', 'running', 'succeeded', 'failed', 'canceled'],
+    })
+      .notNull()
+      .default('pending'),
+    /** 'web' | 'api' — how the job was initiated. */
+    source: text('source', { enum: ['web', 'api'] }).notNull().default('web'),
+    /** Compute backend: 'replicate' | 'home3090'. */
+    provider: text('provider'),
+    /** Remote prediction id for webhook/poll correlation. */
+    providerJobId: text('provider_job_id'),
+    /** Credits reserved/charged for this job. */
+    creditCost: integer('credit_cost').notNull(),
+    /** Ledger row id of the reservation, for settle/refund traceability. */
+    reservationLedgerId: text('reservation_ledger_id'),
+    /** Whether the reservation has been settled or refunded (terminal). */
+    settled: integer('settled', { mode: 'boolean' }).notNull().default(false),
+    /** Storage key of the input object. */
+    inputKey: text('input_key'),
+    /** JSON: request parameters (model, options). */
+    inputMeta: text('input_meta'),
+    /** JSON: result payload (output storage keys, provider cost, timings). */
+    outputMeta: text('output_meta'),
+    error: text('error'),
+    createdAt: integer('created_at')
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    startedAt: integer('started_at'),
+    finishedAt: integer('finished_at'),
+  },
+  (t) => [
+    index('jobs_user_idx').on(t.userId, t.createdAt),
+    index('jobs_status_idx').on(t.status),
+    index('jobs_provider_job_idx').on(t.providerJobId),
+  ],
+);
+
 // ---------- Type exports ----------
 
 export type HandleHistory = typeof handleHistory.$inferSelect;
@@ -331,3 +467,9 @@ export type Follow = typeof follows.$inferSelect;
 export type WeeklyChart = typeof weeklyCharts.$inferSelect;
 export type Report = typeof reports.$inferSelect;
 export type ModerationLogEntry = typeof moderationLog.$inferSelect;
+export type CreditsLedgerEntry = typeof creditsLedger.$inferSelect;
+export type NewCreditsLedgerEntry = typeof creditsLedger.$inferInsert;
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;
+export type Job = typeof jobs.$inferSelect;
+export type NewJob = typeof jobs.$inferInsert;

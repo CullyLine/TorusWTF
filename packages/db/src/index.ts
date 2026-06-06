@@ -12,6 +12,9 @@ export {
   weeklyCharts,
   reports,
   moderationLog,
+  creditsLedger,
+  apiKeys,
+  jobs,
 } from './schema';
 export type {
   HandleHistory,
@@ -29,5 +32,11 @@ export type {
   WeeklyChart,
   Report,
   ModerationLogEntry,
+  CreditsLedgerEntry,
+  NewCreditsLedgerEntry,
+  ApiKey,
+  NewApiKey,
+  Job,
+  NewJob,
 } from './schema';
 export { getDb, closeDb, type Db } from './client';
