@@ -40,3 +40,14 @@ export type {
   NewJob,
 } from './schema';
 export { getDb, closeDb, type Db } from './client';
+export {
+  CREDITS_PER_DOLLAR,
+  InsufficientCreditsError,
+  getBalance,
+  topUp,
+  reserveCredits,
+  refundJob,
+  adjustCredits,
+  grantSignupBonus,
+  listLedger,
+} from './credits';

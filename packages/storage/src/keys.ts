@@ -23,4 +23,16 @@ export const StorageKeys = {
 
   /** User avatars. */
   avatar: (userId: string): string => `avatars/${userId}.webp`,
+
+  // ---------- Lab (compute jobs) ----------
+
+  /** Uploaded input for a Lab job. */
+  labInput: (jobId: string, ext: string): string => `lab/${jobId}/input.${ext}`,
+
+  /** A produced output artifact for a Lab job (e.g. a stem). */
+  labOutput: (jobId: string, name: string, ext: string): string =>
+    `lab/${jobId}/${name}.${ext}`,
+
+  /** All keys under a Lab job. Used at cleanup/auto-delete time. */
+  labPrefix: (jobId: string): string => `lab/${jobId}/`,
 } as const;

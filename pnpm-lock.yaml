@@ -257,6 +257,9 @@ importers:
       ioredis:
         specifier: ^5.4.2
         version: 5.10.1
+      replicate:
+        specifier: ^1.4.0
+        version: 1.4.0
       sharp:
         specifier: ^0.33.5
         version: 0.33.5

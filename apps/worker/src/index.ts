@@ -20,10 +20,13 @@ import { Worker, Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { processClip } from './jobs/process-clip.js';
 import { snapshotPreviousWeekCharts } from './jobs/snapshot-weekly-charts.js';
+import { runGpuJob } from './jobs/run-gpu-job.js';
 import { startHealthWebhook } from './health-webhook.js';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
 const CONCURRENCY = Number(process.env.WORKER_CONCURRENCY ?? '2');
+const GPU_QUEUE = 'gpu-jobs';
+const GPU_CONCURRENCY = Number(process.env.GPU_WORKER_CONCURRENCY ?? '2');
 
 const connection = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
 
@@ -66,6 +69,30 @@ new Worker(
   { connection, concurrency: 1 },
 );
 
+// ---------- GPU/compute job worker (stem separation, …) ----------
+// Provider calls block ~30-90s; attempts=1 on the queue side means we never
+// auto-retry (the runner refunds on failure, so retries can't double-bill).
+const gpuWorker = new Worker<{ jobId: string }>(
+  GPU_QUEUE,
+  async (job) => {
+    console.info(`[gpu] processing ${job.id} (job ${job.data.jobId})`);
+    return await runGpuJob(job.data.jobId);
+  },
+  {
+    connection,
+    concurrency: GPU_CONCURRENCY,
+    lockDuration: 10 * 60 * 1000,
+    stalledInterval: 60 * 1000,
+  },
+);
+
+gpuWorker.on('failed', (job, err) => {
+  console.error(`[gpu] ✗ ${job?.id} failed:`, err.message);
+});
+gpuWorker.on('error', (err) => {
+  console.error('[gpu] error:', err);
+});
+
 worker.on('completed', (job, result) => {
   console.info(`[worker] ✓ ${job.id} done`, result);
 });
@@ -85,6 +112,7 @@ console.info(`[worker] torus.wtf worker started, concurrency=${CONCURRENCY}`);
 async function shutdown(signal: string) {
   console.info(`[worker] received ${signal}, draining...`);
   await worker.close();
+  await gpuWorker.close();
   await connection.quit();
   process.exit(0);
 }
