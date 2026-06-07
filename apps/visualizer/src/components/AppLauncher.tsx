@@ -15,16 +15,28 @@ import type { Route } from 'next';
  */
 
 interface AppEntry {
-  href: Route;
+  /** Internal (same-app) route, or `external` for a cross-origin app. */
+  href?: Route;
+  external?: string;
   name: string;
   glyph: string;
   hint: string;
 }
 
+// The main hub (clip sharing, Lab, credits) is a separate deployment.
+const WEB_URL =
+  process.env.NEXT_PUBLIC_TORUS_WEB_URL?.replace(/\/$/, '') ?? 'https://torus.wtf';
+
 const APPS: AppEntry[] = [
   { href: '/' as Route, name: 'Visualizer', glyph: '\u25ce', hint: 'Turn any audio into 3D visuals' },
   { href: '/conductor' as Route, name: 'Conductor', glyph: '\u25a6', hint: 'SoundFont DAW \u2014 compose music' },
   { href: '/transcriber' as Route, name: 'Transcriber', glyph: '\u266b', hint: 'Audio \u2192 MIDI, in your browser' },
+  {
+    external: `${WEB_URL}/lab`,
+    name: 'Lab',
+    glyph: '\u2697',
+    hint: 'Stem separation & GPU tools (credits)',
+  },
 ];
 
 export function AppLauncher() {
@@ -61,8 +73,8 @@ export function AppLauncher() {
     if (open) firstLinkRef.current?.focus();
   }, [open]);
 
-  const isActive = (href: string) =>
-    href === '/' ? pathname === '/' : pathname.startsWith(href);
+  const isActive = (href?: string) =>
+    !href ? false : href === '/' ? pathname === '/' : pathname.startsWith(href);
 
   if (!mounted) return null;
 
@@ -97,28 +109,40 @@ export function AppLauncher() {
             <ul className="p-2">
               {APPS.map((app, i) => {
                 const active = isActive(app.href);
+                const className = `flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+                  active
+                    ? 'bg-torus-mid/10 text-torus-fg'
+                    : 'text-torus-fg-dim hover:bg-white/5 hover:text-torus-fg'
+                }`;
+                const inner = (
+                  <>
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
+                      {app.glyph}
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-sm font-medium">{app.name}</span>
+                      <span className="truncate text-[11px] text-torus-fg-faint">{app.hint}</span>
+                    </span>
+                    {active ? (
+                      <span className="ml-auto text-[10px] text-torus-mid">current</span>
+                    ) : null}
+                  </>
+                );
                 return (
-                  <li key={app.href}>
-                    <Link
-                      ref={i === 0 ? firstLinkRef : undefined}
-                      href={app.href}
-                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
-                        active
-                          ? 'bg-torus-mid/10 text-torus-fg'
-                          : 'text-torus-fg-dim hover:bg-white/5 hover:text-torus-fg'
-                      }`}
-                    >
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
-                        {app.glyph}
-                      </span>
-                      <span className="flex min-w-0 flex-col">
-                        <span className="text-sm font-medium">{app.name}</span>
-                        <span className="truncate text-[11px] text-torus-fg-faint">{app.hint}</span>
-                      </span>
-                      {active ? (
-                        <span className="ml-auto text-[10px] text-torus-mid">current</span>
-                      ) : null}
-                    </Link>
+                  <li key={app.href ?? app.external}>
+                    {app.external ? (
+                      <a ref={i === 0 ? firstLinkRef : undefined} href={app.external} className={className}>
+                        {inner}
+                      </a>
+                    ) : (
+                      <Link
+                        ref={i === 0 ? firstLinkRef : undefined}
+                        href={app.href!}
+                        className={className}
+                      >
+                        {inner}
+                      </Link>
+                    )}
                   </li>
                 );
               })}

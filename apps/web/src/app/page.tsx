@@ -117,6 +117,10 @@ export default async function HomePage() {
           about
         </Link>
         ·
+        <Link href="/lab" className="mx-2 hover:text-torus-fg">
+          lab
+        </Link>
+        ·
         <Link href="/support" className="mx-2 hover:text-torus-fg">
           support
         </Link>
