@@ -151,6 +151,58 @@ export async function startJob(opts: { userId: string; jobId: string }): Promise
   return (await getJobForUser(opts.userId, opts.jobId))!;
 }
 
+/**
+ * One-shot helper for machine callers (public API / MCP): create a job, upload
+ * the provided bytes to storage server-side, then start it. Returns the started
+ * job. Credit reservation + validation happen inside create/start.
+ */
+export async function createAndStartJobFromBytes(opts: {
+  userId: string;
+  service: string;
+  filename: string;
+  contentType: string;
+  bytes: Buffer | Uint8Array;
+  source?: 'web' | 'api';
+  apiKeyId?: string | null;
+}): Promise<Job> {
+  const { job, uploadUrl } = await createJob({
+    userId: opts.userId,
+    service: opts.service,
+    filename: opts.filename,
+    contentType: opts.contentType,
+    sizeBytes: opts.bytes.byteLength,
+    source: opts.source ?? 'api',
+    apiKeyId: opts.apiKeyId ?? null,
+  });
+
+  const put = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'content-type': opts.contentType },
+    body: new Blob([opts.bytes as unknown as BlobPart], { type: opts.contentType }),
+  });
+  if (!put.ok) {
+    throw new JobValidationError('Failed to store input.', 502);
+  }
+
+  return startJob({ userId: opts.userId, jobId: job.id });
+}
+
+/** Block until a job reaches a terminal state, or timeout. For sync API/MCP. */
+export async function waitForJob(
+  userId: string,
+  jobId: string,
+  timeoutMs = 150_000,
+): Promise<Job | undefined> {
+  const deadline = Date.now() + timeoutMs;
+  let job = await getJobForUser(userId, jobId);
+  while (job && (job.status === 'pending' || job.status === 'running')) {
+    if (Date.now() > deadline) break;
+    await new Promise((r) => setTimeout(r, 2000));
+    job = await getJobForUser(userId, jobId);
+  }
+  return job;
+}
+
 export async function getJobForUser(userId: string, jobId: string): Promise<Job | undefined> {
   return db
     .select()
