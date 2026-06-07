@@ -21,6 +21,7 @@ import IORedis from 'ioredis';
 import { processClip } from './jobs/process-clip.js';
 import { snapshotPreviousWeekCharts } from './jobs/snapshot-weekly-charts.js';
 import { runGpuJob } from './jobs/run-gpu-job.js';
+import { cleanupLabOutputs } from './jobs/cleanup-lab.js';
 import { startHealthWebhook } from './health-webhook.js';
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://localhost:6379';
@@ -56,12 +57,24 @@ await cronQueue.upsertJobScheduler(
   { name: 'snapshot-weekly-charts', data: {} },
 );
 
+// Hourly: auto-delete expired Lab inputs/outputs (privacy + storage cost).
+await cronQueue.upsertJobScheduler(
+  'cleanup-lab-outputs',
+  { pattern: '15 * * * *', tz: 'UTC' },
+  { name: 'cleanup-lab-outputs', data: {} },
+);
+
 new Worker(
   CRON_QUEUE,
   async (job) => {
     if (job.name === 'snapshot-weekly-charts') {
       const result = await snapshotPreviousWeekCharts();
       console.info('[cron] weekly chart snapshot:', result);
+      return result;
+    }
+    if (job.name === 'cleanup-lab-outputs') {
+      const result = await cleanupLabOutputs();
+      console.info('[cron] lab cleanup:', result);
       return result;
     }
     return { skipped: job.name };
