@@ -23,6 +23,8 @@ const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
+  // Keep the dev-tools indicator clear of bottom-left UI (dev-only).
+  devIndicators: { position: 'bottom-right' },
   experimental: {
     serverActions: { bodySizeLimit: '2mb' },
   },

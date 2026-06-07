@@ -20,6 +20,9 @@ const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
+  // Move the Next.js dev-tools indicator out of the bottom-left corner so it
+  // doesn't cover the app-launcher button (dev-only; no effect in production).
+  devIndicators: { position: 'bottom-right' },
   transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared'],
   async headers() {
     return [
