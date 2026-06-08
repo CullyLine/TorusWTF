@@ -17,7 +17,7 @@ function findRepoRoot(start: string): string {
 }
 
 const absolutePath =
-  isAbsolute(raw) || /^[a-zA-Z]:[\\/]/.test(raw) ? raw : resolve(findRepoRoot(import.meta.dirname), raw);
+  isAbsolute(raw) || /^[a-zA-Z]:[\\/]/.test(raw) ? raw : resolve(findRepoRoot(process.cwd()), raw);
 
 export default defineConfig({
   schema: './src/schema.ts',

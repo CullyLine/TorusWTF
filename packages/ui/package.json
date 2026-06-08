@@ -20,10 +20,7 @@
     "react-dom": "19.0.0"
   },
   "dependencies": {
-    "@torus/shared": "workspace:*",
-    "framer-motion": "^11.15.0",
-    "react-dropzone": "^14.3.5",
-    "wavesurfer.js": "^7.9.1"
+    "@torus/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.2",
