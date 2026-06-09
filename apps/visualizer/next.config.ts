@@ -21,20 +21,15 @@ const config: NextConfig = {
   poweredByHeader: false,
   typedRoutes: true,
   transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared'],
-  // The libSQL driver ships native bindings + non-JS files; keep it out of the
-  // webpack bundle and require it at runtime on the server instead. Production
-  // uses the pure-JS `@libsql/client/web` entry (no native code) against Turso.
-  serverExternalPackages: ['@libsql/client', 'libsql'],
+  // Production talks to Turso via the pure-JS `@libsql/client/web` entry, which
+  // we let webpack bundle straight into each function so nothing has to be traced
+  // at runtime. The native `@libsql/client` (default entry) + `libsql` bindings
+  // are only loaded lazily for local `file:` databases, so they stay external and
+  // out of the bundle (and never run on Vercel).
+  serverExternalPackages: ['libsql'],
   webpack: (webpackConfig, { isServer }) => {
     if (isServer) {
-      const libsqlExternals = [
-        '@libsql/client',
-        '@libsql/client/web',
-        'libsql',
-        '@libsql/isomorphic-fetch',
-        '@libsql/isomorphic-ws',
-        '@libsql/hrana-client',
-      ];
+      const libsqlExternals = ['@libsql/client', 'libsql'];
       const existing = webpackConfig.externals;
       webpackConfig.externals = Array.isArray(existing)
         ? [...existing, ...libsqlExternals]
