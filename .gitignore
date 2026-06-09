@@ -60,3 +60,7 @@ secrets/
 # Agent scratch files
 .git-commit-msg.tmp
 .git-commit-msg-*.tmp
+
+# Local scratch / experiment outputs
+/stems-out/
+

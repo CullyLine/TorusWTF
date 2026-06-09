@@ -1,0 +1,17 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="torusRing" x1="5" y1="6" x2="27" y2="27" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A855F7" />
+      <stop offset="0.5" stop-color="#22D3CE" />
+      <stop offset="1" stop-color="#FF2D95" />
+    </linearGradient>
+    <radialGradient id="torusGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop stop-color="#22D3CE" stop-opacity="0.35" />
+      <stop offset="1" stop-color="#22D3CE" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#0a0b1e" />
+  <circle cx="16" cy="16.5" r="11" fill="url(#torusGlow)" />
+  <circle cx="16" cy="16.5" r="9.25" stroke="url(#torusRing)" stroke-width="4.5" />
+  <path d="M25 4.5 L25.9 7.1 L28.5 8 L25.9 8.9 L25 11.5 L24.1 8.9 L21.5 8 L24.1 7.1 Z" fill="#F7E08C" />
+</svg>

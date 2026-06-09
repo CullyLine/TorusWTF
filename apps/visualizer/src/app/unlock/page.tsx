@@ -6,8 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Logo } from '@torus/ui';
 import { useUnlock } from '@/hooks/useUnlock';
 
-const checkoutUrl = process.env.NEXT_PUBLIC_POLAR_CHECKOUT_URL;
-
 // Mirrors `TEST_LICENSE_KEY` in `apps/visualizer/src/lib/polar.ts`. The
 // server-side verify endpoint always returns valid for this key so we can
 // test the pro paths without a real license.
@@ -45,30 +43,22 @@ export default function UnlockPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-4 py-12">
       <Logo size={40} wordmark href="/" color="var(--color-torus-mid)" />
-      <h1 className="mt-6 text-2xl font-semibold">Unlock torus visualizer</h1>
+      <h1 className="mt-6 text-2xl font-semibold">Unlock pro exports</h1>
       <p className="mt-2 text-sm text-torus-fg-dim">
-        $10 one-time — up to 4K / 240 FPS exports, no watermark, custom palette, saved presets, and
-        all future presets free.
+        The Production License is a one-time $10 unlock bound to your account — highest-quality
+        exports, no watermark, and commercial-use rights.
       </p>
 
-      {checkoutUrl ? (
-        <a
-          href={checkoutUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-6 inline-flex justify-center rounded-full bg-torus-mid/20 px-5 py-2.5 text-sm font-medium text-torus-mid border border-torus-mid/40"
-        >
-          Buy full version — $10
-        </a>
-      ) : (
-        <p className="mt-6 text-xs text-torus-fg-faint">
-          Checkout URL not configured. Set NEXT_PUBLIC_POLAR_CHECKOUT_URL in .env.
-        </p>
-      )}
+      <Link
+        href="/license"
+        className="mt-6 inline-flex justify-center rounded-full bg-torus-fg px-5 py-2.5 text-sm font-medium text-torus-bg"
+      >
+        Go to the Production License →
+      </Link>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 space-y-4">
         <label className="block text-sm text-torus-fg-dim">
-          Paste your license key
+          Have a license key? Paste it here
           <input
             type="text"
             value={key}

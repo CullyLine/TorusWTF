@@ -1,4 +1,4 @@
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { migrate } from 'drizzle-orm/libsql/migrator';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { getDb } from './client';
@@ -8,6 +8,6 @@ const migrationsFolder = resolve(here, '..', 'migrations');
 
 const db = getDb();
 console.info(`[db] Running migrations from ${migrationsFolder} ...`);
-migrate(db, { migrationsFolder });
+await migrate(db, { migrationsFolder });
 console.info('[db] Migrations applied.');
 process.exit(0);

@@ -4,37 +4,52 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
+import { BrandMark } from '@/components/BrandMark';
 
 /**
- * AppLauncher — the out-of-the-way connector for the torus.wtf "constellation".
- *
- * A small fixed glyph in the corner that opens a command-palette overlay
- * listing every torus app. Summon with a click or Cmd/Ctrl+K, dismiss with
- * Esc / backdrop. Lives in the shared (studio) layout so it rides along on
- * the visualizer and Conductor without either app having to know about it.
+ * AppLauncher — the always-present, out-of-the-way connector for the torus
+ * "constellation". A small donut glyph pinned to the top-left of every page
+ * that expands into an accordion of the torus apps. Summon with a click or
+ * Cmd/Ctrl+K, dismiss with Esc / outside click. Uninvasive by design.
  */
 
 interface AppEntry {
-  href: Route;
+  href: Route | null;
   name: string;
   glyph: string;
   hint: string;
+  soon?: boolean;
 }
 
 const APPS: AppEntry[] = [
   { href: '/' as Route, name: 'Visualizer', glyph: '\u25ce', hint: 'Turn any audio into 3D visuals' },
-  { href: '/conductor' as Route, name: 'Conductor', glyph: '\u25a6', hint: 'SoundFont DAW \u2014 compose music' },
-  { href: '/transcriber' as Route, name: 'Transcriber', glyph: '\u266b', hint: 'Audio \u2192 MIDI, in your browser' },
+  {
+    href: '/conductor' as Route,
+    name: 'Conductor',
+    glyph: '\u25a6',
+    hint: 'SoundFont DAW \u2014 compose music',
+  },
+  {
+    href: '/transcriber' as Route,
+    name: 'Transcriber',
+    glyph: '\u266b',
+    hint: 'Audio \u2192 MIDI, in your browser',
+  },
+  {
+    href: null,
+    name: 'Stem Separation',
+    glyph: '\u2261',
+    hint: 'Split a track into stems',
+    soon: true,
+  },
 ];
 
 export function AppLauncher() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
-  const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  // Render nothing during SSR/first paint so the overlay chrome can never cause
-  // a hydration mismatch with the static visualizer page it rides on top of.
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -52,80 +67,101 @@ export function AppLauncher() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Close whenever navigation completes.
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (open) firstLinkRef.current?.focus();
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const isActive = (href: string) =>
-    href === '/' ? pathname === '/' : pathname.startsWith(href);
+  const isActive = (href: string | null) =>
+    href === null ? false : href === '/' ? pathname === '/' : pathname.startsWith(href);
 
   if (!mounted) return null;
 
   return (
-    <>
+    <div ref={rootRef} className="fixed left-4 top-4 z-40">
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((o) => !o)}
         aria-label="Open torus apps (Cmd+K)"
+        aria-expanded={open}
         title="torus apps (\u2318K)"
-        className="fixed bottom-4 left-4 z-50 grid h-10 w-10 place-items-center rounded-full border border-torus-border bg-torus-bg/70 text-lg text-torus-fg-dim backdrop-blur-sm transition-opacity hover:text-torus-fg hover:border-torus-border-strong opacity-50 hover:opacity-100"
+        className={`grid h-9 w-9 place-items-center rounded-full border bg-torus-bg/70 backdrop-blur-sm transition ${
+          open
+            ? 'border-torus-border-strong opacity-100'
+            : 'border-torus-border opacity-70 hover:opacity-100 hover:border-torus-border-strong'
+        }`}
       >
-        {'\u25ce'}
+        <BrandMark size={20} sparkle={false} />
       </button>
 
       {open ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="torus apps"
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 p-4 pt-[18vh] backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-sm overflow-hidden rounded-2xl border border-torus-border-strong bg-torus-surface shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-torus-border px-4 py-3">
-              <span className="text-sm font-medium text-torus-fg-dim">torus apps</span>
-              <span className="text-[10px] text-torus-fg-faint">{'\u2318'}K to toggle</span>
-            </div>
-            <ul className="p-2">
-              {APPS.map((app, i) => {
-                const active = isActive(app.href);
-                return (
-                  <li key={app.href}>
-                    <Link
-                      ref={i === 0 ? firstLinkRef : undefined}
-                      href={app.href}
-                      className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
-                        active
-                          ? 'bg-torus-mid/10 text-torus-fg'
-                          : 'text-torus-fg-dim hover:bg-white/5 hover:text-torus-fg'
-                      }`}
-                    >
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
-                        {app.glyph}
-                      </span>
-                      <span className="flex min-w-0 flex-col">
-                        <span className="text-sm font-medium">{app.name}</span>
-                        <span className="truncate text-[11px] text-torus-fg-faint">{app.hint}</span>
-                      </span>
-                      {active ? (
-                        <span className="ml-auto text-[10px] text-torus-mid">current</span>
+        <div className="absolute left-0 mt-2 w-72 overflow-hidden rounded-2xl border border-torus-border-strong bg-torus-bg/95 shadow-2xl backdrop-blur-sm">
+          <div className="flex items-center justify-between border-b border-torus-border px-4 py-3">
+            <span className="text-sm font-medium text-torus-fg-dim">torus apps</span>
+            <span className="text-[10px] text-torus-fg-faint">{'\u2318'}K</span>
+          </div>
+          <ul className="p-2">
+            {APPS.map((app) => {
+              const active = isActive(app.href);
+              const inner = (
+                <>
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
+                    {app.glyph}
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      {app.name}
+                      {app.soon ? (
+                        <span className="rounded-full border border-torus-border px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-torus-fg-faint">
+                          soon
+                        </span>
                       ) : null}
-                    </Link>
+                    </span>
+                    <span className="truncate text-[11px] text-torus-fg-faint">{app.hint}</span>
+                  </span>
+                  {active ? <span className="ml-auto text-[10px] text-torus-mid">current</span> : null}
+                </>
+              );
+
+              if (app.href === null) {
+                return (
+                  <li key={app.name}>
+                    <div
+                      className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-torus-fg-faint opacity-70"
+                      aria-disabled
+                    >
+                      {inner}
+                    </div>
                   </li>
                 );
-              })}
-            </ul>
-          </div>
+              }
+
+              return (
+                <li key={app.name}>
+                  <Link
+                    href={app.href}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+                      active
+                        ? 'bg-torus-mid/10 text-torus-fg'
+                        : 'text-torus-fg-dim hover:bg-white/5 hover:text-torus-fg'
+                    }`}
+                  >
+                    {inner}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

@@ -21,6 +21,25 @@ const config: NextConfig = {
   poweredByHeader: false,
   typedRoutes: true,
   transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared'],
+  // The libSQL driver ships native bindings + non-JS files; keep it out of the
+  // webpack bundle and require it at runtime on the server instead.
+  serverExternalPackages: ['@libsql/client', 'libsql'],
+  webpack: (webpackConfig, { isServer }) => {
+    if (isServer) {
+      const libsqlExternals = [
+        '@libsql/client',
+        'libsql',
+        '@libsql/isomorphic-fetch',
+        '@libsql/isomorphic-ws',
+        '@libsql/hrana-client',
+      ];
+      const existing = webpackConfig.externals;
+      webpackConfig.externals = Array.isArray(existing)
+        ? [...existing, ...libsqlExternals]
+        : [existing, ...libsqlExternals].filter(Boolean);
+    }
+    return webpackConfig;
+  },
   async headers() {
     return [
       {

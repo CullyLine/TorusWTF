@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0
+
+- Consolidate the project into a single Next.js app (`apps/visualizer`): visualizer, Conductor, Transcriber, accounts/profiles, and the Production License all under one roof
+- Remove clip hosting, the background worker, object storage, and the VPS/Docker deployment path
+- Switch the database to libSQL (Turso in production, a local SQLite file in dev); trim the schema to accounts, sessions, and license state
+- Add the one-time, account-bound **Production License** ($10): high-quality 1440p exports, high frame rates, watermark removal, commercial-use rights, and a profile badge — wired through Polar checkout + webhook
+- Account-bound export gating: free exports are watermarked and capped; the license lifts the caps site-wide
+- Add a global, uninvasive top-left app accordion and top-right account menu on every page, with a Stem Separation "coming soon" entry
+- New cosmic-doughnut brand mark and favicon
+- Refresh README, PRINCIPLES, and site copy around "3D visuals for your audio"; set version 0.1.0
+
 ## Unreleased
 
 - Add in-app toast notifications with prompt support for preset saving

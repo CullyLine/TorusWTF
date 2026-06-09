@@ -2,7 +2,7 @@
   "name": "torus",
   "version": "0.1.0",
   "private": true,
-  "description": "torus.wtf — share the loop. Drop any audio, get an instant link.",
+  "description": "torus — 3D visuals for your audio, plus a few sharp tools for music.",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "packageManager": "pnpm@10.31.0",
@@ -38,8 +38,6 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "sharp",
       "esbuild",
       "msgpackr-extract",
       "unrs-resolver"
