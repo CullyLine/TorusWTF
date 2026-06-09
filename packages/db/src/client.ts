@@ -71,27 +71,47 @@ function createLibsqlClient(url: string, authToken?: string): Client {
 }
 
 /**
- * Returns a singleton Drizzle client backed by libSQL.
+ * Resolves the connection URL together with the token that belongs to it. The
+ * URL and token MUST come from the same source: the Vercel Turso integration
+ * injects `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` as a matched pair (often a
+ * per-deployment branch DB), while a hand-set `DATABASE_URL` points at a fixed
+ * database and pairs with `DATABASE_AUTH_TOKEN`. Mixing a URL from one source
+ * with a token from the other yields an auth 401.
  *
- * Local dev:  DATABASE_URL=file:./data/torus.db  (an on-disk SQLite file)
- * Production: DATABASE_URL=libsql://<db>.turso.io + TURSO_AUTH_TOKEN  (Turso)
- *
- * The Vercel Turso integration injects TURSO_DATABASE_URL / TURSO_AUTH_TOKEN, so
- * we accept those names too. Same driver both ways, so code and migrations are
- * identical across environments.
+ *   Local dev:  DATABASE_URL=file:./data/torus.db        (no token)
+ *   Self-managed Turso:  DATABASE_URL + DATABASE_AUTH_TOKEN
+ *   Vercel Turso integration:  TURSO_DATABASE_URL + TURSO_AUTH_TOKEN
+ */
+function resolveConnection(databaseUrl?: string): { url: string; authToken?: string } {
+  if (databaseUrl) {
+    return { url: databaseUrl, authToken: process.env.DATABASE_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN };
+  }
+  if (process.env.DATABASE_URL) {
+    return {
+      url: process.env.DATABASE_URL,
+      authToken: process.env.DATABASE_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN,
+    };
+  }
+  if (process.env.TURSO_DATABASE_URL) {
+    return {
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN,
+    };
+  }
+  return { url: 'file:./data/torus.db' };
+}
+
+/**
+ * Returns a singleton Drizzle client backed by libSQL. Same driver across
+ * environments, so code and migrations are identical everywhere.
  */
 export function getDb(databaseUrl?: string) {
   if (cachedDb) return cachedDb;
 
-  const url = normalizeUrl(
-    databaseUrl ??
-      process.env.DATABASE_URL ??
-      process.env.TURSO_DATABASE_URL ??
-      'file:./data/torus.db',
-  );
-  const authToken = process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN;
+  const conn = resolveConnection(databaseUrl);
+  const url = normalizeUrl(conn.url);
 
-  const client = createLibsqlClient(url, authToken);
+  const client = createLibsqlClient(url, conn.authToken);
   cachedClient = client;
   cachedDb = drizzle(client, { schema, casing: 'snake_case' });
   return cachedDb;
