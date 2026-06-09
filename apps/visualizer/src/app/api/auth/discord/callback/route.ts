@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
+  const baseUrl = (process.env.PUBLIC_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
   if (!clientId || !clientSecret) {
     return redirectToError('Discord OAuth is not configured on this instance.');
   }

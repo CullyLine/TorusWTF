@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     expiresAt,
   });
 
-  const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
+  const baseUrl = (process.env.PUBLIC_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
   const loginUrl = `${baseUrl}/api/auth/magic/verify?token=${encodeURIComponent(token)}`;
 
   let sent = false;

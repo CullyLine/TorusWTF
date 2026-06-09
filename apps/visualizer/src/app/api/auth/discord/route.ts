@@ -5,7 +5,7 @@ export async function GET(req: Request) {
   const popup = new URL(req.url).searchParams.get('popup') === '1';
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const baseUrl = process.env.PUBLIC_URL ?? 'http://localhost:3000';
+  const baseUrl = (process.env.PUBLIC_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
   if (!clientId || !clientSecret) {
     return NextResponse.json(
       { error: 'Discord OAuth is not configured on this instance.' },
