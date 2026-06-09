@@ -46,6 +46,24 @@ export function Scrubber({ currentTime, duration, onSeek }: ScrubberProps) {
     e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (duration <= 0) return;
+    const step = e.shiftKey ? 15 : 5;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      onSeek(Math.max(0, currentTime - step));
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      onSeek(Math.min(duration, currentTime + step));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      onSeek(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      onSeek(duration);
+    }
+  };
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
@@ -63,6 +81,7 @@ export function Scrubber({ currentTime, duration, onSeek }: ScrubberProps) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onKeyDown={onKeyDown}
       >
         <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-torus-border">
           <div

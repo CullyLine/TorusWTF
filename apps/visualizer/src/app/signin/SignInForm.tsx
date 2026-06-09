@@ -4,18 +4,20 @@ import { useState, type FormEvent } from 'react';
 import { MagicLinkSentNotice, type DevMailInfo } from '@torus/ui';
 
 interface SignInFormProps {
-  initialSent: boolean;
   initialError: string | null;
+  nextPath: string | null;
 }
 
 interface MagicApiResponse {
   message?: string;
+  expiresMinutes?: number;
   devMail?: DevMailInfo;
 }
 
-export function SignInForm({ initialSent, initialError }: SignInFormProps) {
+export function SignInForm({ initialError, nextPath }: SignInFormProps) {
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(initialSent);
+  const [sent, setSent] = useState(false);
+  const [expiresMinutes, setExpiresMinutes] = useState(15);
   const [devMail, setDevMail] = useState<DevMailInfo | undefined>(undefined);
   const [error, setError] = useState<string | null>(initialError);
   const [busy, setBusy] = useState(false);
@@ -28,13 +30,14 @@ export function SignInForm({ initialSent, initialError }: SignInFormProps) {
       const res = await fetch('/api/auth/magic', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, next: nextPath ?? undefined }),
       });
       const data = (await res.json().catch(() => ({}))) as MagicApiResponse & { error?: string };
       if (!res.ok) {
         throw new Error(data.error ?? `Sign-in failed (${res.status})`);
       }
       setDevMail(data.devMail);
+      if (data.expiresMinutes) setExpiresMinutes(data.expiresMinutes);
       setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign-in failed.');
@@ -46,7 +49,12 @@ export function SignInForm({ initialSent, initialError }: SignInFormProps) {
   if (sent) {
     return (
       <div className="rounded-2xl border border-torus-border-strong bg-torus-surface p-5">
-        <MagicLinkSentNotice email={email} devMail={devMail} />
+        <MagicLinkSentNotice
+          email={email}
+          devMail={devMail}
+          expiresMinutes={expiresMinutes}
+          onUseDifferentEmail={() => setSent(false)}
+        />
       </div>
     );
   }

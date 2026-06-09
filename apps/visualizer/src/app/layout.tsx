@@ -9,23 +9,23 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://torus-visualizer.vercel.app'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://torus.wtf'),
   title: { default: 'torus visualizer', template: '%s · torus visualizer' },
   description:
-    'Turn any audio into beautiful 3D visuals — Spotify, Ableton, Splice, or your mic. Export for Reels, Shorts, and portfolios.',
+    'Turn any audio into beautiful 3D visuals — Spotify, Ableton, Splice, a file, or your mic. Export for Reels, Shorts, and releases.',
   applicationName: 'torus visualizer',
   openGraph: {
     type: 'website',
     siteName: 'torus visualizer',
     title: 'torus visualizer — turn any audio into 3D visuals',
     description:
-      'Capture audio from Spotify, Ableton, Splice, or your mic in real time. Nine reactive presets including the new infinite Mandelbrot Zoom. Free.',
+      'Capture audio from Spotify, Ableton, Splice, a file, or your mic in real time. A growing library of reactive 3D presets. Free, no signup.',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'torus visualizer',
     description:
-      'Turn any audio into beautiful 3D visuals — Spotify, Ableton, Splice, or your mic. Nine reactive presets, no signup.',
+      'Turn any audio into beautiful 3D visuals — Spotify, Ableton, Splice, a file, or your mic. Free, no signup.',
   },
   icons: {
     icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],

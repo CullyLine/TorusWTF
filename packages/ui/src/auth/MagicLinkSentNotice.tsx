@@ -10,13 +10,21 @@ interface MagicLinkSentNoticeProps {
   email: string;
   devMail?: DevMailInfo | null;
   compact?: boolean;
+  expiresMinutes?: number;
+  onUseDifferentEmail?: () => void;
 }
 
 /**
  * Shown after POST /api/auth/magic succeeds.
  * In local dev (Mailhog), explains that mail is captured and surfaces the link.
  */
-export function MagicLinkSentNotice({ email, devMail, compact }: MagicLinkSentNoticeProps) {
+export function MagicLinkSentNotice({
+  email,
+  devMail,
+  compact,
+  expiresMinutes = 15,
+  onUseDifferentEmail,
+}: MagicLinkSentNoticeProps) {
   if (devMail) {
     return (
       <div
@@ -65,12 +73,31 @@ export function MagicLinkSentNotice({ email, devMail, compact }: MagicLinkSentNo
             </code>
           </p>
         ) : null}
+        {onUseDifferentEmail ? (
+          <p style={{ margin: '12px 0 0', fontSize: 12 }}>
+            <button
+              type="button"
+              onClick={onUseDifferentEmail}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                color: 'var(--color-torus-mid)',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+                fontSize: 12,
+              }}
+            >
+              Use a different email
+            </button>
+          </p>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <p
+    <div
       role="status"
       style={{
         margin: 0,
@@ -79,7 +106,32 @@ export function MagicLinkSentNotice({ email, devMail, compact }: MagicLinkSentNo
         color: 'var(--color-torus-fg-dim, rgba(245,245,250,0.7))',
       }}
     >
-      Check your inbox — a sign-in link was sent to {email || 'your email'}.
-    </p>
+      <p style={{ margin: 0 }}>
+        Check your inbox — a sign-in link was sent to {email || 'your email'}.
+      </p>
+      <p style={{ margin: '8px 0 0', fontSize: 12, opacity: 0.85 }}>
+        The link expires in {expiresMinutes} minutes. Check your spam folder if it doesn&apos;t
+        arrive.
+      </p>
+      {onUseDifferentEmail ? (
+        <p style={{ margin: '12px 0 0', fontSize: 12 }}>
+          <button
+            type="button"
+            onClick={onUseDifferentEmail}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: 'var(--color-torus-mid)',
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              fontSize: 12,
+            }}
+          >
+            Use a different email
+          </button>
+        </p>
+      ) : null}
+    </div>
   );
 }

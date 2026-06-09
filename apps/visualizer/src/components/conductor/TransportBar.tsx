@@ -8,7 +8,10 @@ import type { ConductorPlayback } from './useConductorPlayback';
 
 interface TransportBarProps {
   playback: ConductorPlayback;
+  engineReady: boolean;
+  engineLoading: boolean;
   onImportMidi?: () => void;
+  onExportMidi?: () => void;
   onVisualize?: () => void;
 }
 
@@ -18,12 +21,20 @@ function formatPosition(tick: number): string {
   return `${bar}.${beat}`;
 }
 
-export function TransportBar({ playback, onImportMidi, onVisualize }: TransportBarProps) {
+export function TransportBar({
+  playback,
+  engineReady,
+  engineLoading,
+  onImportMidi,
+  onExportMidi,
+  onVisualize,
+}: TransportBarProps) {
   const { project, dispatch } = useConductor();
-  const { isPlaying, playheadTick, loop, toggle, stop, setLoopEnabled } = playback;
+  const { isPlaying, playheadTick, loop, play, pause, stopAndRewind, setLoopEnabled } = playback;
+  const transportDisabled = !engineReady || engineLoading;
 
   return (
-    <header className="flex items-center gap-3 border-b border-torus-border bg-torus-bg/80 py-2 pl-14 pr-3 backdrop-blur-sm">
+    <header className="flex flex-wrap items-center gap-3 border-b border-torus-border bg-torus-bg/80 py-2 pl-14 pr-3 backdrop-blur-sm">
       <input
         value={project.name}
         onChange={(e) => dispatch({ type: 'renameProject', name: e.target.value })}
@@ -33,23 +44,33 @@ export function TransportBar({ playback, onImportMidi, onVisualize }: TransportB
 
       <div className="mx-1 h-6 w-px bg-torus-border" />
 
+      {isPlaying ? (
+        <button
+          type="button"
+          onClick={pause}
+          disabled={transportDisabled}
+          aria-label="Pause"
+          className="grid h-8 w-8 place-items-center rounded-lg border border-torus-mid/50 bg-torus-mid/15 text-sm text-torus-mid transition-colors hover:border-torus-mid/70 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {'\u23f8'}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => play()}
+          disabled={transportDisabled}
+          aria-label="Play"
+          className="grid h-8 w-8 place-items-center rounded-lg border border-torus-border bg-torus-surface text-sm text-torus-fg transition-colors hover:border-torus-border-strong disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {'\u25b6'}
+        </button>
+      )}
       <button
         type="button"
-        onClick={toggle}
-        aria-label={isPlaying ? 'Stop' : 'Play'}
-        className={`grid h-8 w-8 place-items-center rounded-lg border text-sm transition-colors ${
-          isPlaying
-            ? 'border-torus-bass/50 bg-torus-bass/20 text-torus-bass'
-            : 'border-torus-border bg-torus-surface text-torus-fg hover:border-torus-border-strong'
-        }`}
-      >
-        {isPlaying ? '\u25a0' : '\u25b6'}
-      </button>
-      <button
-        type="button"
-        onClick={stop}
+        onClick={stopAndRewind}
+        disabled={transportDisabled}
         aria-label="Stop and rewind"
-        className="grid h-8 w-8 place-items-center rounded-lg border border-torus-border bg-torus-surface text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg"
+        className="grid h-8 w-8 place-items-center rounded-lg border border-torus-border bg-torus-surface text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg disabled:cursor-not-allowed disabled:opacity-40"
       >
         {'\u23ee'}
       </button>
@@ -118,7 +139,7 @@ export function TransportBar({ playback, onImportMidi, onVisualize }: TransportB
         </select>
       </label>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         {onImportMidi ? (
           <button
             type="button"
@@ -128,11 +149,21 @@ export function TransportBar({ playback, onImportMidi, onVisualize }: TransportB
             Import MIDI
           </button>
         ) : null}
+        {onExportMidi ? (
+          <button
+            type="button"
+            onClick={onExportMidi}
+            className="rounded-lg border border-torus-border bg-torus-surface px-2.5 py-1.5 text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg"
+          >
+            Export MIDI
+          </button>
+        ) : null}
         {onVisualize ? (
           <button
             type="button"
             onClick={onVisualize}
-            className="rounded-lg border border-torus-mid/40 bg-torus-mid/10 px-2.5 py-1.5 text-xs text-torus-mid transition-colors hover:bg-torus-mid/20"
+            disabled={!engineReady}
+            className="rounded-lg border border-torus-mid/40 bg-torus-mid/10 px-2.5 py-1.5 text-xs text-torus-mid transition-colors hover:bg-torus-mid/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Visualize
           </button>

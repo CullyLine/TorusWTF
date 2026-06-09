@@ -98,8 +98,8 @@ export function TitleOverlayPanel({ overlay, onChange, unlocked }: TitleOverlayP
       ) : (
         <p className="mt-3 text-[10px] text-torus-fg-faint">
           Free: bottom-left brand card.{' '}
-          <Link href="/unlock" className="text-torus-mid hover:underline">
-            Unlock
+          <Link href="/license" className="text-torus-mid hover:underline">
+            Get the license
           </Link>{' '}
           to move it and recolor it.
         </p>

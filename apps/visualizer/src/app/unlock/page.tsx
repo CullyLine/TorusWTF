@@ -6,10 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Logo } from '@torus/ui';
 import { useUnlock } from '@/hooks/useUnlock';
 
-// Mirrors `TEST_LICENSE_KEY` in `apps/visualizer/src/lib/polar.ts`. The
-// server-side verify endpoint always returns valid for this key so we can
-// test the pro paths without a real license.
 const TEST_LICENSE_KEY = 'TORUS-WTF-TEST-UNLOCK';
+const showTestMode = process.env.NODE_ENV !== 'production';
 
 export default function UnlockPage() {
   const router = useRouter();
@@ -43,22 +41,25 @@ export default function UnlockPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-4 py-12">
       <Logo size={40} wordmark href="/" color="var(--color-torus-mid)" />
-      <h1 className="mt-6 text-2xl font-semibold">Unlock pro exports</h1>
+      <h1 className="mt-6 text-2xl font-semibold">Redeem license key</h1>
       <p className="mt-2 text-sm text-torus-fg-dim">
-        The Production License is a one-time $10 unlock bound to your account — highest-quality
-        exports, no watermark, and commercial-use rights.
+        Already purchased?{' '}
+        <Link href="/signin" className="text-torus-mid underline">
+          Sign in
+        </Link>{' '}
+        — your license attaches to your account automatically.
       </p>
-
-      <Link
-        href="/license"
-        className="mt-6 inline-flex justify-center rounded-full bg-torus-fg px-5 py-2.5 text-sm font-medium text-torus-bg"
-      >
-        Go to the Production License →
-      </Link>
+      <p className="mt-2 text-sm text-torus-fg-dim">
+        Need to buy?{' '}
+        <Link href="/license" className="text-torus-mid underline">
+          Get the Production License
+        </Link>
+        .
+      </p>
 
       <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 space-y-4">
         <label className="block text-sm text-torus-fg-dim">
-          Have a license key? Paste it here
+          License key
           <input
             type="text"
             value={key}
@@ -72,25 +73,27 @@ export default function UnlockPage() {
         <button
           type="submit"
           disabled={loading || !key.trim()}
-          className="w-full rounded-full bg-torus-mid/20 py-2.5 text-sm font-medium text-torus-mid border border-torus-mid/40 disabled:opacity-40"
+          className="w-full rounded-full border border-torus-mid/40 bg-torus-mid/20 py-2.5 text-sm font-medium text-torus-mid disabled:opacity-40"
         >
-          {loading ? 'Verifying…' : 'Activate'}
+          {loading ? 'Verifying…' : 'Redeem key'}
         </button>
       </form>
 
-      <div className="mt-4 rounded-lg border border-torus-border/60 bg-torus-bg/40 p-3">
-        <p className="text-[11px] text-torus-fg-faint">
-          Testing the pro features without a real license?
-        </p>
-        <button
-          type="button"
-          onClick={() => void handleTestUnlock()}
-          disabled={loading}
-          className="mt-2 w-full rounded-full border border-torus-border bg-transparent py-1.5 text-xs text-torus-fg-dim hover:border-torus-mid/40 hover:text-torus-mid disabled:opacity-40"
-        >
-          {loading ? 'Activating…' : 'Activate test mode'}
-        </button>
-      </div>
+      {showTestMode ? (
+        <div className="mt-4 rounded-lg border border-torus-border/60 bg-torus-bg/40 p-3">
+          <p className="text-[11px] text-torus-fg-faint">
+            Testing the pro features without a real license?
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleTestUnlock()}
+            disabled={loading}
+            className="mt-2 w-full rounded-full border border-torus-border bg-transparent py-1.5 text-xs text-torus-fg-dim hover:border-torus-mid/40 hover:text-torus-mid disabled:opacity-40"
+          >
+            {loading ? 'Activating…' : 'Activate test mode'}
+          </button>
+        </div>
+      ) : null}
 
       <p className="mt-6 text-xs text-torus-fg-faint">
         Lost your key? Check your purchase email.{' '}

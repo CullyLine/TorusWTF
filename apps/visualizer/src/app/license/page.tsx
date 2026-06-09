@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getCurrentUserFromCookies } from '@/lib/auth';
 import { hasLicense, licenseConfigured, LICENSE_BENEFITS, LICENSE_PRICE_USD } from '@/lib/license';
 import { LicenseBuyButton } from './LicenseBuyButton';
+import { LicensePostCheckout } from './LicensePostCheckout';
 
 export const metadata = {
   title: 'Production License',
@@ -40,13 +41,7 @@ export default async function LicensePage({ searchParams }: PageProps) {
 
       <div className="mt-10">
         {success ? (
-          <div className="rounded-2xl border border-torus-mid/40 bg-torus-surface p-5 text-sm">
-            <p className="font-medium text-torus-fg">Thanks for your purchase ✦</p>
-            <p className="mt-1 text-torus-fg-dim">
-              Your license activates the moment Polar confirms the order. If it isn’t showing yet,
-              refresh in a minute.
-            </p>
-          </div>
+          <LicensePostCheckout />
         ) : licensed ? (
           <div className="rounded-2xl border border-torus-high/40 bg-torus-surface p-5 text-sm">
             <p className="font-medium text-torus-high">You have the Production License ✦</p>
@@ -57,7 +52,7 @@ export default async function LicensePage({ searchParams }: PageProps) {
         ) : !user ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-torus-fg-dim">
-              The license is bound to your account, so you’ll need to sign in first.
+              The license is bound to your account, so you'll need to sign in first.
             </p>
             <Link
               href="/signin"
@@ -78,6 +73,28 @@ export default async function LicensePage({ searchParams }: PageProps) {
           terms
         </Link>
         .
+      </p>
+
+      <p className="mt-10 text-xs text-torus-fg-faint">
+        <Link href="/" className="hover:text-torus-fg">
+          Home
+        </Link>
+        {' · '}
+        <Link href="/about" className="hover:text-torus-fg">
+          About
+        </Link>
+        {' · '}
+        <Link href="/principles" className="hover:text-torus-fg">
+          Principles
+        </Link>
+        {' · '}
+        <Link href="/privacy" className="hover:text-torus-fg">
+          Privacy
+        </Link>
+        {' · '}
+        <Link href="/terms" className="hover:text-torus-fg">
+          Terms
+        </Link>
       </p>
     </main>
   );

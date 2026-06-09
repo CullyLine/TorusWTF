@@ -22,6 +22,8 @@ export interface PromptOptions {
   message: string;
   placeholder?: string;
   defaultValue?: string;
+  /** Label for the submit button — defaults to "Confirm". */
+  confirmLabel?: string;
 }
 
 interface ToastMessage {
@@ -37,6 +39,7 @@ interface PromptMessage {
   message: string;
   placeholder?: string;
   defaultValue?: string;
+  confirmLabel?: string;
   resolve: (value: string | null) => void;
 }
 
@@ -116,7 +119,7 @@ function PromptToast({
             type="submit"
             className="rounded-md bg-torus-mid/20 px-3 py-1.5 text-xs text-torus-mid hover:bg-torus-mid/30"
           >
-            Confirm
+            {item.confirmLabel ?? 'Confirm'}
           </button>
         </div>
       </form>
@@ -132,7 +135,7 @@ function MessageToast({ item, onDismiss }: { item: ToastMessage; onDismiss: (id:
 
   return (
     <div
-      role="status"
+      role={item.variant === 'error' ? 'alert' : 'status'}
       className={`pointer-events-auto w-full max-w-sm rounded-lg border px-4 py-3 text-sm shadow-lg backdrop-blur-sm motion-safe:animate-[toast-in_200ms_ease-out] ${VARIANT_STYLES[item.variant]}`}
     >
       {item.message}
@@ -178,6 +181,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           message: normalized.message,
           placeholder: normalized.placeholder,
           defaultValue: normalized.defaultValue,
+          confirmLabel: normalized.confirmLabel,
           resolve: (value) => {
             promptActiveRef.current = false;
             resolve(value);

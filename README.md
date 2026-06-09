@@ -16,12 +16,13 @@ No ads. No algorithmic feed. No data selling. No subscription treadmill — the 
 
 ### The Production License
 
-Everything is free. Free exports are watermarked and capped in resolution and frame rate. The **$10 one-time, account-bound Production License** unlocks:
+Everything is free. Free exports are watermarked and capped at 720p / 30 fps. The **$10 one-time, account-bound Production License** unlocks:
 
-- highest-quality 1440p exports
-- high frame-rate exports
+- exports up to 4K resolution
+- high frame-rate exports (60 / 120 / 240 fps)
 - no `torus.wtf` watermark
 - commercial-use permission for your exports
+- custom palette colors and title-card styling
 - a licensed badge on your profile
 
 ## Architecture

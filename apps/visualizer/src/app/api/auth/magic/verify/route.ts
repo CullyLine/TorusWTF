@@ -5,9 +5,22 @@ import { encodeHexLowerCase } from '@oslojs/encoding';
 import { db, magicLinks } from '@/lib/db';
 import { buildSessionCookie, createSession, getOrCreateUserByEmail } from '@/lib/auth';
 
+function safeNextPath(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
+  return raw;
+}
+
+function postAuthRedirect(next: string | null): string {
+  const path = safeNextPath(next) ?? '/';
+  const u = new URL(path, 'http://local');
+  u.searchParams.set('welcome', '1');
+  return `${u.pathname}${u.search}`;
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const token = url.searchParams.get('token');
+  const next = url.searchParams.get('next');
   if (!token) {
     return redirectToError('Missing sign-in token.');
   }
@@ -38,7 +51,7 @@ export async function GET(req: Request) {
 
   const headers = new Headers();
   headers.set('Set-Cookie', buildSessionCookie(session.token, session.expiresAt));
-  headers.set('Location', '/?welcome=1');
+  headers.set('Location', postAuthRedirect(next));
   return new NextResponse(null, { status: 302, headers });
 }
 

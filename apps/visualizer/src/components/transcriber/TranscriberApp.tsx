@@ -4,17 +4,30 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
 import { conductorEngine } from '@/lib/conductor/engine';
-import { loadProject, saveProject } from '@/lib/conductor/project';
+import { saveProject } from '@/lib/conductor/project';
 import {
   DEFAULT_TRANSCRIBE_OPTIONS,
+  friendlyTranscribeError,
   transcribeFile,
+  TRANSCRIBE_PHASE_LABELS,
   type NoteEventTime,
   type TranscribeOptions,
+  type TranscribeProgress,
 } from '@/lib/transcriber/transcribe';
 import { partsToMidi, partsToProject, splitNotes, type SplitMode } from '@/lib/transcriber/parts';
+import { useToast } from '@/hooks/useToast';
 import { useMidiPreview } from './useMidiPreview';
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac';
+const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.opus', '.m4a', '.aac']);
+const INVALID_AUDIO_MSG = 'Please choose an audio file (MP3, WAV, FLAC, OGG, M4A).';
+
+function isAudioFile(file: File): boolean {
+  if (file.type.startsWith('audio/')) return true;
+  const dot = file.name.lastIndexOf('.');
+  if (dot < 0) return false;
+  return AUDIO_EXTENSIONS.has(file.name.slice(dot).toLowerCase());
+}
 
 type Status = 'idle' | 'working' | 'done' | 'error';
 
@@ -24,12 +37,13 @@ function baseName(name: string): string {
 
 export function TranscriberApp() {
   const router = useRouter();
+  const { toast } = useToast();
   const preview = useMidiPreview();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<Status>('idle');
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState<TranscribeProgress>({ fraction: 0, phase: 'decoding' });
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteEventTime[] | null>(null);
 
@@ -61,19 +75,30 @@ export function TranscriberApp() {
       setNotes(null);
       setStatus('idle');
       setError(null);
-      setProgress(0);
+      setProgress({ fraction: 0, phase: 'decoding' });
       setStale(false);
     },
     [preview],
+  );
+
+  const acceptFile = useCallback(
+    (f: File) => {
+      if (!isAudioFile(f)) {
+        toast({ message: INVALID_AUDIO_MSG, variant: 'error' });
+        return;
+      }
+      selectFile(f);
+    },
+    [selectFile, toast],
   );
 
   const handleDrop = useCallback(
     (e: DragEvent) => {
       e.preventDefault();
       const f = e.dataTransfer.files[0];
-      if (f) selectFile(f);
+      if (f) acceptFile(f);
     },
-    [selectFile],
+    [acceptFile],
   );
 
   const runTranscription = useCallback(async () => {
@@ -81,14 +106,14 @@ export function TranscriberApp() {
     preview.stop();
     setStatus('working');
     setError(null);
-    setProgress(0);
+    setProgress({ fraction: 0, phase: 'decoding' });
     try {
       const result = await transcribeFile(file, analysis, setProgress);
       setNotes(result);
       setStatus('done');
       setStale(false);
     } catch (err) {
-      setError((err as Error).message || 'Transcription failed');
+      setError(friendlyTranscribeError(err));
       setStatus('error');
     }
   }, [file, analysis, preview]);
@@ -102,35 +127,40 @@ export function TranscriberApp() {
   );
 
   const handleDownload = useCallback(() => {
-    if (!notes) return;
+    if (!notes || noteCount === 0) return;
+    const name = `${file ? baseName(file.name) : 'transcription'}.mid`;
     const bytes = partsToMidi(parts, bpm);
     const blob = new Blob([bytes as BlobPart], { type: 'audio/midi' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${file ? baseName(file.name) : 'transcription'}.mid`;
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  }, [notes, parts, bpm, file]);
+    toast({ message: `Downloaded ${name}`, variant: 'success' });
+  }, [notes, noteCount, parts, bpm, file, toast]);
 
   const handleSendToConductor = useCallback(() => {
-    if (!project) return;
-    const existing = loadProject();
-    const hasNotes = existing?.tracks?.some((t) => t.clips.some((c) => c.notes.length > 0));
-    if (hasNotes && !window.confirm('Replace your current Conductor project with this transcription?')) {
-      return;
-    }
+    if (!project || noteCount === 0) return;
     preview.stop();
     saveProject(project);
+    toast({ message: 'Sent to Conductor', variant: 'success' });
     router.push('/conductor' as Route);
-  }, [project, preview, router]);
+  }, [project, noteCount, preview, router, toast]);
 
   const togglePreview = useCallback(() => {
     if (preview.playing) preview.stop();
-    else if (project) void preview.play(project);
-  }, [preview, project]);
+    else if (project) {
+      void preview.play(project).catch(() => {
+        toast({
+          message: 'Preview unavailable — instruments are still loading.',
+          variant: 'error',
+        });
+      });
+    }
+  }, [preview, project, toast]);
 
   return (
     <main className="min-h-dvh bg-torus-bg text-torus-fg">
@@ -146,6 +176,7 @@ export function TranscriberApp() {
         {/* Drop zone */}
         <section
           role="button"
+          aria-label="Choose or drop an audio file"
           tabIndex={0}
           onClick={() => inputRef.current?.click()}
           onKeyDown={(e) => {
@@ -164,7 +195,7 @@ export function TranscriberApp() {
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) selectFile(f);
+              if (f) acceptFile(f);
               e.target.value = '';
             }}
           />
@@ -214,7 +245,7 @@ export function TranscriberApp() {
               className="mt-4 w-full rounded-full bg-torus-mid px-4 py-2.5 text-sm font-semibold text-torus-bg transition hover:opacity-90 disabled:opacity-50"
             >
               {status === 'working'
-                ? `Transcribing… ${Math.round(progress * 100)}%`
+                ? `${TRANSCRIBE_PHASE_LABELS[progress.phase]} ${Math.round(progress.fraction * 100)}%`
                 : notes
                   ? stale
                     ? 'Re-transcribe (settings changed)'
@@ -223,11 +254,16 @@ export function TranscriberApp() {
             </button>
 
             {status === 'working' ? (
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-torus-border">
-                <div
-                  className="h-full rounded-full bg-torus-mid transition-[width]"
-                  style={{ width: `${Math.max(2, Math.round(progress * 100))}%` }}
-                />
+              <div className="mt-3">
+                <p className="mb-1.5 text-xs text-torus-fg-faint">
+                  {TRANSCRIBE_PHASE_LABELS[progress.phase]}
+                </p>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-torus-border">
+                  <div
+                    className="h-full rounded-full bg-torus-mid transition-[width]"
+                    style={{ width: `${Math.max(2, Math.round(progress.fraction * 100))}%` }}
+                  />
+                </div>
               </div>
             ) : null}
 
@@ -236,7 +272,7 @@ export function TranscriberApp() {
         ) : null}
 
         {/* Result */}
-        {notes && project ? (
+        {notes !== null && project ? (
           <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-medium text-torus-fg-dim">Result</h2>
@@ -245,56 +281,68 @@ export function TranscriberApp() {
               </span>
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <span className="mb-1.5 block text-xs text-torus-fg-dim">Instruments</span>
-                <div className="flex gap-1.5">
-                  <SplitButton active={split === 'none'} onClick={() => setSplit('none')}>
-                    Single track
-                  </SplitButton>
-                  <SplitButton active={split === 'range'} onClick={() => setSplit('range')}>
-                    Bass / Mid / Lead
-                  </SplitButton>
+            {noteCount === 0 ? (
+              <p className="mt-4 text-sm text-torus-fg-dim">
+                No notes detected — try lowering Note confidence, or use a recording with a clearer
+                melody.
+              </p>
+            ) : (
+              <>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <span className="mb-1.5 block text-xs text-torus-fg-dim">Instruments</span>
+                    <div className="flex gap-1.5">
+                      <SplitButton active={split === 'none'} onClick={() => setSplit('none')}>
+                        Single track
+                      </SplitButton>
+                      <SplitButton active={split === 'range'} onClick={() => setSplit('range')}>
+                        Bass / Mid / Lead
+                      </SplitButton>
+                    </div>
+                  </div>
+                  <SliderRow
+                    label="Tempo"
+                    value={bpm}
+                    min={40}
+                    max={240}
+                    step={1}
+                    format={(v) => `${Math.round(v)} BPM`}
+                    onChange={(v) => setBpm(Math.round(v))}
+                    hint="Used when laying notes onto the grid"
+                  />
                 </div>
-              </div>
-              <SliderRow
-                label="Tempo"
-                value={bpm}
-                min={40}
-                max={240}
-                step={1}
-                format={(v) => `${Math.round(v)} BPM`}
-                onChange={(v) => setBpm(Math.round(v))}
-                hint="Used when laying notes onto the grid"
-              />
-            </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={togglePreview}
-                className="rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-sm font-medium text-torus-mid transition hover:bg-torus-mid/20"
-              >
-                {preview.playing ? '■ Stop' : '▶ Preview'}
-              </button>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-              >
-                Download .mid
-              </button>
-              <button
-                type="button"
-                onClick={handleSendToConductor}
-                className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-              >
-                Send to Conductor →
-              </button>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={togglePreview}
+                    className="rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-sm font-medium text-torus-mid transition hover:bg-torus-mid/20"
+                  >
+                    {preview.playing ? '■ Stop' : '▶ Preview'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
+                  >
+                    Download .mid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendToConductor}
+                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
+                  >
+                    Send to Conductor →
+                  </button>
+                </div>
+              </>
+            )}
+
+            <div className={`mt-5 flex ${noteCount === 0 ? '' : 'flex-wrap gap-2'}`}>
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="ml-auto rounded-full px-3 py-2 text-xs text-torus-fg-faint transition hover:text-torus-fg-dim"
+                className={`rounded-full px-3 py-2 text-xs text-torus-fg-faint transition hover:text-torus-fg-dim ${noteCount > 0 ? 'ml-auto' : ''}`}
               >
                 New file
               </button>

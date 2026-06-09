@@ -10,7 +10,7 @@ export const metadata = {
 
 export default async function SettingsPage() {
   const user = await getCurrentUserFromCookies();
-  if (!user) redirect('/signin');
+  if (!user) redirect('/signin?next=/settings');
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-xl flex-col px-6 py-20">

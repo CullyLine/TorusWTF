@@ -1,11 +1,12 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Logo } from '@torus/ui';
 import {
   pickRandomVisualizerPreset,
+  VISUALIZERS,
   type Creature,
   type VisualizerId,
 } from '@torus/visualizers';
@@ -31,6 +32,7 @@ import { useExport } from '@/hooks/useExport';
 import { usePrerender } from '@/hooks/usePrerender';
 import { useBPM } from '@/hooks/useBPM';
 import { useIdleHide } from '@/hooks/useIdleHide';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePersistedState } from '@/hooks/usePersistedState';
 import { useToast } from '@/hooks/useToast';
 import { useUnlock } from '@/hooks/useUnlock';
@@ -60,6 +62,7 @@ import {
   SHOW_BPM_KEY,
   SOURCE_KIND_KEY,
   DESKTOP_GUIDE_SEEN_KEY,
+  HERO_SEEN_KEY,
   TITLE_OVERLAY_KEY,
   DEFAULT_TITLE_OVERLAY,
   BACKGROUND_KEY,
@@ -85,6 +88,12 @@ function formatTime(sec: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+const AUDIO_FILE_RE = /\.(mp3|wav|flac|ogg|opus|m4a|aac|weba|webm)$/i;
+
+const RESOLUTION_VALUES: readonly ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
+const FPS_VALUES: readonly ExportFps[] = [30, 60, 120, 240];
+const ASPECT_VALUES: readonly AspectRatio[] = ['16:9', '9:16', '1:1', '4:5'];
+
 export function VisualizerApp() {
   const audio = useAudioSource();
   const unlock = useUnlock();
@@ -92,23 +101,39 @@ export function VisualizerApp() {
   const prerender = usePrerender();
   const { toast, prompt } = useToast();
 
-  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'liquid_blob');
+  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'liquid_blob', (v) =>
+    typeof v === 'string' && v in VISUALIZERS ? (v as VisualizerId) : undefined,
+  );
   const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
   const [controls, setControls] = usePersistedState<VisualizerControls>(
     CONTROLS_KEY,
     DEFAULT_CONTROLS,
+    (v) =>
+      v && typeof v === 'object'
+        ? { ...DEFAULT_CONTROLS, ...(v as Partial<VisualizerControls>) }
+        : undefined,
   );
   const [resolution, setResolution] = usePersistedState<ExportResolution>(
     EXPORT_RESOLUTION_KEY,
     FREE_MAX_RES,
+    (v) => (RESOLUTION_VALUES.includes(v as ExportResolution) ? (v as ExportResolution) : undefined),
   );
-  const [fps, setFps] = usePersistedState<ExportFps>(EXPORT_FPS_KEY, FREE_MAX_FPS);
-  const [aspect, setAspect] = usePersistedState<AspectRatio>(EXPORT_ASPECT_KEY, '16:9');
+  const [fps, setFps] = usePersistedState<ExportFps>(EXPORT_FPS_KEY, FREE_MAX_FPS, (v) =>
+    FPS_VALUES.includes(v as ExportFps) ? (v as ExportFps) : undefined,
+  );
+  const [aspect, setAspect] = usePersistedState<AspectRatio>(EXPORT_ASPECT_KEY, '16:9', (v) =>
+    ASPECT_VALUES.includes(v as AspectRatio) ? (v as AspectRatio) : undefined,
+  );
+  // Mic/desktop streams can't survive a reload, so only `file` is restored —
+  // anything else would claim a source that no longer exists.
   const [sourceKind, setSourceKind] = usePersistedState<SourceKind | null>(
     SOURCE_KIND_KEY,
     null,
+    (v) => (v === 'file' ? 'file' : null),
   );
   const [heroCollapsed, setHeroCollapsed] = useState(true);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const [presetsVersion, setPresetsVersion] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [showBpm, setShowBpm] = usePersistedState<boolean>(SHOW_BPM_KEY, false);
@@ -130,6 +155,25 @@ export function VisualizerApp() {
 
   useEffect(() => {
     setDesktopSupported(isChromium());
+  }, []);
+
+  // First visit: open with the product intro. Returning visitors land
+  // straight in the studio.
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(HERO_SEEN_KEY)) setHeroCollapsed(false);
+    } catch {
+      // localStorage unavailable — stay in studio mode.
+    }
+  }, []);
+
+  const collapseHero = useCallback(() => {
+    setHeroCollapsed(true);
+    try {
+      localStorage.setItem(HERO_SEEN_KEY, '1');
+    } catch {
+      // ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -154,10 +198,7 @@ export function VisualizerApp() {
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
 
-  const reducedMotion = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  }, []);
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   useEffect(() => {
     if (!reducedMotion) return;
@@ -231,13 +272,26 @@ export function VisualizerApp() {
 
   const handleFile = useCallback(
     (file: File) => {
+      const looksLikeAudio = file.type.startsWith('audio/') || AUDIO_FILE_RE.test(file.name);
+      if (!looksLikeAudio) {
+        toast({
+          message: `"${file.name}" doesn't look like an audio file — try MP3, WAV, FLAC, or OGG.`,
+          variant: 'error',
+        });
+        return;
+      }
       setSourceKind('file');
       audio.loadFile(file);
-      setHeroCollapsed(true);
+      collapseHero();
       void applyEmbeddedTags(file);
     },
-    [audio, applyEmbeddedTags, setSourceKind],
+    [audio, applyEmbeddedTags, collapseHero, setSourceKind, toast],
   );
+
+  const handleClearSource = useCallback(() => {
+    audio.clearSource();
+    setSourceKind(null);
+  }, [audio, setSourceKind]);
 
   const handlePickPaletteImage = useCallback(
     async (file: File) => {
@@ -253,6 +307,8 @@ export function VisualizerApp() {
   );
 
   const handleTryDemo = useCallback(async () => {
+    if (demoLoading) return;
+    setDemoLoading(true);
     try {
       const res = await fetch('/demo.mp3');
       if (!res.ok) throw new Error('fetch failed');
@@ -260,8 +316,10 @@ export function VisualizerApp() {
       handleFile(new File([blob], 'demo.mp3', { type: 'audio/mpeg' }));
     } catch {
       toast({ message: 'Could not load demo audio', variant: 'error' });
+    } finally {
+      setDemoLoading(false);
     }
-  }, [handleFile, toast]);
+  }, [demoLoading, handleFile, toast]);
 
   const handleRandomPreset = useCallback(() => {
     setPreset(pickRandomVisualizerPreset());
@@ -296,7 +354,11 @@ export function VisualizerApp() {
 
   const handleSavePreset = useCallback(async () => {
     if (!unlock.unlocked) return;
-    const name = await prompt({ message: 'Preset name', placeholder: 'My preset' });
+    const name = await prompt({
+      message: 'Preset name',
+      placeholder: 'My preset',
+      confirmLabel: 'Save',
+    });
     const trimmed = name?.trim();
     if (!trimmed) return;
 
@@ -345,21 +407,29 @@ export function VisualizerApp() {
     const canvas = glCanvasRef.current;
     if (!canvas || !audio.source) return;
 
-    await exportHook.start({
-      glCanvas: canvas,
-      audioStream: audio.getAudioStreamForExport(),
-      resolution,
-      aspect,
-      fps,
-      titleOverlay,
-      onBeforeRecord: async () => {
-        if (audio.source?.kind === 'file') {
-          await audio.restartFile();
-        }
-      },
-      onFileEnded: () => exportHook.stop(),
-    });
-  }, [audio, exportHook, resolution, aspect, fps, titleOverlay]);
+    try {
+      await exportHook.start({
+        glCanvas: canvas,
+        audioStream: audio.getAudioStreamForExport(),
+        resolution,
+        aspect,
+        fps,
+        titleOverlay,
+        onBeforeRecord: async () => {
+          if (audio.source?.kind === 'file') {
+            await audio.restartFile();
+          }
+        },
+        onFileEnded: () => exportHook.stop(),
+        onSaved: () => toast({ message: 'Export saved to your downloads', variant: 'success' }),
+      });
+    } catch (err) {
+      toast({
+        message: err instanceof Error ? err.message : 'Could not start recording',
+        variant: 'error',
+      });
+    }
+  }, [audio, exportHook, resolution, aspect, fps, titleOverlay, toast]);
 
   const handleSnapshot = useCallback(async () => {
     const canvas = glCanvasRef.current;
@@ -393,7 +463,7 @@ export function VisualizerApp() {
       void ctx.close();
 
       const dims = dimensionsFor(resolution, aspect);
-      await prerender.start({
+      const ok = await prerender.start({
         audioBuffer,
         fileName: fileSource.fileName,
         preset,
@@ -409,8 +479,8 @@ export function VisualizerApp() {
         unlocked: unlock.unlocked,
         background,
       });
-      if (prerender.progress.stage === 'done') {
-        toast({ message: 'MP4 download ready', variant: 'success' });
+      if (ok) {
+        toast({ message: 'MP4 saved to your downloads', variant: 'success' });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Pre-render failed';
@@ -436,13 +506,18 @@ export function VisualizerApp() {
 
   const exportSize = dimensionsFor(resolution, aspect);
   const isRecording = exportHook.state === 'recording';
+  const hasSource = Boolean(audio.source);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const bannerVisible = !unlock.unlocked && !unlock.checking;
   const previewAspect = `${exportSize.width} / ${exportSize.height}`;
   const previewPortrait = aspect === '9:16' || aspect === '4:5';
+  // Nothing auto-hides until there's actually audio on screen — a fresh
+  // visitor should never watch the controls fade away.
   const { uiVisible: overlayVisible, reveal: revealOverlay, hide: hideOverlay } = useIdleHide({
-    forceVisible: isRecording,
+    forceVisible: isRecording || !hasSource,
   });
   const { uiVisible: sidebarVisible, reveal: revealSidebar, hide: hideSidebar } = useIdleHide({
-    forceVisible: isRecording,
+    forceVisible: isRecording || !hasSource,
     idleMs: 3_000,
   });
   // Run BPM detection whenever there's an audio source, regardless of the
@@ -460,6 +535,11 @@ export function VisualizerApp() {
     revealOverlay();
     revealSidebar();
   }, [revealOverlay, revealSidebar]);
+
+  // When audio arrives on mobile, tuck the sheet away so the visuals win.
+  useEffect(() => {
+    if (hasSource && isMobile) setMobileControlsOpen(false);
+  }, [hasSource, isMobile]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -525,11 +605,13 @@ export function VisualizerApp() {
         hasSource={Boolean(audio.source)}
         error={audio.error}
         desktopSupported={desktopSupported}
+        demoLoading={demoLoading}
         onSelectKind={handleSelectKind}
         onDesktopSelect={handleDesktopSelect}
         onShowDesktopGuide={() => setDesktopGuideOpen(true)}
         onFile={handleFile}
         onTryDemo={() => void handleTryDemo()}
+        onClearSource={handleClearSource}
       />
       {audio.source?.kind === 'file' ? (
         <AudioControls
@@ -597,8 +679,8 @@ export function VisualizerApp() {
       />
       {!unlock.unlocked ? (
         <p className="text-center text-xs text-torus-fg-faint">
-          <Link href="/unlock" className="text-torus-mid hover:underline">
-            Unlock full version ($10)
+          <Link href="/license" className="text-torus-mid hover:underline">
+            Get the Production License ($10, one-time)
           </Link>
         </p>
       ) : null}
@@ -657,8 +739,13 @@ export function VisualizerApp() {
             <div
               className={`absolute bottom-3 left-1/2 z-30 -translate-x-1/2 flex items-center gap-2 rounded-full border border-torus-border bg-torus-bg/80 px-3 py-1.5 text-xs backdrop-blur-sm ${overlayFade} ${overlayHidden}`}
             >
-              <button type="button" onClick={audio.togglePlay} className="text-torus-mid">
-                {audio.isPlaying ? 'pause' : 'play'}
+              <button
+                type="button"
+                onClick={audio.togglePlay}
+                aria-label={audio.isPlaying ? 'Pause' : 'Play'}
+                className="text-torus-mid"
+              >
+                {audio.isPlaying ? 'Pause' : 'Play'}
               </button>
               <span className="text-torus-fg-faint truncate max-w-[200px]">
                 {audio.source.fileName}
@@ -684,6 +771,7 @@ export function VisualizerApp() {
         <EmptyStateHero
           reducedMotion={reducedMotion}
           onTryDemo={() => void handleTryDemo()}
+          demoLoading={demoLoading}
         />
       )}
     </>
@@ -702,16 +790,19 @@ export function VisualizerApp() {
                 Turn any audio into beautiful 3D visuals. Drop a track, use your mic, or capture
                 desktop audio — then export for Reels, Shorts, and portfolios.
               </p>
-              <div className="mt-4 flex flex-wrap gap-3 text-xs">
+              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
                 <span className="rounded-full border border-torus-border px-3 py-1">Free: 720p / 30 FPS</span>
                 <span className="rounded-full border border-torus-mid/30 px-3 py-1 text-torus-mid">
-                  Full: $10 one-time — 4K / 240 FPS, no watermark
+                  Full: $10 one-time — up to 4K / 240 FPS, no watermark
                 </span>
+                <Link href="/about" className="text-torus-fg-faint hover:text-torus-mid">
+                  More about torus →
+                </Link>
               </div>
             </div>
             <button
               type="button"
-              onClick={() => setHeroCollapsed(true)}
+              onClick={collapseHero}
               className="self-start rounded-full border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40"
             >
               Open the app →
@@ -746,15 +837,26 @@ export function VisualizerApp() {
   return (
     <div className="flex h-dvh flex-col">
       <HwAccelBanner />
-      <header className="flex items-center justify-end gap-2 border-b border-torus-border py-3 px-4">
+      <header className="flex items-center justify-end gap-3 border-b border-torus-border py-3 px-4">
         <FeedbackButton />
+        <button
+          type="button"
+          onClick={() => setShortcutsOpen(true)}
+          className="text-xs text-torus-fg-faint hover:text-torus-mid"
+          title="Keyboard shortcuts (?)"
+        >
+          Shortcuts
+        </button>
         <button
           type="button"
           onClick={() => setHeroCollapsed(false)}
           className="text-xs text-torus-fg-faint hover:text-torus-mid"
         >
-          About
+          Intro
         </button>
+        <Link href="/about" className="text-xs text-torus-fg-faint hover:text-torus-mid">
+          About
+        </Link>
       </header>
 
       <main
@@ -769,7 +871,9 @@ export function VisualizerApp() {
         <section className="absolute inset-0 flex flex-col">
           <div className="relative min-h-0 flex-1">{viewportCanvas}</div>
           {audio.source?.kind === 'file' ? (
-            <div className={`absolute bottom-0 left-0 right-0 z-30 ${overlayFade} ${overlayHidden}`}>
+            <div
+              className={`absolute left-0 right-0 z-20 ${isMobile ? 'bottom-9' : 'bottom-0'} ${overlayFade} ${overlayHidden}`}
+            >
               <Scrubber
                 currentTime={audio.currentTime}
                 duration={audio.duration}
@@ -779,25 +883,42 @@ export function VisualizerApp() {
           ) : null}
         </section>
 
-        <aside
-          aria-label="Visualizer controls"
-          onPointerEnter={revealSidebar}
-          onPointerMove={revealSidebar}
-          className={`absolute left-4 top-4 bottom-4 z-20 hidden w-[320px] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-y-auto rounded-xl border border-torus-border bg-torus-surface/70 p-4 shadow-2xl backdrop-blur-md md:flex ${sidebarFade} ${sidebarHidden}`}
-        >
-          {sidebarPanels}
-        </aside>
-
-        {/* Mobile fallback: inline sidebar drawer at the bottom */}
-        <aside
-          aria-label="Visualizer controls (mobile)"
-          className="absolute inset-x-0 bottom-0 z-20 flex max-h-[55dvh] flex-col gap-4 overflow-y-auto border-t border-torus-border bg-torus-surface/90 p-4 backdrop-blur-md md:hidden"
-        >
-          {sidebarPanels}
-        </aside>
+        {!isMobile ? (
+          <aside
+            aria-label="Visualizer controls"
+            onPointerEnter={revealSidebar}
+            onPointerMove={revealSidebar}
+            className={`absolute left-4 top-4 bottom-4 z-20 flex w-[320px] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-y-auto rounded-xl border border-torus-border bg-torus-surface/70 p-4 shadow-2xl backdrop-blur-md ${sidebarFade} ${sidebarHidden}`}
+          >
+            {sidebarPanels}
+          </aside>
+        ) : (
+          /* Mobile: collapsible bottom sheet so the visuals stay visible. */
+          <aside
+            aria-label="Visualizer controls"
+            className="absolute inset-x-0 bottom-0 z-30 flex flex-col border-t border-torus-border bg-torus-surface/90 backdrop-blur-md"
+          >
+            <button
+              type="button"
+              onClick={() => setMobileControlsOpen((o) => !o)}
+              aria-expanded={mobileControlsOpen}
+              className="flex w-full items-center justify-between px-4 py-2.5 text-xs font-medium text-torus-fg-dim"
+            >
+              <span>Controls</span>
+              <span aria-hidden>{mobileControlsOpen ? '\u25be' : '\u25b4'}</span>
+            </button>
+            {mobileControlsOpen ? (
+              <div className="flex max-h-[50dvh] flex-col gap-4 overflow-y-auto border-t border-torus-border p-4">
+                {sidebarPanels}
+              </div>
+            ) : null}
+          </aside>
+        )}
       </main>
 
-      {!unlock.unlocked && !unlock.checking ? <UnlockBanner /> : null}
+      {/* Reserve room so the fixed banner never covers the scrubber/controls. */}
+      {bannerVisible ? <div className="h-12 shrink-0" aria-hidden /> : null}
+      {bannerVisible ? <UnlockBanner /> : null}
       <ShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}

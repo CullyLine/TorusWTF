@@ -30,6 +30,11 @@ export interface SoundfontInfo {
   presets: PresetInfo[];
 }
 
+export interface SoundfontLoadProgress {
+  loaded: number;
+  total: number | null;
+}
+
 class ConductorEngine {
   private ctx: AudioContext | null = null;
   private synth: WorkletSynthesizer | null = null;
@@ -70,20 +75,58 @@ class ConductorEngine {
     this.analyser = analyser;
   }
 
+  resetDefaultSoundfont(): void {
+    this.defaultPromise = null;
+  }
+
   /** Fetches + registers the bundled default soundfont (once). */
-  async ensureDefaultSoundfont(): Promise<SoundfontInfo> {
+  async ensureDefaultSoundfont(
+    onProgress?: (progress: SoundfontLoadProgress) => void,
+  ): Promise<SoundfontInfo> {
     await this.init();
     if (!this.defaultPromise) {
-      this.defaultPromise = (async () => {
-        const res = await fetch(DEFAULT_SF_URL);
-        if (!res.ok) throw new Error(`Failed to load default soundfont (${res.status})`);
-        const buf = await res.arrayBuffer();
-        await this.synth!.soundBankManager.addSoundBank(buf, DEFAULT_SOUNDFONT_ID);
-        this.loaded.set(DEFAULT_SOUNDFONT_ID, DEFAULT_SOUNDFONT_NAME);
-        return { id: DEFAULT_SOUNDFONT_ID, name: DEFAULT_SOUNDFONT_NAME, presets: this.getPresets() };
-      })();
+      this.defaultPromise = this.fetchDefaultSoundfont(onProgress);
     }
     return this.defaultPromise;
+  }
+
+  private async fetchDefaultSoundfont(
+    onProgress?: (progress: SoundfontLoadProgress) => void,
+  ): Promise<SoundfontInfo> {
+    const res = await fetch(DEFAULT_SF_URL);
+    if (!res.ok) throw new Error(`Failed to load default soundfont (${res.status})`);
+
+    const totalHeader = res.headers.get('content-length');
+    const total = totalHeader ? Number.parseInt(totalHeader, 10) : null;
+    onProgress?.({ loaded: 0, total: Number.isFinite(total) ? total : null });
+
+    let buf: ArrayBuffer;
+    if (res.body) {
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let loaded = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.byteLength;
+        onProgress?.({ loaded, total: Number.isFinite(total) ? total : null });
+      }
+      const merged = new Uint8Array(loaded);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      buf = merged.buffer;
+    } else {
+      buf = await res.arrayBuffer();
+      onProgress?.({ loaded: buf.byteLength, total: buf.byteLength });
+    }
+
+    await this.synth!.soundBankManager.addSoundBank(buf, DEFAULT_SOUNDFONT_ID);
+    this.loaded.set(DEFAULT_SOUNDFONT_ID, DEFAULT_SOUNDFONT_NAME);
+    return { id: DEFAULT_SOUNDFONT_ID, name: DEFAULT_SOUNDFONT_NAME, presets: this.getPresets() };
   }
 
   /** Registers a user-uploaded soundfont (SF2/SF3/DLS). */

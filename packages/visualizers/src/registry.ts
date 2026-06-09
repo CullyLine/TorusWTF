@@ -89,13 +89,13 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   anima: {
     id: 'anima',
     label: 'Anima',
-    hint: 'The living creature ? aurora curtains + soul core, listens with you.',
+    hint: 'The living creature \u2014 aurora curtains + soul core, listens with you.',
     Scene: AnimaScene,
   },
   torus_field: {
     id: 'torus_field',
     label: 'Torus Field',
-    hint: 'Sacred-geometry energy flow ? the brand signature.',
+    hint: 'Sacred-geometry energy flow \u2014 the brand signature.',
     Scene: TorusFieldScene,
   },
   particle_storm: {
@@ -113,13 +113,13 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   volumetric_waveform: {
     id: 'volumetric_waveform',
     label: 'Volumetric Waveform',
-    hint: 'The waveform extruded into 3D ? minimal, universal.',
+    hint: 'The waveform extruded into 3D \u2014 minimal, universal.',
     Scene: VolumetricWaveformScene,
   },
   cosmic_mandala: {
     id: 'cosmic_mandala',
     label: 'Cosmic Mandala',
-    hint: 'Sacred-geometry rings in radial symmetry ? brand-aligned calm power.',
+    hint: 'Sacred-geometry rings in radial symmetry \u2014 brand-aligned calm power.',
     Scene: CosmicMandalaScene,
   },
   star_field: {
@@ -131,13 +131,13 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   outrun_grid: {
     id: 'outrun_grid',
     label: 'Outrun Grid',
-    hint: 'Synthwave horizon grid with a pulsing sun ? producer-nightdrive vibes.',
+    hint: 'Synthwave horizon grid with a pulsing sun \u2014 producer-nightdrive vibes.',
     Scene: OutrunGridScene,
   },
   liquid_chrome: {
     id: 'liquid_chrome',
     label: 'Liquid Chrome',
-    hint: 'Metallic blob morphing with bass and beats ? high-gloss centerpiece.',
+    hint: 'Metallic blob morphing with bass and beats \u2014 high-gloss centerpiece.',
     Scene: LiquidChromeScene,
   },
   liquid_blob: {

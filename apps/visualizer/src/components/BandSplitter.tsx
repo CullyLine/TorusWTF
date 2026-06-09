@@ -128,8 +128,17 @@ export function BandSplitter({
       raf = requestAnimationFrame(draw);
     };
 
+    const onVisibility = () => {
+      cancelAnimationFrame(raf);
+      if (!document.hidden) raf = requestAnimationFrame(draw);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [analyser, palette, bassMaxHz, midMaxHz, maxHz, nyquist]);
 
   // Handle drag with pointer capture on the container.
@@ -183,6 +192,28 @@ export function BandSplitter({
     forceRerender((n) => n + 1);
   };
 
+  const nudge = (which: 'bass' | 'mid', direction: -1 | 1) => {
+    // Multiplicative steps feel even on the log-scaled axis.
+    const factor = direction > 0 ? 1.06 : 1 / 1.06;
+    if (which === 'bass') {
+      const next = Math.max(MIN_BASS_HZ, Math.min(midMaxHz - HANDLE_GAP_HZ, bassMaxHz * factor));
+      onChange({ bassMaxHz: Math.round(next) });
+    } else {
+      const next = Math.max(bassMaxHz + HANDLE_GAP_HZ, Math.min(maxHz - 100, midMaxHz * factor));
+      onChange({ midMaxHz: Math.round(next) });
+    }
+  };
+
+  const handleKeyDown = (which: 'bass' | 'mid') => (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      nudge(which, -1);
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      nudge(which, 1);
+    }
+  };
+
   return (
     <div className="block text-xs text-torus-fg-dim">
       <div className="mb-1 flex items-center justify-between">
@@ -214,15 +245,28 @@ export function BandSplitter({
           left={`${(hzToX(bassMaxHz, 100, maxHz)).toFixed(2)}%`}
           color={palette.bass}
           onPointerDown={startDrag('bass')}
+          onKeyDown={handleKeyDown('bass')}
           title={`${formatHz(bassMaxHz)}Hz`}
+          label="Bass / mid crossover"
+          value={bassMaxHz}
+          min={MIN_BASS_HZ}
+          max={midMaxHz - HANDLE_GAP_HZ}
         />
         <Handle
           left={`${(hzToX(midMaxHz, 100, maxHz)).toFixed(2)}%`}
           color={palette.mid}
           onPointerDown={startDrag('mid')}
+          onKeyDown={handleKeyDown('mid')}
           title={`${formatHz(midMaxHz)}Hz`}
+          label="Mid / high crossover"
+          value={midMaxHz}
+          min={bassMaxHz + HANDLE_GAP_HZ}
+          max={maxHz - 100}
         />
       </div>
+      <p className="mt-1 text-[10px] text-torus-fg-faint">
+        Drag the handles (or use arrow keys) to set where bass, mid, and high split.
+      </p>
     </div>
   );
 }
@@ -231,18 +275,36 @@ function Handle({
   left,
   color,
   onPointerDown,
+  onKeyDown,
   title,
+  label,
+  value,
+  min,
+  max,
 }: {
   left: string;
   color: string;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   title: string;
+  label: string;
+  value: number;
+  min: number;
+  max: number;
 }) {
   return (
     <div
       onPointerDown={onPointerDown}
+      onKeyDown={onKeyDown}
       title={title}
-      className="absolute top-0 h-full w-3 -translate-x-1/2 cursor-ew-resize touch-none"
+      role="slider"
+      tabIndex={0}
+      aria-label={label}
+      aria-valuemin={Math.round(min)}
+      aria-valuemax={Math.round(max)}
+      aria-valuenow={Math.round(value)}
+      aria-valuetext={`${formatHz(value)}Hz`}
+      className="absolute top-0 h-full w-4 -translate-x-1/2 cursor-ew-resize touch-none outline-none focus-visible:bg-white/10"
       style={{ left }}
     >
       <div

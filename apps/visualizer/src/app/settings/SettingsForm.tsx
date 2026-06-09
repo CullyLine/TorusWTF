@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -29,13 +29,57 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
   const [profileOk, setProfileOk] = useState(false);
   const [subBusy, setSubBusy] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+  const [subOk, setSubOk] = useState(false);
   const [dangerOpen, setDangerOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmHandle, setConfirmHandle] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteTitleId = useId();
+  const deletePanelRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
 
   const licensed = initialUser.hasLicense;
+  const normalizedConfirmHandle = confirmHandle.replace(/^@/, '').toLowerCase();
+  const confirmMatches =
+    normalizedConfirmHandle === initialUser.handle.toLowerCase();
+
+  useEffect(() => {
+    if (!confirmOpen) return;
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const first = deletePanelRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setConfirmOpen(false);
+      }
+      if (e.key === 'Tab' && deletePanelRef.current) {
+        const focusable = deletePanelRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const firstEl = focusable[0]!;
+        const lastEl = focusable[focusable.length - 1]!;
+        if (e.shiftKey && document.activeElement === firstEl) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && document.activeElement === lastEl) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocus.current?.focus();
+    };
+  }, [confirmOpen]);
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -72,6 +116,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
     if (!licensed) return;
     setSubBusy(true);
     setSubError(null);
+    setSubOk(false);
     try {
       const res = await fetch('/api/me/subdomain', {
         method: 'POST',
@@ -84,6 +129,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
         setSubError(data.error ?? 'Could not update subdomain.');
         return;
       }
+      setSubOk(true);
       router.refresh();
     } catch {
       setSubError('Network error.');
@@ -100,7 +146,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ confirmHandle }),
+        body: JSON.stringify({ confirmHandle: normalizedConfirmHandle }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -122,6 +168,17 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
       <section>
         <h2 className="text-lg font-semibold">Profile</h2>
         <form onSubmit={(e) => void saveProfile(e)} className="mt-4 space-y-4">
+          {initialUser.email ? (
+            <label className="block text-sm">
+              <span className="text-torus-fg-dim">Email</span>
+              <input
+                type="email"
+                value={initialUser.email}
+                readOnly
+                className="mt-1 w-full rounded-lg border border-torus-border bg-torus-surface/50 px-3 py-2 text-sm text-torus-fg-dim"
+              />
+            </label>
+          ) : null}
           <label className="block text-sm">
             <span className="text-torus-fg-dim">Handle</span>
             <input
@@ -200,6 +257,13 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
           </button>
         </form>
         {subError ? <p className="mt-2 text-sm text-torus-bass">{subError}</p> : null}
+        {subOk && subdomain.trim() ? (
+          <p className="mt-2 text-sm text-torus-mid">
+            Saved — {subdomain.trim()}.torus.wtf
+          </p>
+        ) : subOk ? (
+          <p className="mt-2 text-sm text-torus-mid">Saved.</p>
+        ) : null}
       </section>
 
       <section className="rounded-xl border border-torus-bass/30 p-6">
@@ -234,13 +298,24 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
       {confirmOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          role="dialog"
-          aria-modal="true"
+          role="presentation"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmOpen(false);
+          }}
         >
-          <div className="w-full max-w-md rounded-xl border border-torus-border-strong bg-torus-bg p-6">
-            <h3 className="text-lg font-semibold">Delete account</h3>
+          <div
+            ref={deletePanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={deleteTitleId}
+            className="w-full max-w-md rounded-xl border border-torus-border-strong bg-torus-bg p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id={deleteTitleId} className="text-lg font-semibold">
+              Delete account
+            </h3>
             <p className="mt-2 text-sm text-torus-fg-dim">
-              Type <strong className="font-mono text-torus-fg">@{initialUser.handle}</strong> to
+              Type <strong className="font-mono text-torus-fg">{initialUser.handle}</strong> to
               confirm.
             </p>
             <input
@@ -262,9 +337,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
               </button>
               <button
                 type="button"
-                disabled={
-                  deleteBusy || confirmHandle.toLowerCase() !== initialUser.handle.toLowerCase()
-                }
+                disabled={deleteBusy || !confirmMatches}
                 onClick={() => void confirmDelete()}
                 className="rounded-full bg-torus-bass px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >

@@ -5,15 +5,30 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 export function usePersistedState<T>(
   key: string,
   initial: T,
+  /**
+   * Optional guard run against the value read back from localStorage.
+   * Return a coerced/clamped value, or `undefined` to fall back to
+   * `initial` — protects the UI from stale or corrupt persisted state.
+   */
+  sanitize?: (persisted: unknown) => T | undefined,
 ): [T, Dispatch<SetStateAction<T>>] {
   const [value, setValue] = useState<T>(initial);
   const hydratedRef = useRef(false);
+  const sanitizeRef = useRef(sanitize);
+  sanitizeRef.current = sanitize;
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
       if (raw !== null) {
-        setValue(JSON.parse(raw) as T);
+        const parsed = JSON.parse(raw) as unknown;
+        const guard = sanitizeRef.current;
+        if (guard) {
+          const next = guard(parsed);
+          if (next !== undefined) setValue(next);
+        } else {
+          setValue(parsed as T);
+        }
       }
     } catch {
       // ignore corrupt storage

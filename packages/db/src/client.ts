@@ -1,4 +1,5 @@
 import { createClient as createRemoteClient, type Client } from '@libsql/client/web';
+import type { createClient as CreateNativeClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql/web';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { createRequire } from 'node:module';
@@ -60,7 +61,7 @@ function createLibsqlClient(url: string, authToken?: string): Client {
     // ever used.
     const nodeRequire = createRequire(import.meta.url);
     const nativeId = ['@libsql', 'client'].join('/');
-    const { createClient } = nodeRequire(nativeId) as typeof import('@libsql/client');
+    const { createClient } = nodeRequire(nativeId) as { createClient: typeof CreateNativeClient };
     return createClient({ url, authToken }) as unknown as Client;
   }
   // Force plain HTTPS for remote Turso. The `libsql://` scheme makes the client

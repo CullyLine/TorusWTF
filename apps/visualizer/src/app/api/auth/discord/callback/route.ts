@@ -9,6 +9,18 @@ interface DiscordUser {
   avatar: string | null;
 }
 
+function safeNextPath(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
+  return raw;
+}
+
+function postAuthRedirect(next: string | null): string {
+  const path = safeNextPath(next) ?? '/';
+  const u = new URL(path, 'http://local');
+  u.searchParams.set('welcome', '1');
+  return `${u.pathname}${u.search}`;
+}
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
@@ -76,6 +88,9 @@ export async function GET(req: Request) {
   headers.append('Set-Cookie', 'torus_oauth_state=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
   headers.append('Set-Cookie', 'torus_oauth_verifier=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
   headers.append('Set-Cookie', 'torus_oauth_popup=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+  const nextRaw = getCookie('torus_oauth_next');
+  const next = nextRaw ? decodeURIComponent(nextRaw) : null;
+  headers.append('Set-Cookie', 'torus_oauth_next=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
 
   if (isPopup) {
     headers.set('Content-Type', 'text/html; charset=utf-8');
@@ -92,7 +107,7 @@ export async function GET(req: Request) {
     );
   }
 
-  headers.set('Location', '/?welcome=1');
+  headers.set('Location', postAuthRedirect(next));
   return new NextResponse(null, { status: 302, headers });
 }
 

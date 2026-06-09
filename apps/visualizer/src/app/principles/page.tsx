@@ -45,6 +45,28 @@ export default function PrinciplesPage() {
         </Link>{' '}
         — a one-time unlock for high-quality, commercial-ready exports.
       </p>
+
+      <p className="mt-10 text-xs text-torus-fg-faint">
+        <Link href="/" className="hover:text-torus-fg">
+          Home
+        </Link>
+        {' · '}
+        <Link href="/about" className="hover:text-torus-fg">
+          About
+        </Link>
+        {' · '}
+        <Link href="/principles" className="hover:text-torus-fg">
+          Principles
+        </Link>
+        {' · '}
+        <Link href="/privacy" className="hover:text-torus-fg">
+          Privacy
+        </Link>
+        {' · '}
+        <Link href="/terms" className="hover:text-torus-fg">
+          Terms
+        </Link>
+      </p>
     </main>
   );
 }

@@ -77,7 +77,7 @@ export function uid(prefix = 'id'): string {
 
 export const DEFAULT_PRESET: PresetRef = {
   soundfontId: 'osrs',
-  name: 'Patch 0',
+  name: 'Piano',
   bankMSB: 0,
   bankLSB: 0,
   program: 0,

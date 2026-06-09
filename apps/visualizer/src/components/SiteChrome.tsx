@@ -1,7 +1,9 @@
 'use client';
 
+import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
 import { AppLauncher } from '@/components/AppLauncher';
+import { WelcomeToast } from '@/components/WelcomeToast';
 
 /**
  * Global, uninvasive chrome rendered on every page: the app + account accordion
@@ -11,5 +13,12 @@ import { AppLauncher } from '@/components/AppLauncher';
 export function SiteChrome() {
   const pathname = usePathname();
   if (pathname.startsWith('/hd')) return null;
-  return <AppLauncher />;
+  return (
+    <>
+      <Suspense fallback={null}>
+        <WelcomeToast />
+      </Suspense>
+      <AppLauncher />
+    </>
+  );
 }

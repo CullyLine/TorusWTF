@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
 import { BrandMark } from '@/components/BrandMark';
 import { useSessionUser } from '@/hooks/useSessionUser';
+import { detectOS } from '@/lib/platform';
 
 /**
  * AppLauncher — the always-present, out-of-the-way connector for the torus
@@ -51,11 +52,22 @@ export function AppLauncher() {
   const [mounted, setMounted] = useState(false);
   const pathname = usePathname();
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const { user, loaded, refresh } = useSessionUser();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Move focus into the panel on open; hand it back to the trigger on close.
+  useEffect(() => {
+    if (open) {
+      panelRef.current?.focus();
+    } else if (document.activeElement && rootRef.current?.contains(document.activeElement)) {
+      triggerRef.current?.focus();
+    }
+  }, [open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -105,17 +117,20 @@ export function AppLauncher() {
 
   if (!mounted) return null;
 
+  const modKey = detectOS() === 'mac' ? '\u2318' : 'Ctrl+';
+
   const menuItem =
     'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-torus-fg-dim transition-colors hover:bg-white/5 hover:text-torus-fg';
 
   return (
     <div ref={rootRef} className="fixed left-4 top-4 z-40">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label="Open torus apps (Cmd+K)"
+        aria-label={`Open torus apps (${modKey}K)`}
         aria-expanded={open}
-        title="torus apps (\u2318K)"
+        title={`torus apps (${modKey}K)`}
         className={`relative grid h-9 w-9 place-items-center rounded-full border bg-torus-bg/70 backdrop-blur-sm transition ${
           open
             ? 'border-torus-border-strong opacity-100'
@@ -135,10 +150,16 @@ export function AppLauncher() {
       </button>
 
       {open ? (
-        <div className="absolute left-0 mt-2 w-72 overflow-hidden rounded-2xl border border-torus-border-strong bg-torus-bg/95 shadow-2xl backdrop-blur-sm">
+        <div
+          ref={panelRef}
+          tabIndex={-1}
+          role="dialog"
+          aria-label="torus apps and account"
+          className="absolute left-0 mt-2 w-72 overflow-hidden rounded-2xl border border-torus-border-strong bg-torus-bg/95 shadow-2xl backdrop-blur-sm outline-none"
+        >
           <div className="flex items-center justify-between border-b border-torus-border px-4 py-3">
             <span className="text-sm font-medium text-torus-fg-dim">torus apps</span>
-            <span className="text-[10px] text-torus-fg-faint">{'\u2318'}K</span>
+            <span className="text-[10px] text-torus-fg-faint">{modKey}K</span>
           </div>
           <ul className="p-2">
             {APPS.map((app) => {
@@ -204,7 +225,7 @@ export function AppLauncher() {
                 <span className="flex min-w-0 flex-col">
                   <span className="text-sm font-medium text-torus-fg">Sign in</span>
                   <span className="truncate text-[11px] text-torus-fg-faint">
-                    Save projects & sync your license
+                    Claim your handle & manage your license
                   </span>
                 </span>
               </Link>
@@ -271,6 +292,24 @@ export function AppLauncher() {
                 </button>
               </>
             )}
+          </div>
+
+          <div className="flex items-center gap-3 border-t border-torus-border px-4 py-2.5 text-[11px] text-torus-fg-faint">
+            <Link
+              href={'/about' as Route}
+              className="hover:text-torus-fg"
+              onClick={() => setOpen(false)}
+            >
+              About torus
+            </Link>
+            <span aria-hidden>·</span>
+            <Link
+              href={'/principles' as Route}
+              className="hover:text-torus-fg"
+              onClick={() => setOpen(false)}
+            >
+              Principles
+            </Link>
           </div>
         </div>
       ) : null}

@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -83,6 +84,9 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [drag, setDrag] = useState<NoteDrag | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const previousFocus = useRef<HTMLElement | null>(null);
 
   const gridWidth = prTickToPx(clip.lengthTick);
   const barCount = Math.max(1, Math.ceil(clip.lengthTick / (PPQ * 4)));
@@ -104,17 +108,43 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
     return scaleLock ? nearestInScale(p, key) : p;
   };
 
-  // Delete selected note with keyboard.
   useEffect(() => {
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const first = panelRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, select, [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
         dispatch({ type: 'removeNote', trackId: track.id, clipId: clip.id, noteId: selected });
         setSelected(null);
       }
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const firstEl = focusable[0]!;
+        const lastEl = focusable[focusable.length - 1]!;
+        if (e.shiftKey && document.activeElement === firstEl) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && document.activeElement === lastEl) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocus.current?.focus();
+    };
   }, [selected, dispatch, track.id, clip.id, onClose]);
 
   const onGridPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -191,11 +221,18 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-torus-bg/95 backdrop-blur-sm">
-      {/* Header */}
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="fixed inset-0 z-40 flex flex-col bg-torus-bg/95 backdrop-blur-sm"
+    >
       <div className="flex flex-wrap items-center gap-3 border-b border-torus-border px-4 py-2.5">
         <span className="h-3 w-3 rounded-sm" style={{ background: track.color }} />
-        <span className="text-sm font-medium">{clip.name}</span>
+        <span id={titleId} className="text-sm font-medium">
+          {clip.name}
+        </span>
         <span className="text-xs text-torus-fg-faint">{track.name}</span>
 
         <div className="mx-1 h-5 w-px bg-torus-border" />

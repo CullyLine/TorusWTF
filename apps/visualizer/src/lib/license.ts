@@ -3,11 +3,17 @@ import type { User } from '@torus/db';
 /** One-time Production License — account-bound, site-wide perks. */
 export const LICENSE_PRICE_USD = 10;
 
+/**
+ * Single source of truth for licensed-tier marketing copy. The actual gates
+ * live in `lib/export-config.ts` (free = 720p / 30 fps; licensed = every
+ * resolution and frame rate, up to 4K / 240 fps).
+ */
 export const LICENSE_BENEFITS = [
-  'Highest-quality 1440p exports',
-  '60 fps and 144 fps exports',
+  'Exports up to 4K resolution',
+  'High frame-rate exports (60 / 120 / 240 fps)',
   'No torus.wtf watermark on exports',
   'Commercial-use permission for your exports',
+  'Custom palette colors and title-card styling',
   'A licensed badge on your profile',
 ] as const;
 

@@ -141,8 +141,8 @@ export function ExportPanel({
       {!unlocked ? (
         <p className="mb-3 text-xs text-torus-fg-dim">
           Free: 720p / 30 FPS with watermark.{' '}
-          <Link href="/unlock" className="text-torus-mid hover:underline">
-            Unlock $10
+          <Link href="/license" className="text-torus-mid hover:underline">
+            Get the license ($10, one-time)
           </Link>{' '}
           for up to 4K / 240 FPS, no watermark.
         </p>
@@ -150,7 +150,11 @@ export function ExportPanel({
 
       <div className="mb-3">
         {prerenderActive ? (
-          <div className="rounded-lg border border-torus-mid/40 bg-torus-mid/10 p-3">
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-lg border border-torus-mid/40 bg-torus-mid/10 p-3"
+          >
             <div className="mb-2 flex items-center justify-between gap-3">
               <span className="text-xs font-medium text-torus-mid">
                 Pre-rendering MP4…
@@ -195,6 +199,11 @@ export function ExportPanel({
             Export Pre-Rendered Video
           </button>
         )}
+        {!prerenderActive ? (
+          <p className="mt-1.5 text-[10px] text-torus-fg-faint">
+            Best quality (MP4) — renders your uploaded track frame by frame.
+          </p>
+        ) : null}
         {!prerenderSupported ? (
           <p className="mt-2 text-[10px] text-torus-fg-faint">
             Pre-render needs Chrome/Edge or Firefox 130+. Use Record export
@@ -234,6 +243,11 @@ export function ExportPanel({
           Snapshot PNG
         </button>
       </div>
+      <p className="mt-1.5 text-[10px] text-torus-fg-faint">
+        {recording && !hasFileSource
+          ? 'Recording continues until you press Stop.'
+          : 'Record captures the live canvas in real time (WebM).'}
+      </p>
     </section>
   );
 }

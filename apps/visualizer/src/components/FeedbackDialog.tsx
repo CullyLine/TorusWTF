@@ -15,24 +15,53 @@ interface FeedbackDialogProps {
 export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [category, setCategory] = useState<FeedbackCategory>('feature');
+  const [category, setCategory] = useState<FeedbackCategory>('bug');
 
   useEffect(() => {
     if (!open) return;
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const first = panelRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const firstEl = focusable[0]!;
+        const lastEl = focusable[focusable.length - 1]!;
+        if (e.shiftKey && document.activeElement === firstEl) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && document.activeElement === lastEl) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
     };
+
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocus.current?.focus();
+    };
   }, [open, onClose]);
 
   useEffect(() => {
     if (open) return;
     setTitle('');
     setBody('');
-    setCategory('feature');
+    setCategory('bug');
   }, [open]);
 
   if (!open) return null;
@@ -51,7 +80,13 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <button
         type="button"
         className="absolute inset-0 bg-black/60"
@@ -64,6 +99,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
         aria-modal="true"
         aria-labelledby={titleId}
         className="relative z-10 w-full max-w-lg rounded-xl border border-torus-border bg-torus-surface p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId} className="text-lg font-semibold text-torus-fg">
           Send feedback

@@ -43,6 +43,7 @@ export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) 
             key={id}
             type="button"
             onClick={() => onChange(id)}
+            title={VISUALIZERS[id].hint}
             className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition ${
               active === id
                 ? 'border-torus-mid/50 bg-torus-mid/10 text-torus-mid'

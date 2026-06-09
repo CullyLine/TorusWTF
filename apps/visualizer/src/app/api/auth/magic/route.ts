@@ -8,7 +8,13 @@ import { devMailInboxUrl, isDevMailCapture, sendMagicLinkEmail } from '@/lib/mai
 
 const Body = z.object({
   email: z.string().email().max(254),
+  next: z.string().optional(),
 });
+
+function safeNextPath(raw: string | undefined): string | null {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
+  return raw;
+}
 
 const EXPIRES_MIN = 15;
 
@@ -37,7 +43,9 @@ export async function POST(req: Request) {
   });
 
   const baseUrl = (process.env.PUBLIC_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
-  const loginUrl = `${baseUrl}/api/auth/magic/verify?token=${encodeURIComponent(token)}`;
+  const next = safeNextPath(body.data.next);
+  let loginUrl = `${baseUrl}/api/auth/magic/verify?token=${encodeURIComponent(token)}`;
+  if (next) loginUrl += `&next=${encodeURIComponent(next)}`;
 
   let sent = false;
   try {
@@ -55,9 +63,11 @@ export async function POST(req: Request) {
 
   const payload: {
     message: string;
+    expiresMinutes: number;
     devMail?: { inboxUrl: string; loginUrl: string; sent: boolean };
   } = {
-    message: `If an account exists for ${email}, a sign-in link has been sent.`,
+    message: 'Check your email — we sent you a sign-in link.',
+    expiresMinutes: EXPIRES_MIN,
   };
 
   if (isDevMailCapture()) {

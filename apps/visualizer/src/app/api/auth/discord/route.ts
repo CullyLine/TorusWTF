@@ -1,8 +1,15 @@
 import { Discord, generateState, generateCodeVerifier } from 'arctic';
 import { NextResponse } from 'next/server';
 
+function safeNextPath(raw: string | null): string | null {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return null;
+  return raw;
+}
+
 export async function GET(req: Request) {
-  const popup = new URL(req.url).searchParams.get('popup') === '1';
+  const reqUrl = new URL(req.url);
+  const popup = reqUrl.searchParams.get('popup') === '1';
+  const next = safeNextPath(reqUrl.searchParams.get('next'));
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
   const baseUrl = (process.env.PUBLIC_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
@@ -27,6 +34,9 @@ export async function GET(req: Request) {
   );
   if (popup) {
     headers.append('Set-Cookie', `torus_oauth_popup=1; ${cookieAttrs}`);
+  }
+  if (next) {
+    headers.append('Set-Cookie', `torus_oauth_next=${encodeURIComponent(next)}; ${cookieAttrs}`);
   }
   headers.set('Location', authUrl.toString());
   return new NextResponse(null, { status: 302, headers });

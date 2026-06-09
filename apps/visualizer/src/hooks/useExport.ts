@@ -22,6 +22,7 @@ export function useExport(unlocked: boolean) {
   const compositorRef = useRef<ReturnType<typeof createCompositor> | null>(null);
   const timerRef = useRef<number | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const onSavedRef = useRef<((fileName: string) => void) | null>(null);
 
   const stop = useCallback(() => {
     if (timerRef.current) {
@@ -43,12 +44,14 @@ export function useExport(unlocked: boolean) {
         const ext = fileExtensionForMime(mime);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
+        const fileName = `torus-visualizer-${Date.now()}.${ext}`;
         a.href = url;
-        a.download = `torus-visualizer-${Date.now()}.${ext}`;
+        a.download = fileName;
         a.click();
         URL.revokeObjectURL(url);
         setState('idle');
         setElapsedSec(0);
+        onSavedRef.current?.(fileName);
       };
       recorder.stop();
     } else {
@@ -67,8 +70,11 @@ export function useExport(unlocked: boolean) {
       titleOverlay?: TitleOverlay | null;
       onBeforeRecord?: () => Promise<void>;
       onFileEnded?: () => void;
+      onSaved?: (fileName: string) => void;
     }) => {
       if (state !== 'idle') return;
+
+      onSavedRef.current = opts.onSaved ?? null;
 
       const { width, height } = dimensionsFor(opts.resolution, opts.aspect ?? '16:9');
       const watermark = !unlocked;
@@ -81,23 +87,34 @@ export function useExport(unlocked: boolean) {
         unlocked,
       );
       compositorRef.current = compositor;
-      compositor.start();
 
-      const mimeType = pickRecorderMimeType();
-      const videoStream = compositor.canvas.captureStream(opts.fps);
+      let recorder: MediaRecorder;
+      try {
+        compositor.start();
 
-      const tracks: MediaStreamTrack[] = [...videoStream.getVideoTracks()];
-      if (opts.audioStream) {
-        for (const track of opts.audioStream.getAudioTracks()) {
-          tracks.push(track);
+        const mimeType = pickRecorderMimeType();
+        const videoStream = compositor.canvas.captureStream(opts.fps);
+
+        const tracks: MediaStreamTrack[] = [...videoStream.getVideoTracks()];
+        if (opts.audioStream) {
+          for (const track of opts.audioStream.getAudioTracks()) {
+            tracks.push(track);
+          }
         }
-      }
 
-      const combined = new MediaStream(tracks);
-      const recorder = new MediaRecorder(combined, {
-        mimeType,
-        videoBitsPerSecond: bitrateFor(opts.resolution),
-      });
+        const combined = new MediaStream(tracks);
+        recorder = new MediaRecorder(combined, {
+          mimeType,
+          videoBitsPerSecond: bitrateFor(opts.resolution),
+        });
+      } catch (err) {
+        compositor.stop();
+        compositorRef.current = null;
+        setState('idle');
+        throw err instanceof Error
+          ? err
+          : new Error('Could not start recording in this browser.');
+      }
 
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
@@ -108,7 +125,17 @@ export function useExport(unlocked: boolean) {
 
       if (opts.onBeforeRecord) await opts.onBeforeRecord();
 
-      recorder.start(250);
+      try {
+        recorder.start(250);
+      } catch (err) {
+        compositor.stop();
+        compositorRef.current = null;
+        recorderRef.current = null;
+        setState('idle');
+        throw err instanceof Error
+          ? err
+          : new Error('Could not start recording in this browser.');
+      }
       setState('recording');
       setElapsedSec(0);
       timerRef.current = window.setInterval(() => {

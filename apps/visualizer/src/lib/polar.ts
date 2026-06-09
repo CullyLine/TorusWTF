@@ -63,7 +63,7 @@ export const TEST_LICENSE_KEY = 'TORUS-WTF-TEST-UNLOCK';
  * See https://docs.polar.sh for endpoint details.
  */
 export async function validateLicenseKey(key: string): Promise<LicenseValidationResult> {
-  if (key === TEST_LICENSE_KEY) {
+  if (key === TEST_LICENSE_KEY && process.env.NODE_ENV !== 'production') {
     return { valid: true };
   }
 

@@ -36,6 +36,14 @@ interface ControlPanelProps {
 
 const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive', 'cinematic'];
 
+const CAMERA_LABELS: Record<CameraMode, string> = {
+  still: 'Still',
+  drift: 'Drift — slow float',
+  orbit: 'Orbit — circle the scene',
+  dive: 'Dive — push forward',
+  cinematic: 'Cinematic — auto-directed',
+};
+
 const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
   none: 'None',
   nebula: 'Nebula',
@@ -83,169 +91,207 @@ export function ControlPanel({
     min: number;
     max: number;
     step: number;
+    /** Plain-language tooltip for jargon-y controls. */
+    hint?: string;
   };
   const autoGain = controls.autoGain ?? true;
-  const allSliders: SliderDef[] = [
-    { key: 'reactivity', label: autoGain ? 'Gain (trim)' : 'Gain', min: 0.2, max: 12.5, step: 0.05 },
-    { key: 'energy', label: 'Energy (punch)', min: 0, max: 2, step: 0.05 },
-    { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05 },
-    { key: 'midMix', label: 'Mid', min: 0, max: 10, step: 0.05 },
-    { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05 },
-    { key: 'bassShake', label: 'Bass Shake', min: 0, max: 3, step: 0.05 },
-    { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 12.5, step: 0.05 },
-    { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05 },
-    { key: 'smoothness', label: 'Smoothness', min: 0, max: 0.95, step: 0.01 },
-    { key: 'scale', label: 'Scale', min: 0.2, max: 5, step: 0.05 },
-    { key: 'anima', label: 'Anima', min: 0, max: 1, step: 0.01 },
-    { key: 'aura', label: 'Aura', min: 0, max: 1, step: 0.01 },
-    // Liquid-Blob-specific. Filtered out below when a different preset is active.
-    { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01 },
-    { key: 'appendages', label: 'Appendages', min: 0, max: 10, step: 1 },
-    { key: 'subSpheres', label: 'Sub-spheres', min: 0, max: 8, step: 1 },
+  const audioSliders: SliderDef[] = [
+    {
+      key: 'reactivity',
+      label: autoGain ? 'Gain (trim)' : 'Gain',
+      min: 0.2,
+      max: 12.5,
+      step: 0.05,
+      hint: autoGain
+        ? 'Fine-tune on top of auto sensitivity'
+        : 'How strongly the visuals react to the audio',
+    },
+    { key: 'energy', label: 'Energy (punch)', min: 0, max: 2, step: 0.05, hint: 'Extra kick on transients — drums hit harder' },
+    { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05, hint: 'How much the low end drives the visuals' },
+    { key: 'midMix', label: 'Mid', min: 0, max: 10, step: 0.05, hint: 'How much the mids drive the visuals' },
+    { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05, hint: 'How much the highs drive the visuals' },
+    { key: 'bassShake', label: 'Bass Shake', min: 0, max: 3, step: 0.05, hint: 'Camera shake on heavy bass' },
+    { key: 'smoothness', label: 'Smoothness', min: 0, max: 0.95, step: 0.01, hint: 'Higher = calmer, more flowing motion' },
   ];
-  const blobOnly: Array<keyof VisualizerControls> = [
-    'inflate',
-    'appendages',
-    'subSpheres',
+  const lookSliders: SliderDef[] = [
+    { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 12.5, step: 0.05, hint: 'Glow around bright areas' },
+    { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05, hint: 'Animation speed of the preset' },
+    { key: 'scale', label: 'Scale', min: 0.2, max: 5, step: 0.05, hint: 'Size of the scene in frame' },
+    { key: 'anima', label: 'Anima', min: 0, max: 1, step: 0.01, hint: 'How "alive" the scene behaves between beats' },
+    { key: 'aura', label: 'Aura', min: 0, max: 1, step: 0.01, hint: 'Ambient glow field around the scene' },
   ];
-  const sliders: SliderDef[] = allSliders.filter(
-    (s) => !blobOnly.includes(s.key) || activePreset === 'liquid_blob',
-  );
+  const blobSliders: SliderDef[] = [
+    { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01, hint: '0 = stretchy taffy, 1 = round puff' },
+    { key: 'appendages', label: 'Appendages', min: 0, max: 10, step: 1, hint: 'Orbiting satellite spheres that fuse into the blob' },
+    { key: 'subSpheres', label: 'Sub-spheres', min: 0, max: 8, step: 1, hint: 'Small pops on hi-hats and cymbals' },
+  ];
+  const showBlobSliders = activePreset === 'liquid_blob';
 
   const saved = unlocked ? loadSavedPresets() : [];
   void presetsVersion;
+
+  const renderSlider = ({ key, label, min, max, step, hint }: SliderDef) => {
+    // Smoothness/Scale/BassShake/Anima/Aura/Inflate/Appendages were
+    // added later, so older persisted controls may not have them.
+    // Default per-slider.
+    const fallback =
+      key === 'scale'
+        ? 1
+        : key === 'anima'
+          ? 0.5
+          : key === 'aura'
+            ? 0.4
+            : key === 'inflate'
+              ? 0.5
+              : key === 'appendages'
+                ? 4
+                : key === 'subSpheres'
+                  ? 6
+                  : 0;
+    const value = controls[key] ?? fallback;
+    const outOfRange = value < min || value > max;
+    const sliderValue = Math.max(min, Math.min(max, value));
+    return (
+      <div key={key} className="block text-xs text-torus-fg-dim">
+        <div className="mb-1 flex justify-between">
+          <span title={hint} className={hint ? 'cursor-help' : undefined}>
+            {label}
+          </span>
+          <EditableNumber
+            value={value}
+            onCommit={(v) => onChange({ [key]: v })}
+            ariaLabel={label}
+            outOfRange={outOfRange}
+          />
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={sliderValue}
+          onChange={(e) => onChange({ [key]: Number(e.target.value) })}
+          aria-label={label}
+          className="w-full accent-torus-mid"
+        />
+      </div>
+    );
+  };
+
+  const sectionSummary =
+    'cursor-pointer select-none list-none text-xs font-medium text-torus-fg-dim hover:text-torus-fg [&::-webkit-details-marker]:hidden';
+  const sectionChevron = (
+    <span aria-hidden className="float-right text-torus-fg-faint transition-transform [[open]>summary>&]:rotate-90">
+      ›
+    </span>
+  );
 
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Controls</h2>
 
       <div className="space-y-3">
-        {sliders.map(({ key, label, min, max, step }, idx) => {
-          // Smoothness/Scale/BassShake/Anima/Aura/Inflate/Appendages were
-          // added later, so older persisted controls may not have them.
-          // Default per-slider.
-          const fallback =
-            key === 'scale'
-              ? 1
-              : key === 'anima'
-                ? 0.5
-                : key === 'aura'
-                  ? 0.4
-                  : key === 'inflate'
-                    ? 0.5
-                    : key === 'appendages'
-                      ? 4
-                      : key === 'subSpheres'
-                        ? 6
-                        : 0;
-          const value = controls[key] ?? fallback;
-          const outOfRange = value < min || value > max;
-          const sliderValue = Math.max(min, Math.min(max, value));
-          const sliderEl = (
-            <div key={key} className="block text-xs text-torus-fg-dim">
-              <div className="mb-1 flex justify-between">
-                <span>{label}</span>
-                <EditableNumber
-                  value={value}
-                  onCommit={(v) => onChange({ [key]: v })}
-                  ariaLabel={label}
-                  outOfRange={outOfRange}
-                />
-              </div>
-              <input
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                value={sliderValue}
-                onChange={(e) => onChange({ [key]: Number(e.target.value) })}
-                className="w-full accent-torus-mid"
-              />
-            </div>
-          );
-          // Insert the BandSplitter UI right after Gain (the first slider).
-          if (idx === 0) {
-            return (
-              <div key="gain-and-bands" className="space-y-3">
-                <label className="flex items-center justify-between gap-2 text-xs text-torus-fg-dim">
-                  <span className="flex flex-col">
-                    <span>Auto sensitivity</span>
-                    <span className="text-[10px] text-torus-fg-faint">
-                      Levels any track automatically — Gain just trims it
-                    </span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={autoGain}
-                    onChange={(e) => onChange({ autoGain: e.target.checked })}
-                    className="accent-torus-mid"
-                  />
-                </label>
-                {sliderEl}
-                <BandSplitter
-                  analyser={analyser}
-                  palette={palette}
-                  bassMaxHz={controls.bassMaxHz ?? 250}
-                  midMaxHz={controls.midMaxHz ?? 2000}
-                  onChange={onChange}
-                />
-              </div>
-            );
-          }
-          return sliderEl;
-        })}
+        <details open className="space-y-3">
+          <summary className={sectionSummary}>
+            Audio response
+            {sectionChevron}
+          </summary>
+          <label className="flex items-center justify-between gap-2 text-xs text-torus-fg-dim">
+            <span className="flex flex-col">
+              <span>Auto sensitivity</span>
+              <span className="text-[10px] text-torus-fg-faint">
+                Levels any track automatically — Gain just trims it
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={autoGain}
+              onChange={(e) => onChange({ autoGain: e.target.checked })}
+              className="accent-torus-mid"
+            />
+          </label>
+          {renderSlider(audioSliders[0]!)}
+          <BandSplitter
+            analyser={analyser}
+            palette={palette}
+            bassMaxHz={controls.bassMaxHz ?? 250}
+            midMaxHz={controls.midMaxHz ?? 2000}
+            onChange={onChange}
+          />
+          {audioSliders.slice(1).map(renderSlider)}
+        </details>
 
-        <label className="block text-xs text-torus-fg-dim">
-          Camera motion
-          <select
-            value={controls.cameraMode}
-            onChange={(e) => onChange({ cameraMode: e.target.value as CameraMode })}
-            className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-2 py-1.5 text-sm text-torus-fg"
-          >
-            {CAMERA_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {mode}
-              </option>
-            ))}
-          </select>
-        </label>
+        <details open className="space-y-3 border-t border-torus-border pt-3">
+          <summary className={sectionSummary}>
+            Look
+            {sectionChevron}
+          </summary>
+          {lookSliders.map(renderSlider)}
+          {showBlobSliders ? blobSliders.map(renderSlider) : null}
+        </details>
 
-        {controls.cameraMode === 'cinematic'
-          ? (() => {
-              const v = controls.cinematicSpeed ?? 1;
-              const clamped = Math.max(
-                CINEMATIC_SPEED_MIN,
-                Math.min(CINEMATIC_SPEED_MAX, v),
-              );
-              const outOfRange = v < CINEMATIC_SPEED_MIN || v > CINEMATIC_SPEED_MAX;
-              return (
-                <div className="block text-xs text-torus-fg-dim">
-                  <div className="mb-1 flex justify-between">
-                    <span>Cinematic speed</span>
-                    <EditableNumber
-                      value={v}
-                      onCommit={(next) => onChange({ cinematicSpeed: next })}
-                      ariaLabel="Cinematic speed"
-                      outOfRange={outOfRange}
+        <details className="space-y-3 border-t border-torus-border pt-3">
+          <summary className={sectionSummary}>
+            Camera
+            {sectionChevron}
+          </summary>
+          <label className="block text-xs text-torus-fg-dim">
+            Camera motion
+            <select
+              value={controls.cameraMode}
+              onChange={(e) => onChange({ cameraMode: e.target.value as CameraMode })}
+              className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-2 py-1.5 text-sm text-torus-fg"
+            >
+              {CAMERA_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {CAMERA_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {controls.cameraMode === 'cinematic'
+            ? (() => {
+                const v = controls.cinematicSpeed ?? 1;
+                const clamped = Math.max(
+                  CINEMATIC_SPEED_MIN,
+                  Math.min(CINEMATIC_SPEED_MAX, v),
+                );
+                const outOfRange = v < CINEMATIC_SPEED_MIN || v > CINEMATIC_SPEED_MAX;
+                return (
+                  <div className="block text-xs text-torus-fg-dim">
+                    <div className="mb-1 flex justify-between">
+                      <span>Cinematic speed</span>
+                      <EditableNumber
+                        value={v}
+                        onCommit={(next) => onChange({ cinematicSpeed: next })}
+                        ariaLabel="Cinematic speed"
+                        outOfRange={outOfRange}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min={CINEMATIC_SPEED_MIN}
+                      max={CINEMATIC_SPEED_MAX}
+                      step={CINEMATIC_SPEED_STEP}
+                      value={clamped}
+                      onChange={(e) =>
+                        onChange({ cinematicSpeed: Number(e.target.value) })
+                      }
+                      aria-label="Cinematic speed"
+                      className="w-full accent-torus-mid"
                     />
                   </div>
-                  <input
-                    type="range"
-                    min={CINEMATIC_SPEED_MIN}
-                    max={CINEMATIC_SPEED_MAX}
-                    step={CINEMATIC_SPEED_STEP}
-                    value={clamped}
-                    onChange={(e) =>
-                      onChange({ cinematicSpeed: Number(e.target.value) })
-                    }
-                    className="w-full accent-torus-mid"
-                  />
-                </div>
-              );
-            })()
-          : null}
+                );
+              })()
+            : null}
+        </details>
 
-        <div className="space-y-2 border-t border-torus-border pt-3">
+        <details className="space-y-2 border-t border-torus-border pt-3">
+          <summary className={sectionSummary}>
+            Background
+            {sectionChevron}
+          </summary>
           <label className="block text-xs text-torus-fg-dim">
             Background
             <select
@@ -278,6 +324,7 @@ export function ControlPanel({
                 step={0.05}
                 value={Math.max(0, Math.min(1, background.intensity))}
                 onChange={(e) => onBackgroundChange({ intensity: Number(e.target.value) })}
+                aria-label="Background intensity"
                 className="w-full accent-torus-mid"
               />
             </div>
@@ -288,9 +335,9 @@ export function ControlPanel({
               Try it with Torus Field, Star Field, or Cosmic Mandala.
             </p>
           ) : null}
-        </div>
+        </details>
 
-        <label className="flex items-center gap-2 text-xs text-torus-fg-dim">
+        <label className="flex items-center gap-2 border-t border-torus-border pt-3 text-xs text-torus-fg-dim">
           <input
             type="checkbox"
             checked={showBpm}
@@ -385,7 +432,7 @@ export function ControlPanel({
                       {p.thumbnail ? (
                         <img
                           src={p.thumbnail}
-                          alt=""
+                          alt={`Preview of ${p.name}`}
                           className="h-full w-full object-cover"
                         />
                       ) : (

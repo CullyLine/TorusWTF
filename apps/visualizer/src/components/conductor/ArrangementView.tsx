@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -99,6 +100,7 @@ export function ArrangementView({
   const [selected, setSelected] = useState<{ trackId: string; clipId: string } | null>(null);
   const [drag, setDrag] = useState<ClipDrag | null>(null);
   const [menu, setMenu] = useState<ClipMenu | null>(null);
+  const [confirmDeleteTrackId, setConfirmDeleteTrackId] = useState<string | null>(null);
   const rulerDrag = useRef<{ startTick: number; moved: boolean } | null>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
 
@@ -109,6 +111,18 @@ export function ArrangementView({
     const idx = Math.floor((clientY - top) / LANE_H);
     return Math.max(0, Math.min(project.tracks.length - 1, idx));
   };
+
+  const hasClips = useMemo(
+    () => project.tracks.some((t) => t.clips.length > 0),
+    [project.tracks],
+  );
+  const atTrackLimit = project.tracks.length >= MAX_TRACKS;
+
+  useEffect(() => {
+    if (!confirmDeleteTrackId) return;
+    const timer = window.setTimeout(() => setConfirmDeleteTrackId(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [confirmDeleteTrackId]);
 
   const totalTicks = useMemo(() => {
     const len = projectLengthTicks(project);
@@ -246,6 +260,16 @@ export function ArrangementView({
   return (
     <>
     <div className="relative flex-1 overflow-auto bg-torus-bg">
+      {!hasClips ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-1/2 z-10 mx-auto max-w-md -translate-y-1/2 px-6"
+          aria-hidden
+        >
+          <div className="rounded-xl border border-torus-border bg-torus-surface/80 px-4 py-3 text-center text-sm text-torus-fg-dim backdrop-blur-sm">
+            Double-click the timeline to add a clip, then double-click the clip to draw notes — or Import MIDI.
+          </div>
+        </div>
+      ) : null}
       <div className="relative" style={{ width: TRACK_HEADER_W + timelineWidth }}>
         {/* Ruler row */}
         <div className="sticky top-0 z-20 flex" style={{ height: RULER_H }}>
@@ -302,9 +326,22 @@ export function ArrangementView({
                 />
                 <button
                   type="button"
-                  onClick={() => dispatch({ type: 'removeTrack', trackId: track.id })}
-                  aria-label="Remove track"
-                  className="text-torus-fg-faint hover:text-torus-bass"
+                  onClick={() => {
+                    if (confirmDeleteTrackId === track.id) {
+                      dispatch({ type: 'removeTrack', trackId: track.id });
+                      setConfirmDeleteTrackId(null);
+                    } else {
+                      setConfirmDeleteTrackId(track.id);
+                    }
+                  }}
+                  aria-label={
+                    confirmDeleteTrackId === track.id ? 'Click again to confirm delete' : 'Remove track'
+                  }
+                  className={
+                    confirmDeleteTrackId === track.id
+                      ? 'text-torus-bass'
+                      : 'text-torus-fg-faint hover:text-torus-bass'
+                  }
                 >
                   {'\u2715'}
                 </button>
@@ -321,6 +358,7 @@ export function ArrangementView({
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'toggleMute', trackId: track.id })}
+                  aria-label="Mute track"
                   aria-pressed={track.mute}
                   className={`grid h-5 w-5 place-items-center rounded text-[10px] ${
                     track.mute ? 'bg-torus-bass/30 text-torus-bass' : 'bg-torus-surface text-torus-fg-faint hover:text-torus-fg'
@@ -331,6 +369,7 @@ export function ArrangementView({
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'toggleSolo', trackId: track.id })}
+                  aria-label="Solo track"
                   aria-pressed={track.solo}
                   className={`grid h-5 w-5 place-items-center rounded text-[10px] ${
                     track.solo ? 'bg-torus-high/30 text-torus-high' : 'bg-torus-surface text-torus-fg-faint hover:text-torus-fg'
@@ -414,9 +453,11 @@ export function ArrangementView({
             <button
               type="button"
               onClick={onNewInstrument}
-              className="w-full rounded-lg border border-dashed border-torus-border px-2 py-2 text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg"
+              disabled={atTrackLimit}
+              title={atTrackLimit ? 'Track limit reached (16)' : undefined}
+              className="w-full rounded-lg border border-dashed border-torus-border px-2 py-2 text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-torus-border disabled:hover:text-torus-fg-dim"
             >
-              + New Instrument
+              {atTrackLimit ? 'Track limit reached (16)' : '+ New Instrument'}
             </button>
           </div>
           <div style={{ width: timelineWidth }} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { DEFAULT_SOUNDFONT_ID, type PresetInfo, type SoundfontInfo } from '@/lib/conductor/engine';
 import type { PresetRef } from '@/lib/conductor/project';
 
@@ -35,6 +35,9 @@ export function InstrumentPicker({
 }: InstrumentPickerProps) {
   const [query, setQuery] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -47,20 +50,62 @@ export function InstrumentPicker({
     );
   }, [presets, query]);
 
+  useEffect(() => {
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const first = panelRef.current?.querySelector<HTMLElement>(
+      'button, [href], input, [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const firstEl = focusable[0]!;
+        const lastEl = focusable[focusable.length - 1]!;
+        if (e.shiftKey && document.activeElement === firstEl) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && document.activeElement === lastEl) {
+          e.preventDefault();
+          firstEl.focus();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      previousFocus.current?.focus();
+    };
+  }, [onClose]);
+
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-torus-border-strong bg-torus-bg shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-torus-border px-4 py-3">
-          <span className="text-sm font-medium">{title}</span>
+          <span id={titleId} className="text-sm font-medium">
+            {title}
+          </span>
           <button
             type="button"
             onClick={onClose}
@@ -73,7 +118,6 @@ export function InstrumentPicker({
 
         <div className="border-b border-torus-border p-3">
           <input
-            autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={'Search presets\u2026'}

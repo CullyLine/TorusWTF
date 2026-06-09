@@ -17,6 +17,7 @@ export const HWACCEL_BANNER_DISMISSED_KEY = 'torus-visualizer-hwaccel-banner-dis
 export const VOLUME_KEY = 'torus-visualizer-volume';
 export const TITLE_OVERLAY_KEY = 'torus-visualizer-title-overlay';
 export const BACKGROUND_KEY = 'torus-visualizer-background';
+export const HERO_SEEN_KEY = 'torus-visualizer-hero-seen';
 
 /** Reactive backdrop behind the preset. `none` = current behavior. */
 export interface BackgroundSettings {

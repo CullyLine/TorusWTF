@@ -3,12 +3,13 @@
 interface EmptyStateHeroProps {
   reducedMotion: boolean;
   onTryDemo: () => void;
+  demoLoading?: boolean;
 }
 
 const OUTER_LEN = 580;
 const INNER_LEN = 220;
 
-export function EmptyStateHero({ reducedMotion, onTryDemo }: EmptyStateHeroProps) {
+export function EmptyStateHero({ reducedMotion, onTryDemo, demoLoading = false }: EmptyStateHeroProps) {
   const animate = !reducedMotion;
 
   return (
@@ -67,18 +68,24 @@ export function EmptyStateHero({ reducedMotion, onTryDemo }: EmptyStateHeroProps
           strokeDashoffset={animate ? undefined : 0}
         />
       </svg>
-      <p className="max-w-sm text-sm text-torus-fg-dim">
-        Drop a track, talk into your mic, or share a tab.
+      <h1 className="text-lg font-semibold tracking-tight text-torus-fg">
+        torus <span className="font-normal text-torus-fg-dim">— 3D visuals for your audio</span>
+      </h1>
+      <p className="mt-2 max-w-sm text-sm text-torus-fg-dim">
+        Drop a track, talk into your mic, or capture desktop audio — then export the result for
+        Reels, Shorts, or a release.
       </p>
       <button
         type="button"
         onClick={onTryDemo}
-        className="mt-4 rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-xs font-medium text-torus-mid transition hover:border-torus-mid/60 hover:bg-torus-mid/15"
+        disabled={demoLoading}
+        className="mt-4 rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-xs font-medium text-torus-mid transition hover:border-torus-mid/60 hover:bg-torus-mid/15 disabled:opacity-60"
       >
-        Try with demo audio
+        {demoLoading ? 'Loading demo\u2026' : 'Try with demo audio'}
       </button>
       <p className="mt-4 text-xs text-torus-fg-faint">
-        Shortcuts: Space play/pause · F fullscreen · R random preset
+        Press <kbd className="rounded border border-torus-border px-1">?</kbd> anytime for keyboard
+        shortcuts
       </p>
     </div>
   );

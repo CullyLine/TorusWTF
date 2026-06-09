@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { CreaturePersonality, RootState, VisualizerId } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
@@ -71,7 +71,8 @@ interface PrerenderHookResult {
   progress: PrerenderProgress;
   rootMount: PrerenderRootMount | null;
   error: string | null;
-  start: (options: PrerenderStartOptions) => Promise<void>;
+  /** Resolves `true` when the MP4 was rendered and downloaded successfully. */
+  start: (options: PrerenderStartOptions) => Promise<boolean>;
   cancel: () => void;
   reset: () => void;
 }
@@ -87,6 +88,13 @@ export function usePrerender(): PrerenderHookResult {
   const [progress, setProgress] = useState<PrerenderProgress>(IDLE);
   const [rootMount, setRootMount] = useState<PrerenderRootMount | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Browser-capability check resolved after mount so SSR and the first client
+  // render agree (`false`) — avoids a hydration mismatch on the export button.
+  const [supported, setSupported] = useState(false);
+
+  useEffect(() => {
+    setSupported(isPrerenderSupported());
+  }, []);
 
   const cancelRef = useRef(false);
   const readyResolverRef = useRef<((h: { state: RootState; canvas: HTMLCanvasElement }) => void) | null>(null);
@@ -318,6 +326,7 @@ export function usePrerender(): PrerenderHookResult {
         totalFrames,
         message: 'Done.',
       });
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === 'cancelled') {
@@ -330,6 +339,7 @@ export function usePrerender(): PrerenderHookResult {
           message,
         }));
       }
+      return false;
     } finally {
       setRootMount(null);
       inFlightRef.current = false;
@@ -337,7 +347,7 @@ export function usePrerender(): PrerenderHookResult {
   }, []);
 
   return {
-    supported: isPrerenderSupported(),
+    supported,
     progress,
     rootMount,
     error,

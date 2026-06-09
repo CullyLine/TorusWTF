@@ -30,6 +30,19 @@ export const DEFAULT_TRANSCRIBE_OPTIONS: TranscribeOptions = {
   minNoteLengthMs: 130,
 };
 
+export type TranscribePhase = 'decoding' | 'loading-model' | 'transcribing';
+
+export interface TranscribeProgress {
+  fraction: number;
+  phase: TranscribePhase;
+}
+
+export const TRANSCRIBE_PHASE_LABELS: Record<TranscribePhase, string> = {
+  decoding: 'Decoding audio…',
+  'loading-model': 'Loading model (first run)…',
+  transcribing: 'Transcribing…',
+};
+
 /** Decode an audio File and resample it to mono 22.05 kHz samples. */
 export async function decodeToMono22k(file: File): Promise<Float32Array> {
   const arrayBuffer = await file.arrayBuffer();
@@ -59,16 +72,16 @@ export async function decodeToMono22k(file: File): Promise<Float32Array> {
 
 /**
  * Run Basic Pitch over an audio File and return timed note events.
- * `onProgress` reports 0..1 across decode (first 10%) + inference (rest).
+ * `onProgress` reports fraction 0..1 and the current pipeline phase.
  */
 export async function transcribeFile(
   file: File,
   options: TranscribeOptions,
-  onProgress?: (fraction: number) => void,
+  onProgress?: (progress: TranscribeProgress) => void,
 ): Promise<NoteEventTime[]> {
-  onProgress?.(0.02);
+  onProgress?.({ fraction: 0.02, phase: 'decoding' });
   const samples = await decodeToMono22k(file);
-  onProgress?.(0.1);
+  onProgress?.({ fraction: 0.1, phase: 'loading-model' });
 
   // Lazy import keeps TensorFlow.js out of the initial bundle.
   const { BasicPitch, noteFramesToTime, outputToNotesPoly, addPitchBendsToNoteEvents } =
@@ -88,7 +101,7 @@ export async function transcribeFile(
       contours.push(...c);
     },
     (pct: number) => {
-      onProgress?.(0.1 + pct * 0.88);
+      onProgress?.({ fraction: 0.1 + pct * 0.88, phase: 'transcribing' });
     },
   );
 
@@ -104,8 +117,35 @@ export async function transcribeFile(
   const timed = noteFramesToTime(withBends);
   timed.sort((a, b) => a.startTimeSeconds - b.startTimeSeconds);
 
-  onProgress?.(1);
+  onProgress?.({ fraction: 1, phase: 'transcribing' });
   return timed;
+}
+
+/** Map raw transcription failures to user-facing messages. */
+export function friendlyTranscribeError(err: unknown): string {
+  if (err instanceof DOMException) {
+    return "Couldn't decode that audio file — try MP3 or WAV";
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
+  if (
+    lower.includes('decode') ||
+    lower.includes('decoding') ||
+    lower.includes('encoding') ||
+    lower.includes('unable to decode')
+  ) {
+    return "Couldn't decode that audio file — try MP3 or WAV";
+  }
+  if (
+    lower.includes('fetch') ||
+    lower.includes('network') ||
+    lower.includes('failed to load') ||
+    lower.includes('model.json') ||
+    /\b404\b/.test(lower)
+  ) {
+    return 'The transcription model failed to load — check your connection and try again.';
+  }
+  return msg || 'Transcription failed';
 }
 
 export type { NoteEventTime };

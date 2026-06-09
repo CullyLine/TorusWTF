@@ -10,7 +10,9 @@ export interface ConductorPlayback {
   playheadTick: number;
   loop: LoopRegion;
   play: (fromTick?: number) => void;
+  pause: () => void;
   stop: () => void;
+  stopAndRewind: () => void;
   toggle: () => void;
   seek: (tick: number) => void;
   setLoopEnabled: (enabled: boolean) => void;
@@ -40,11 +42,18 @@ export function useConductorPlayback(project: ConductorProject): ConductorPlayba
     rafRef.current = null;
   };
 
-  const stop = useCallback(() => {
+  const pause = useCallback(() => {
     schedRef.current?.stop();
     cancelRaf();
     setIsPlaying(false);
   }, []);
+
+  const stop = pause;
+
+  const stopAndRewind = useCallback(() => {
+    pause();
+    setPlayheadTick(0);
+  }, [pause]);
 
   const play = useCallback((fromTick?: number) => {
     const sched = schedRef.current!;
@@ -71,9 +80,9 @@ export function useConductorPlayback(project: ConductorProject): ConductorPlayba
   }, [playheadTick]);
 
   const toggle = useCallback(() => {
-    if (schedRef.current?.playing) stop();
+    if (schedRef.current?.playing) pause();
     else play();
-  }, [play, stop]);
+  }, [play, pause]);
 
   const seek = useCallback(
     (tick: number) => {
@@ -101,14 +110,16 @@ export function useConductorPlayback(project: ConductorProject): ConductorPlayba
     else applyMix(project);
   }, [project]);
 
-  useEffect(() => () => stop(), [stop]);
+  useEffect(() => () => pause(), [pause]);
 
   return {
     isPlaying,
     playheadTick,
     loop,
     play,
+    pause,
     stop,
+    stopAndRewind,
     toggle,
     seek,
     setLoopEnabled,

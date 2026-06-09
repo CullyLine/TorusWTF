@@ -1,12 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { conductorEngine, type PresetInfo, type SoundfontInfo } from '@/lib/conductor/engine';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  conductorEngine,
+  type PresetInfo,
+  type SoundfontInfo,
+  type SoundfontLoadProgress,
+} from '@/lib/conductor/engine';
 
 export interface ConductorEngineState {
   ready: boolean;
   loading: boolean;
   error: string | null;
+  loadProgress: SoundfontLoadProgress | null;
   soundfonts: SoundfontInfo[];
   presets: PresetInfo[];
 }
@@ -20,26 +26,53 @@ export function useConductorEngine() {
     ready: conductorEngine.isInitialized,
     loading: true,
     error: null,
+    loadProgress: null,
     soundfonts: [],
     presets: conductorEngine.getPresets(),
   });
+  const attemptRef = useRef(0);
+
+  const loadDefault = useCallback(async (attempt: number) => {
+    setState((s) => ({ ...s, loading: true, error: null, loadProgress: null }));
+    try {
+      const sf = await conductorEngine.ensureDefaultSoundfont((progress) => {
+        if (attemptRef.current !== attempt) return;
+        setState((s) => ({ ...s, loadProgress: progress }));
+      });
+      if (attemptRef.current !== attempt) return;
+      setState({
+        ready: true,
+        loading: false,
+        error: null,
+        loadProgress: null,
+        soundfonts: [sf],
+        presets: sf.presets,
+      });
+    } catch (err) {
+      if (attemptRef.current !== attempt) return;
+      setState((s) => ({
+        ...s,
+        ready: false,
+        loading: false,
+        error: (err as Error).message,
+        loadProgress: null,
+      }));
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const sf = await conductorEngine.ensureDefaultSoundfont();
-        if (cancelled) return;
-        setState({ ready: true, loading: false, error: null, soundfonts: [sf], presets: sf.presets });
-      } catch (err) {
-        if (cancelled) return;
-        setState((s) => ({ ...s, loading: false, error: (err as Error).message }));
-      }
-    })();
+    const attempt = ++attemptRef.current;
+    loadDefault(attempt);
     return () => {
-      cancelled = true;
+      attemptRef.current++;
     };
-  }, []);
+  }, [loadDefault]);
+
+  const retry = useCallback(() => {
+    conductorEngine.resetDefaultSoundfont();
+    const attempt = ++attemptRef.current;
+    void loadDefault(attempt);
+  }, [loadDefault]);
 
   const addSoundfont = useCallback(async (file: File): Promise<SoundfontInfo> => {
     const sf = await conductorEngine.loadSoundfont(file);
@@ -51,7 +84,7 @@ export function useConductorEngine() {
     return sf;
   }, []);
 
-  return { ...state, addSoundfont };
+  return { ...state, addSoundfont, retry };
 }
 
 export type { PresetInfo, SoundfontInfo };

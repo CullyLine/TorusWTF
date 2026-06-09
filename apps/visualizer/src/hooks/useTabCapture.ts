@@ -19,7 +19,7 @@ export function useTabCapture() {
     setError(null);
 
     if (!isChromium()) {
-      setError('Tab audio capture requires Chrome or Edge.');
+      setError('Desktop audio capture requires Chrome or Edge.');
       return null;
     }
 
@@ -41,7 +41,7 @@ export function useTabCapture() {
       setStream(next);
       return next;
     } catch {
-      setError('Tab capture was cancelled or denied.');
+      setError('Desktop capture was cancelled or denied.');
       return null;
     }
   }, [stop]);

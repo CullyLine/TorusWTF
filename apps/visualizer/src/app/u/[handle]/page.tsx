@@ -55,15 +55,20 @@ export default async function ProfilePage({ params }: PageProps) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-20">
       <section className="flex items-start gap-6">
-        <div
-          className="h-20 w-20 flex-shrink-0 rounded-full border border-torus-border-strong bg-torus-surface"
-          style={{
-            backgroundImage: user.avatarUrl ? `url(${user.avatarUrl})` : undefined,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-          aria-hidden
-        />
+        {user.avatarUrl ? (
+          <img
+            src={user.avatarUrl}
+            alt={`${user.handle}'s avatar`}
+            className="h-20 w-20 flex-shrink-0 rounded-full border border-torus-border-strong object-cover"
+          />
+        ) : (
+          <div
+            className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-full border border-torus-border-strong bg-torus-surface text-xl font-semibold text-torus-fg-dim"
+            aria-label={`${user.handle}'s avatar`}
+          >
+            {user.handle.slice(0, 1).toUpperCase()}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
             @{user.handle}
@@ -80,9 +85,9 @@ export default async function ProfilePage({ params }: PageProps) {
           ) : null}
           {user.bio ? (
             <p className="mt-3 max-w-prose text-sm text-torus-fg-dim">{user.bio}</p>
-          ) : (
+          ) : isOwner ? (
             <p className="mt-3 text-sm text-torus-fg-faint">No bio yet.</p>
-          )}
+          ) : null}
         </div>
         {isOwner ? (
           <div className="flex flex-col gap-2 sm:flex-row">

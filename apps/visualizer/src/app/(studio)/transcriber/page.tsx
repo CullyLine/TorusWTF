@@ -10,8 +10,13 @@ const TranscriberApp = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="grid min-h-dvh place-items-center bg-torus-bg text-sm text-torus-fg-dim">
-        Loading Transcriber{'\u2026'}
+      <div className="grid min-h-dvh place-items-center bg-torus-bg px-4 text-center">
+        <div>
+          <p className="text-sm text-torus-fg-dim">Loading Transcriber{'\u2026'}</p>
+          <p className="mt-2 text-xs text-torus-fg-faint">
+            The ML transcription model loads on your first transcribe.
+          </p>
+        </div>
       </div>
     ),
   },
