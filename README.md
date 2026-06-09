@@ -68,4 +68,4 @@ pnpm db:studio      # drizzle studio
 
 ## Deployment
 
-Deploy `apps/visualizer` to Vercel and set `DATABASE_URL` (a `libsql://…turso.io` URL) plus `TURSO_AUTH_TOKEN`. Configure the optional integrations (SMTP, Discord, Polar) as needed — see [`.env.example`](./.env.example). Run `pnpm db:migrate` against the Turso database once before first launch.
+Deploy `apps/visualizer` to Vercel and provide the Turso connection: either set `DATABASE_URL` (a `libsql://…turso.io` URL) plus `TURSO_AUTH_TOKEN`, or use the Vercel Turso integration, which injects `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` (both are read automatically). Configure the optional integrations (SMTP, Discord, Polar) as needed — see [`.env.example`](./.env.example). Run `pnpm db:migrate` against the Turso database once before first launch.

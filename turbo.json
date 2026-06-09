@@ -4,6 +4,9 @@
   "globalEnv": [
     "NODE_ENV",
     "DATABASE_URL",
+    "TURSO_DATABASE_URL",
+    "TURSO_AUTH_TOKEN",
+    "DATABASE_AUTH_TOKEN",
     "REDIS_URL",
     "STORAGE_DRIVER",
     "STORAGE_BUCKET",

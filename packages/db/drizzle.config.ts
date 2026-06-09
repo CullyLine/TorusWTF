@@ -2,8 +2,11 @@ import { defineConfig } from 'drizzle-kit';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 
-const url = process.env.DATABASE_URL ?? 'file:./data/torus.db';
-const raw = url.startsWith('file:') ? url.slice(5) : url;
+const url =
+  process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL ?? 'file:./data/torus.db';
+const authToken = process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN;
+const isFile = url.startsWith('file:');
+const raw = isFile ? url.slice(5) : url;
 
 function findRepoRoot(start: string): string {
   let dir = start;
@@ -16,6 +19,8 @@ function findRepoRoot(start: string): string {
   return start;
 }
 
+// Only file: URLs get anchored to an absolute on-disk path. Remote libsql://
+// (Turso) URLs are passed through verbatim with their auth token.
 const absolutePath =
   isAbsolute(raw) || /^[a-zA-Z]:[\\/]/.test(raw) ? raw : resolve(findRepoRoot(process.cwd()), raw);
 
@@ -24,9 +29,7 @@ export default defineConfig({
   out: './migrations',
   dialect: 'sqlite',
   casing: 'snake_case',
-  dbCredentials: {
-    url: absolutePath,
-  },
+  dbCredentials: isFile ? { url: absolutePath } : { url, authToken },
   verbose: true,
   strict: true,
 });

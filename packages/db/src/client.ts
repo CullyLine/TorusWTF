@@ -47,12 +47,19 @@ function normalizeUrl(url: string): string {
  * Local dev:  DATABASE_URL=file:./data/torus.db  (an on-disk SQLite file)
  * Production: DATABASE_URL=libsql://<db>.turso.io + TURSO_AUTH_TOKEN  (Turso)
  *
- * Same driver both ways, so code and migrations are identical across environments.
+ * The Vercel Turso integration injects TURSO_DATABASE_URL / TURSO_AUTH_TOKEN, so
+ * we accept those names too. Same driver both ways, so code and migrations are
+ * identical across environments.
  */
 export function getDb(databaseUrl?: string) {
   if (cachedDb) return cachedDb;
 
-  const url = normalizeUrl(databaseUrl ?? process.env.DATABASE_URL ?? 'file:./data/torus.db');
+  const url = normalizeUrl(
+    databaseUrl ??
+      process.env.DATABASE_URL ??
+      process.env.TURSO_DATABASE_URL ??
+      'file:./data/torus.db',
+  );
   const authToken = process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN;
 
   const client = createClient({ url, authToken });
