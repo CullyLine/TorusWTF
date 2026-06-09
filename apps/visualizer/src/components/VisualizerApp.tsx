@@ -746,7 +746,7 @@ export function VisualizerApp() {
   return (
     <div className="flex h-dvh flex-col">
       <HwAccelBanner />
-      <header className="flex items-center justify-end gap-2 border-b border-torus-border py-3 pl-14 pr-14">
+      <header className="flex items-center justify-end gap-2 border-b border-torus-border py-3 px-4">
         <FeedbackButton />
         <button
           type="button"
