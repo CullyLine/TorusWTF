@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
-import { Logo } from '@torus/ui';
 import { conductorEngine } from '@/lib/conductor/engine';
 import { loadProject, saveProject } from '@/lib/conductor/project';
 import {
@@ -135,10 +134,9 @@ export function TranscriberApp() {
 
   return (
     <main className="min-h-dvh bg-torus-bg text-torus-fg">
-      <div className="mx-auto max-w-2xl px-4 py-10 md:py-16">
+      <div className="mx-auto max-w-2xl px-4 py-16 md:py-20">
         <header className="mb-8">
-          <Logo size={40} wordmark href={null} color="var(--color-torus-mid)" />
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight">Transcriber</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Transcriber</h1>
           <p className="mt-2 text-sm text-torus-fg-dim">
             Turn audio into MIDI, right in your browser. Powered by Spotify&apos;s Basic Pitch —
             your file never leaves this device.

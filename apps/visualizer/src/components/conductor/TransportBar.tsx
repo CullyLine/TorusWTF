@@ -23,11 +23,7 @@ export function TransportBar({ playback, onImportMidi, onVisualize }: TransportB
   const { isPlaying, playheadTick, loop, toggle, stop, setLoopEnabled } = playback;
 
   return (
-    <header className="flex items-center gap-3 border-b border-torus-border bg-torus-bg/80 px-3 py-2 backdrop-blur-sm">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-surface text-sm">
-        {'\u25a6'}
-      </span>
-
+    <header className="flex items-center gap-3 border-b border-torus-border bg-torus-bg/80 py-2 pl-14 pr-14 backdrop-blur-sm">
       <input
         value={project.name}
         onChange={(e) => dispatch({ type: 'renameProject', name: e.target.value })}

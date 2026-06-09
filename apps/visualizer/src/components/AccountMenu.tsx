@@ -48,7 +48,7 @@ export function AccountMenu() {
   }
 
   const pill =
-    'rounded-full border border-torus-border bg-torus-bg/70 px-4 py-2 text-xs text-torus-fg-dim backdrop-blur-sm transition hover:text-torus-fg hover:border-torus-border-strong';
+    'inline-flex h-9 items-center rounded-full border border-torus-border bg-torus-bg/70 px-3.5 text-xs text-torus-fg-dim backdrop-blur-sm transition hover:text-torus-fg hover:border-torus-border-strong';
 
   if (!loaded) {
     return <div className="fixed right-4 top-4 z-40 h-9 w-9" aria-hidden />;

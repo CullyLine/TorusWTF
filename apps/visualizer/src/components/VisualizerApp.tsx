@@ -693,7 +693,7 @@ export function VisualizerApp() {
     return (
       <div className={`min-h-dvh ${!unlock.unlocked ? 'pb-12' : ''}`}>
         <HwAccelBanner />
-        <header className="border-b border-torus-border px-4 py-8 md:px-8">
+        <header className="border-b border-torus-border px-4 pb-8 pt-16 md:px-8">
           <div className="mx-auto flex max-w-6xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
               <Logo size={48} wordmark href={null} color="var(--color-torus-mid)" />
@@ -746,18 +746,15 @@ export function VisualizerApp() {
   return (
     <div className="flex h-dvh flex-col">
       <HwAccelBanner />
-      <header className="flex items-center justify-between border-b border-torus-border px-4 py-3">
-        <Logo size={32} wordmark href={null} color="var(--color-torus-mid)" />
-        <div className="flex items-center gap-2">
-          <FeedbackButton />
-          <button
-            type="button"
-            onClick={() => setHeroCollapsed(false)}
-            className="text-xs text-torus-fg-faint hover:text-torus-mid"
-          >
-            About
-          </button>
-        </div>
+      <header className="flex items-center justify-end gap-2 border-b border-torus-border py-3 pl-14 pr-14">
+        <FeedbackButton />
+        <button
+          type="button"
+          onClick={() => setHeroCollapsed(false)}
+          className="text-xs text-torus-fg-faint hover:text-torus-mid"
+        >
+          About
+        </button>
       </header>
 
       <main
