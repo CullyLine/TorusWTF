@@ -1,5 +1,6 @@
 import { createClient as createRemoteClient, type Client } from '@libsql/client/web';
-import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
+import { drizzle } from 'drizzle-orm/libsql/web';
+import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
@@ -53,8 +54,13 @@ function normalizeUrl(url: string): string {
  */
 function createLibsqlClient(url: string, authToken?: string): Client {
   if (url.startsWith('file:')) {
+    // On-disk SQLite needs the native client. Build the specifier at runtime so
+    // the bundler never sees it: this keeps the native module (and its `libsql`
+    // binding) out of the serverless build, where only the remote web client is
+    // ever used.
     const nodeRequire = createRequire(import.meta.url);
-    const { createClient } = nodeRequire('@libsql/client') as typeof import('@libsql/client');
+    const nativeId = ['@libsql', 'client'].join('/');
+    const { createClient } = nodeRequire(nativeId) as typeof import('@libsql/client');
     return createClient({ url, authToken }) as unknown as Client;
   }
   return createRemoteClient({ url, authToken });

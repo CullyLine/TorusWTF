@@ -27,16 +27,6 @@ const config: NextConfig = {
   // are only loaded lazily for local `file:` databases, so they stay external and
   // out of the bundle (and never run on Vercel).
   serverExternalPackages: ['libsql'],
-  webpack: (webpackConfig, { isServer }) => {
-    if (isServer) {
-      const libsqlExternals = ['@libsql/client', 'libsql'];
-      const existing = webpackConfig.externals;
-      webpackConfig.externals = Array.isArray(existing)
-        ? [...existing, ...libsqlExternals]
-        : [existing, ...libsqlExternals].filter(Boolean);
-    }
-    return webpackConfig;
-  },
   async headers() {
     return [
       {
