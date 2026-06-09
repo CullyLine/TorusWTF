@@ -22,12 +22,14 @@ const config: NextConfig = {
   typedRoutes: true,
   transpilePackages: ['@torus/ui', '@torus/visualizers', '@torus/shared'],
   // The libSQL driver ships native bindings + non-JS files; keep it out of the
-  // webpack bundle and require it at runtime on the server instead.
+  // webpack bundle and require it at runtime on the server instead. Production
+  // uses the pure-JS `@libsql/client/web` entry (no native code) against Turso.
   serverExternalPackages: ['@libsql/client', 'libsql'],
   webpack: (webpackConfig, { isServer }) => {
     if (isServer) {
       const libsqlExternals = [
         '@libsql/client',
+        '@libsql/client/web',
         'libsql',
         '@libsql/isomorphic-fetch',
         '@libsql/isomorphic-ws',

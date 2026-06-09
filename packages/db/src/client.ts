@@ -1,5 +1,6 @@
-import { createClient, type Client } from '@libsql/client';
+import { createClient as createRemoteClient, type Client } from '@libsql/client/web';
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql';
+import { createRequire } from 'node:module';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import * as schema from './schema';
@@ -42,6 +43,24 @@ function normalizeUrl(url: string): string {
 }
 
 /**
+ * Builds a libSQL client, picking the entrypoint by URL scheme:
+ *   - remote (`libsql://`, `http(s)://`, `ws(s)://`) → `@libsql/client/web`, a
+ *     pure-JS client that talks to Turso over HTTP/WS. No native bindings, so it
+ *     runs cleanly on Vercel's serverless functions and the edge.
+ *   - `file:` → the default `@libsql/client`, whose native bindings are only
+ *     needed for an on-disk SQLite file (local dev). Loaded lazily so the native
+ *     module is never required in production.
+ */
+function createLibsqlClient(url: string, authToken?: string): Client {
+  if (url.startsWith('file:')) {
+    const nodeRequire = createRequire(import.meta.url);
+    const { createClient } = nodeRequire('@libsql/client') as typeof import('@libsql/client');
+    return createClient({ url, authToken }) as unknown as Client;
+  }
+  return createRemoteClient({ url, authToken });
+}
+
+/**
  * Returns a singleton Drizzle client backed by libSQL.
  *
  * Local dev:  DATABASE_URL=file:./data/torus.db  (an on-disk SQLite file)
@@ -62,7 +81,7 @@ export function getDb(databaseUrl?: string) {
   );
   const authToken = process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN;
 
-  const client = createClient({ url, authToken });
+  const client = createLibsqlClient(url, authToken);
   cachedClient = client;
   cachedDb = drizzle(client, { schema, casing: 'snake_case' });
   return cachedDb;

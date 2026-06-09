@@ -64,3 +64,4 @@ secrets/
 # Local scratch / experiment outputs
 /stems-out/
 
+.vercel
