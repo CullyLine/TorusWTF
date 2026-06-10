@@ -83,10 +83,10 @@ This runs `scripts/fetch-demos.mjs` first, which downloads the latest 10 public 
 Add to the root `.env`:
 
 ```env
-# Polar.sh — license key validation + checkout link
+# Polar.sh — Production License checkout (account-bound, one-time $10)
 POLAR_API_KEY=
-POLAR_VISUALIZER_PRODUCT_ID=
-NEXT_PUBLIC_POLAR_CHECKOUT_URL=
+POLAR_PRODUCTION_LICENSE_PRODUCT_ID=
+POLAR_WEBHOOK_SECRET=
 
 # Optional — base URL used in OG metadata / canonical URLs
 NEXT_PUBLIC_SITE_URL=https://visualizer.torus.wtf
@@ -97,8 +97,8 @@ NEXT_PUBLIC_SITE_URL=https://visualizer.torus.wtf
 1. Create a product: **torus visualizer — full unlock**
 2. Type: one-time, $10 USD
 3. Enable **license keys** as a benefit
-4. Copy product ID → `POLAR_VISUALIZER_PRODUCT_ID`
-5. Copy hosted checkout URL → `NEXT_PUBLIC_POLAR_CHECKOUT_URL`
+4. Copy product ID → `POLAR_PRODUCTION_LICENSE_PRODUCT_ID`
+5. Set webhook endpoint to `https://your-domain/api/license/webhook` and copy the secret → `POLAR_WEBHOOK_SECRET`
 6. Reuse `POLAR_API_KEY` from torus.wtf if already set
 
 ## Deploy
