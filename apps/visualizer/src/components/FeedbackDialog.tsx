@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { githubIssueUrl } from '@/lib/constants';
+import { SUPPORT_EMAIL } from '@/lib/constants';
 
 type FeedbackCategory = 'bug' | 'feature' | 'other';
 
@@ -19,6 +19,9 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [category, setCategory] = useState<FeedbackCategory>('bug');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -62,21 +65,44 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
     setTitle('');
     setBody('');
     setCategory('bug');
+    setBusy(false);
+    setError(null);
+    setSent(false);
   }, [open]);
 
   if (!open) return null;
 
   const remaining = MAX_CHARS - body.length;
 
-  const submit = () => {
-    const trimmedTitle = title.trim() || 'Visualizer feedback';
-    const url = githubIssueUrl({
-      title: trimmedTitle,
-      body: body.trim() || '_No details provided._',
-      label: category,
-    });
-    window.open(url, '_blank', 'noopener,noreferrer');
-    onClose();
+  const submit = async () => {
+    if (body.trim().length === 0 && title.trim().length === 0) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          title: title.trim() || 'Visualizer feedback',
+          body: body.trim(),
+          category,
+          pageUrl: window.location.href,
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? 'Could not send feedback.');
+        return;
+      }
+      setSent(true);
+      window.setTimeout(onClose, 1800);
+    } catch {
+      setError('Network error. Try again or email support directly.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -105,84 +131,99 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
           Send feedback
         </h2>
         <p className="mt-1 text-xs text-torus-fg-faint">
-          Opens a pre-filled GitHub issue. Markdown supported in the body.
+          Goes straight to our inbox. If you&apos;re signed in, we&apos;ll include your account email
+          so we can reply.
         </p>
 
-        <div className="mt-4 space-y-3">
-          <label className="block text-xs text-torus-fg-dim">
-            Title
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Short summary"
-              className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
-            />
-          </label>
+        {sent ? (
+          <p className="mt-6 text-sm text-torus-high">Thanks — we got it.</p>
+        ) : (
+          <>
+            <div className="mt-4 space-y-3">
+              <label className="block text-xs text-torus-fg-dim">
+                Title
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Short summary"
+                  className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
+                />
+              </label>
 
-          <fieldset className="text-xs text-torus-fg-dim">
-            <legend className="mb-1">Category</legend>
-            <div className="flex flex-wrap gap-3">
-              {(
-                [
-                  ['bug', 'Bug'],
-                  ['feature', 'Feature'],
-                  ['other', 'Other'],
-                ] as const
-              ).map(([value, label]) => (
-                <label key={value} className="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    name="feedback-category"
-                    value={value}
-                    checked={category === value}
-                    onChange={() => setCategory(value)}
-                    className="accent-torus-mid"
-                  />
-                  {label}
-                </label>
-              ))}
+              <fieldset className="text-xs text-torus-fg-dim">
+                <legend className="mb-1">Category</legend>
+                <div className="flex flex-wrap gap-3">
+                  {(
+                    [
+                      ['bug', 'Bug'],
+                      ['feature', 'Feature'],
+                      ['other', 'Other'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label key={value} className="flex items-center gap-1.5">
+                      <input
+                        type="radio"
+                        name="feedback-category"
+                        value={value}
+                        checked={category === value}
+                        onChange={() => setCategory(value)}
+                        className="accent-torus-mid"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              <label className="block text-xs text-torus-fg-dim">
+                <div className="mb-1 flex justify-between">
+                  <span>Details</span>
+                  <span className={remaining < 0 ? 'text-torus-bass' : 'text-torus-fg-faint'}>
+                    {remaining} left
+                  </span>
+                </div>
+                <textarea
+                  value={body}
+                  onChange={(e) => setBody(e.target.value.slice(0, MAX_CHARS))}
+                  rows={8}
+                  placeholder="Describe the bug or feature request..."
+                  className="w-full resize-y rounded-lg border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
+                />
+              </label>
             </div>
-          </fieldset>
 
-          <label className="block text-xs text-torus-fg-dim">
-            <div className="mb-1 flex justify-between">
-              <span>Details</span>
-              <span className={remaining < 0 ? 'text-torus-bass' : 'text-torus-fg-faint'}>
-                {remaining} left
-              </span>
+            {error ? <p className="mt-3 text-sm text-torus-bass">{error}</p> : null}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={
+                  busy || (body.trim().length === 0 && title.trim().length === 0)
+                }
+                className="rounded-lg bg-torus-mid px-4 py-2 text-sm font-medium text-torus-bg disabled:opacity-40"
+              >
+                {busy ? 'Sending…' : 'Send feedback'}
+              </button>
             </div>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value.slice(0, MAX_CHARS))}
-              rows={8}
-              placeholder="Describe the bug or feature request..."
-              className="w-full resize-y rounded-lg border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
-            />
-          </label>
+          </>
+        )}
 
-          <p className="text-[10px] text-torus-fg-faint">
-            Markdown: **bold**, *italic*, `code`, - lists
-          </p>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={body.trim().length === 0 && title.trim().length === 0}
-            className="rounded-lg bg-torus-mid px-4 py-2 text-sm font-medium text-torus-bg disabled:opacity-40"
-          >
-            Open GitHub issue
-          </button>
-        </div>
+        <p className="mt-4 text-[10px] text-torus-fg-faint">
+          Or email{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`} className="text-torus-mid underline">
+            {SUPPORT_EMAIL}
+          </a>{' '}
+          directly.
+        </p>
       </div>
     </div>
   );

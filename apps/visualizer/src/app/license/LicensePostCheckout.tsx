@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
+import { SUPPORT_EMAIL } from '@/lib/constants';
 
 export function LicensePostCheckout() {
   const router = useRouter();
@@ -12,7 +13,11 @@ export function LicensePostCheckout() {
       <p className="font-medium text-torus-fg">Thanks for your purchase ✦</p>
       <p className="mt-1 text-torus-fg-dim">
         Your license activates the moment Polar confirms the order. If it isn&apos;t showing yet,
-        give it a moment, then refresh.
+        give it a moment, then refresh — or email{' '}
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-torus-mid underline">
+          {SUPPORT_EMAIL}
+        </a>
+        .
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
         <button

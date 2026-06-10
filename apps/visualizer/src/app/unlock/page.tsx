@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Logo } from '@torus/ui';
 import { useUnlock } from '@/hooks/useUnlock';
+import { SUPPORT_EMAIL } from '@/lib/constants';
 
 const TEST_LICENSE_KEY = 'TORUS-WTF-TEST-UNLOCK';
 const showTestMode = process.env.NODE_ENV !== 'production';
@@ -96,7 +97,11 @@ export default function UnlockPage() {
       ) : null}
 
       <p className="mt-6 text-xs text-torus-fg-faint">
-        Lost your key? Check your purchase email.{' '}
+        Lost your key? Check your purchase email or contact{' '}
+        <a href={`mailto:${SUPPORT_EMAIL}`} className="text-torus-mid hover:underline">
+          {SUPPORT_EMAIL}
+        </a>
+        .{' '}
         <Link href="/" className="text-torus-mid hover:underline">
           Back to visualizer
         </Link>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
   title: 'privacy',
@@ -42,6 +43,13 @@ export default function PrivacyPage() {
           <Link href="/settings" className="text-torus-mid underline">
             settings
           </Link>
+          .
+        </p>
+        <p>
+          <strong className="text-torus-fg">Contact:</strong> questions about privacy or your data?{' '}
+          <a href={mailto(SUPPORT_EMAIL)} className="text-torus-mid underline">
+            {SUPPORT_EMAIL}
+          </a>
           .
         </p>
       </section>

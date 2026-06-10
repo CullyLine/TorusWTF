@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
   title: 'terms',
@@ -37,6 +38,13 @@ export default function TermsPage() {
             settings
           </Link>
           . No dark patterns.
+        </p>
+        <p>
+          <strong className="text-torus-fg">Contact:</strong> licensing questions or support?{' '}
+          <a href={mailto(SUPPORT_EMAIL)} className="text-torus-mid underline">
+            {SUPPORT_EMAIL}
+          </a>
+          .
         </p>
       </section>
 

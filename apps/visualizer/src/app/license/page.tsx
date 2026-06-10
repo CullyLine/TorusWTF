@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getCurrentUserFromCookies } from '@/lib/auth';
+import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 import { hasLicense, licenseConfigured, LICENSE_BENEFITS, LICENSE_PRICE_USD } from '@/lib/license';
 import { LicenseBuyButton } from './LicenseBuyButton';
 import { LicensePostCheckout } from './LicensePostCheckout';
@@ -72,6 +73,10 @@ export default async function LicensePage({ searchParams }: PageProps) {
         <Link href="/terms" className="underline">
           terms
         </Link>
+        . Questions about your purchase?{' '}
+        <a href={mailto(SUPPORT_EMAIL)} className="underline">
+          {SUPPORT_EMAIL}
+        </a>
         .
       </p>
 

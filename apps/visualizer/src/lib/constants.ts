@@ -1,14 +1,9 @@
-export const GITHUB_REPO = 'CullyLine/TorusFM';
+/** Customer-facing support address (Polar, license help, general contact). */
+export const SUPPORT_EMAIL = 'support@torus.wtf';
 
-export function githubIssueUrl(opts: {
-  title: string;
-  body: string;
-  label: 'bug' | 'feature' | 'other';
-}): string {
-  const params = new URLSearchParams({
-    title: opts.title,
-    body: opts.body,
-    labels: opts.label,
-  });
-  return `https://github.com/${GITHUB_REPO}/issues/new?${params.toString()}`;
+/** In-app feedback form destination. */
+export const FEEDBACK_EMAIL = 'feedback@torus.wtf';
+
+export function mailto(href: string): string {
+  return `mailto:${href}`;
 }

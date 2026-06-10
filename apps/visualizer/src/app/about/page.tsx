@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
   title: 'about',
@@ -73,7 +74,11 @@ export default function AboutPage() {
         <Link href="/principles" className="underline">
           principles
         </Link>
-        . Best-effort service, made with care. ♥
+        . Best-effort service, made with care. Questions?{' '}
+        <a href={mailto(SUPPORT_EMAIL)} className="underline">
+          {SUPPORT_EMAIL}
+        </a>
+        .
       </p>
 
       <p className="mt-10 text-xs text-torus-fg-faint">

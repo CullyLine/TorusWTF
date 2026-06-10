@@ -67,3 +67,53 @@ export async function sendMagicLinkEmail(opts: {
     `,
   });
 }
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export async function sendFeedbackEmail(opts: {
+  to: string;
+  category: 'bug' | 'feature' | 'other';
+  title: string;
+  body: string;
+  pageUrl?: string;
+  userEmail?: string | null;
+}): Promise<void> {
+  const from = process.env.SMTP_FROM ?? 'torus.wtf <noreply@torus.wtf>';
+  const categoryLabel =
+    opts.category === 'bug' ? 'Bug' : opts.category === 'feature' ? 'Feature' : 'Other';
+
+  const meta = [
+    opts.userEmail ? `From account: ${opts.userEmail}` : null,
+    opts.pageUrl ? `Page: ${opts.pageUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const text = [opts.body, meta ? `\n---\n${meta}` : ''].join('');
+
+  await getMailer().sendMail({
+    from,
+    to: opts.to,
+    replyTo: opts.userEmail ?? undefined,
+    subject: `[torus feedback · ${categoryLabel}] ${opts.title}`,
+    text,
+    html: `
+      <div style="font-family: -apple-system, system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; color: #0a0b1e;">
+        <p style="margin: 0 0 8px; font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.08em;">${categoryLabel}</p>
+        <h1 style="margin: 0 0 16px; font-size: 20px;">${escapeHtml(opts.title)}</h1>
+        <pre style="margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.5;">${escapeHtml(opts.body)}</pre>
+        ${
+          meta
+            ? `<p style="margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #888; white-space: pre-wrap;">${escapeHtml(meta)}</p>`
+            : ''
+        }
+      </div>
+    `,
+  });
+}

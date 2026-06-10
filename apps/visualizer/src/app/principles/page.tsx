@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
   title: 'principles',
@@ -43,7 +44,11 @@ export default function PrinciplesPage() {
         <Link href="/license" className="underline">
           Production License
         </Link>{' '}
-        — a one-time unlock for high-quality, commercial-ready exports.
+        — a one-time unlock for high-quality, commercial-ready exports. Reach us at{' '}
+        <a href={mailto(SUPPORT_EMAIL)} className="underline">
+          {SUPPORT_EMAIL}
+        </a>
+        .
       </p>
 
       <p className="mt-10 text-xs text-torus-fg-faint">
