@@ -78,5 +78,14 @@ export function useUnlock() {
   const unlocked = hasAccountLicense || testUnlocked;
   const checking = !loaded || testChecking;
 
+  // Account license is authoritative — drop any legacy local key so UI stays in sync.
+  useEffect(() => {
+    if (!hasAccountLicense) return;
+    localStorage.removeItem(LICENSE_STORAGE_KEY);
+    localStorage.removeItem(LICENSE_VERIFIED_AT_KEY);
+    setLicenseKey(null);
+    setTestUnlocked(false);
+  }, [hasAccountLicense]);
+
   return { unlocked, checking, hasAccountLicense, licenseKey, activate, deactivate };
 }

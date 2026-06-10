@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db, users } from '@/lib/db';
+import {
+  ensureAccountLicensed,
+  extractPolarUserId,
+  resolveLicenseUser,
+  type PolarMetadataCarrier,
+} from '@/lib/license-grant';
 
 export const runtime = 'nodejs';
 
@@ -34,7 +40,6 @@ function verifyStandardWebhook(
   const signedContent = `${id}.${timestamp}.${rawBody}`;
   const expected = createHmac('sha256', keyBytes).update(signedContent).digest('base64');
 
-  // The header is space-delimited "v1,<sig> v1,<sig>"; any match passes.
   for (const part of signature.split(' ')) {
     const sig = part.includes(',') ? part.split(',')[1] : part;
     if (!sig) continue;
@@ -51,23 +56,29 @@ function verifyStandardWebhook(
 
 interface PolarEvent {
   type?: string;
-  data?: {
-    id?: string;
+  data?: PolarMetadataCarrier & {
     status?: string;
     paid?: boolean;
-    metadata?: Record<string, unknown>;
-    customer?: { email?: string | null } | null;
-    checkout?: { metadata?: Record<string, unknown> } | null;
+    customer?: { email?: string | null; metadata?: Record<string, unknown> | null } | null;
+    checkout?: { metadata?: Record<string, unknown> | null } | null;
   };
 }
 
-function extractUserId(data: PolarEvent['data']): string | null {
-  const m = (data?.metadata ?? data?.checkout?.metadata ?? {}) as Record<string, unknown>;
-  const id = m.userId;
-  return typeof id === 'string' && id.length > 0 ? id : null;
+const GRANTING_EVENTS = new Set([
+  'order.paid',
+  'order.created',
+  'order.updated',
+  'checkout.updated',
+]);
+
+function isPaidOrder(data: PolarEvent['data']): boolean {
+  if (!data) return false;
+  return data.paid === true || data.status === 'paid';
 }
 
-const GRANTING_EVENTS = new Set(['order.created', 'order.paid', 'order.updated']);
+function isSucceededCheckout(data: PolarEvent['data']): boolean {
+  return data?.status === 'succeeded';
+}
 
 export async function POST(req: Request) {
   const rawBody = await req.text();
@@ -90,34 +101,35 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, ignored: event.type ?? 'unknown' });
   }
 
-  // For order.updated, only grant once the order is actually paid.
-  if (event.type === 'order.updated' && !event.data?.paid && event.data?.status !== 'paid') {
+  if (event.type === 'checkout.updated' && !isSucceededCheckout(event.data)) {
+    return NextResponse.json({ ok: true, ignored: 'checkout-not-succeeded' });
+  }
+
+  if (event.type.startsWith('order.') && event.type !== 'order.paid' && !isPaidOrder(event.data)) {
     return NextResponse.json({ ok: true, ignored: 'unpaid' });
   }
 
-  const userId = extractUserId(event.data);
-  const orderId = event.data?.id ?? null;
-  const email = event.data?.customer?.email ?? null;
-
-  let target: { id: string } | undefined;
-  if (userId) {
-    [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
-  }
-  if (!target && email) {
-    [target] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-  }
-  if (!target) {
+  const data = event.data;
+  if (!data) {
     return NextResponse.json({ ok: true, unmatched: true });
   }
 
-  await db
-    .update(users)
-    .set({ productionLicenseAt: Date.now(), productionLicenseOrderId: orderId })
-    .where(eq(users.id, target.id));
+  const userId = extractPolarUserId(data);
+  const orderId = data.id ?? null;
+  const email = data.customer?.email ?? null;
+
+  const target = await resolveLicenseUser(data, email);
+  if (!target) {
+    console.warn('[license/webhook] unmatched event', event.type, { userId, email, orderId });
+    return NextResponse.json({ ok: true, unmatched: true });
+  }
+
+  const [account] = await db.select().from(users).where(eq(users.id, target.id)).limit(1);
+  if (!account) {
+    return NextResponse.json({ ok: true, unmatched: true });
+  }
+
+  await ensureAccountLicensed(account, orderId);
 
   return NextResponse.json({ ok: true, granted: target.id });
 }

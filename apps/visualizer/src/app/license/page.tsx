@@ -3,7 +3,7 @@ import { getCurrentUserFromCookies } from '@/lib/auth';
 import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 import { hasLicense, licenseConfigured, LICENSE_BENEFITS, LICENSE_PRICE_USD } from '@/lib/license';
 import { LicenseBuyButton } from './LicenseBuyButton';
-import { LicensePostCheckout } from './LicensePostCheckout';
+import { LicenseAccountSync, LicensePostCheckout } from './LicenseAccountSync';
 
 export const metadata = {
   title: 'Production License',
@@ -12,11 +12,11 @@ export const metadata = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ success?: string }>;
+  searchParams: Promise<{ success?: string; checkout_id?: string }>;
 }
 
 export default async function LicensePage({ searchParams }: PageProps) {
-  const { success } = await searchParams;
+  const { success, checkout_id: checkoutId } = await searchParams;
   const user = await getCurrentUserFromCookies();
   const licensed = hasLicense(user);
   const configured = licenseConfigured();
@@ -40,16 +40,18 @@ export default async function LicensePage({ searchParams }: PageProps) {
         ))}
       </ul>
 
+      {user && !licensed ? <LicenseAccountSync /> : null}
+
       <div className="mt-10">
-        {success ? (
-          <LicensePostCheckout />
-        ) : licensed ? (
+        {licensed ? (
           <div className="rounded-2xl border border-torus-high/40 bg-torus-surface p-5 text-sm">
             <p className="font-medium text-torus-high">You have the Production License ✦</p>
             <p className="mt-1 text-torus-fg-dim">
               All pro exports and commercial-use rights are unlocked on this account.
             </p>
           </div>
+        ) : success ? (
+          <LicensePostCheckout checkoutId={checkoutId} />
         ) : !user ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-torus-fg-dim">

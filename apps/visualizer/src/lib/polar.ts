@@ -6,6 +6,66 @@ export interface LicenseValidationResult {
 
 const POLAR_API_BASE = process.env.POLAR_API_BASE ?? 'https://api.polar.sh';
 
+function polarHeaders(apiKey: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+export interface PolarCheckoutSession {
+  id: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+  customer_email?: string | null;
+  customer?: { email?: string | null; metadata?: Record<string, unknown> | null } | null;
+}
+
+export interface PolarOrder {
+  id: string;
+  paid?: boolean;
+  status?: string;
+  metadata?: Record<string, unknown>;
+  customer?: { email?: string | null; metadata?: Record<string, unknown> | null } | null;
+}
+
+export async function getPolarCheckout(
+  checkoutId: string,
+): Promise<PolarCheckoutSession | { error: string }> {
+  const apiKey = process.env.POLAR_API_KEY;
+  if (!apiKey) return { error: 'Polar is not configured.' };
+
+  try {
+    const res = await fetch(`${POLAR_API_BASE}/v1/checkouts/${checkoutId}`, {
+      headers: polarHeaders(apiKey),
+      cache: 'no-store',
+    });
+    if (!res.ok) return { error: `Polar checkout lookup failed (${res.status}).` };
+    return (await res.json()) as PolarCheckoutSession;
+  } catch {
+    return { error: 'Could not reach Polar.' };
+  }
+}
+
+export async function listPolarOrdersForProduct(
+  productId: string,
+): Promise<PolarOrder[] | { error: string }> {
+  const apiKey = process.env.POLAR_API_KEY;
+  if (!apiKey) return { error: 'Polar is not configured.' };
+
+  try {
+    const url = new URL(`${POLAR_API_BASE}/v1/orders/`);
+    url.searchParams.set('product_id', productId);
+    url.searchParams.set('limit', '100');
+    const res = await fetch(url, { headers: polarHeaders(apiKey), cache: 'no-store' });
+    if (!res.ok) return { error: `Polar orders lookup failed (${res.status}).` };
+    const data = (await res.json()) as { items?: PolarOrder[] };
+    return data.items ?? [];
+  } catch {
+    return { error: 'Could not reach Polar.' };
+  }
+}
+
 /**
  * Create a one-time Polar checkout for the Production License. Returns the
  * hosted checkout URL the client should redirect to. `metadata.userId` is
@@ -24,10 +84,7 @@ export async function createProductionLicenseCheckout(opts: {
   try {
     const res = await fetch(`${POLAR_API_BASE}/v1/checkouts/`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: polarHeaders(apiKey),
       body: JSON.stringify({
         products: [opts.productId],
         success_url: opts.successUrl,

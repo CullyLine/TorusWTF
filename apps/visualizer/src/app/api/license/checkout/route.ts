@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     productId,
     userId: user.id,
     email: user.email,
-    successUrl: `${origin}/license?success=1`,
+    successUrl: `${origin}/license?success=1&checkout_id={CHECKOUT_ID}`,
   });
 
   if ('error' in result) {

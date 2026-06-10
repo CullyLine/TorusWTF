@@ -40,6 +40,13 @@ export function useSessionUser(enabled = true) {
     void refresh();
   }, [enabled, refresh]);
 
+  useEffect(() => {
+    if (!enabled) return;
+    const onLicense = () => void refresh();
+    window.addEventListener('torus-license-granted', onLicense);
+    return () => window.removeEventListener('torus-license-granted', onLicense);
+  }, [enabled, refresh]);
+
   const openDiscordPopup = useCallback(() => {
     window.open(
       '/api/auth/discord?popup=1',
