@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAudioAnalyser, useStreamAnalyser, type AnalyserHandle } from '@torus/visualizers';
 import { VOLUME_KEY } from '@/lib/storage';
 import { useMicCapture } from './useMicCapture';
-import { useTabCapture } from './useTabCapture';
+import { useTabCapture, type DesktopCaptureMode } from './useTabCapture';
 
 const DEFAULT_VOLUME = 0.4;
 
@@ -157,12 +157,15 @@ export function useAudioSource() {
     if (mic.error) setError(mic.error);
   }, [clearSource, mic]);
 
-  const startTab = useCallback(async () => {
-    clearSource();
-    const stream = await tab.start();
-    if (stream) setSource({ kind: 'tab' });
-    if (tab.error) setError(tab.error);
-  }, [clearSource, tab]);
+  const startTab = useCallback(
+    async (mode: DesktopCaptureMode = 'everything') => {
+      clearSource();
+      const stream = await tab.start(mode);
+      if (stream) setSource({ kind: 'tab' });
+      if (tab.error) setError(tab.error);
+    },
+    [clearSource, tab],
+  );
 
   const play = useCallback(() => {
     if (source?.kind === 'file' && audioRef.current) {

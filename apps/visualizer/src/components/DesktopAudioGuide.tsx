@@ -1,32 +1,38 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { isChromium } from '@/lib/palettes';
 import { detectOS } from '@/lib/platform';
+import type { DesktopCaptureMode } from '@/hooks/useTabCapture';
 
 interface DesktopAudioGuideProps {
   open: boolean;
   reducedMotion?: boolean;
   onClose: () => void;
-  onConfirm: (dontShowAgain: boolean) => void;
+  /** User picked a capture mode — open Chrome's share dialog with it. */
+  onPick: (mode: DesktopCaptureMode) => void;
 }
 
+/**
+ * Pre-picker for desktop capture. Chrome's native "Choose what to share"
+ * dialog can't be customized, so the simple choice lives here: each button
+ * opens the native picker pre-aimed at the right surface via
+ * `getDisplayMedia` hints (see `useTabCapture`).
+ */
 export function DesktopAudioGuide({
   open,
   reducedMotion = false,
   onClose,
-  onConfirm,
+  onPick,
 }: DesktopAudioGuideProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
   const os = detectOS();
   const chromium = isChromium();
 
   useEffect(() => {
     if (!open) return;
-    setDontShowAgain(false);
     previousFocus.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = panelRef.current?.querySelector<HTMLElement>(
@@ -54,6 +60,9 @@ export function DesktopAudioGuide({
     ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4'
     : 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-200';
 
+  const bigButton =
+    'flex w-full flex-col items-start gap-1 rounded-xl border border-torus-border bg-torus-surface p-4 text-left transition hover:border-torus-mid/50 hover:bg-torus-mid/5';
+
   return (
     <div
       className={overlayClass}
@@ -72,7 +81,7 @@ export function DesktopAudioGuide({
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id={titleId} className="text-sm font-semibold text-torus-fg">
-            Capture desktop audio
+            What should torus listen to?
           </h2>
           <button
             type="button"
@@ -114,62 +123,38 @@ export function DesktopAudioGuide({
                 BlackHole 2ch as the input.
               </li>
             </ol>
-            <p className="text-xs text-torus-fg-faint">
-              You can still share a browser tab below if that tab is playing audio.
-            </p>
+            <button type="button" onClick={() => onPick('tab')} className={bigButton}>
+              <span className="text-sm font-medium text-torus-fg">Share a browser tab instead</span>
+              <span className="text-xs text-torus-fg-faint">
+                Works without BlackHole — pick a tab that&apos;s playing audio.
+              </span>
+            </button>
           </div>
         ) : (
-          <div className="space-y-3 text-sm text-torus-fg-dim">
-            <p>
-              Capture anything playing on your computer — Spotify, Ableton, Splice, YouTube, or any
-              desktop app — in real time. When Chrome&apos;s share dialog opens:
+          <div className="space-y-3">
+            <button type="button" onClick={() => onPick('everything')} className={bigButton}>
+              <span className="text-sm font-medium text-torus-fg">Listen to everything</span>
+              <span className="text-xs text-torus-fg-dim">
+                Your whole computer&apos;s audio — Spotify, Ableton, games, all of it.
+              </span>
+              <span className="text-[10px] text-torus-fg-faint">
+                Keep &ldquo;Also share system audio&rdquo; ticked in Chrome&apos;s dialog.
+              </span>
+            </button>
+            <button type="button" onClick={() => onPick('application')} className={bigButton}>
+              <span className="text-sm font-medium text-torus-fg">One application</span>
+              <span className="text-xs text-torus-fg-dim">
+                Just a single app window or browser tab.
+              </span>
+              <span className="text-[10px] text-torus-fg-faint">
+                Tick &ldquo;Also share audio&rdquo; when you pick it.
+              </span>
+            </button>
+            <p className="text-[10px] text-torus-fg-faint">
+              Only the audio is used — the shared video is discarded.
             </p>
-            <ol className="list-decimal space-y-2 pl-5">
-              <li>
-                Click <strong className="text-torus-fg">Entire Screen</strong> at the top of the
-                dialog.
-              </li>
-              <li>
-                Tick <strong className="text-torus-fg">Share system audio</strong> at the
-                bottom-left.
-              </li>
-              <li>
-                Click <strong className="text-torus-fg">Share</strong>.
-              </li>
-            </ol>
           </div>
         )}
-
-        {chromium ? (
-          <label className="mt-4 flex cursor-pointer items-center gap-2 text-xs text-torus-fg-dim">
-            <input
-              type="checkbox"
-              checked={dontShowAgain}
-              onChange={(e) => setDontShowAgain(e.target.checked)}
-              className="rounded border-torus-border"
-            />
-            Don&apos;t show this again
-          </label>
-        ) : null}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-torus-border px-4 py-2 text-xs text-torus-fg-dim hover:border-torus-border-strong"
-          >
-            Cancel
-          </button>
-          {chromium ? (
-            <button
-              type="button"
-              onClick={() => onConfirm(dontShowAgain)}
-              className="rounded-full border border-torus-mid/40 bg-torus-mid/20 px-4 py-2 text-xs font-medium text-torus-mid hover:bg-torus-mid/30"
-            >
-              Got it, share now
-            </button>
-          ) : null}
-        </div>
       </div>
     </div>
   );

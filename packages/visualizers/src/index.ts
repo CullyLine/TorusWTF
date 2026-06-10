@@ -7,6 +7,7 @@ export {
   FULLSCREEN_SHADER_PRESETS,
   type VisualizerId,
   type VisualizerDefinition,
+  type PresetControlDefaults,
 } from './registry';
 export {
   BackgroundLayer,

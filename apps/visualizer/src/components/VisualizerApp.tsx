@@ -28,6 +28,7 @@ import { TitleOverlayPanel } from '@/components/TitleOverlayPanel';
 import { PrerenderRoot } from '@/components/PrerenderRoot';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
+import type { DesktopCaptureMode } from '@/hooks/useTabCapture';
 import { useExport } from '@/hooks/useExport';
 import { usePrerender } from '@/hooks/usePrerender';
 import { useBPM } from '@/hooks/useBPM';
@@ -61,7 +62,6 @@ import {
   PRESET_KEY,
   SHOW_BPM_KEY,
   SOURCE_KIND_KEY,
-  DESKTOP_GUIDE_SEEN_KEY,
   HERO_SEEN_KEY,
   TITLE_OVERLAY_KEY,
   DEFAULT_TITLE_OVERLAY,
@@ -101,9 +101,11 @@ export function VisualizerApp() {
   const prerender = usePrerender();
   const { toast, prompt } = useToast();
 
-  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'liquid_blob', (v) =>
-    typeof v === 'string' && v in VISUALIZERS ? (v as VisualizerId) : undefined,
-  );
+  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'liquid_blob', (v) => {
+    // Spectral Tunnel was replaced by Infinite Tunnel in the Flow Field Update.
+    if (v === 'spectral_tunnel') return 'infinite_tunnel';
+    return typeof v === 'string' && v in VISUALIZERS ? (v as VisualizerId) : undefined;
+  });
   const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
   const [controls, setControls] = usePersistedState<VisualizerControls>(
     CONTROLS_KEY,
@@ -144,10 +146,6 @@ export function VisualizerApp() {
   const [background, setBackground] = usePersistedState<BackgroundSettings>(
     BACKGROUND_KEY,
     DEFAULT_BACKGROUND,
-  );
-  const [desktopGuideSeen, setDesktopGuideSeen] = usePersistedState<boolean>(
-    DESKTOP_GUIDE_SEEN_KEY,
-    false,
   );
   const [desktopGuideOpen, setDesktopGuideOpen] = useState(false);
   const [desktopSupported, setDesktopSupported] = useState(false);
@@ -219,26 +217,23 @@ export function VisualizerApp() {
     async (kind: SourceKind) => {
       setSourceKind(kind);
       if (kind === 'mic') await audio.startMic();
-      if (kind === 'tab') await audio.startTab();
     },
     [audio, setSourceKind],
   );
 
+  // Desktop always goes through the chooser — it's the mode selector
+  // (everything vs. one application), not a one-time tutorial.
   const handleDesktopSelect = useCallback(() => {
-    if (!desktopGuideSeen) {
-      setDesktopGuideOpen(true);
-      return;
-    }
-    void handleSelectKind('tab');
-  }, [desktopGuideSeen, handleSelectKind]);
+    setDesktopGuideOpen(true);
+  }, []);
 
-  const handleDesktopGuideConfirm = useCallback(
-    (dontShowAgain: boolean) => {
-      if (dontShowAgain) setDesktopGuideSeen(true);
+  const handleDesktopPick = useCallback(
+    (mode: DesktopCaptureMode) => {
       setDesktopGuideOpen(false);
-      void handleSelectKind('tab');
+      setSourceKind('tab');
+      void audio.startTab(mode);
     },
-    [handleSelectKind, setDesktopGuideSeen],
+    [audio, setSourceKind],
   );
 
   const applyEmbeddedTags = useCallback(
@@ -321,12 +316,27 @@ export function VisualizerApp() {
     }
   }, [demoLoading, handleFile, toast]);
 
+  // Switching presets applies that preset's hand-tuned slider defaults
+  // (from the registry). Omitted fields keep the user's current values, so
+  // audio-response tuning survives preset hopping.
+  const handlePresetChange = useCallback(
+    (id: VisualizerId) => {
+      setPreset(id);
+      const defaults = VISUALIZERS[id].defaults;
+      if (defaults) setControls((c) => ({ ...c, ...defaults }));
+    },
+    [setControls, setPreset],
+  );
+
   const handleRandomPreset = useCallback(() => {
-    setPreset(pickRandomVisualizerPreset());
-  }, []);
+    handlePresetChange(pickRandomVisualizerPreset());
+  }, [handlePresetChange]);
 
   const handleLoadSaved = useCallback((saved: SavedPreset) => {
-    setPreset(saved.presetId);
+    // Legacy saved presets may still point at the removed Spectral Tunnel.
+    const presetId =
+      (saved.presetId as string) === 'spectral_tunnel' ? 'infinite_tunnel' : saved.presetId;
+    setPreset(presetId in VISUALIZERS ? presetId : 'liquid_blob');
     setPalette(saved.palette);
     setControls({
       reactivity: saved.reactivity,
@@ -346,6 +356,13 @@ export function VisualizerApp() {
       inflate: saved.inflate ?? 0.5,
       appendages: saved.appendages ?? 4,
       subSpheres: saved.subSpheres ?? 6,
+      turbulence: saved.turbulence ?? 1,
+      trailLength: saved.trailLength ?? 1,
+      density: saved.density ?? 1,
+      vortexAmount: saved.vortexAmount ?? 0.25,
+      interactStrength: saved.interactStrength ?? 1,
+      cameraDistance: saved.cameraDistance ?? 1,
+      lightLevel: saved.lightLevel ?? 1,
       autoGain: saved.autoGain ?? true,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
@@ -629,7 +646,7 @@ export function VisualizerApp() {
           onToggleMute={audio.toggleMute}
         />
       ) : null}
-      <PresetPicker active={preset} onChange={setPreset} onRandom={handleRandomPreset} />
+      <PresetPicker active={preset} onChange={handlePresetChange} onRandom={handleRandomPreset} />
       <ControlPanel
         controls={controls}
         onChange={(patch) => setControls((c) => ({ ...c, ...patch }))}
@@ -720,6 +737,8 @@ export function VisualizerApp() {
                 anima={controls.anima ?? 0.5}
                 aura={controls.aura ?? 0.4}
                 cinematicSpeed={controls.cinematicSpeed ?? 1}
+                cameraDistance={controls.cameraDistance ?? 1}
+                lightLevel={controls.lightLevel ?? 1}
                 energy={controls.energy ?? 0}
                 autoGain={controls.autoGain ?? true}
                 background={background.mode}
@@ -727,6 +746,11 @@ export function VisualizerApp() {
                 inflate={controls.inflate ?? 0.5}
                 appendages={controls.appendages ?? 4}
                 subSpheres={controls.subSpheres ?? 6}
+                turbulence={controls.turbulence ?? 1}
+                trailLength={controls.trailLength ?? 1}
+                density={controls.density ?? 1}
+                vortexAmount={controls.vortexAmount ?? 0.25}
+                interactStrength={controls.interactStrength ?? 1}
                 bloomIntensity={controls.bloomIntensity}
                 cameraMode={controls.cameraMode}
                 creature={creature?.personality}
@@ -827,7 +851,7 @@ export function VisualizerApp() {
           open={desktopGuideOpen}
           reducedMotion={reducedMotion}
           onClose={() => setDesktopGuideOpen(false)}
-          onConfirm={handleDesktopGuideConfirm}
+          onPick={handleDesktopPick}
         />
         {prerender.rootMount ? <PrerenderRoot {...prerender.rootMount} /> : null}
       </div>
@@ -928,7 +952,7 @@ export function VisualizerApp() {
         open={desktopGuideOpen}
         reducedMotion={reducedMotion}
         onClose={() => setDesktopGuideOpen(false)}
-        onConfirm={handleDesktopGuideConfirm}
+        onPick={handleDesktopPick}
       />
       {prerender.rootMount ? <PrerenderRoot {...prerender.rootMount} /> : null}
     </div>

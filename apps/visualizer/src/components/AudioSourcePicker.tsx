@@ -166,14 +166,14 @@ export function AudioSourcePicker({
           <p className="text-sm text-torus-fg-dim">
             {hasSource
               ? "Capturing audio from your desktop — Spotify, Ableton, Splice, anything that's playing."
-              : 'Pick a screen or tab to share — only its audio is used.'}
+              : 'Listen to everything on your computer, or just one application.'}
           </p>
           <button
             type="button"
             onClick={onShowDesktopGuide}
             className="text-xs text-torus-mid hover:underline"
           >
-            How does this work?
+            {hasSource ? 'Change what torus listens to' : 'Choose what to listen to'}
           </button>
         </div>
       )}

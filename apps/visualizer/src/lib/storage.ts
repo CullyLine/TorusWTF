@@ -12,7 +12,6 @@ export const EXPORT_FPS_KEY = 'torus-visualizer-export-fps';
 export const EXPORT_ASPECT_KEY = 'torus-visualizer-export-aspect';
 export const SOURCE_KIND_KEY = 'torus-visualizer-source-kind';
 export const SHOW_BPM_KEY = 'torus-visualizer-show-bpm';
-export const DESKTOP_GUIDE_SEEN_KEY = 'torus-visualizer-desktop-guide-seen';
 export const HWACCEL_BANNER_DISMISSED_KEY = 'torus-visualizer-hwaccel-banner-dismissed';
 export const VOLUME_KEY = 'torus-visualizer-volume';
 export const TITLE_OVERLAY_KEY = 'torus-visualizer-title-overlay';
@@ -88,6 +87,13 @@ export interface SavedPreset {
   inflate?: number;
   appendages?: number;
   subSpheres?: number;
+  turbulence?: number;
+  trailLength?: number;
+  density?: number;
+  vortexAmount?: number;
+  interactStrength?: number;
+  cameraDistance?: number;
+  lightLevel?: number;
   /** Auto-gain on/off. Absent for legacy presets → treated as on. */
   autoGain?: boolean;
 }
@@ -133,6 +139,27 @@ export interface VisualizerControls {
    * the main blob between hits. 0 = disabled. Default 6.
    */
   subSpheres?: number;
+  /** Flow Field: fine turbulent detail 0..2. Default 1. */
+  turbulence?: number;
+  /** Flow Field: trail length 0..2. Default 1. */
+  trailLength?: number;
+  /** Flow Field: fraction of particles rendered 0..1. Default 1. */
+  density?: number;
+  /** Flow Field: tornado vortex strength 0..1. Default 0.25. */
+  vortexAmount?: number;
+  /** Flow Field: cursor-stir strength 0..2. Default 1. */
+  interactStrength?: number;
+  /**
+   * Camera distance multiplier. 1 = each camera mode's natural framing;
+   * higher pulls the camera out, lower pushes in (the engine enforces a
+   * safe minimum distance from the scene center regardless).
+   */
+  cameraDistance?: number;
+  /**
+   * Global light level. 1 = default look; <1 dims the whole frame, >1
+   * brightens. Useful for presets that stay too bright even at 0 bloom.
+   */
+  lightLevel?: number;
   /**
    * Auto-gain (AGC). When on (default), loudness is normalized automatically
    * so any song reacts well without cranking Gain; Gain then trims on top.
@@ -171,6 +198,13 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   inflate: 0.32,
   appendages: 4,
   subSpheres: 6,
+  turbulence: 1,
+  trailLength: 1,
+  density: 1,
+  vortexAmount: 0.25,
+  interactStrength: 1,
+  cameraDistance: 1,
+  lightLevel: 1,
   autoGain: true,
   bloomIntensity: 0,
   cameraMode: 'cinematic',

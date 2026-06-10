@@ -34,7 +34,7 @@ interface ControlPanelProps {
   onBackgroundChange: (patch: Partial<BackgroundSettings>) => void;
 }
 
-const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive', 'cinematic'];
+const CAMERA_MODES: CameraMode[] = ['still', 'drift', 'orbit', 'dive', 'cinematic', 'flow'];
 
 const CAMERA_LABELS: Record<CameraMode, string> = {
   still: 'Still',
@@ -42,6 +42,7 @@ const CAMERA_LABELS: Record<CameraMode, string> = {
   orbit: 'Orbit — circle the scene',
   dive: 'Dive — push forward',
   cinematic: 'Cinematic — auto-directed',
+  flow: 'Flow — ride the current',
 };
 
 const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
@@ -115,6 +116,7 @@ export function ControlPanel({
   ];
   const lookSliders: SliderDef[] = [
     { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 12.5, step: 0.05, hint: 'Glow around bright areas' },
+    { key: 'lightLevel', label: 'Light level', min: 0.2, max: 2, step: 0.05, hint: 'Overall brightness of the world — dim presets that are too hot even at 0 bloom' },
     { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05, hint: 'Animation speed of the preset' },
     { key: 'scale', label: 'Scale', min: 0.2, max: 5, step: 0.05, hint: 'Size of the scene in frame' },
     { key: 'anima', label: 'Anima', min: 0, max: 1, step: 0.01, hint: 'How "alive" the scene behaves between beats' },
@@ -123,9 +125,23 @@ export function ControlPanel({
   const blobSliders: SliderDef[] = [
     { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01, hint: '0 = stretchy taffy, 1 = round puff' },
     { key: 'appendages', label: 'Appendages', min: 0, max: 10, step: 1, hint: 'Orbiting satellite spheres that fuse into the blob' },
-    { key: 'subSpheres', label: 'Sub-spheres', min: 0, max: 8, step: 1, hint: 'Small pops on hi-hats and cymbals' },
+    { key: 'subSpheres', label: 'Sub-spheres', min: 0, max: 8, step: 1, hint: 'Big fluid bubbles on hi-hats and cymbals' },
   ];
   const showBlobSliders = activePreset === 'liquid_blob';
+  const flowSliders: SliderDef[] = [
+    { key: 'turbulence', label: 'Turbulence', min: 0, max: 2, step: 0.05, hint: 'Fine chaotic detail in the current' },
+    { key: 'trailLength', label: 'Trails', min: 0, max: 2, step: 0.05, hint: 'How long each particle\u2019s ink trail is' },
+    { key: 'density', label: 'Density', min: 0.05, max: 1, step: 0.05, hint: 'Fraction of the swarm that\u2019s visible' },
+    { key: 'vortexAmount', label: 'Vortex', min: 0, max: 1, step: 0.05, hint: 'Tornado pull at the center of the field' },
+    { key: 'interactStrength', label: 'Stir', min: 0, max: 2, step: 0.05, hint: 'How strongly your cursor stirs the current' },
+  ];
+  const showFlowSliders = activePreset === 'flow_field';
+  // The tunnel's particle stream reuses a subset of the flow controls
+  // (trails and cursor-stir don't apply to it).
+  const tunnelSliders = flowSliders.filter((s) =>
+    ['turbulence', 'density', 'vortexAmount'].includes(s.key),
+  );
+  const showTunnelSliders = activePreset === 'infinite_tunnel';
 
   const saved = unlocked ? loadSavedPresets() : [];
   void presetsVersion;
@@ -135,7 +151,13 @@ export function ControlPanel({
     // added later, so older persisted controls may not have them.
     // Default per-slider.
     const fallback =
-      key === 'scale'
+      key === 'scale' ||
+      key === 'cameraDistance' ||
+      key === 'lightLevel' ||
+      key === 'turbulence' ||
+      key === 'trailLength' ||
+      key === 'density' ||
+      key === 'interactStrength'
         ? 1
         : key === 'anima'
           ? 0.5
@@ -143,11 +165,13 @@ export function ControlPanel({
             ? 0.4
             : key === 'inflate'
               ? 0.5
-              : key === 'appendages'
-                ? 4
-                : key === 'subSpheres'
-                  ? 6
-                  : 0;
+              : key === 'vortexAmount'
+                ? 0.25
+                : key === 'appendages'
+                  ? 4
+                  : key === 'subSpheres'
+                    ? 6
+                    : 0;
     const value = controls[key] ?? fallback;
     const outOfRange = value < min || value > max;
     const sliderValue = Math.max(min, Math.min(max, value));
@@ -228,6 +252,8 @@ export function ControlPanel({
           </summary>
           {lookSliders.map(renderSlider)}
           {showBlobSliders ? blobSliders.map(renderSlider) : null}
+          {showFlowSliders ? flowSliders.map(renderSlider) : null}
+          {showTunnelSliders ? tunnelSliders.map(renderSlider) : null}
         </details>
 
         <details className="space-y-3 border-t border-torus-border pt-3">
@@ -249,6 +275,15 @@ export function ControlPanel({
               ))}
             </select>
           </label>
+
+          {renderSlider({
+            key: 'cameraDistance',
+            label: 'Distance',
+            min: 0.5,
+            max: 2.5,
+            step: 0.05,
+            hint: 'How far the camera sits from the center — it never gets close enough to clip into the scene',
+          })}
 
           {controls.cameraMode === 'cinematic'
             ? (() => {

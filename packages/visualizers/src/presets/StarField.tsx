@@ -6,10 +6,13 @@ import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
 import { useCameraZoomDistanceRef } from '../cameraZoom';
+import { FLOW_GLSL } from '../dsp/flowGlsl';
 
 const ARMS = 3;
 
 const vertexShader = /* glsl */ `
+${FLOW_GLSL}
+
 attribute float aPhase;
 attribute float aRadius;
 attribute float aArm;
@@ -20,12 +23,21 @@ uniform float uMid;
 uniform float uHigh;
 uniform float uBeat;
 uniform float uEnergy;
+uniform float uFlowTime;
+uniform float uFlowAmt;
+uniform float uBandSpread;
 
 varying vec3 vColor;
 varying float vAlpha;
 
 void main() {
   vec3 pos = position;
+  // Flow Field Update: stars shimmer along a curl current. Displacement
+  // (not advection) keeps the spiral intact — the galaxy breathes with the
+  // music and settles back to a clean spiral at rest. Each ARM is a band:
+  // they ride separate currents until the music converges.
+  vec3 fv = ffFlow(pos, aArm, uFlowTime, 0.6, 0.5, 1.0, uBandSpread, 0.0);
+  pos += fv * uFlowAmt * (0.4 + aPhase * 0.6);
   float twinkle = sin(uTime * (3.0 + aPhase * 5.0) + aPhase * 40.0) * 0.5 + 0.5;
   twinkle *= 0.35 + uHigh * 0.65;
 
@@ -42,7 +54,10 @@ void main() {
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   // Base size kept small: 50k+ additively-blended points saturate the framebuffer
   // (and the bloom pass) instantly if individual sprites get too large.
-  gl_PointSize = (1.2 + sizeBoost * 1.4) * (22.0 / -mvPosition.z);
+  // The depth divisor is floored and the final size capped: a star drifting
+  // near the camera plane must not become a screen-filling sprite.
+  float pz = max(0.9, -mvPosition.z);
+  gl_PointSize = min((1.2 + sizeBoost * 1.4) * (22.0 / pz), 26.0);
   gl_Position = projectionMatrix * mvPosition;
 }
 `;
@@ -103,9 +118,13 @@ export function StarFieldScene({ analyser, tier }: VisualizerSceneProps) {
       uHigh: { value: 0 },
       uBeat: { value: 0 },
       uEnergy: { value: 0 },
+      uFlowTime: { value: 0 },
+      uFlowAmt: { value: 0 },
+      uBandSpread: { value: 0.9 },
     }),
     [],
   );
+  const flowTimeRef = useRef(0);
 
   useFrame((state, delta) => {
     const mat = matRef.current;
@@ -120,12 +139,20 @@ export function StarFieldScene({ analyser, tier }: VisualizerSceneProps) {
     mat.uniforms.uBeat!.value = m.beat;
     mat.uniforms.uEnergy!.value = m.energy;
 
+    flowTimeRef.current += Math.min(delta, 0.05) * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+    mat.uniforms.uFlowTime!.value = flowTimeRef.current;
+    // Calm at rest, swirling on energy, surging on drops.
+    mat.uniforms.uFlowAmt!.value = 0.04 + m.energy * 0.16 + m.dropEvent * 0.4;
+    mat.uniforms.uBandSpread!.value = (1 - m.convergence) * 0.9;
+
     beatZoomRef.current = Math.max(0, beatZoomRef.current - delta * 3.5);
     if (m.beat > 0.35) beatZoomRef.current = 1;
 
     const sway = m.energy * 0.08;
     points.rotation.y += delta * (0.03 + m.mid * 0.06);
-    points.rotation.x = Math.sin(state.clock.elapsedTime * 0.12) * 0.08 + sway;
+    // Sway AROUND the base tilt — assigning the raw sway here used to stomp
+    // the JSX rotation and flatten the disc edge-on (white-hot smear).
+    points.rotation.x = Math.PI / 3 + Math.sin(state.clock.elapsedTime * 0.12) * 0.08 + sway;
 
     const baseZ = zoomRef?.current ?? 4;
     camera.position.set(

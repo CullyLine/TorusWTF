@@ -1,8 +1,9 @@
 import type { ComponentType } from 'react';
 import type { AnalyserHandle } from './audio';
+import type { CameraMode } from './SceneRig';
 import { TorusFieldScene } from './presets/TorusField';
 import { ParticleStormScene } from './presets/ParticleStorm';
-import { SpectralTunnelScene } from './presets/SpectralTunnel';
+import { InfiniteTunnelScene } from './presets/InfiniteTunnel';
 import { VolumetricWaveformScene } from './presets/VolumetricWaveform';
 import { CosmicMandalaScene } from './presets/CosmicMandala';
 import { StarFieldScene } from './presets/StarField';
@@ -11,12 +12,14 @@ import { LiquidChromeScene } from './presets/LiquidChrome';
 import { LiquidBlobScene } from './presets/LiquidBlob';
 import { MandelbrotZoomScene } from './presets/MandelbrotZoom';
 import { AnimaScene } from './presets/Anima';
+import { FlowFieldScene } from './presets/FlowField';
 
 export type VisualizerId =
   | 'anima'
+  | 'flow_field'
   | 'torus_field'
   | 'particle_storm'
-  | 'spectral_tunnel'
+  | 'infinite_tunnel'
   | 'volumetric_waveform'
   | 'cosmic_mandala'
   | 'star_field'
@@ -67,6 +70,57 @@ export interface VisualizerSceneProps {
    * capped at 8 in the shader. Other presets ignore this prop.
    */
   subSpheres?: number;
+  /** Flow Field: fine turbulent detail 0..2. Other presets ignore. */
+  turbulence?: number;
+  /** Flow Field: trail length 0..2. Other presets ignore. */
+  trailLength?: number;
+  /** Flow Field: fraction of particles rendered 0..1. Other presets ignore. */
+  density?: number;
+  /** Flow Field: tornado vortex strength 0..1. Other presets ignore. */
+  vortexAmount?: number;
+  /** Flow Field: pointer-stir strength 0..2. Other presets ignore. */
+  interactStrength?: number;
+}
+
+/**
+ * Per-preset default slider values, applied when the user switches to the
+ * preset. Only the fields listed here change — anything omitted keeps the
+ * user's current setting, so audio-response tuning (Gain, band mixes,
+ * auto sensitivity) survives preset hopping unless a preset opts in.
+ *
+ * These are meant to be hand-tuned per preset: edit the `defaults` blocks
+ * in `VISUALIZERS` below.
+ */
+export interface PresetControlDefaults {
+  reactivity?: number;
+  bassMix?: number;
+  midMix?: number;
+  highMix?: number;
+  speed?: number;
+  smoothness?: number;
+  scale?: number;
+  bassShake?: number;
+  bassMaxHz?: number;
+  midMaxHz?: number;
+  anima?: number;
+  aura?: number;
+  cinematicSpeed?: number;
+  energy?: number;
+  inflate?: number;
+  appendages?: number;
+  subSpheres?: number;
+  turbulence?: number;
+  trailLength?: number;
+  density?: number;
+  vortexAmount?: number;
+  interactStrength?: number;
+  autoGain?: boolean;
+  bloomIntensity?: number;
+  cameraMode?: CameraMode;
+  /** Camera distance multiplier. 1 = natural framing. */
+  cameraDistance?: number;
+  /** Global brightness. 1 = default; <1 dims, >1 brightens. */
+  lightLevel?: number;
 }
 
 export interface VisualizerDefinition {
@@ -74,6 +128,8 @@ export interface VisualizerDefinition {
   label: string;
   hint: string;
   Scene: ComponentType<VisualizerSceneProps>;
+  /** Slider values applied when the user switches to this preset. */
+  defaults?: PresetControlDefaults;
 }
 
 /**
@@ -86,70 +142,219 @@ export interface VisualizerDefinition {
  * See CONTRIBUTING.md.
  */
 export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
+  // The `defaults` blocks below are starting points — tune freely. They're
+  // applied whenever the user switches TO that preset; omitted fields keep
+  // the user's current values.
   anima: {
     id: 'anima',
     label: 'Anima',
     hint: 'The living creature \u2014 aurora curtains + soul core, listens with you.',
     Scene: AnimaScene,
+    defaults: {
+      speed: 1.5,
+      smoothness: 0.8,
+      scale: 1,
+      anima: 1,
+      aura: 0.4,
+      cameraMode: 'still',
+      bloomIntensity: 0.6,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
+  },
+  flow_field: {
+    id: 'flow_field',
+    label: 'Flow Field',
+    hint: 'A quarter-million particles riding living currents \u2014 chaos that flows into collective motion. Stir it with your cursor.',
+    Scene: FlowFieldScene,
+    defaults: {
+      speed: 1.5,
+      smoothness: 0.55,
+      scale: 1,
+      bassShake: 0.6,
+      cameraMode: 'flow',
+      bloomIntensity: 0.8,
+      cameraDistance: 1,
+      lightLevel: 1,
+      turbulence: 1,
+      trailLength: 1,
+      density: 1,
+      vortexAmount: 0.25,
+      interactStrength: 1,
+    },
   },
   torus_field: {
     id: 'torus_field',
     label: 'Torus Field',
     hint: 'Sacred-geometry energy flow \u2014 the brand signature.',
     Scene: TorusFieldScene,
+    defaults: {
+      speed: 1.5,
+      smoothness: 0.6,
+      scale: 1,
+      bassShake: 1,
+      cameraMode: 'cinematic',
+      cinematicSpeed: 1,
+      bloomIntensity: 1.1,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
   particle_storm: {
     id: 'particle_storm',
     label: 'Particle Storm',
     hint: 'Frequency-driven swarm. Punchy energy for big drops.',
     Scene: ParticleStormScene,
+    defaults: {
+      speed: 2,
+      smoothness: 0.4,
+      scale: 1,
+      bassShake: 1.5,
+      cameraMode: 'cinematic',
+      cinematicSpeed: 1,
+      bloomIntensity: 1.1,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
-  spectral_tunnel: {
-    id: 'spectral_tunnel',
-    label: 'Spectral Tunnel',
-    hint: 'Glide through a deforming tube. Melodic + ambient.',
-    Scene: SpectralTunnelScene,
+  infinite_tunnel: {
+    id: 'infinite_tunnel',
+    label: 'Tunnel',
+    hint: 'An infinite tunnel rushing past \u2014 walls explode on bass, pyramids bite on mids, souls ride the current.',
+    Scene: InfiniteTunnelScene,
+    defaults: {
+      speed: 1.5,
+      smoothness: 0.55,
+      scale: 1,
+      bassShake: 1,
+      cameraMode: 'drift',
+      bloomIntensity: 0.9,
+      cameraDistance: 1,
+      lightLevel: 1,
+      turbulence: 1,
+      density: 1,
+      vortexAmount: 0.25,
+    },
   },
   volumetric_waveform: {
     id: 'volumetric_waveform',
     label: 'Volumetric Waveform',
     hint: 'The waveform extruded into 3D \u2014 minimal, universal.',
     Scene: VolumetricWaveformScene,
+    defaults: {
+      speed: 1.5,
+      smoothness: 0.5,
+      scale: 1,
+      bassShake: 0.8,
+      cameraMode: 'drift',
+      bloomIntensity: 0.8,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
   cosmic_mandala: {
     id: 'cosmic_mandala',
     label: 'Cosmic Mandala',
     hint: 'Sacred-geometry rings in radial symmetry \u2014 brand-aligned calm power.',
     Scene: CosmicMandalaScene,
+    defaults: {
+      speed: 1.2,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.5,
+      cameraMode: 'drift',
+      bloomIntensity: 1,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
   star_field: {
     id: 'star_field',
     label: 'Star Field',
     hint: 'Galaxy spiral arms that tighten with the bass and twinkle on highs.',
     Scene: StarFieldScene,
+    defaults: {
+      speed: 1.5,
+      smoothness: 0.6,
+      scale: 1,
+      bassShake: 0.8,
+      cameraMode: 'cinematic',
+      cinematicSpeed: 1,
+      bloomIntensity: 1,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
   outrun_grid: {
     id: 'outrun_grid',
     label: 'Outrun Grid',
     hint: 'Synthwave horizon grid with a pulsing sun \u2014 producer-nightdrive vibes.',
     Scene: OutrunGridScene,
+    defaults: {
+      speed: 1.8,
+      smoothness: 0.5,
+      scale: 1,
+      bassShake: 1,
+      cameraMode: 'still',
+      bloomIntensity: 1.2,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
   liquid_chrome: {
     id: 'liquid_chrome',
     label: 'Liquid Chrome',
     hint: 'Metallic blob morphing with bass and beats \u2014 high-gloss centerpiece.',
     Scene: LiquidChromeScene,
+    defaults: {
+      speed: 1.5,
+      smoothness: 0.6,
+      scale: 1,
+      bassShake: 1.2,
+      cameraMode: 'cinematic',
+      cinematicSpeed: 1,
+      bloomIntensity: 1,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
   liquid_blob: {
     id: 'liquid_blob',
     label: 'Liquid Blob',
     hint: 'Amorphous raymarched metaballs that fuse and split. Pure goo, no edges.',
     Scene: LiquidBlobScene,
+    // Matches the app's first-load DEFAULT_CONTROLS tuning.
+    defaults: {
+      speed: 5.95,
+      smoothness: 0.95,
+      scale: 0.15,
+      bassShake: 2.55,
+      anima: 1,
+      aura: 0,
+      cameraMode: 'cinematic',
+      cinematicSpeed: 3,
+      inflate: 0.45,
+      appendages: 4,
+      subSpheres: 6,
+      bloomIntensity: 0,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
   mandelbrot_zoom: {
     id: 'mandelbrot_zoom',
     label: 'Mandelbrot Zoom',
     hint: 'Infinite fractal dive — color cycles to the music, dives faster on drops.',
     Scene: MandelbrotZoomScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0,
+      cameraMode: 'still',
+      bloomIntensity: 0.5,
+      cameraDistance: 1,
+      lightLevel: 1,
+    },
   },
 };

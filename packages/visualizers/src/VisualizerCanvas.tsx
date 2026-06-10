@@ -72,6 +72,10 @@ interface VisualizerCanvasProps {
   aura?: number;
   /** Cinematic playback rate (only used when cameraMode === 'cinematic'). */
   cinematicSpeed?: number;
+  /** Camera distance multiplier. 1 = natural framing; never goes inside the safe zone. */
+  cameraDistance?: number;
+  /** Global light level. 1 = default; <1 dims the frame, >1 brightens. */
+  lightLevel?: number;
   /** Dynamic-range expansion. 0 = unchanged, 1 = peaks 3x their deviation. */
   energy?: number;
   /** Auto-gain (AGC). Default on; normalizes loudness so any song reacts well. */
@@ -82,6 +86,16 @@ interface VisualizerCanvasProps {
   appendages?: number;
   /** Liquid Blob: max sub-spheres that pop on high-frequency transients (0–8). */
   subSpheres?: number;
+  /** Flow Field: fine turbulent detail 0..2. */
+  turbulence?: number;
+  /** Flow Field: trail length 0..2. */
+  trailLength?: number;
+  /** Flow Field: fraction of particles rendered 0..1. */
+  density?: number;
+  /** Flow Field: tornado vortex strength 0..1. */
+  vortexAmount?: number;
+  /** Flow Field: pointer-stir strength 0..2. */
+  interactStrength?: number;
   /**
    * Optional reactive background behind the preset. Default 'none' keeps the
    * clip player and all current presets unchanged. Skipped automatically for
@@ -121,11 +135,18 @@ export function VisualizerCanvas({
   anima,
   aura,
   cinematicSpeed = 1,
+  cameraDistance = 1,
+  lightLevel = 1,
   energy,
   autoGain,
   inflate,
   appendages,
   subSpheres,
+  turbulence,
+  trailLength,
+  density,
+  vortexAmount,
+  interactStrength,
   background = 'none',
   backgroundIntensity = 0.6,
   frameloop = 'always',
@@ -192,6 +213,8 @@ export function VisualizerCanvas({
                 aura={aura}
                 creature={creature}
                 cinematicSpeed={cinematicSpeed}
+                cameraDistance={cameraDistance}
+                lightLevel={lightLevel}
               />
               {background !== 'none' && !FULLSCREEN_SHADER_PRESETS.has(preset) ? (
                 <BackgroundLayer
@@ -210,6 +233,11 @@ export function VisualizerCanvas({
                   inflate={inflate}
                   appendages={appendages}
                   subSpheres={subSpheres}
+                  turbulence={turbulence}
+                  trailLength={trailLength}
+                  density={density}
+                  vortexAmount={vortexAmount}
+                  interactStrength={interactStrength}
                 />
               </group>
             </AudioMetricsProvider>

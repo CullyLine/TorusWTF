@@ -243,6 +243,9 @@ importers:
       '@react-three/postprocessing':
         specifier: ^3.0.4
         version: 3.0.4(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)(three@0.171.0))(@types/three@0.171.0)(react@19.0.0)(three@0.171.0)
+      postprocessing:
+        specifier: ^6.39.1
+        version: 6.39.1(three@0.171.0)
       react:
         specifier: 19.0.0
         version: 19.0.0
@@ -2857,11 +2860,11 @@ packages:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
 
+  spessasynth_core@4.3.10:
+    resolution: {integrity: sha512-krkf6OFIFh76juBzZxt1e1VTp3/Aws4cEZ4OBsBJGLbz2xmxsAyg7awnkIibn061g/b6K7+nv8pu3arW8uVQ+g==}
+
   spessasynth_core@4.3.7:
     resolution: {integrity: sha512-ut9KOPUPjm9n1n4kD4utAluA4pRpFRNtaObR4ocPmhjRnUoGCGtOCkAZod58YoHVEmcXjDtHVz0cmGfjSJEYPg==}
-
-  spessasynth_core@4.3.9:
-    resolution: {integrity: sha512-G+pzVBpWz6vBZX7PGpOvewI/3VgpMoULPOCejyni5E0VdgfcBxXhqaJ8ncFAbFe82OcVIoobjCqpGaVWnOia0A==}
 
   spessasynth_lib@4.3.6:
     resolution: {integrity: sha512-EXMQaBHnbsnkTaLKzBYweZsNdT2oOgvF6wUR5AhdEuxwi0s0EAb7hAEVASEuj33E7tiGaH5Nf03jB10MoxCqZg==}
@@ -5451,13 +5454,13 @@ snapshots:
 
   source-map@0.6.1: {}
 
-  spessasynth_core@4.3.7: {}
+  spessasynth_core@4.3.10: {}
 
-  spessasynth_core@4.3.9: {}
+  spessasynth_core@4.3.7: {}
 
   spessasynth_lib@4.3.6:
     dependencies:
-      spessasynth_core: 4.3.9
+      spessasynth_core: 4.3.10
 
   sprintf-js@1.0.3: {}
 

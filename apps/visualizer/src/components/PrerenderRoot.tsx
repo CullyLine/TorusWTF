@@ -100,6 +100,8 @@ export function PrerenderRoot({
         anima={controls.anima ?? 0.5}
         aura={controls.aura ?? 0.4}
         cinematicSpeed={controls.cinematicSpeed ?? 1}
+        cameraDistance={controls.cameraDistance ?? 1}
+        lightLevel={controls.lightLevel ?? 1}
         energy={controls.energy ?? 0}
         autoGain={controls.autoGain ?? true}
         background={background?.mode ?? 'none'}
@@ -107,6 +109,11 @@ export function PrerenderRoot({
         inflate={controls.inflate ?? 0.5}
         appendages={controls.appendages ?? 4}
         subSpheres={controls.subSpheres ?? 6}
+        turbulence={controls.turbulence ?? 1}
+        trailLength={controls.trailLength ?? 1}
+        density={controls.density ?? 1}
+        vortexAmount={controls.vortexAmount ?? 0.25}
+        interactStrength={controls.interactStrength ?? 1}
         bloomIntensity={controls.bloomIntensity}
         cameraMode={controls.cameraMode}
         creature={creature}

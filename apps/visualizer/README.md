@@ -20,7 +20,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `anima` | Anima | The living creature — aurora curtains + soul core that listens with you |
 | `torus_field` | Torus Field | Flowing torus with bass-reactive bloom, the brand signature |
 | `particle_storm` | Particle Storm | High-density particles, beat-driven bursts |
-| `spectral_tunnel` | Spectral Tunnel | Warp-speed tunnel flythrough with FFT rings and chromatic flash on beats |
+| `infinite_tunnel` | Tunnel | Infinite segmented tunnel — bass explodes the walls, mids drive pyramid teeth, flow-field particles ride the current |
 | `volumetric_waveform` | Volumetric Waveform | Time-domain ribbon in 3D |
 | `cosmic_mandala` | Cosmic Mandala | Radial symmetry, dreamlike |
 | `star_field` | Star Field | Face-on spiral galaxy with twinkles and beat-driven camera punches |

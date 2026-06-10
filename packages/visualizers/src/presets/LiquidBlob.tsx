@@ -89,7 +89,55 @@ float smin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// Sub-sphere field — small fast-orbiting blobs that pop on high-freq
+// Flow Field Update: noise-gradient hash for the curl warp below. Same
+// lattice math as the shared flow core (dsp/flowGlsl.ts), inlined lean
+// because the raymarcher calls scene() hundreds of times per pixel.
+float blobHash(vec3 ip) {
+  return fract(sin(dot(ip, vec3(127.1, 311.7, 74.7))) * 43758.5453123);
+}
+
+vec3 blobNoiseGrad(vec3 p) {
+  vec3 ip = floor(p);
+  vec3 f = fract(p);
+  vec3 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  vec3 du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+  float a = blobHash(ip);
+  float b = blobHash(ip + vec3(1.0, 0.0, 0.0));
+  float c = blobHash(ip + vec3(0.0, 1.0, 0.0));
+  float d = blobHash(ip + vec3(1.0, 1.0, 0.0));
+  float e = blobHash(ip + vec3(0.0, 0.0, 1.0));
+  float f1 = blobHash(ip + vec3(1.0, 0.0, 1.0));
+  float g = blobHash(ip + vec3(0.0, 1.0, 1.0));
+  float h = blobHash(ip + vec3(1.0, 1.0, 1.0));
+  float k1 = b - a;
+  float k2 = c - a;
+  float k3 = e - a;
+  float k4 = a - b - c + d;
+  float k5 = a - c - e + g;
+  float k6 = a - b - e + f1;
+  float k7 = -a + b + c - d + e - f1 - g + h;
+  return du * vec3(
+    k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
+    k2 + k4 * u.x + k5 * u.z + k7 * u.z * u.x,
+    k3 + k5 * u.y + k6 * u.x + k7 * u.x * u.y
+  );
+}
+
+// Gentle domain warp — jelly-like undulation without breaking the SDF too
+// badly. The trig layer gives the base jelly; the curl term (gradient ×
+// axis = divergence-free) makes the surface ROIL like real fluid when the
+// music pushes.
+vec3 warpSpace(vec3 p, float t) {
+  float w = 0.09 + uMid * 0.05 + uEnergy * 0.03;
+  p.x += sin(p.y * 2.0 + t * 0.85) * w;
+  p.y += cos(p.z * 1.7 + t * 0.65) * w;
+  p.z += sin(p.x * 2.2 + t * 1.05) * w * 0.65;
+  vec3 g = blobNoiseGrad(p * 1.5 + vec3(t * 0.22, t * 0.17, -t * 0.19));
+  p += cross(g, vec3(0.577, 0.577, 0.577)) * (0.05 + uEnergy * 0.05 + uBeat * 0.04);
+  return p;
+}
+
+// Sub-sphere field — large fast-orbiting blobs that pop on high-freq
 // transients and merge back into the main blob.
 //
 // IMPORTANT: returns the SDF of the sub-spheres ALONE (no main blob
@@ -109,19 +157,18 @@ float subField(vec3 p) {
     float a = ot * (1.13 + fi * 0.19) + fi * 2.41;
     float b = ot * (0.97 + fi * 0.23) + fi * 1.71;
     float c = ot * (1.31 + fi * 0.17) + fi * 0.97;
-    // Tighter orbits than appendages — they cluster closer to the
-    // anchor so they look like they emerged FROM the blob.
-    float orbit = 0.40 + 0.16 * sin(ot * 0.6 + fi * 1.3);
+    // Wide orbits so the bigger sub-spheres have room to fuse fluidly.
+    float orbit = 0.52 + 0.22 * sin(ot * 0.55 + fi * 1.3);
     vec3 center = vec3(
       cos(a) * orbit,
       sin(b) * orbit * 0.85,
       sin(c) * orbit * 0.75
     );
-    // Radius scales with uSubAmount so they disappear into the main
-    // blob when the high envelope is quiet. The extra uHigh term
-    // makes them visibly throb on sustained hi-hat patterns.
-    float baseR = 0.06 + 0.04 * sin(ot * 2.1 + fi);
-    float rr = baseR * uSubAmount * (0.7 + uHigh * 0.35);
+    // Much larger than before — these read as chunky fluid bubbles, not
+    // sparkles. A small floor keeps a hint of life even between transients.
+    float presence = max(uSubAmount, 0.18);
+    float baseR = 0.20 + 0.09 * sin(ot * 2.1 + fi);
+    float rr = baseR * presence * (0.9 + uHigh * 0.45);
     d = min(d, sdSphere(p - center, rr));
   }
   return d;
@@ -144,7 +191,7 @@ float sceneInner(vec3 p) {
   float r0 = 0.42 + uBass * 0.28 * uInflate + uBeat * 0.12;
   float d = sdSphere(p, r0);
 
-  float k = 0.32 + uMid * 0.18 + uHigh * 0.1;
+  float k = 0.44 + uMid * 0.24 + uHigh * 0.14;
 
   // Stretch axis: a slowly tumbling unit vector. When Inflate is LOW the
   // bass elongates the satellite cluster along this axis instead of puffing
@@ -196,10 +243,20 @@ float sceneInner(vec3 p) {
   // The smaller smoothing window makes them read as distinct bumps
   // when they're at full radius, then they melt smoothly back into the
   // surface as uSubAmount decays toward 0.
+  //
+  // Skip the smin entirely when subField returns its 1e9 "no sub-spheres"
+  // sentinel: GPU drivers compile mix(x, y, h) as x + (y - x) * h, and at
+  // x = 1e9 the float32 cancellation swallows the real distance and
+  // returns 0 — making the SDF zero everywhere, so every ray "hit" at the
+  // camera and the blob filled the entire screen whenever the high band
+  // was silent.
   float sd = subField(p);
-  d = smin(d, sd, 0.10);
+  if (sd < 1e8) d = smin(d, sd, 0.26);
 
-  d += 0.012 * sin(p.x * 5.0 + tw) * cos(p.y * 4.4 + tw * 1.1) * sin(p.z * 4.7 + tw * 0.8);
+  float wobble = 0.02 * sin(p.x * 4.2 + tw * 0.9) * cos(p.y * 3.8 + tw * 1.05);
+  wobble += 0.014 * sin(p.z * 5.1 + tw * 0.75) * cos(p.x * 3.3 + tw * 1.2);
+  wobble += 0.01 * sin(dot(p, vec3(1.7, 2.1, 1.9)) * 2.8 + tw * 1.4);
+  d += wobble * (1.0 + uMid * 0.35);
 
   return d;
 }
@@ -207,7 +264,8 @@ float sceneInner(vec3 p) {
 // Standard SDF uniform scaling: shrink/grow space, then rescale the distance.
 float scene(vec3 p) {
   float s = max(uScale, 0.05);
-  return sceneInner(p / s) * s;
+  vec3 warped = warpSpace(p / s, uPhase);
+  return sceneInner(warped) * s;
 }
 
 vec3 calcNormal(vec3 p) {
@@ -285,8 +343,10 @@ void main() {
     // pre-scaled coordinates everywhere else in this shader.
     float s = max(uScale, 0.05);
     vec3 pInner = p / s;
+    // Reversed-edge smoothstep is undefined per the GLSL spec, so build
+    // the falloff from the well-defined ascending form instead.
     float subAtHit = subField(pInner) * s;
-    float subWeight = smoothstep(0.10, -0.02, subAtHit);
+    float subWeight = 1.0 - smoothstep(-0.02, 0.10, subAtHit);
     col = mix(col, uColorHigh * (1.4 + uHigh * 0.6), subWeight * 0.55);
 
     // Beat injection + downbeat flash + drop punch.
@@ -409,13 +469,13 @@ export function LiquidBlobScene({
     const highNow = m.high;
     const transient = Math.max(0, highNow - prevHighRef.current * 0.72);
     prevHighRef.current = highNow;
-    const sustain = Math.max(0, highNow - 0.45) * 0.45;
-    const target = Math.min(1, transient * 2.4 + sustain);
+    const sustain = Math.max(0, highNow - 0.3) * 0.6;
+    const target = Math.min(1, transient * 2.2 + sustain);
 
-    // Fast attack (snap up to target), slow exponential decay.
+    // Fast attack, slow melt — keeps sub-spheres fluidly visible longer.
     const dt = Math.min(delta, 0.05);
     const prevSub = subAmountRef.current;
-    const next = target > prevSub ? target : prevSub * Math.exp(-dt * 2.8);
+    const next = target > prevSub ? target : prevSub * Math.exp(-dt * 1.4);
     subAmountRef.current = Math.max(0, Math.min(1, next));
 
     mat.uniforms.uSubSphereCount!.value = Math.max(

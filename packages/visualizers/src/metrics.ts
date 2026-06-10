@@ -24,6 +24,11 @@ import {
   updateChoreography,
   type ChoreographyState,
 } from './dsp/choreography';
+import {
+  createCallResponseState,
+  updateCallResponse,
+  type CallResponseState,
+} from './dsp/callResponse';
 import { extractBands } from './dsp/bands';
 
 export interface AudioMetrics {
@@ -72,6 +77,23 @@ export interface AudioMetrics {
   moodArousal: number;
   /** Long-EMA valence in -1..1. */
   moodValence: number;
+  /**
+   * 0..1 phrase-echo impulse train. When the music opens a gap after a
+   * phrase, the recorded rhythm of the last bars replays here — the visual
+   * answering the music. 0 while the track is speaking.
+   */
+  echo: number;
+  /**
+   * 0..1 pre-beat anticipation. Ramps just before each predicted beat and
+   * releases on the hit — the inhale before the downbeat.
+   */
+  gather: number;
+  /**
+   * 0..1 how locked-together bass/mid/high currently are (sliding
+   * correlation). Drops/choruses → 1, breakdowns/solos → 0. Drives the
+   * flow-field band blend.
+   */
+  convergence: number;
 }
 
 export const DEFAULT_METRICS: AudioMetrics = {
@@ -101,6 +123,9 @@ export const DEFAULT_METRICS: AudioMetrics = {
   tenderness: 0,
   moodArousal: 0.2,
   moodValence: 0,
+  echo: 0,
+  gather: 0,
+  convergence: 0,
 };
 
 const MetricsRefContext = createContext<MutableRefObject<AudioMetrics> | null>(null);
@@ -189,6 +214,7 @@ export function AudioMetricsProvider({
   const baselineEnergyRef = useRef(0.15);
   const macroState = useRef<MacroState>(createMacroState());
   const choreographyState = useRef<ChoreographyState>(createChoreographyState());
+  const callResponseState = useRef<CallResponseState>(createCallResponseState());
 
   useFrame((_state, delta) => {
     let bass = 0.15;
@@ -229,11 +255,19 @@ export function AudioMetricsProvider({
         if (autoGain) {
           const envAlpha = 1 - Math.exp(-dt / AGC_ENVELOPE_TAU);
           agcEnvRef.current += (levels.full - agcEnvRef.current) * envAlpha;
-          const desired = clamp(
-            AGC_TARGET / Math.max(AGC_FLOOR, agcEnvRef.current),
-            AGC_MIN_GAIN,
-            AGC_MAX_GAIN,
-          );
+          // True silence (0 dB output, paused track, dead input) parks the
+          // gain at neutral instead of pumping toward AGC_MAX_GAIN. Without
+          // this, silence ramps the gain to max and the first sound after
+          // it lands multiplied by 3x (+ punch expansion) — the "blows up
+          // at exactly 0 dB but fine at 0.01 dB" bug.
+          const desired =
+            agcEnvRef.current < AGC_SILENCE_LEVEL
+              ? 1
+              : clamp(
+                  AGC_TARGET / Math.max(AGC_FLOOR, agcEnvRef.current),
+                  AGC_MIN_GAIN,
+                  AGC_MAX_GAIN,
+                );
           const gainAlpha = 1 - Math.exp(-dt / AGC_GAIN_TAU);
           agcGainRef.current += (desired - agcGainRef.current) * gainAlpha;
           agc = agcGainRef.current;
@@ -402,6 +436,26 @@ export function AudioMetricsProvider({
       barPhase = (sinceOnset % barPeriod) / barPeriod;
     }
 
+    // Call and response — phrase echo, pre-beat gather, band convergence.
+    updateCallResponse(
+      callResponseState.current,
+      {
+        bass,
+        mid,
+        high,
+        energy,
+        beat,
+        drumActivity,
+        leadActivity,
+        vocalActivity,
+        silence: macroState.current.silence,
+        bpm: bpmNow,
+        beatPhase,
+        barPhase,
+      },
+      dtClamped,
+    );
+
     const prev = metricsRef.current;
     metricsRef.current = {
       bass: envFollow(prev.bass, softCap(bass)),
@@ -436,6 +490,9 @@ export function AudioMetricsProvider({
       tenderness: choreographyState.current.tenderness,
       moodArousal: choreographyState.current.moodMemory.arousal,
       moodValence: choreographyState.current.moodMemory.valence,
+      echo: callResponseState.current.echo,
+      gather: callResponseState.current.gather,
+      convergence: callResponseState.current.convergence,
     };
   });
 
@@ -465,6 +522,7 @@ const BAND_PERCEPTUAL_EXPONENT = 0.6;
 // --- Auto-gain (AGC) tuning ---
 const AGC_TARGET = 0.32; // desired motion level the envelope normalizes toward
 const AGC_FLOOR = 0.04; // ignore near-silence so we don't blow up the gain
+const AGC_SILENCE_LEVEL = 0.012; // below this the signal is silence — park gain at 1
 const AGC_MIN_GAIN = 0.6;
 const AGC_MAX_GAIN = 3;
 const AGC_ENVELOPE_TAU = 2.5; // seconds — how slowly loudness is tracked

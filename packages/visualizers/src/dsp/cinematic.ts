@@ -91,10 +91,14 @@ export const CINEMATIC_SHOTS: Shot[] = [
     ease: linear,
   },
   {
-    name: 'push-through-zero',
+    // Formerly "push-through-zero" (ended at z=-0.6, flying THROUGH the
+    // scene). Crossing the origin put the camera inside the preset — the
+    // whole frame filled with geometry. Now it pushes in close and stops
+    // just outside the safe radius, keeping the drama without the clip.
+    name: 'push-in-close',
     beats: 6,
     from: { pos: [0, 0, 5.0], look: [0, 0, 0] },
-    to: { pos: [0, 0, -0.6], look: [0, 0, -1] },
+    to: { pos: [0.2, 0.1, 1.7], look: [0, 0, -1] },
     ease: easeInOutCubic,
   },
   {

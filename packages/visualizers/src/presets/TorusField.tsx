@@ -5,6 +5,13 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import {
+  DEFAULT_FLOW_PARAMS,
+  flowParamsFromMetrics,
+  sampleFlow,
+  type FlowParams,
+  type Vec3Like,
+} from '../dsp/flowfield';
 
 export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProps) {
   const torusRef = useRef<THREE.Mesh>(null);
@@ -12,6 +19,11 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
   const matRef = useRef<THREE.PointsMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
+  // Flow Field Update: particles lift off the torus surface along the
+  // shared curl current, then settle back — the energy field made liquid.
+  const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
+  const flowTimeRef = useRef(0);
+  const flowScratch = useRef<Vec3Like>({ x: 0, y: 0, z: 0 });
 
   const particleCount = tier === 'high' ? 6000 : tier === 'mid' ? 2500 : 800;
 
@@ -77,13 +89,26 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
 
+    // Shared flow current: off-surface drift that grows with the music and
+    // vanishes at rest, so the sacred geometry stays clean when calm.
+    flowTimeRef.current += Math.min(delta, 0.05) * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+    const fp = flowParamsFromMetrics(m, flowParamsRef.current);
+    fp.time = flowTimeRef.current;
+    const flowLift = 0.05 + m.energy * 0.2 + m.dropEvent * 0.45;
+    const fv = flowScratch.current;
+
     for (let i = 0; i < particleCount; i++) {
       if (i / particleCount > activeRatio) continue;
       basePhi[i] = (basePhi[i]! + flowSpeed) % (Math.PI * 2);
       baseTheta[i] = (baseTheta[i]! + delta * (0.15 + m.high * 1.2 + m.beat)) % (Math.PI * 2);
       const radius = 1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08;
       const tube = 0.5 + m.breath * 0.15;
-      setTorusPoint(arr, i * 3, baseTheta[i]!, basePhi[i]!, radius, tube);
+      const i3 = i * 3;
+      setTorusPoint(arr, i3, baseTheta[i]!, basePhi[i]!, radius, tube);
+      sampleFlow(fv, arr[i3]!, arr[i3 + 1]!, arr[i3 + 2]!, i % 3, fp);
+      arr[i3] = arr[i3]! + fv.x * flowLift;
+      arr[i3 + 1] = arr[i3 + 1]! + fv.y * flowLift;
+      arr[i3 + 2] = arr[i3 + 2]! + fv.z * flowLift;
     }
     posAttr.needsUpdate = true;
 
