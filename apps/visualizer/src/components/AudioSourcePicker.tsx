@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useRef, type DragEvent } from 'react';
+import { useCallback, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import type { SourceKind } from '@/hooks/useAudioSource';
+import { parseYouTubeVideoId } from '@/components/YouTubePanel';
 
 interface AudioSourcePickerProps {
   activeKind: SourceKind | null;
@@ -10,9 +11,12 @@ interface AudioSourcePickerProps {
   error: string | null;
   desktopSupported: boolean;
   demoLoading?: boolean;
+  youtubeVideoId: string | null;
   onSelectKind: (kind: SourceKind) => void;
   onDesktopSelect: () => void;
   onShowDesktopGuide: () => void;
+  onYouTubeSelect: () => void;
+  onYouTubeLoad: (videoId: string) => void;
   onFile: (file: File) => void;
   onTryDemo: () => void;
   onClearSource: () => void;
@@ -34,14 +38,33 @@ export function AudioSourcePicker({
   error,
   desktopSupported,
   demoLoading = false,
+  youtubeVideoId,
   onSelectKind,
   onDesktopSelect,
   onShowDesktopGuide,
+  onYouTubeSelect,
+  onYouTubeLoad,
   onFile,
   onTryDemo,
   onClearSource,
 }: AudioSourcePickerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [youtubeParseError, setYoutubeParseError] = useState<string | null>(null);
+
+  const handleYouTubeSubmit = useCallback(
+    (e: FormEvent) => {
+      e.preventDefault();
+      const id = parseYouTubeVideoId(youtubeUrl);
+      if (!id) {
+        setYoutubeParseError("That doesn't look like a YouTube link.");
+        return;
+      }
+      setYoutubeParseError(null);
+      onYouTubeLoad(id);
+    },
+    [onYouTubeLoad, youtubeUrl],
+  );
 
   const handleDrop = useCallback(
     (e: DragEvent) => {
@@ -58,6 +81,10 @@ export function AudioSourcePicker({
         onDesktopSelect();
         return;
       }
+      if (key === 'youtube') {
+        onYouTubeSelect();
+        return;
+      }
       if (key === 'file' && activeKind === 'file') {
         // Re-clicking File opens the picker so users can swap tracks.
         inputRef.current?.click();
@@ -65,16 +92,18 @@ export function AudioSourcePicker({
       }
       onSelectKind(key);
     },
-    [activeKind, onDesktopSelect, onSelectKind],
+    [activeKind, onDesktopSelect, onSelectKind, onYouTubeSelect],
   );
 
   const buttons: PickerButton[] = [
     { key: 'file', label: 'File' },
     { key: 'mic', label: 'Mic' },
     { key: 'tab', label: 'Desktop' },
+    { key: 'youtube', label: 'YouTube' },
   ];
 
-  const streamActive = hasSource && (activeKind === 'mic' || activeKind === 'tab');
+  const streamActive =
+    hasSource && (activeKind === 'mic' || activeKind === 'tab' || activeKind === 'youtube');
 
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface/80 p-4 backdrop-blur-md">
@@ -82,7 +111,7 @@ export function AudioSourcePicker({
       <div className="mb-3 flex flex-wrap gap-2">
         {buttons.map(({ key, label }) => {
           const isActive = activeKind === key;
-          const disabled = key === 'tab' && !desktopSupported;
+          const disabled = (key === 'tab' || key === 'youtube') && !desktopSupported;
           const accent = isActive
             ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
             : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong';
@@ -96,7 +125,11 @@ export function AudioSourcePicker({
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${accent} ${
                 disabled ? 'opacity-40 cursor-not-allowed' : ''
               }`}
-              title={key === 'tab' && !desktopSupported ? 'Requires Chrome or Edge' : undefined}
+              title={
+                (key === 'tab' || key === 'youtube') && !desktopSupported
+                  ? 'Requires Chrome or Edge'
+                  : undefined
+              }
             >
               {label}
             </button>
@@ -161,6 +194,35 @@ export function AudioSourcePicker({
             Your browser will ask for microphone access.
           </p>
         )
+      ) : activeKind === 'youtube' ? (
+        <div className="space-y-2">
+          <form onSubmit={handleYouTubeSubmit} className="flex gap-2">
+            <input
+              type="text"
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              placeholder="Paste a YouTube link…"
+              aria-label="YouTube link"
+              className="min-w-0 flex-1 rounded-lg border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
+            />
+            <button
+              type="submit"
+              className="shrink-0 rounded-lg border border-torus-border px-3 py-2 text-xs font-medium text-torus-fg-dim hover:border-torus-mid/40"
+            >
+              Load
+            </button>
+          </form>
+          {youtubeParseError ? (
+            <p className="text-xs text-torus-bass">{youtubeParseError}</p>
+          ) : null}
+          <p className="text-sm text-torus-fg-dim">
+            {hasSource
+              ? 'Visualizing the player in the corner.'
+              : youtubeVideoId
+                ? 'Press play in the corner player, then capture its audio.'
+                : 'The video opens in a small player in the corner.'}
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           <p className="text-sm text-torus-fg-dim">

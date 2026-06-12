@@ -14,8 +14,10 @@ import { isChromium } from '@/lib/palettes';
  *                   audio capture isn't supported)
  * - `tab`         → Chrome Tab pane + tab audio (works on every platform,
  *                   the macOS fallback)
+ * - `currentTab`  → pre-selects this very tab ("This Tab" pane) so the
+ *                   embedded YouTube player's audio can be captured
  */
-export type DesktopCaptureMode = 'everything' | 'application' | 'tab';
+export type DesktopCaptureMode = 'everything' | 'application' | 'tab' | 'currentTab';
 
 /**
  * `systemAudio`, `windowAudio`, `monitorTypeSurfaces`, `selfBrowserSurface`
@@ -27,6 +29,7 @@ type ChromiumDisplayMediaOptions = DisplayMediaStreamOptions & {
   monitorTypeSurfaces?: 'include' | 'exclude';
   selfBrowserSurface?: 'include' | 'exclude';
   surfaceSwitching?: 'include' | 'exclude';
+  preferCurrentTab?: boolean;
 };
 
 const CAPTURE_OPTIONS: Record<DesktopCaptureMode, ChromiumDisplayMediaOptions> = {
@@ -51,6 +54,13 @@ const CAPTURE_OPTIONS: Record<DesktopCaptureMode, ChromiumDisplayMediaOptions> =
     selfBrowserSurface: 'exclude',
     surfaceSwitching: 'include',
   },
+  currentTab: {
+    video: { displaySurface: 'browser' },
+    audio: true,
+    preferCurrentTab: true,
+    selfBrowserSurface: 'include',
+    surfaceSwitching: 'exclude',
+  },
 };
 
 const NO_AUDIO_MESSAGES: Record<DesktopCaptureMode, string> = {
@@ -59,6 +69,8 @@ const NO_AUDIO_MESSAGES: Record<DesktopCaptureMode, string> = {
   application:
     'No audio in the shared source. Tick "Also share audio" when picking the application, or choose a tab that is playing audio.',
   tab: 'No audio from that tab. Pick a tab that is playing audio and keep "Also share tab audio" ticked.',
+  currentTab:
+    'No audio from this tab. Keep "Also share tab audio" ticked when sharing.',
 };
 
 export function useTabCapture() {
@@ -95,7 +107,11 @@ export function useTabCapture() {
         setStream(next);
         return next;
       } catch {
-        setError('Desktop capture was cancelled or denied.');
+        setError(
+          mode === 'currentTab'
+            ? 'Tab capture was cancelled or denied.'
+            : 'Desktop capture was cancelled or denied.',
+        );
         return null;
       }
     },

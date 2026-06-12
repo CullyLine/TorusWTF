@@ -6,6 +6,8 @@
 
 import type { TitleOverlay } from '@/lib/storage';
 
+export type WatermarkImage = ImageBitmap | HTMLImageElement;
+
 export interface CompositorHandle {
   canvas: HTMLCanvasElement;
   start: () => void;
@@ -19,6 +21,7 @@ export function createCompositor(
   watermark: boolean,
   titleOverlay?: TitleOverlay | null,
   unlocked = false,
+  watermarkImage: WatermarkImage | null = null,
 ): CompositorHandle {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -36,7 +39,7 @@ export function createCompositor(
     }
 
     if (watermark) {
-      drawWatermark(ctx, width, height);
+      drawWatermark(ctx, width, height, watermarkImage);
     }
 
     raf = requestAnimationFrame(draw);
@@ -58,7 +61,22 @@ export function drawWatermark(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
+  image?: WatermarkImage | null,
 ): void {
+  if (image) {
+    const pad = Math.round(width * 0.022 * 0.8);
+    const targetW = Math.round(width * 0.12);
+    const targetH = Math.round(image.height * (targetW / image.width));
+    const x = width - targetW - pad;
+    const y = height - targetH - pad;
+
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(image, x, y, targetW, targetH);
+    ctx.restore();
+    return;
+  }
+
   const fontSize = Math.max(12, Math.round(width * 0.022));
   const pad = Math.round(fontSize * 0.8);
   const text = 'torus.wtf';

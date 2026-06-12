@@ -11,7 +11,7 @@ export const LICENSE_PRICE_USD = 10;
 export const LICENSE_BENEFITS = [
   'Exports up to 4K resolution',
   'High frame-rate exports (60 / 120 / 240 fps)',
-  'No torus.wtf watermark on exports',
+  'Remove the watermark — or replace it with your own custom logo',
   'Commercial-use permission for your exports',
   'Custom palette colors and title-card styling',
   'A licensed badge on your profile',

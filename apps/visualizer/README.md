@@ -49,7 +49,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | Export length | Unlimited | Unlimited |
 | Export resolution | 720p | Up to 4K |
 | Export FPS | 30 | Up to 240 |
-| Watermark on exports | Small corner mark | None |
+| Watermark on exports | Small corner mark | Optional — off, default badge, or your own logo |
 | Pre-rendered MP4 (file/WTF) | Yes (watermarked) | Yes |
 | Smart palette from image | Yes | Yes |
 | Title card on exports | Bottom-left brand card | Position + color + opacity |
@@ -77,6 +77,10 @@ pnpm --filter @torus/visualizer build
 ```
 
 This runs `scripts/fetch-demos.mjs` first, which downloads the latest 10 public tracks from the configured SoundCloud account into `public/demos/`. If SoundCloud is unreachable, the build continues without WTF tracks (button hides itself in the UI).
+
+### Demo audio attribution
+
+`public/demo.mp3` ("Try with demo audio") is **"Scheming Weasel (faster version)" by Kevin MacLeod** ([incompetech.com](https://incompetech.com)), licensed under [Creative Commons: By Attribution 3.0](https://creativecommons.org/licenses/by/3.0/). Keep this credit if you redistribute the app.
 
 ## Environment variables
 

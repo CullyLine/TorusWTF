@@ -17,7 +17,7 @@ function readInitialVolume(): number {
   return Math.max(0, Math.min(1, parsed));
 }
 
-export type SourceKind = 'file' | 'mic' | 'tab';
+export type SourceKind = 'file' | 'mic' | 'tab' | 'youtube';
 
 export interface FileSourceState {
   kind: 'file';
@@ -28,7 +28,7 @@ export interface FileSourceState {
 }
 
 export interface StreamSourceState {
-  kind: 'mic' | 'tab';
+  kind: 'mic' | 'tab' | 'youtube';
 }
 
 export type SourceState = FileSourceState | StreamSourceState | null;
@@ -55,7 +55,7 @@ export function useAudioSource() {
 
   const activeStream = useMemo(() => {
     if (source?.kind === 'mic') return mic.stream;
-    if (source?.kind === 'tab') return tab.stream;
+    if (source?.kind === 'tab' || source?.kind === 'youtube') return tab.stream;
     return fileStream;
   }, [source, mic.stream, tab.stream, fileStream]);
 
@@ -167,6 +167,13 @@ export function useAudioSource() {
     [clearSource, tab],
   );
 
+  const startYouTube = useCallback(async () => {
+    clearSource();
+    const stream = await tab.start('currentTab');
+    if (stream) setSource({ kind: 'youtube' });
+    if (tab.error) setError(tab.error);
+  }, [clearSource, tab]);
+
   const play = useCallback(() => {
     if (source?.kind === 'file' && audioRef.current) {
       void audioRef.current.play();
@@ -257,7 +264,7 @@ export function useAudioSource() {
       return capture ?? null;
     }
     if (source?.kind === 'mic') return mic.stream;
-    if (source?.kind === 'tab') return tab.stream;
+    if (source?.kind === 'tab' || source?.kind === 'youtube') return tab.stream;
     return null;
   }, [source, mic.stream, tab.stream]);
 
@@ -283,6 +290,7 @@ export function useAudioSource() {
     playUrl,
     startMic,
     startTab,
+    startYouTube,
     clearSource,
     play,
     pause,

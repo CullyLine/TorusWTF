@@ -170,10 +170,10 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     defaults: {
       speed: 1.5,
       smoothness: 0.55,
-      scale: 1,
+      scale: 0.4,
       bassShake: 0.6,
       cameraMode: 'flow',
-      bloomIntensity: 0.8,
+      bloomIntensity: 0.3,
       cameraDistance: 1,
       lightLevel: 1,
       turbulence: 1,

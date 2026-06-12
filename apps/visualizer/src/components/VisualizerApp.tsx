@@ -27,6 +27,7 @@ import { ExportPanel } from '@/components/ExportPanel';
 import { TitleOverlayPanel } from '@/components/TitleOverlayPanel';
 import { PrerenderRoot } from '@/components/PrerenderRoot';
 import { UnlockBanner } from '@/components/UnlockBanner';
+import { YouTubePanel } from '@/components/YouTubePanel';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import type { DesktopCaptureMode } from '@/hooks/useTabCapture';
 import { useExport } from '@/hooks/useExport';
@@ -67,6 +68,8 @@ import {
   DEFAULT_TITLE_OVERLAY,
   BACKGROUND_KEY,
   DEFAULT_BACKGROUND,
+  WATERMARK_KEY,
+  DEFAULT_WATERMARK_SETTINGS,
   THUMBNAIL_STORAGE_BUDGET_BYTES,
   estimateLocalStorageBytes,
   loadSavedPresets,
@@ -75,7 +78,9 @@ import {
   type TitleOverlay,
   type BackgroundSettings,
   type VisualizerControls,
+  type WatermarkSettings,
 } from '@/lib/storage';
+import { fileToWatermarkDataUrl, watermarkDataUrlToBitmap } from '@/lib/watermarkImage';
 
 const VisualizerCanvas = dynamic(
   () => import('@torus/visualizers').then((m) => m.VisualizerCanvas),
@@ -101,7 +106,7 @@ export function VisualizerApp() {
   const prerender = usePrerender();
   const { toast, prompt } = useToast();
 
-  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'liquid_blob', (v) => {
+  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'flow_field', (v) => {
     // Spectral Tunnel was replaced by Infinite Tunnel in the Flow Field Update.
     if (v === 'spectral_tunnel') return 'infinite_tunnel';
     return typeof v === 'string' && v in VISUALIZERS ? (v as VisualizerId) : undefined;
@@ -147,8 +152,13 @@ export function VisualizerApp() {
     BACKGROUND_KEY,
     DEFAULT_BACKGROUND,
   );
+  const [watermark, setWatermark] = usePersistedState<WatermarkSettings>(
+    WATERMARK_KEY,
+    DEFAULT_WATERMARK_SETTINGS,
+  );
   const [desktopGuideOpen, setDesktopGuideOpen] = useState(false);
   const [desktopSupported, setDesktopSupported] = useState(false);
+  const [youtubeVideoId, setYoutubeVideoId] = useState<string | null>(null);
   const [creature, setCreature] = useState<Creature | null>(null);
 
   useEffect(() => {
@@ -236,6 +246,35 @@ export function VisualizerApp() {
     [audio, setSourceKind],
   );
 
+  // Collapse the hero before showing the player — if the layout swapped while
+  // the embed was playing, the iframe would remount and playback would die.
+  const handleYouTubeSelect = useCallback(() => {
+    collapseHero();
+    setSourceKind('youtube');
+  }, [collapseHero, setSourceKind]);
+
+  const handleYouTubeLoad = useCallback(
+    (videoId: string) => {
+      collapseHero();
+      setYoutubeVideoId(videoId);
+    },
+    [collapseHero],
+  );
+
+  const handleYouTubeCapture = useCallback(() => {
+    void audio.startYouTube();
+  }, [audio]);
+
+  // Stop just the capture — the embed keeps playing so the user can re-capture.
+  const handleYouTubeStopCapture = useCallback(() => {
+    audio.clearSource();
+  }, [audio]);
+
+  const handleYouTubeClose = useCallback(() => {
+    setYoutubeVideoId(null);
+    if (audio.source?.kind === 'youtube') audio.clearSource();
+  }, [audio]);
+
   const applyEmbeddedTags = useCallback(
     async (file: File) => {
       const tags = await readAudioTags(file);
@@ -308,7 +347,11 @@ export function VisualizerApp() {
       const res = await fetch('/demo.mp3');
       if (!res.ok) throw new Error('fetch failed');
       const blob = await res.blob();
-      handleFile(new File([blob], 'demo.mp3', { type: 'audio/mpeg' }));
+      // "Scheming Weasel (faster version)" — Kevin MacLeod (incompetech.com),
+      // CC BY 3.0. Filename doubles as on-screen attribution.
+      handleFile(
+        new File([blob], 'Scheming Weasel — Kevin MacLeod.mp3', { type: 'audio/mpeg' }),
+      );
     } catch {
       toast({ message: 'Could not load demo audio', variant: 'error' });
     } finally {
@@ -425,6 +468,10 @@ export function VisualizerApp() {
     if (!canvas || !audio.source) return;
 
     try {
+      const watermarkImage =
+        unlock.unlocked && watermark.customImageDataUrl
+          ? await watermarkDataUrlToBitmap(watermark.customImageDataUrl)
+          : null;
       await exportHook.start({
         glCanvas: canvas,
         audioStream: audio.getAudioStreamForExport(),
@@ -432,6 +479,8 @@ export function VisualizerApp() {
         aspect,
         fps,
         titleOverlay,
+        watermark: watermark.show,
+        watermarkImage,
         onBeforeRecord: async () => {
           if (audio.source?.kind === 'file') {
             await audio.restartFile();
@@ -446,7 +495,19 @@ export function VisualizerApp() {
         variant: 'error',
       });
     }
-  }, [audio, exportHook, resolution, aspect, fps, titleOverlay, toast]);
+  }, [audio, exportHook, resolution, aspect, fps, titleOverlay, watermark, unlock.unlocked, toast]);
+
+  const handleWatermarkImageFile = useCallback(
+    async (file: File) => {
+      try {
+        const dataUrl = await fileToWatermarkDataUrl(file);
+        setWatermark((w) => ({ ...w, customImageDataUrl: dataUrl }));
+      } catch {
+        toast({ message: 'Could not read that image', variant: 'error' });
+      }
+    },
+    [setWatermark, toast],
+  );
 
   const handleSnapshot = useCallback(async () => {
     const canvas = glCanvasRef.current;
@@ -480,6 +541,12 @@ export function VisualizerApp() {
       void ctx.close();
 
       const dims = dimensionsFor(resolution, aspect);
+      // Free tier always gets the default badge; licensed users control both
+      // the toggle and the custom image.
+      const watermarkImage =
+        unlock.unlocked && watermark.customImageDataUrl
+          ? await watermarkDataUrlToBitmap(watermark.customImageDataUrl)
+          : null;
       const ok = await prerender.start({
         audioBuffer,
         fileName: fileSource.fileName,
@@ -491,7 +558,8 @@ export function VisualizerApp() {
         height: dims.height,
         fps,
         videoBitrate: bitrateFor(resolution),
-        watermark: !unlock.unlocked,
+        watermark: unlock.unlocked ? watermark.show : true,
+        watermarkImage,
         titleOverlay,
         unlocked: unlock.unlocked,
         background,
@@ -516,6 +584,7 @@ export function VisualizerApp() {
     prerender,
     resolution,
     titleOverlay,
+    watermark,
     toast,
     unlock.unlocked,
     background,
@@ -626,6 +695,9 @@ export function VisualizerApp() {
         onSelectKind={handleSelectKind}
         onDesktopSelect={handleDesktopSelect}
         onShowDesktopGuide={() => setDesktopGuideOpen(true)}
+        onYouTubeSelect={handleYouTubeSelect}
+        onYouTubeLoad={handleYouTubeLoad}
+        youtubeVideoId={youtubeVideoId}
         onFile={handleFile}
         onTryDemo={() => void handleTryDemo()}
         onClearSource={handleClearSource}
@@ -693,6 +765,11 @@ export function VisualizerApp() {
         prerenderProgressPercent={prerender.progress.percent}
         prerenderProgressMessage={prerender.progress.message ?? ''}
         prerenderError={prerender.error}
+        watermarkShow={watermark.show}
+        watermarkImageDataUrl={watermark.customImageDataUrl}
+        onWatermarkShowChange={(show) => setWatermark((w) => ({ ...w, show }))}
+        onWatermarkImageFile={(file) => void handleWatermarkImageFile(file)}
+        onWatermarkImageReset={() => setWatermark((w) => ({ ...w, customImageDataUrl: null }))}
       />
       {!unlock.unlocked ? (
         <p className="text-center text-xs text-torus-fg-faint">
@@ -853,6 +930,16 @@ export function VisualizerApp() {
           onClose={() => setDesktopGuideOpen(false)}
           onPick={handleDesktopPick}
         />
+        {youtubeVideoId ? (
+          <YouTubePanel
+            videoId={youtubeVideoId}
+            capturing={audio.source?.kind === 'youtube'}
+            error={sourceKind === 'youtube' ? audio.error : null}
+            onCapture={handleYouTubeCapture}
+            onStopCapture={handleYouTubeStopCapture}
+            onClose={handleYouTubeClose}
+          />
+        ) : null}
         {prerender.rootMount ? <PrerenderRoot {...prerender.rootMount} /> : null}
       </div>
     );
@@ -954,6 +1041,16 @@ export function VisualizerApp() {
         onClose={() => setDesktopGuideOpen(false)}
         onPick={handleDesktopPick}
       />
+      {youtubeVideoId ? (
+        <YouTubePanel
+          videoId={youtubeVideoId}
+          capturing={audio.source?.kind === 'youtube'}
+          error={sourceKind === 'youtube' ? audio.error : null}
+          onCapture={handleYouTubeCapture}
+          onStopCapture={handleYouTubeStopCapture}
+          onClose={handleYouTubeClose}
+        />
+      ) : null}
       {prerender.rootMount ? <PrerenderRoot {...prerender.rootMount} /> : null}
     </div>
   );

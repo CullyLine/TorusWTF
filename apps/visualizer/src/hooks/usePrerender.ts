@@ -41,6 +41,7 @@ export interface PrerenderStartOptions {
   fps: number;
   videoBitrate: number;
   watermark: boolean;
+  watermarkImage?: ImageBitmap | null;
   titleOverlay?: TitleOverlay | null;
   unlocked?: boolean;
   background?: BackgroundSettings;
@@ -223,6 +224,7 @@ export function usePrerender(): PrerenderHookResult {
         videoBitrate: options.videoBitrate,
         audioBuffer: options.audioBuffer,
         watermark: options.watermark,
+        watermarkImage: options.watermarkImage,
         titleOverlay: options.titleOverlay,
         unlocked: options.unlocked,
       });

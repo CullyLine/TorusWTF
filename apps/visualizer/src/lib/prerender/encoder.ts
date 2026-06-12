@@ -26,6 +26,7 @@ export interface PrerenderEncoderOptions {
   videoBitrate: number;
   audioBuffer: AudioBuffer;
   watermark: boolean;
+  watermarkImage?: ImageBitmap | null;
   titleOverlay?: TitleOverlay | null;
   unlocked?: boolean;
 }
@@ -53,6 +54,7 @@ export async function createPrerenderEncoder(
   opts: PrerenderEncoderOptions,
 ): Promise<PrerenderEncoder> {
   const { width, height, fps, videoBitrate, audioBuffer, watermark } = opts;
+  const watermarkImage = opts.watermarkImage ?? null;
   const titleOverlay = opts.titleOverlay ?? null;
   const unlocked = opts.unlocked ?? false;
   const sampleRate = audioBuffer.sampleRate;
@@ -162,7 +164,7 @@ export async function createPrerenderEncoder(
       ctx.clearRect(0, 0, width, height);
       ctx.drawImage(sourceCanvas, 0, 0, width, height);
       if (titleOverlay) drawTitleOverlay(ctx, width, height, titleOverlay, unlocked);
-      if (watermark) drawWatermark(ctx, width, height);
+      if (watermark) drawWatermark(ctx, width, height, watermarkImage ?? null);
 
       // VideoFrame timestamp is in microseconds.
       const timestampUsec = Math.round((frameIndex / fps) * 1_000_000);

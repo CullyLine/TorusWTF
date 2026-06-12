@@ -68,6 +68,8 @@ export function useExport(unlocked: boolean) {
       aspect?: AspectRatio;
       fps: ExportFps;
       titleOverlay?: TitleOverlay | null;
+      watermark?: boolean;
+      watermarkImage?: ImageBitmap | null;
       onBeforeRecord?: () => Promise<void>;
       onFileEnded?: () => void;
       onSaved?: (fileName: string) => void;
@@ -77,7 +79,7 @@ export function useExport(unlocked: boolean) {
       onSavedRef.current = opts.onSaved ?? null;
 
       const { width, height } = dimensionsFor(opts.resolution, opts.aspect ?? '16:9');
-      const watermark = !unlocked;
+      const watermark = unlocked ? (opts.watermark ?? true) : true;
       const compositor = createCompositor(
         opts.glCanvas,
         width,
@@ -85,6 +87,7 @@ export function useExport(unlocked: boolean) {
         watermark,
         opts.titleOverlay ?? null,
         unlocked,
+        unlocked ? opts.watermarkImage ?? null : null,
       );
       compositorRef.current = compositor;
 

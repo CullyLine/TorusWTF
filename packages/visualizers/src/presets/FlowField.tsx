@@ -9,7 +9,6 @@ import { FLOW_GLSL } from '../dsp/flowGlsl';
 import {
   DEFAULT_FLOW_PARAMS,
   flowParamsFromMetrics,
-  sampleFlow,
   type FlowParams,
 } from '../dsp/flowfield';
 
@@ -29,8 +28,6 @@ import {
  * Homages to the original FlowField Saga (2019-2021):
  *  - wandering magnet wells that capture and fling particles (Magnet build)
  *  - pointer stirring — the cursor directs the field (mouse lookAt build)
- *  - in silence, a faint arrow grid fades in: the classic flow-field debug
- *    view as an idle aesthetic.
  */
 
 // Simulation texture sides per tier. Particle count = side².
@@ -328,8 +325,7 @@ export function FlowFieldScene({
     ndc: new THREE.Vector2(),
   });
 
-  // CPU flow params — used ONLY for the idle arrow grid; the GPU twin
-  // receives the same values as uniforms so both views show one field.
+  // CPU flow params — smoothed twin of the GPU field uniforms.
   const cpuParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
 
   // ---- GPGPU resources ----
@@ -502,41 +498,8 @@ export function FlowFieldScene({
     [headUniforms],
   );
 
-  // ---- Idle arrow grid (homage: the field reveals itself in silence) ----
-  const ARROW_COLS = 13;
-  const ARROW_ROWS = 9;
-  const arrowCount = ARROW_COLS * ARROW_ROWS;
-  const arrowData = useMemo(() => {
-    const geo = new THREE.BufferGeometry();
-    // shaft (2 verts) + two head ticks (4 verts) per arrow.
-    const positions = new Float32Array(arrowCount * 6 * 3);
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    const mat = new THREE.LineBasicMaterial({
-      color: new THREE.Color(palette.mid),
-      transparent: true,
-      opacity: 0,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-    const centers: THREE.Vector3[] = [];
-    for (let r = 0; r < ARROW_ROWS; r++) {
-      for (let c = 0; c < ARROW_COLS; c++) {
-        centers.push(
-          new THREE.Vector3(
-            (c / (ARROW_COLS - 1) - 0.5) * 6.4,
-            (r / (ARROW_ROWS - 1) - 0.5) * 4.2,
-            0,
-          ),
-        );
-      }
-    }
-    return { geo, mat, centers, scratch: { x: 0, y: 0, z: 0 } };
-    // Palette intentionally omitted: arrow color is re-set every frame.
-  }, [arrowCount]);
-
   const trailRef = useRef<THREE.LineSegments>(null);
   const headRef = useRef<THREE.Points>(null);
-  const arrowRef = useRef<THREE.LineSegments>(null);
 
   // ---- Pointer stirring listeners ----
   useEffect(() => {
@@ -580,10 +543,8 @@ export function FlowFieldScene({
       headGeometry.dispose();
       trailMaterial.dispose();
       headMaterial.dispose();
-      arrowData.geo.dispose();
-      arrowData.mat.dispose();
     };
-  }, [gpu, trailGeometry, headGeometry, trailMaterial, headMaterial, arrowData]);
+  }, [gpu, trailGeometry, headGeometry, trailMaterial, headMaterial]);
 
   // ---- Frame loop ----
   useFrame((_state, delta) => {
@@ -599,7 +560,7 @@ export function FlowFieldScene({
     }
     prevDropRef.current = m.dropEvent;
 
-    // Audio → flow params (CPU twin drives the arrow grid with same values).
+    // Audio → flow params (CPU twin drives GPU field uniforms).
     const fp = flowParamsFromMetrics(m, cpuParamsRef.current, {
       turbulence,
       vortex: vortexAmount,
@@ -689,54 +650,6 @@ export function FlowFieldScene({
     (hu.uColorMid.value as THREE.Color).set(palette.mid);
     (hu.uColorHigh.value as THREE.Color).set(palette.high);
 
-    // ---- Idle arrow grid: fades in with silence, sampled from the CPU twin ----
-    const arrowMat = arrowData.mat;
-    // Only in real, sustained silence — never layered over the music.
-    const arrowOpacityTarget = Math.max(0, m.silence - 0.45) * 0.8;
-    arrowMat.opacity += (arrowOpacityTarget - arrowMat.opacity) * Math.min(1, dt * 3);
-    if (arrowRef.current) arrowRef.current.visible = arrowMat.opacity > 0.01;
-    if (arrowMat.opacity > 0.01 && arrowRef.current) {
-      const posAttr = arrowData.geo.getAttribute('position') as THREE.BufferAttribute;
-      const arr = posAttr.array as Float32Array;
-      const s = arrowData.scratch;
-      for (let i = 0; i < arrowData.centers.length; i++) {
-        const c = arrowData.centers[i]!;
-        sampleFlow(s, c.x, c.y, c.z, i % 3, fp);
-        const len = Math.hypot(s.x, s.y, s.z) + 1e-5;
-        const dx = (s.x / len) * 0.32;
-        const dy = (s.y / len) * 0.32;
-        const o = i * 18;
-        // shaft
-        arr[o] = c.x - dx;
-        arr[o + 1] = c.y - dy;
-        arr[o + 2] = 0;
-        arr[o + 3] = c.x + dx;
-        arr[o + 4] = c.y + dy;
-        arr[o + 5] = 0;
-        // head ticks (rotate tip direction ±150°)
-        const tipX = c.x + dx;
-        const tipY = c.y + dy;
-        const hx1 = -dx * 0.45 - -dy * 0.26;
-        const hy1 = -dy * 0.45 + -dx * 0.26;
-        const hx2 = -dx * 0.45 + -dy * 0.26;
-        const hy2 = -dy * 0.45 - -dx * 0.26;
-        arr[o + 6] = tipX;
-        arr[o + 7] = tipY;
-        arr[o + 8] = 0;
-        arr[o + 9] = tipX + hx1;
-        arr[o + 10] = tipY + hy1;
-        arr[o + 11] = 0;
-        arr[o + 12] = tipX;
-        arr[o + 13] = tipY;
-        arr[o + 14] = 0;
-        arr[o + 15] = tipX + hx2;
-        arr[o + 16] = tipY + hy2;
-        arr[o + 17] = 0;
-      }
-      posAttr.needsUpdate = true;
-      (arrowMat.color as THREE.Color).set(palette.mid);
-    }
-
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
@@ -744,7 +657,6 @@ export function FlowFieldScene({
     <group>
       <lineSegments ref={trailRef} geometry={trailGeometry} material={trailMaterial} frustumCulled={false} />
       <points ref={headRef} geometry={headGeometry} material={headMaterial} frustumCulled={false} />
-      <lineSegments ref={arrowRef} geometry={arrowData.geo} material={arrowData.mat} frustumCulled={false} />
     </group>
   );
 }

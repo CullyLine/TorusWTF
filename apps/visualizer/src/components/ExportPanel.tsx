@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRef } from 'react';
 import {
   ASPECT_OPTIONS,
   isFpsLocked,
@@ -35,6 +36,11 @@ interface ExportPanelProps {
   prerenderProgressPercent: number;
   prerenderProgressMessage: string;
   prerenderError: string | null;
+  watermarkShow: boolean;
+  watermarkImageDataUrl: string | null;
+  onWatermarkShowChange: (show: boolean) => void;
+  onWatermarkImageFile: (file: File) => void;
+  onWatermarkImageReset: () => void;
 }
 
 const RESOLUTIONS: ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
@@ -63,7 +69,15 @@ export function ExportPanel({
   prerenderProgressPercent,
   prerenderProgressMessage,
   prerenderError,
+  watermarkShow,
+  watermarkImageDataUrl,
+  onWatermarkShowChange,
+  onWatermarkImageFile,
+  onWatermarkImageReset,
 }: ExportPanelProps) {
+  const watermarkFileInputRef = useRef<HTMLInputElement>(null);
+  const showWatermark = unlocked ? watermarkShow : true;
+
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Export</h2>
@@ -131,6 +145,70 @@ export function ExportPanel({
         </div>
       </div>
 
+      <div className={`mb-3 ${!showWatermark ? 'opacity-50' : ''}`}>
+        <span className="mb-2 block text-xs text-torus-fg-dim">Watermark</span>
+        <label
+          className={`mb-2 flex items-center gap-2 text-xs ${unlocked ? 'text-torus-fg-dim' : 'text-torus-fg-faint opacity-60'}`}
+        >
+          <input
+            type="checkbox"
+            checked={showWatermark}
+            disabled={!unlocked}
+            onChange={(e) => onWatermarkShowChange(e.target.checked)}
+            className="accent-torus-mid disabled:cursor-not-allowed"
+          />
+          Show watermark
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          {watermarkImageDataUrl ? (
+            <img
+              src={watermarkImageDataUrl}
+              alt="Custom watermark"
+              className="h-8 max-w-[7rem] rounded border border-torus-border object-contain bg-black/40 px-1"
+            />
+          ) : (
+            <span className="inline-flex items-center rounded-md bg-black/60 px-2 py-1 text-[10px] font-semibold text-white/90">
+              torus.wtf
+            </span>
+          )}
+          {unlocked ? (
+            <>
+              <button
+                type="button"
+                onClick={() => watermarkFileInputRef.current?.click()}
+                className="rounded-full border border-torus-border px-3 py-1 text-[10px] text-torus-fg-dim hover:border-torus-mid/40"
+              >
+                Custom image…
+              </button>
+              <input
+                ref={watermarkFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onWatermarkImageFile(file);
+                  e.target.value = '';
+                }}
+              />
+              {watermarkImageDataUrl ? (
+                <button
+                  type="button"
+                  onClick={onWatermarkImageReset}
+                  className="text-[10px] text-torus-fg-faint hover:text-torus-bass"
+                >
+                  Reset
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-[10px] text-torus-fg-faint">
+              Get the license to hide it or use your own logo.
+            </span>
+          )}
+        </div>
+      </div>
+
       <QualityWarning resolution={resolution} fps={fps} />
 
       <p className="mb-3 text-[10px] text-torus-fg-faint">
@@ -144,7 +222,7 @@ export function ExportPanel({
           <Link href="/license" className="text-torus-mid hover:underline">
             Get the license ($10, one-time)
           </Link>{' '}
-          for up to 4K / 240 FPS, no watermark.
+          for up to 4K / 240 FPS, no watermark — or your own custom watermark.
         </p>
       ) : null}
 

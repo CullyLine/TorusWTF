@@ -15,6 +15,7 @@ export const SHOW_BPM_KEY = 'torus-visualizer-show-bpm';
 export const HWACCEL_BANNER_DISMISSED_KEY = 'torus-visualizer-hwaccel-banner-dismissed';
 export const VOLUME_KEY = 'torus-visualizer-volume';
 export const TITLE_OVERLAY_KEY = 'torus-visualizer-title-overlay';
+export const WATERMARK_KEY = 'torus-visualizer-watermark';
 export const BACKGROUND_KEY = 'torus-visualizer-background';
 export const HERO_SEEN_KEY = 'torus-visualizer-hero-seen';
 
@@ -58,6 +59,22 @@ export const DEFAULT_TITLE_OVERLAY: TitleOverlay = {
   position: 'bottom-left',
   textColor: '#f5f5fa',
   bgOpacity: 0.55,
+};
+
+/**
+ * Export watermark settings. Free tier ignores these at draw time —
+ * `show` is forced true and the default torus badge is used; only
+ * licensed users can hide the watermark or substitute their own image.
+ */
+export interface WatermarkSettings {
+  show: boolean;
+  /** Downscaled PNG data URL of a user-supplied logo, or null for the default badge. */
+  customImageDataUrl: string | null;
+}
+
+export const DEFAULT_WATERMARK_SETTINGS: WatermarkSettings = {
+  show: true,
+  customImageDataUrl: null,
 };
 
 export interface SavedPreset {
@@ -171,24 +188,20 @@ export interface VisualizerControls {
 }
 
 /**
- * First-load defaults, tuned for the Liquid Blob preset (the default).
+ * First-load defaults, tuned for the Flow Field preset (the default).
  *
- * Loudness is now carried by auto-gain (AGC) + perceptual band scaling in
- * `metrics.ts`, so the gain-related controls sit near 1 instead of the old
- * extreme values (Gain 2.5, mixes ~9, Energy 2). Gain is a gentle trim,
- * the mixes nudge band balance, and Energy adds punch on top of the small
- * base punch that is always applied. The look-and-feel controls
- * (speed/smoothness/scale/shake/anima) keep their Liquid-Blob tuning.
+ * Loudness is carried by auto-gain (AGC) + perceptual band scaling in
+ * `metrics.ts`. Look-and-feel controls match `VISUALIZERS.flow_field.defaults`.
  */
 export const DEFAULT_CONTROLS: VisualizerControls = {
   reactivity: 1.1,
   bassMix: 1,
   midMix: 1,
   highMix: 1.1,
-  speed: 5.95,
-  smoothness: 0.95,
-  scale: 0.15,
-  bassShake: 2.55,
+  speed: 1.5,
+  smoothness: 0.55,
+  scale: 0.4,
+  bassShake: 0.6,
   bassMaxHz: 175,
   midMaxHz: 2500,
   anima: 1,
@@ -206,8 +219,8 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   cameraDistance: 1,
   lightLevel: 1,
   autoGain: true,
-  bloomIntensity: 0,
-  cameraMode: 'cinematic',
+  bloomIntensity: 0.3,
+  cameraMode: 'flow',
 };
 
 export function loadSavedPresets(): SavedPreset[] {
