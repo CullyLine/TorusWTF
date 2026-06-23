@@ -1,10 +1,26 @@
 /**
  * midiLookup.ts — client helpers for the Transcriber's "Find existing MIDI"
  * mode. For popular songs, a human-made MIDI from BitMidi's archive is far more
- * accurate than browser transcription. Search + download both go through our
- * own /api/midi/* proxy (BitMidi has no CORS headers and we want to keep the
- * upstream host server-side).
+ * accurate than browser transcription.
+ *
+ * We call BitMidi directly from the browser. Its search API and file downloads
+ * both send `Access-Control-Allow-Origin: *`, so CORS isn't an issue — and
+ * going direct is actually required: BitMidi sits behind Cloudflare, which
+ * returns 403 for requests from datacenter IPs (e.g. Vercel's serverless
+ * functions). The visitor's own IP isn't blocked, so the fetch must run
+ * client-side.
  */
+
+const BITMIDI = 'https://bitmidi.com';
+const MAX_RESULTS = 15;
+
+interface BitMidiRaw {
+  id?: number;
+  name?: string;
+  views?: number;
+  plays?: number;
+  url?: string;
+}
 
 export interface MidiSearchResult {
   id: number;
@@ -15,13 +31,6 @@ export interface MidiSearchResult {
   pageUrl: string;
   /** 0..1 — how well this result matches the query (see `relevance`). */
   score: number;
-}
-
-export interface MidiSearchResponse {
-  ok: boolean;
-  query: string;
-  results: MidiSearchResult[];
-  error?: string;
 }
 
 const STOP = new Set([
@@ -76,15 +85,40 @@ export function cleanSongQuery(raw: string): string {
 export async function searchMidi(query: string, signal?: AbortSignal): Promise<MidiSearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];
-  const res = await fetch(`/api/midi/search?q=${encodeURIComponent(q)}`, { signal });
+  const res = await fetch(
+    `${BITMIDI}/api/midi/search?q=${encodeURIComponent(q)}&page=0`,
+    { signal, headers: { Accept: 'application/json' } },
+  );
   if (!res.ok) throw new Error(`Search failed (${res.status})`);
-  const data = (await res.json()) as MidiSearchResponse;
-  if (!data.ok) throw new Error(data.error || 'Search failed');
-  return data.results;
+
+  const data = (await res.json()) as { result?: { results?: BitMidiRaw[] } };
+  const raw = data.result?.results ?? [];
+
+  return raw
+    .filter((r): r is BitMidiRaw & { id: number } => typeof r.id === 'number')
+    .slice(0, MAX_RESULTS)
+    .map((r) => {
+      const name = r.name ?? `MIDI ${r.id}`;
+      return {
+        id: r.id,
+        name,
+        views: r.views ?? 0,
+        plays: r.plays ?? 0,
+        pageUrl: r.url ? `${BITMIDI}${r.url}` : BITMIDI,
+        score: relevance(q, name),
+      };
+    });
 }
 
 export async function fetchMidiBytes(id: number, signal?: AbortSignal): Promise<ArrayBuffer> {
-  const res = await fetch(`/api/midi/download?id=${encodeURIComponent(String(id))}`, { signal });
+  // `id` is a number, so the path can't be tampered with to reach another host.
+  const res = await fetch(`${BITMIDI}/uploads/${id}.mid`, { signal });
   if (!res.ok) throw new Error(`Download failed (${res.status})`);
-  return res.arrayBuffer();
+
+  const buf = await res.arrayBuffer();
+  const head = new Uint8Array(buf.slice(0, 4));
+  // Standard MIDI File magic: "MThd".
+  const isMidi = head[0] === 0x4d && head[1] === 0x54 && head[2] === 0x68 && head[3] === 0x64;
+  if (!isMidi) throw new Error('That entry did not return a valid MIDI file.');
+  return buf;
 }
