@@ -354,7 +354,7 @@ export function TranscriberApp() {
               ? "Turn audio into MIDI, right in your browser. Powered by Spotify's Basic Pitch — your file never leaves this device."
               : mode === 'find'
                 ? 'Grab a ready-made MIDI for popular songs from the BitMidi archive — often far more accurate than transcription.'
-                : 'Pull the chord progression out of a song — analyzed right here in your browser, so your file never leaves this device.'}
+                : 'Pull the chord progression out of a song — 7ths, 9ths, sus/add, and slash-chord inversions — analyzed right here in your browser, so your file never leaves this device.'}
           </p>
         </header>
 

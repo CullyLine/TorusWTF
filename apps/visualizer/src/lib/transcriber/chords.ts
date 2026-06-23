@@ -10,53 +10,88 @@ import {
   type Note,
   type Track,
 } from '../conductor/project';
+import type { Mode, PitchClass } from '@libraz/libsonare';
 import { decodeToMono22k } from './transcribe';
 
 /**
  * chords.ts — browser-side audio → chord progression, fully local (the file
  * never leaves the device, same as the note transcriber).
  *
- * Pipeline (a lightweight take on the classic HPCP → chord-template approach):
- *   decode → frame → Hann window → FFT magnitude → fold bins into a 12-bin
- *   chroma → aggregate into ~0.4 s blocks → match each block against the 24
- *   major/minor triad templates → smooth + merge into timed chord segments.
+ * Detection is delegated to libsonare (Apache-2.0, WASM): an NNLS chromagram
+ * fed through a Viterbi/HMM decoder against a rich chord dictionary, with a
+ * separate bass chromagram for inversions and a key-context bias. That gives us
+ * 7th / 9th / sus / add / dim / half-dim chords plus slash-chord inversions —
+ * the soul / future-bass palette — which a plain 12-bin template matcher can't
+ * reach (a folded chroma throws away the bass register entirely).
  *
- * We roll our own DSP rather than depending on a multi-megabyte WASM MIR lib:
- * it keeps the bundle lean and avoids fragile WASM bundling, while staying
- * 100% client-side.
+ * The 2.9 MB WASM binary is copied to /public/libsonare by a prefetch script
+ * and fetched lazily on first use, so it never touches the initial bundle.
  */
 
-const SR = 22050; // decodeToMono22k always returns this rate
-const FRAME = 4096;
-const HOP = 2048;
-const HALF = FRAME / 2;
-const HOP_SEC = HOP / SR;
-
-// Chroma binning range — roughly A1..C7 covers chordal content without the
-// extreme lows (rumble) or highs (cymbals/air) that just muddy the profile.
-const MIN_FREQ = 55;
-const MAX_FREQ = 2093;
+const SR = 22050; // decodeToMono22k always returns this rate.
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 
-// Block-level smoothing: shortest chord we'll keep, in seconds.
-const MIN_SEG_SEC = 0.5;
-const BLOCK_SEC = 0.4;
-
 // Project/MIDI output is time-based; bpm only sets the tick grid.
 const CHORD_BPM = 120;
-const CHORD_ROOT_MIDI = 48; // C3 — comfortable mid-range voicing
+const CHORD_BODY_MIDI = 48; // C3 — the chord body sits here.
+const CHORD_BASS_MIDI = 36; // C2 — the detected bass / inversion note sits here.
 
-export type ChordQuality = 'maj' | 'min';
+/**
+ * libsonare ChordQuality enum values (mirrored locally so we don't pull the
+ * library's runtime exports into this module's static graph). Keep in sync with
+ * `@libraz/libsonare` PitchClass(C=0) and ChordQuality.
+ */
+const QUALITY_INTERVALS: Record<number, number[]> = {
+  0: [0, 4, 7], // Major
+  1: [0, 3, 7], // Minor
+  2: [0, 3, 6], // Diminished
+  3: [0, 4, 8], // Augmented
+  4: [0, 4, 7, 10], // Dominant7
+  5: [0, 4, 7, 11], // Major7
+  6: [0, 3, 7, 10], // Minor7
+  7: [0, 2, 7], // Sus2
+  8: [0, 5, 7], // Sus4
+  9: [0, 4, 7], // Unknown (fallback; usually filtered out)
+  10: [0, 4, 7, 14], // Add9
+  11: [0, 3, 7, 14], // MinorAdd9
+  12: [0, 3, 6, 9], // Dim7
+  13: [0, 3, 6, 10], // HalfDim7
+  14: [0, 4, 7, 11, 14], // Major9
+  15: [0, 4, 7, 10, 14], // Dominant9
+};
+
+const QUALITY_SUFFIX: Record<number, string> = {
+  0: '',
+  1: 'm',
+  2: 'dim',
+  3: 'aug',
+  4: '7',
+  5: 'maj7',
+  6: 'm7',
+  7: 'sus2',
+  8: 'sus4',
+  9: '',
+  10: 'add9',
+  11: 'm(add9)',
+  12: 'dim7',
+  13: 'm7♭5',
+  14: 'maj9',
+  15: '9',
+};
+
+const UNKNOWN_QUALITY = 9;
+
 export type ChordVoicing = 'block' | 'arp';
 
 export interface ChordSegment {
   startSec: number;
   endSec: number;
-  /** Display label, e.g. "C" (major) or "Am" (minor). */
+  /** Display label, e.g. "Cmaj7", "Am7", "G/B". */
   label: string;
-  rootPc: number; // 0..11
-  quality: ChordQuality;
+  rootPc: number; // 0..11 (C=0)
+  bassPc: number; // 0..11 — lowest sounding pitch class (drives inversions)
+  quality: number; // libsonare ChordQuality enum (0..15)
 }
 
 export type ChordPhase = 'decoding' | 'analyzing';
@@ -71,241 +106,133 @@ export const CHORD_PHASE_LABELS: Record<ChordPhase, string> = {
   analyzing: 'Finding chords…',
 };
 
-/** In-place iterative radix-2 Cooley–Tukey FFT (FRAME is a power of two). */
-function fft(re: Float32Array, im: Float32Array): void {
-  const n = re.length;
-  for (let i = 1, j = 0; i < n; i++) {
-    let bit = n >> 1;
-    for (; j & bit; bit >>= 1) j ^= bit;
-    j ^= bit;
-    if (i < j) {
-      const tr = re[i]!;
-      re[i] = re[j]!;
-      re[j] = tr;
-      const ti = im[i]!;
-      im[i] = im[j]!;
-      im[j] = ti;
-    }
-  }
-  for (let len = 2; len <= n; len <<= 1) {
-    const ang = (-2 * Math.PI) / len;
-    const wpr = Math.cos(ang);
-    const wpi = Math.sin(ang);
-    const halfLen = len >> 1;
-    for (let i = 0; i < n; i += len) {
-      let wr = 1;
-      let wi = 0;
-      for (let k = 0; k < halfLen; k++) {
-        const a = i + k;
-        const b = a + halfLen;
-        const rea = re[a]!;
-        const ima = im[a]!;
-        const reb = re[b]!;
-        const imb = im[b]!;
-        const xr = reb * wr - imb * wi;
-        const xi = reb * wi + imb * wr;
-        re[b] = rea - xr;
-        im[b] = ima - xi;
-        re[a] = rea + xr;
-        im[a] = ima + xi;
-        const tmp = wr;
-        wr = wr * wpr - wi * wpi;
-        wi = tmp * wpi + wi * wpr;
-      }
-    }
-  }
+function pc(n: number): number {
+  return ((Math.round(n) % 12) + 12) % 12;
 }
 
-// Precomputed per-bin pitch class (-1 = outside the chroma range) and window.
-const BIN_PC = (() => {
-  const pcs = new Int8Array(HALF + 1).fill(-1);
-  for (let k = 1; k <= HALF; k++) {
-    const freq = (k * SR) / FRAME;
-    if (freq < MIN_FREQ || freq > MAX_FREQ) continue;
-    let pc = Math.round(69 + 12 * Math.log2(freq / 440)) % 12;
-    if (pc < 0) pc += 12;
-    pcs[k] = pc;
-  }
-  return pcs;
-})();
-
-const HANN = (() => {
-  const w = new Float32Array(FRAME);
-  for (let i = 0; i < FRAME; i++) w[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (FRAME - 1));
-  return w;
-})();
-
-/** Best-matching triad for a chroma vector. Returns 0..11 (major), 12..23 (minor), or -1. */
-function classify(chroma: Float32Array): number {
-  let norm = 0;
-  for (let p = 0; p < 12; p++) {
-    const v = chroma[p]!;
-    norm += v * v;
-  }
-  if (Math.sqrt(norm) <= 1e-9) return -1;
-
-  let best = -1;
-  let bestScore = -Infinity;
-  for (let root = 0; root < 12; root++) {
-    const r = chroma[root]!;
-    const fifth = chroma[(root + 7) % 12]!;
-    const sMaj = r + chroma[(root + 4) % 12]! + fifth;
-    if (sMaj > bestScore) {
-      bestScore = sMaj;
-      best = root;
-    }
-    const sMin = r + chroma[(root + 3) % 12]! + fifth;
-    if (sMin > bestScore) {
-      bestScore = sMin;
-      best = root + 12;
-    }
-  }
-  return best;
+/** Build a human label when libsonare doesn't hand one back. */
+function fallbackLabel(rootPc: number, bassPc: number, quality: number): string {
+  const root = NOTE_NAMES[rootPc] ?? 'C';
+  const suffix = QUALITY_SUFFIX[quality] ?? '';
+  const base = `${root}${suffix}`;
+  return bassPc !== rootPc ? `${base}/${NOTE_NAMES[bassPc] ?? ''}` : base;
 }
 
-function labelFor(index: number): { label: string; rootPc: number; quality: ChordQuality } {
-  const minor = index >= 12;
-  const rootPc = minor ? index - 12 : index;
-  const name = NOTE_NAMES[rootPc]!;
-  return { label: minor ? `${name}m` : name, rootPc, quality: minor ? 'min' : 'maj' };
+/** Ensure inversions are visible in the label even if the engine omits them. */
+function ensureSlash(label: string, rootPc: number, bassPc: number): string {
+  if (bassPc === rootPc || label.includes('/')) return label;
+  return `${label}/${NOTE_NAMES[bassPc] ?? ''}`;
 }
 
-/** Detect a chord progression from an audio file. */
+// ---------------------------------------------------------------------------
+// libsonare loader (lazy import + one-time WASM init from /public).
+// ---------------------------------------------------------------------------
+
+function importSonare() {
+  return import('@libraz/libsonare');
+}
+type Sonare = Awaited<ReturnType<typeof importSonare>>;
+
+let sonarePromise: Promise<Sonare> | null = null;
+
+async function loadSonare(): Promise<Sonare> {
+  if (!sonarePromise) {
+    sonarePromise = (async () => {
+      const mod = await importSonare();
+      // Hand the engine its WASM bytes directly so emscripten never has to
+      // resolve a path through the bundler (robust under Next.js/webpack).
+      const res = await fetch('/libsonare/sonare.wasm');
+      if (!res.ok) throw new Error(`Failed to load chord engine (HTTP ${res.status}).`);
+      const wasmBinary = await res.arrayBuffer();
+      await mod.init({ wasmBinary });
+      return mod;
+    })().catch((err) => {
+      sonarePromise = null; // allow a retry on the next attempt
+      throw err;
+    });
+  }
+  return sonarePromise;
+}
+
+/** Detect a chord progression from an audio file (extended chords + inversions). */
 export async function detectChords(
   file: File,
   onProgress?: (p: ChordProgress) => void,
 ): Promise<ChordSegment[]> {
   onProgress?.({ fraction: 0.02, phase: 'decoding' });
   const samples = await decodeToMono22k(file);
-  onProgress?.({ fraction: 0.1, phase: 'analyzing' });
 
-  const nFrames = samples.length >= FRAME ? Math.floor((samples.length - FRAME) / HOP) + 1 : 0;
-  if (nFrames === 0) return [];
+  onProgress?.({ fraction: 0.2, phase: 'decoding' });
+  const sonare = await loadSonare();
 
-  // Per-frame chroma + raw energy.
-  const re = new Float32Array(FRAME);
-  const im = new Float32Array(FRAME);
-  const chromas: Float32Array[] = [];
-  const energies = new Float32Array(nFrames);
-
-  for (let f = 0; f < nFrames; f++) {
-    const off = f * HOP;
-    im.fill(0);
-    for (let i = 0; i < FRAME; i++) re[i] = samples[off + i]! * HANN[i]!;
-    fft(re, im);
-
-    const chroma = new Float32Array(12);
-    let energy = 0;
-    for (let k = 1; k <= HALF; k++) {
-      const pc = BIN_PC[k]!;
-      if (pc < 0) continue;
-      const reK = re[k]!;
-      const imK = im[k]!;
-      const mag = Math.sqrt(reK * reK + imK * imK);
-      chroma[pc] = chroma[pc]! + mag;
-      energy += mag;
-    }
-    energies[f] = energy;
-
-    let mx = 0;
-    for (let p = 0; p < 12; p++) {
-      const v = chroma[p]!;
-      if (v > mx) mx = v;
-    }
-    if (mx > 0) for (let p = 0; p < 12; p++) chroma[p] = chroma[p]! / mx;
-    chromas.push(chroma);
-
-    if ((f & 31) === 0) {
-      // Reserve the last 10% for segmentation.
-      onProgress?.({ fraction: 0.1 + 0.8 * (f / nFrames), phase: 'analyzing' });
-    }
+  onProgress?.({ fraction: 0.45, phase: 'analyzing' });
+  // Bias chord choices toward the song's key, so in-key extensions win.
+  let keyRoot: PitchClass | undefined;
+  let keyMode: Mode | undefined;
+  try {
+    const key = sonare.detectKey(samples, SR);
+    keyRoot = key.root;
+    keyMode = key.mode;
+  } catch {
+    // Key context is a nicety; fall back to no bias if it fails.
   }
 
-  // Aggregate frames into blocks and classify each.
-  const blockFrames = Math.max(1, Math.round(BLOCK_SEC / HOP_SEC));
-  const nBlocks = Math.ceil(nFrames / blockFrames);
-  const labels = new Int16Array(nBlocks);
-  const blockEnergy = new Float32Array(nBlocks);
-  let maxEnergy = 0;
+  onProgress?.({ fraction: 0.6, phase: 'analyzing' });
+  // Yield once so the "Finding chords…" UI can paint before the WASM crunch
+  // (detectChords is synchronous and blocks the main thread briefly).
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-  for (let b = 0; b < nBlocks; b++) {
-    const start = b * blockFrames;
-    const end = Math.min(nFrames, start + blockFrames);
-    const acc = new Float32Array(12);
-    let eSum = 0;
-    for (let f = start; f < end; f++) {
-      const c = chromas[f]!;
-      for (let p = 0; p < 12; p++) acc[p] = acc[p]! + c[p]!;
-      eSum += energies[f]!;
-    }
-    blockEnergy[b] = eSum;
-    if (eSum > maxEnergy) maxEnergy = eSum;
-    labels[b] = classify(acc);
-  }
+  const result = sonare.detectChords(samples, SR, {
+    chromaMethod: 'nnls', // high-quality chroma the classic MIR systems use
+    useHmm: true, // Viterbi/HMM temporal smoothing (less flicker)
+    detectInversions: true, // slash chords via the detected bass note
+    useKeyContext: keyRoot !== undefined,
+    keyRoot,
+    keyMode,
+    useBeatSync: true,
+    minDuration: 0.5,
+  });
 
-  // Gate out near-silent blocks (intros, gaps) so they don't get a chord.
-  const gate = maxEnergy * 0.08;
-  for (let b = 0; b < nBlocks; b++) if (blockEnergy[b]! < gate) labels[b] = -1;
+  onProgress?.({ fraction: 0.95, phase: 'analyzing' });
 
-  // Majority smoothing over a 3-block window to kill single-block flicker.
-  const smoothed = new Int16Array(nBlocks);
-  for (let b = 0; b < nBlocks; b++) {
-    const counts = new Map<number, number>();
-    for (let d = -1; d <= 1; d++) {
-      const idx = b + d;
-      if (idx < 0 || idx >= nBlocks) continue;
-      const lab = labels[idx]!;
-      counts.set(lab, (counts.get(lab) ?? 0) + 1);
-    }
-    let bestLab = labels[b]!;
-    let bestCount = -1;
-    for (const [lab, count] of counts) {
-      if (count > bestCount) {
-        bestCount = count;
-        bestLab = lab;
-      }
-    }
-    smoothed[b] = bestLab;
-  }
-
-  // Enforce a minimum run length (relabel short runs to the previous chord).
-  const minBlocks = Math.max(1, Math.round(MIN_SEG_SEC / (blockFrames * HOP_SEC)));
-  let i = 0;
-  while (i < nBlocks) {
-    let j = i;
-    while (j < nBlocks && smoothed[j] === smoothed[i]) j++;
-    if (j - i < minBlocks && i > 0) {
-      const prev = smoothed[i - 1]!;
-      for (let k = i; k < j; k++) smoothed[k] = prev;
-    } else {
-      i = j;
-    }
-  }
-
-  // Merge equal runs into timed segments (skipping the "no chord" label).
   const segments: ChordSegment[] = [];
-  let b = 0;
-  while (b < nBlocks) {
-    const lab = smoothed[b]!;
-    let e = b;
-    while (e < nBlocks && smoothed[e] === lab) e++;
-    if (lab >= 0) {
-      const startSec = b * blockFrames * HOP_SEC;
-      const endSec = Math.min(nFrames, e * blockFrames) * HOP_SEC + FRAME / SR;
-      segments.push({ startSec, endSec, ...labelFor(lab) });
+  for (const c of result.chords) {
+    if (c.end <= c.start) continue;
+    if (c.quality === UNKNOWN_QUALITY) continue; // "no clear chord" here
+    const name = (c.name ?? '').trim();
+    if (name === 'N' || name === 'NC') continue;
+    const rootPc = pc(c.root);
+    const bassPc = pc(c.bass);
+    const base = name || fallbackLabel(rootPc, bassPc, c.quality);
+    const label = ensureSlash(base, rootPc, bassPc);
+
+    // Merge into the previous run if it's the same chord (engine may emit
+    // adjacent identical segments across beats).
+    const prev = segments[segments.length - 1];
+    if (
+      prev &&
+      prev.rootPc === rootPc &&
+      prev.bassPc === bassPc &&
+      prev.quality === c.quality &&
+      c.start - prev.endSec < 0.05
+    ) {
+      prev.endSec = c.end;
+      continue;
     }
-    b = e;
+
+    segments.push({ startSec: c.start, endSec: c.end, label, rootPc, bassPc, quality: c.quality });
   }
 
   onProgress?.({ fraction: 1, phase: 'analyzing' });
   return segments;
 }
 
-/** MIDI pitches for a chord: root, third, fifth, and the octave root on top. */
-function chordPitches(rootPc: number, quality: ChordQuality): number[] {
-  const root = CHORD_ROOT_MIDI + rootPc;
-  const third = root + (quality === 'min' ? 3 : 4);
-  return [root, third, root + 7, root + 12];
+/** MIDI pitches for a chord: the detected bass note, then the chord body. */
+function chordPitches(seg: ChordSegment): number[] {
+  const intervals = QUALITY_INTERVALS[seg.quality] ?? [0, 4, 7];
+  const body = intervals.map((i) => CHORD_BODY_MIDI + seg.rootPc + i);
+  const bass = CHORD_BASS_MIDI + seg.bassPc; // a register below the body
+  return [bass, ...body];
 }
 
 interface RawNote {
@@ -315,7 +242,7 @@ interface RawNote {
 }
 
 function segmentNotes(seg: ChordSegment, voicing: ChordVoicing): RawNote[] {
-  const pitches = chordPitches(seg.rootPc, seg.quality);
+  const pitches = chordPitches(seg);
   const dur = Math.max(0.05, seg.endSec - seg.startSec);
   if (voicing === 'block') {
     return pitches.map((pitch) => ({ pitch, startSec: seg.startSec, durationSec: dur }));

@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/copy-conductor-assets.mjs && node scripts/copy-transcriber-assets.mjs && next dev --port 3000",
+    "dev": "node scripts/copy-conductor-assets.mjs && node scripts/copy-transcriber-assets.mjs && node scripts/copy-chords-assets.mjs && next dev --port 3000",
     "prefetch:conductor": "node scripts/copy-conductor-assets.mjs",
     "prefetch:transcriber": "node scripts/copy-transcriber-assets.mjs",
-    "build": "pnpm prefetch:conductor && pnpm prefetch:transcriber && next build",
+    "prefetch:chords": "node scripts/copy-chords-assets.mjs",
+    "build": "pnpm prefetch:conductor && pnpm prefetch:transcriber && pnpm prefetch:chords && next build",
     "start": "next start --port 3000",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -15,6 +16,7 @@
     "clean": "rimraf .next .turbo .tsbuildinfo"
   },
   "dependencies": {
+    "@libraz/libsonare": "^1.3.3",
     "@oslojs/crypto": "^1.0.1",
     "@oslojs/encoding": "^1.1.0",
     "@spotify/basic-pitch": "^1.0.1",

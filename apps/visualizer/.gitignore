@@ -3,3 +3,6 @@ public/conductor/spessasynth_processor.min.js
 
 # Basic Pitch model — copied from node_modules at build (prefetch:transcriber)
 public/transcriber/
+
+# libsonare WASM — copied from node_modules at build (prefetch:chords)
+public/libsonare/
