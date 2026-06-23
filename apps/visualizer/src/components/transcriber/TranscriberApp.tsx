@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
 import { conductorEngine } from '@/lib/conductor/engine';
-import { saveProject } from '@/lib/conductor/project';
+import { saveProject, type ConductorProject } from '@/lib/conductor/project';
+import { importMidiToProject } from '@/lib/conductor/midiImport';
 import {
   DEFAULT_TRANSCRIBE_OPTIONS,
   friendlyTranscribeError,
@@ -15,6 +16,12 @@ import {
   type TranscribeProgress,
 } from '@/lib/transcriber/transcribe';
 import { partsToMidi, partsToProject, splitNotes, type SplitMode } from '@/lib/transcriber/parts';
+import {
+  fetchMidiBytes,
+  matchTier,
+  searchMidi,
+  type MidiSearchResult,
+} from '@/lib/transcriber/midiLookup';
 import { useToast } from '@/hooks/useToast';
 import { useMidiPreview } from './useMidiPreview';
 
@@ -30,6 +37,13 @@ function isAudioFile(file: File): boolean {
 }
 
 type Status = 'idle' | 'working' | 'done' | 'error';
+type Mode = 'transcribe' | 'find';
+
+interface FoundMidi {
+  project: ConductorProject;
+  bytes: ArrayBuffer;
+  name: string;
+}
 
 function baseName(name: string): string {
   return name.replace(/\.[^.]+$/, '') || 'transcription';
@@ -54,6 +68,15 @@ export function TranscriberApp() {
   // Output options (live — recompute project/MIDI without re-running the model).
   const [split, setSplit] = useState<SplitMode>('range');
   const [bpm, setBpm] = useState(120);
+
+  // "Find existing MIDI" mode.
+  const [mode, setMode] = useState<Mode>('transcribe');
+  const [query, setQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<MidiSearchResult[] | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [found, setFound] = useState<FoundMidi | null>(null);
 
   // Warm up the soundfont engine so the first preview is instant.
   useEffect(() => {
@@ -162,17 +185,109 @@ export function TranscriberApp() {
     }
   }, [preview, project, toast]);
 
+  const switchMode = useCallback(
+    (m: Mode) => {
+      preview.stop();
+      setMode(m);
+    },
+    [preview],
+  );
+
+  const runSearch = useCallback(async () => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    preview.stop();
+    setSearching(true);
+    setSearchError(null);
+    setFound(null);
+    try {
+      setResults(await searchMidi(q));
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Search failed');
+      setResults(null);
+    } finally {
+      setSearching(false);
+    }
+  }, [query, preview]);
+
+  const pickResult = useCallback(
+    async (res: MidiSearchResult) => {
+      preview.stop();
+      setLoadingId(res.id);
+      setSearchError(null);
+      try {
+        const bytes = await fetchMidiBytes(res.id);
+        const name = res.name.replace(/\.midi?$/i, '') || 'MIDI';
+        // Import from a copy so the original buffer stays intact for download.
+        const imported = importMidiToProject(bytes.slice(0), `${name}.mid`);
+        setFound({ project: imported, bytes, name });
+      } catch (err) {
+        setSearchError(err instanceof Error ? err.message : "Couldn't load that MIDI");
+      } finally {
+        setLoadingId(null);
+      }
+    },
+    [preview],
+  );
+
+  const previewFound = useCallback(() => {
+    if (!found) return;
+    if (preview.playing) preview.stop();
+    else
+      void preview.play(found.project).catch(() => {
+        toast({
+          message: 'Preview unavailable — instruments are still loading.',
+          variant: 'error',
+        });
+      });
+  }, [found, preview, toast]);
+
+  const downloadFound = useCallback(() => {
+    if (!found) return;
+    const blob = new Blob([new Uint8Array(found.bytes)], { type: 'audio/midi' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${found.name}.mid`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast({ message: `Downloaded ${found.name}.mid`, variant: 'success' });
+  }, [found, toast]);
+
+  const sendFoundToConductor = useCallback(() => {
+    if (!found) return;
+    preview.stop();
+    saveProject(found.project);
+    toast({ message: 'Sent to Conductor', variant: 'success' });
+    router.push('/conductor' as Route);
+  }, [found, preview, router, toast]);
+
   return (
     <main className="min-h-dvh bg-torus-bg text-torus-fg">
       <div className="mx-auto max-w-2xl px-4 py-16 md:py-20">
-        <header className="mb-8">
+        <header className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight">Transcriber</h1>
           <p className="mt-2 text-sm text-torus-fg-dim">
-            Turn audio into MIDI, right in your browser. Powered by Spotify&apos;s Basic Pitch —
-            your file never leaves this device.
+            {mode === 'transcribe'
+              ? "Turn audio into MIDI, right in your browser. Powered by Spotify's Basic Pitch — your file never leaves this device."
+              : 'Grab a ready-made MIDI for popular songs from the BitMidi archive — often far more accurate than transcription.'}
           </p>
         </header>
 
+        {/* Mode toggle */}
+        <div className="mb-5 flex gap-1.5">
+          <ModeButton active={mode === 'transcribe'} onClick={() => switchMode('transcribe')}>
+            Transcribe audio
+          </ModeButton>
+          <ModeButton active={mode === 'find'} onClick={() => switchMode('find')}>
+            Find existing MIDI
+          </ModeButton>
+        </div>
+
+        {mode === 'transcribe' ? (
+          <>
         {/* Drop zone */}
         <section
           role="button"
@@ -349,6 +464,124 @@ export function TranscriberApp() {
             </div>
           </section>
         ) : null}
+          </>
+        ) : (
+          <>
+            {/* Search */}
+            <section className="rounded-xl border border-torus-border bg-torus-surface/60 p-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void runSearch();
+                  }}
+                  placeholder="Song name — e.g. Queen Bohemian Rhapsody"
+                  className="min-w-0 flex-1 rounded-full border border-torus-border bg-torus-bg px-4 py-2 text-sm text-torus-fg placeholder:text-torus-fg-faint focus:border-torus-mid/50 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => void runSearch()}
+                  disabled={searching || query.trim().length < 2}
+                  className="shrink-0 rounded-full bg-torus-mid px-4 py-2 text-sm font-semibold text-torus-bg transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {searching ? 'Searching…' : 'Search'}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-torus-fg-faint">
+                Community-made MIDIs from BitMidi — best for popular &amp; classic songs. Not found?
+                Switch to Transcribe audio.
+              </p>
+              {searchError ? <p className="mt-3 text-xs text-torus-bass">{searchError}</p> : null}
+            </section>
+
+            {/* Results */}
+            {results !== null ? (
+              <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
+                {results.length === 0 ? (
+                  <p className="text-sm text-torus-fg-dim">
+                    No matches found. Try a simpler query, e.g. just “artist song”.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {results.map((r) => {
+                      const tier = matchTier(r.score);
+                      return (
+                        <li key={r.id}>
+                          <button
+                            type="button"
+                            onClick={() => void pickResult(r)}
+                            disabled={loadingId !== null}
+                            className="flex w-full items-center gap-3 rounded-lg border border-torus-border bg-torus-bg/40 px-3 py-2 text-left transition hover:border-torus-mid/40 disabled:opacity-50"
+                          >
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                tier === 'match'
+                                  ? 'bg-torus-mid/20 text-torus-mid'
+                                  : tier === 'maybe'
+                                    ? 'bg-torus-border text-torus-fg-dim'
+                                    : 'text-torus-fg-faint'
+                              }`}
+                            >
+                              {tier === 'match' ? 'Match' : tier === 'maybe' ? 'Maybe' : '—'}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm text-torus-fg">{r.name}</span>
+                              <span className="block text-[11px] text-torus-fg-faint">
+                                {r.views.toLocaleString()} views · {r.plays.toLocaleString()} plays
+                              </span>
+                            </span>
+                            {loadingId === r.id ? (
+                              <span className="shrink-0 text-xs text-torus-fg-faint">Loading…</span>
+                            ) : null}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            ) : null}
+
+            {/* Selected MIDI */}
+            {found ? (
+              <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-medium text-torus-fg-dim">Selected</h2>
+                  <span className="text-xs text-torus-fg-faint">
+                    {found.project.tracks.length} track{found.project.tracks.length === 1 ? '' : 's'}{' '}
+                    · {found.project.bpm} BPM
+                  </span>
+                </div>
+                <p className="mt-2 truncate text-sm text-torus-fg">{found.name}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={previewFound}
+                    className="rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-sm font-medium text-torus-mid transition hover:bg-torus-mid/20"
+                  >
+                    {preview.playing ? '■ Stop' : '▶ Preview'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={downloadFound}
+                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
+                  >
+                    Download .mid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={sendFoundToConductor}
+                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
+                  >
+                    Send to Conductor →
+                  </button>
+                </div>
+              </section>
+            ) : null}
+          </>
+        )}
       </div>
     </main>
   );
@@ -400,6 +633,31 @@ function SplitButton({
       type="button"
       onClick={onClick}
       className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+        active
+          ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
+          : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition ${
         active
           ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
           : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong'
