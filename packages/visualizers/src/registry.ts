@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { AnalyserHandle } from './audio';
+import type { ControlKey } from './controlSchema';
 import type { CameraMode } from './SceneRig';
 import { TorusFieldScene } from './presets/TorusField';
 import { ParticleStormScene } from './presets/ParticleStorm';
@@ -136,6 +137,12 @@ export interface VisualizerDefinition {
   Scene: ComponentType<VisualizerSceneProps>;
   /** Slider values applied when the user switches to this preset. */
   defaults?: PresetControlDefaults;
+  /**
+   * Extra controls this preset owns, shown in the "This preset" panel
+   * section. Keys must have a `group: 'preset'` def in `CONTROL_SCHEMA`.
+   * The panel renders them generically — new presets never touch UI code.
+   */
+  presetControls?: ControlKey[];
 }
 
 /**
@@ -179,6 +186,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Flow Field',
     hint: 'A quarter-million particles riding living currents \u2014 chaos that flows into collective motion. Stir it with your cursor.',
     Scene: FlowFieldScene,
+    presetControls: ['turbulence', 'trailLength', 'density', 'vortexAmount', 'interactStrength'],
     defaults: {
       speed: 1,
       smoothness: 0.6,
@@ -234,6 +242,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Tunnel',
     hint: 'An infinite tunnel rushing past \u2014 walls explode on bass, pyramids bite on mids, souls ride the current.',
     Scene: InfiniteTunnelScene,
+    presetControls: ['turbulence', 'density', 'vortexAmount'],
     defaults: {
       speed: 1,
       smoothness: 0.55,
@@ -335,6 +344,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Liquid Blob',
     hint: 'Amorphous raymarched metaballs that fuse and split. Pure goo, no edges.',
     Scene: LiquidBlobScene,
+    presetControls: ['inflate', 'appendages', 'subSpheres'],
     // The blob renders through its own in-shader camera, so framing comes
     // entirely from `scale` — 0.6 puts the goo at ~"here in the room".
     // Camera mode is 'still' because the rig camera can't move this preset.

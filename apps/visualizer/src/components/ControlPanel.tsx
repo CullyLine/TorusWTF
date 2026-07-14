@@ -3,9 +3,14 @@
 import { useRef } from 'react';
 import {
   BACKGROUND_MODES,
+  VISUALIZERS,
+  CONTROL_DEFS_BY_KEY,
+  controlsForGroup,
   type AnalyserHandle,
   type BackgroundMode,
   type CameraMode,
+  type ControlDef,
+  type ControlKey,
   type VisualizerId,
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
@@ -61,12 +66,6 @@ const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'mandelbrot_zoom',
 ]);
 
-const CINEMATIC_SPEED_MIN = 0.25;
-const CINEMATIC_SPEED_MAX = 3;
-const CINEMATIC_SPEED_STEP = 0.05;
-
-type SliderKey = Exclude<keyof VisualizerControls, 'cameraMode' | 'autoGain'>;
-
 export function ControlPanel({
   controls,
   onChange,
@@ -86,103 +85,22 @@ export function ControlPanel({
   onBackgroundChange,
 }: ControlPanelProps) {
   const paletteImageInputRef = useRef<HTMLInputElement>(null);
-  type SliderDef = {
-    key: SliderKey;
-    label: string;
-    min: number;
-    max: number;
-    step: number;
-    /** Plain-language tooltip for jargon-y controls. */
-    hint?: string;
-  };
   const autoGain = controls.autoGain ?? true;
-  // The Pulse Update panel: grouped by intent (how it feels / how it's lit
-  // and colored / how it's framed), with ranges tightened to the musical
-  // zone — the old 0–12.5 ranges left 95% of each slider useless.
-  const feelSliders: SliderDef[] = [
-    {
-      key: 'reactivity',
-      label: autoGain ? 'Intensity (trim)' : 'Intensity',
-      min: 0.2,
-      max: 4,
-      step: 0.05,
-      hint: autoGain
-        ? 'How big the visuals move — fine-tune on top of auto sensitivity'
-        : 'How big the visuals move with the audio',
-    },
-    { key: 'energy', label: 'Punch', min: 0, max: 2, step: 0.05, hint: 'Extra snap on hits — drums land harder without raising the quiet parts' },
-    { key: 'smoothness', label: 'Flow', min: 0, max: 0.95, step: 0.01, hint: 'How silkily motion glides between hits — hits still land instantly' },
-    { key: 'speed', label: 'Speed', min: 0.25, max: 3, step: 0.05, hint: 'Pace of the motion' },
-    { key: 'anima', label: 'Life', min: 0, max: 1, step: 0.01, hint: 'How alive the scene stays between beats — breathing, drifting attention' },
-  ];
-  const colorSliders: SliderDef[] = [
-    { key: 'colorLife', label: 'Color life', min: 0, max: 1, step: 0.01, hint: 'Colors breathe with loudness, drift over time, and shift on drops' },
-    { key: 'bloomIntensity', label: 'Glow', min: 0, max: 3, step: 0.05, hint: 'Bloom around bright areas — swells with the music' },
-    { key: 'lightLevel', label: 'Light', min: 0.2, max: 2, step: 0.05, hint: 'Overall brightness of the world' },
-    { key: 'aura', label: 'Aura', min: 0, max: 1, step: 0.01, hint: 'Ambient wisp field around the scene' },
-  ];
-  const framingSliders: SliderDef[] = [
-    { key: 'scale', label: 'Size', min: 0.2, max: 3, step: 0.05, hint: 'How much of the frame the scene fills' },
-    { key: 'bassShake', label: 'Shake', min: 0, max: 3, step: 0.05, hint: 'Subwoofer camera rumble on heavy bass' },
-  ];
-  const bandSliders: SliderDef[] = [
-    { key: 'bassMix', label: 'Bass', min: 0, max: 4, step: 0.05, hint: 'How much the low end drives the visuals' },
-    { key: 'midMix', label: 'Mid', min: 0, max: 4, step: 0.05, hint: 'How much the mids drive the visuals' },
-    { key: 'highMix', label: 'High', min: 0, max: 4, step: 0.05, hint: 'How much the highs drive the visuals' },
-  ];
-  const blobSliders: SliderDef[] = [
-    { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01, hint: '0 = stretchy taffy, 1 = round puff' },
-    { key: 'appendages', label: 'Appendages', min: 0, max: 10, step: 1, hint: 'Orbiting satellite spheres that fuse into the blob' },
-    { key: 'subSpheres', label: 'Sub-spheres', min: 0, max: 8, step: 1, hint: 'Big fluid bubbles on hi-hats and cymbals' },
-  ];
-  const showBlobSliders = activePreset === 'liquid_blob';
-  const flowSliders: SliderDef[] = [
-    { key: 'turbulence', label: 'Turbulence', min: 0, max: 2, step: 0.05, hint: 'Fine chaotic detail in the current' },
-    { key: 'trailLength', label: 'Trails', min: 0, max: 2, step: 0.05, hint: 'How long each particle\u2019s ink trail is' },
-    { key: 'density', label: 'Density', min: 0.05, max: 1, step: 0.05, hint: 'Fraction of the swarm that\u2019s visible' },
-    { key: 'vortexAmount', label: 'Vortex', min: 0, max: 1, step: 0.05, hint: 'Tornado pull at the center of the field' },
-    { key: 'interactStrength', label: 'Stir', min: 0, max: 2, step: 0.05, hint: 'How strongly your cursor stirs the current' },
-  ];
-  const showFlowSliders = activePreset === 'flow_field';
-  // The tunnel's particle stream reuses a subset of the flow controls
-  // (trails and cursor-stir don't apply to it).
-  const tunnelSliders = flowSliders.filter((s) =>
-    ['turbulence', 'density', 'vortexAmount'].includes(s.key),
-  );
-  const showTunnelSliders = activePreset === 'infinite_tunnel';
+
+  // All slider definitions (label, range, hint, fallback, grouping) come
+  // from CONTROL_SCHEMA in @torus/visualizers — this component is just a
+  // generic renderer plus the structural bits (selects, checkboxes).
+  const presetControlKeys = VISUALIZERS[activePreset].presetControls ?? [];
+  const presetSliders = presetControlKeys.map((key) => CONTROL_DEFS_BY_KEY[key]);
 
   const saved = unlocked ? loadSavedPresets() : [];
   void presetsVersion;
 
-  const renderSlider = ({ key, label, min, max, step, hint }: SliderDef) => {
-    // Smoothness/Scale/BassShake/Anima/Aura/Inflate/Appendages were
-    // added later, so older persisted controls may not have them.
-    // Default per-slider.
-    const fallback =
-      key === 'scale' ||
-      key === 'cameraDistance' ||
-      key === 'lightLevel' ||
-      key === 'turbulence' ||
-      key === 'trailLength' ||
-      key === 'density' ||
-      key === 'interactStrength'
-        ? 1
-        : key === 'anima'
-          ? 0.5
-          : key === 'aura'
-            ? 0.4
-            : key === 'colorLife'
-              ? 0.6
-              : key === 'inflate'
-                ? 0.5
-                : key === 'vortexAmount'
-                  ? 0.25
-                  : key === 'appendages'
-                    ? 4
-                    : key === 'subSpheres'
-                      ? 6
-                      : 0;
-    const value = controls[key] ?? fallback;
+  const renderSlider = (def: ControlDef) => {
+    const { key, min, max, step } = def;
+    const label = autoGain && def.labelAutoGain ? def.labelAutoGain : def.label;
+    const hint = autoGain && def.hintAutoGain ? def.hintAutoGain : def.hint;
+    const value = controls[key] ?? def.fallback;
     const outOfRange = value < min || value > max;
     const sliderValue = Math.max(min, Math.min(max, value));
     return (
@@ -211,6 +129,8 @@ export function ControlPanel({
       </div>
     );
   };
+
+  const renderControl = (key: ControlKey) => renderSlider(CONTROL_DEFS_BY_KEY[key]);
 
   const sectionSummary =
     'cursor-pointer select-none list-none text-xs font-medium text-torus-fg-dim hover:text-torus-fg [&::-webkit-details-marker]:hidden';
@@ -244,7 +164,7 @@ export function ControlPanel({
               className="accent-torus-mid"
             />
           </label>
-          {feelSliders.map(renderSlider)}
+          {controlsForGroup('feel').map(renderSlider)}
         </details>
 
         <details open className="space-y-3 border-t border-torus-border pt-3">
@@ -252,18 +172,16 @@ export function ControlPanel({
             Color &amp; light
             {sectionChevron}
           </summary>
-          {colorSliders.map(renderSlider)}
+          {controlsForGroup('color').map(renderSlider)}
         </details>
 
-        {showBlobSliders || showFlowSliders || showTunnelSliders ? (
+        {presetSliders.length > 0 ? (
           <details open className="space-y-3 border-t border-torus-border pt-3">
             <summary className={sectionSummary}>
               This preset
               {sectionChevron}
             </summary>
-            {showBlobSliders ? blobSliders.map(renderSlider) : null}
-            {showFlowSliders ? flowSliders.map(renderSlider) : null}
-            {showTunnelSliders ? tunnelSliders.map(renderSlider) : null}
+            {presetSliders.map(renderSlider)}
           </details>
         ) : null}
 
@@ -272,7 +190,7 @@ export function ControlPanel({
             Framing &amp; camera
             {sectionChevron}
           </summary>
-          {renderSlider(framingSliders[0]!)}
+          {renderControl('scale')}
           <label className="block text-xs text-torus-fg-dim">
             Camera motion
             <select
@@ -288,51 +206,9 @@ export function ControlPanel({
             </select>
           </label>
 
-          {renderSlider({
-            key: 'cameraDistance',
-            label: 'Distance',
-            min: 0.5,
-            max: 2.5,
-            step: 0.05,
-            hint: 'How far the camera sits from the center — it never gets close enough to clip into the scene',
-          })}
-          {renderSlider(framingSliders[1]!)}
-
-          {controls.cameraMode === 'cinematic'
-            ? (() => {
-                const v = controls.cinematicSpeed ?? 1;
-                const clamped = Math.max(
-                  CINEMATIC_SPEED_MIN,
-                  Math.min(CINEMATIC_SPEED_MAX, v),
-                );
-                const outOfRange = v < CINEMATIC_SPEED_MIN || v > CINEMATIC_SPEED_MAX;
-                return (
-                  <div className="block text-xs text-torus-fg-dim">
-                    <div className="mb-1 flex justify-between">
-                      <span>Cinematic speed</span>
-                      <EditableNumber
-                        value={v}
-                        onCommit={(next) => onChange({ cinematicSpeed: next })}
-                        ariaLabel="Cinematic speed"
-                        outOfRange={outOfRange}
-                      />
-                    </div>
-                    <input
-                      type="range"
-                      min={CINEMATIC_SPEED_MIN}
-                      max={CINEMATIC_SPEED_MAX}
-                      step={CINEMATIC_SPEED_STEP}
-                      value={clamped}
-                      onChange={(e) =>
-                        onChange({ cinematicSpeed: Number(e.target.value) })
-                      }
-                      aria-label="Cinematic speed"
-                      className="w-full accent-torus-mid"
-                    />
-                  </div>
-                );
-              })()
-            : null}
+          {renderControl('cameraDistance')}
+          {renderControl('bassShake')}
+          {controls.cameraMode === 'cinematic' ? renderControl('cinematicSpeed') : null}
         </details>
 
         <details className="space-y-3 border-t border-torus-border pt-3">
@@ -347,7 +223,7 @@ export function ControlPanel({
             midMaxHz={controls.midMaxHz ?? 2000}
             onChange={onChange}
           />
-          {bandSliders.map(renderSlider)}
+          {controlsForGroup('bands').map(renderSlider)}
         </details>
 
         <details className="space-y-2 border-t border-torus-border pt-3">

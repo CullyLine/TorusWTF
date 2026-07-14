@@ -16,6 +16,14 @@ export {
   type BackgroundLayerProps,
 } from './BackgroundLayer';
 export { pickRandomVisualizerPreset } from './pickRandomPreset';
+export {
+  CONTROL_SCHEMA,
+  CONTROL_DEFS_BY_KEY,
+  controlsForGroup,
+  type ControlDef,
+  type ControlGroup,
+  type ControlKey,
+} from './controlSchema';
 export type { AudioMetrics, MetricsScales } from './metrics';
 export type { CameraMode } from './SceneRig';
 export {

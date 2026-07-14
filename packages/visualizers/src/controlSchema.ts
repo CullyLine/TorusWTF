@@ -1,0 +1,324 @@
+/**
+ * Schema-driven control definitions — the single source of truth for every
+ * numeric control the visualizer exposes.
+ *
+ * The control panel renders directly from this schema (label, range, hint,
+ * grouping), presets declare which extra controls they own via
+ * `presetControls` in the registry, and fallback values live here instead of
+ * being scattered through UI code. Adding a preset with custom sliders means
+ * adding defs here and listing their keys in the registry entry — no panel
+ * changes.
+ *
+ * Inspired by nw_wrld's `static methods` option schema, adapted to TorusFM's
+ * continuous-control model.
+ */
+
+export type ControlKey =
+  | 'reactivity'
+  | 'energy'
+  | 'smoothness'
+  | 'speed'
+  | 'anima'
+  | 'colorLife'
+  | 'bloomIntensity'
+  | 'lightLevel'
+  | 'aura'
+  | 'scale'
+  | 'cameraDistance'
+  | 'bassShake'
+  | 'cinematicSpeed'
+  | 'bassMix'
+  | 'midMix'
+  | 'highMix'
+  | 'inflate'
+  | 'appendages'
+  | 'subSpheres'
+  | 'turbulence'
+  | 'trailLength'
+  | 'density'
+  | 'vortexAmount'
+  | 'interactStrength';
+
+export type ControlGroup = 'feel' | 'color' | 'framing' | 'bands' | 'preset';
+
+export interface ControlDef {
+  key: ControlKey;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  /** Value assumed when persisted controls predate this key. */
+  fallback: number;
+  /** Plain-language tooltip for jargon-y controls. */
+  hint?: string;
+  group: ControlGroup;
+  /** Label variant shown while auto-gain is enabled. */
+  labelAutoGain?: string;
+  /** Hint variant shown while auto-gain is enabled. */
+  hintAutoGain?: string;
+  /** Only meaningful when this camera mode is active. */
+  requiresCameraMode?: string;
+}
+
+export const CONTROL_SCHEMA: ControlDef[] = [
+  // ---- Feel ----
+  {
+    key: 'reactivity',
+    label: 'Intensity',
+    labelAutoGain: 'Intensity (trim)',
+    min: 0.2,
+    max: 4,
+    step: 0.05,
+    fallback: 1.1,
+    hint: 'How big the visuals move with the audio',
+    hintAutoGain: 'How big the visuals move — fine-tune on top of auto sensitivity',
+    group: 'feel',
+  },
+  {
+    key: 'energy',
+    label: 'Punch',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 0.45,
+    hint: 'Extra snap on hits — drums land harder without raising the quiet parts',
+    group: 'feel',
+  },
+  {
+    key: 'smoothness',
+    label: 'Flow',
+    min: 0,
+    max: 0.95,
+    step: 0.01,
+    fallback: 0.6,
+    hint: 'How silkily motion glides between hits — hits still land instantly',
+    group: 'feel',
+  },
+  {
+    key: 'speed',
+    label: 'Speed',
+    min: 0.25,
+    max: 3,
+    step: 0.05,
+    fallback: 1,
+    hint: 'Pace of the motion',
+    group: 'feel',
+  },
+  {
+    key: 'anima',
+    label: 'Life',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    fallback: 0.5,
+    hint: 'How alive the scene stays between beats — breathing, drifting attention',
+    group: 'feel',
+  },
+
+  // ---- Color & light ----
+  {
+    key: 'colorLife',
+    label: 'Color life',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    fallback: 0.6,
+    hint: 'Colors breathe with loudness, drift over time, and shift on drops',
+    group: 'color',
+  },
+  {
+    key: 'bloomIntensity',
+    label: 'Glow',
+    min: 0,
+    max: 3,
+    step: 0.05,
+    fallback: 1,
+    hint: 'Bloom around bright areas — swells with the music',
+    group: 'color',
+  },
+  {
+    key: 'lightLevel',
+    label: 'Light',
+    min: 0.2,
+    max: 2,
+    step: 0.05,
+    fallback: 1,
+    hint: 'Overall brightness of the world',
+    group: 'color',
+  },
+  {
+    key: 'aura',
+    label: 'Aura',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    fallback: 0.4,
+    hint: 'Ambient wisp field around the scene',
+    group: 'color',
+  },
+
+  // ---- Framing & camera ----
+  {
+    key: 'scale',
+    label: 'Size',
+    min: 0.2,
+    max: 3,
+    step: 0.05,
+    fallback: 1,
+    hint: 'How much of the frame the scene fills',
+    group: 'framing',
+  },
+  {
+    key: 'cameraDistance',
+    label: 'Distance',
+    min: 0.5,
+    max: 2.5,
+    step: 0.05,
+    fallback: 1,
+    hint: 'How far the camera sits from the center — it never gets close enough to clip into the scene',
+    group: 'framing',
+  },
+  {
+    key: 'bassShake',
+    label: 'Shake',
+    min: 0,
+    max: 3,
+    step: 0.05,
+    fallback: 0,
+    hint: 'Subwoofer camera rumble on heavy bass',
+    group: 'framing',
+  },
+  {
+    key: 'cinematicSpeed',
+    label: 'Cinematic speed',
+    min: 0.25,
+    max: 3,
+    step: 0.05,
+    fallback: 1,
+    hint: 'Playback rate of the auto-directed camera',
+    group: 'framing',
+    requiresCameraMode: 'cinematic',
+  },
+
+  // ---- Bands (advanced) ----
+  {
+    key: 'bassMix',
+    label: 'Bass',
+    min: 0,
+    max: 4,
+    step: 0.05,
+    fallback: 1,
+    hint: 'How much the low end drives the visuals',
+    group: 'bands',
+  },
+  {
+    key: 'midMix',
+    label: 'Mid',
+    min: 0,
+    max: 4,
+    step: 0.05,
+    fallback: 1,
+    hint: 'How much the mids drive the visuals',
+    group: 'bands',
+  },
+  {
+    key: 'highMix',
+    label: 'High',
+    min: 0,
+    max: 4,
+    step: 0.05,
+    fallback: 1.05,
+    hint: 'How much the highs drive the visuals',
+    group: 'bands',
+  },
+
+  // ---- Per-preset (rendered when the active preset lists the key) ----
+  {
+    key: 'inflate',
+    label: 'Inflate',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    fallback: 0.5,
+    hint: '0 = stretchy taffy, 1 = round puff',
+    group: 'preset',
+  },
+  {
+    key: 'appendages',
+    label: 'Appendages',
+    min: 0,
+    max: 10,
+    step: 1,
+    fallback: 4,
+    hint: 'Orbiting satellite spheres that fuse into the blob',
+    group: 'preset',
+  },
+  {
+    key: 'subSpheres',
+    label: 'Sub-spheres',
+    min: 0,
+    max: 8,
+    step: 1,
+    fallback: 6,
+    hint: 'Big fluid bubbles on hi-hats and cymbals',
+    group: 'preset',
+  },
+  {
+    key: 'turbulence',
+    label: 'Turbulence',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 1,
+    hint: 'Fine chaotic detail in the current',
+    group: 'preset',
+  },
+  {
+    key: 'trailLength',
+    label: 'Trails',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 1,
+    hint: 'How long each particle\u2019s ink trail is',
+    group: 'preset',
+  },
+  {
+    key: 'density',
+    label: 'Density',
+    min: 0.05,
+    max: 1,
+    step: 0.05,
+    fallback: 1,
+    hint: 'Fraction of the swarm that\u2019s visible',
+    group: 'preset',
+  },
+  {
+    key: 'vortexAmount',
+    label: 'Vortex',
+    min: 0,
+    max: 1,
+    step: 0.05,
+    fallback: 0.25,
+    hint: 'Tornado pull at the center of the field',
+    group: 'preset',
+  },
+  {
+    key: 'interactStrength',
+    label: 'Stir',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 1,
+    hint: 'How strongly your cursor stirs the current',
+    group: 'preset',
+  },
+];
+
+export const CONTROL_DEFS_BY_KEY: Readonly<Record<ControlKey, ControlDef>> = Object.fromEntries(
+  CONTROL_SCHEMA.map((def) => [def.key, def]),
+) as Record<ControlKey, ControlDef>;
+
+export function controlsForGroup(group: ControlGroup): ControlDef[] {
+  return CONTROL_SCHEMA.filter((def) => def.group === group);
+}
