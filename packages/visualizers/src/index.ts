@@ -24,6 +24,8 @@ export {
   type ControlGroup,
   type ControlKey,
 } from './controlSchema';
+export { createImpulses, type VisualImpulses } from './impulse';
+export { DEFAULT_METRICS } from './metrics';
 export type { AudioMetrics, MetricsScales } from './metrics';
 export type { CameraMode } from './SceneRig';
 export {

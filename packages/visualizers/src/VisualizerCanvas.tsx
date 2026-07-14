@@ -8,7 +8,8 @@ import { useAudioAnalyser } from './audio';
 import { detectTier } from './tier';
 import { VISUALIZERS, FULLSCREEN_SHADER_PRESETS, type VisualizerId } from './registry';
 import { BackgroundLayer, type BackgroundMode } from './BackgroundLayer';
-import { AudioMetricsProvider, type MetricsScales } from './metrics';
+import { AudioMetricsProvider, type AudioMetrics, type MetricsScales } from './metrics';
+import type { VisualImpulses } from './impulse';
 import { LivingPaletteDriver, type LivingPaletteTarget } from './livingPalette';
 import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
@@ -110,6 +111,21 @@ interface VisualizerCanvasProps {
   background?: BackgroundMode;
   /** Background visibility 0..1. Default 0.6. */
   backgroundIntensity?: number;
+  /**
+   * One-shot visual commands (trigger mappings / MIDI). Mutable object with
+   * a stable identity; the rig and palette driver consume fields per frame.
+   */
+  impulses?: VisualImpulses;
+  /**
+   * Receives the freshest AudioMetrics object every frame — for consumers
+   * outside the canvas (trigger engine, projector broadcast).
+   */
+  metricsOutRef?: MutableRefObject<AudioMetrics | null>;
+  /**
+   * Remote-driven mode (projector window): metrics are read from this ref
+   * instead of being computed from an analyser.
+   */
+  externalMetricsRef?: MutableRefObject<AudioMetrics | null>;
 }
 
 export function VisualizerCanvas({
@@ -156,6 +172,9 @@ export function VisualizerCanvas({
   colorLife = 0.6,
   background = 'none',
   backgroundIntensity = 0.6,
+  impulses,
+  metricsOutRef,
+  externalMetricsRef,
   frameloop = 'always',
   glOverrides,
   onR3FState,
@@ -192,6 +211,8 @@ export function VisualizerCanvas({
     lastOnsetRef,
     energy,
     autoGain,
+    metricsOutRef,
+    externalMetricsRef,
   };
 
   const containerStyle = exportSize
@@ -220,7 +241,12 @@ export function VisualizerCanvas({
           >
             <color attach="background" args={['#0a0b1e']} />
             <AudioMetricsProvider analyser={analyser} {...metricsScales}>
-              <LivingPaletteDriver base={palette} out={livingPalette} amount={colorLife} />
+              <LivingPaletteDriver
+                base={palette}
+                out={livingPalette}
+                amount={colorLife}
+                impulses={impulses}
+              />
               <SceneRig
                 palette={livingPalette}
                 tier={tier}
@@ -234,6 +260,7 @@ export function VisualizerCanvas({
                 cinematicSpeed={cinematicSpeed}
                 cameraDistance={cameraDistance}
                 lightLevel={lightLevel}
+                impulses={impulses}
               />
               {background !== 'none' && !FULLSCREEN_SHADER_PRESETS.has(preset) ? (
                 <BackgroundLayer

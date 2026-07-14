@@ -181,6 +181,19 @@ export interface MetricsScales {
   /** Optional last-onset-timestamp ref (from useBPM). Anchors phase wrapping. */
   lastOnsetRef?: RefObject<number>;
   /**
+   * Mirror of the freshest metrics for consumers OUTSIDE the canvas (trigger
+   * engine, projector broadcast). Updated every frame with the same object
+   * the scene reads — no copying, no allocation.
+   */
+  metricsOutRef?: MutableRefObject<AudioMetrics | null>;
+  /**
+   * Remote-driven mode: when set, all local analysis is skipped and metrics
+   * are read from this ref instead (the projector window renders visuals
+   * from metrics computed in the main window and shipped over
+   * BroadcastChannel). The analyser may be null in this mode.
+   */
+  externalMetricsRef?: MutableRefObject<AudioMetrics | null>;
+  /**
    * Dynamic-range expansion. 0 = unchanged. 1 = peaks reach 3x their
    * deviation from the slow baseline. Unlike `reactivity` (Gain) this
    * does NOT raise the quiet baseline, so quiet music stays quiet
@@ -213,6 +226,8 @@ export function AudioMetricsProvider({
   lastOnsetRef,
   energy: energyExpand = 0,
   autoGain = true,
+  metricsOutRef,
+  externalMetricsRef,
 }: {
   analyser: AnalyserHandle | null;
   children: ReactNode;
@@ -244,6 +259,16 @@ export function AudioMetricsProvider({
   const callResponseState = useRef<CallResponseState>(createCallResponseState());
 
   useFrame((_state, delta) => {
+    // Remote-driven (projector) mode: adopt the shipped metrics wholesale.
+    if (externalMetricsRef) {
+      const remote = externalMetricsRef.current;
+      if (remote) {
+        metricsRef.current = remote;
+        if (metricsOutRef) metricsOutRef.current = remote;
+      }
+      return;
+    }
+
     let bass = 0.15;
     let mid = 0.15;
     let high = 0.15;
@@ -552,6 +577,7 @@ export function AudioMetricsProvider({
       gather: callResponseState.current.gather,
       convergence: callResponseState.current.convergence,
     };
+    if (metricsOutRef) metricsOutRef.current = metricsRef.current;
   });
 
   return createElement(MetricsRefContext.Provider, { value: metricsRef }, children);

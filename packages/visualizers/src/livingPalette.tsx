@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMetricsRef } from './metrics';
+import type { VisualImpulses } from './impulse';
 
 /**
  * Living palette — makes color itself a musical instrument.
@@ -39,6 +40,8 @@ interface LivingPaletteDriverProps {
   out: LivingPaletteTarget;
   /** 0 = colors stay exactly as picked; 1 = full breathing/drifting life. */
   amount?: number;
+  /** One-shot commands from trigger mappings / MIDI (hueKick consumed here). */
+  impulses?: VisualImpulses;
 }
 
 const scratchColor = new THREE.Color();
@@ -52,7 +55,7 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-export function LivingPaletteDriver({ base, out, amount = 0.6 }: LivingPaletteDriverProps) {
+export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: LivingPaletteDriverProps) {
   const metricsRef = useMetricsRef();
   const huePhaseRef = useRef(Math.random());
   const hueKickRef = useRef(0);
@@ -61,7 +64,18 @@ export function LivingPaletteDriver({ base, out, amount = 0.6 }: LivingPaletteDr
 
   useFrame((_state, delta) => {
     const life = clamp(amount, 0, 1);
-    if (life <= 0.001) {
+    const dt = Math.min(delta, 0.1);
+
+    // Manual color kick (trigger mapping / MIDI) — fires even at Color life
+    // 0, because the user explicitly asked for it.
+    if (impulses && impulses.hueKick > 0.001) {
+      kickSignRef.current *= -1;
+      hueKickRef.current = 0.1 * Math.min(1.5, impulses.hueKick) * kickSignRef.current;
+      impulses.hueKick = 0;
+    }
+    hueKickRef.current *= Math.exp(-dt / 1.5);
+
+    if (life <= 0.001 && Math.abs(hueKickRef.current) < 0.002) {
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
       if (out.high !== base.high) out.high = base.high;
@@ -69,7 +83,6 @@ export function LivingPaletteDriver({ base, out, amount = 0.6 }: LivingPaletteDr
     }
 
     const m = metricsRef.current;
-    const dt = Math.min(delta, 0.1);
 
     // Hue orbit advances with the music's presence — faster in loud
     // passages, near-still in silence. One full lap takes minutes.
@@ -78,16 +91,16 @@ export function LivingPaletteDriver({ base, out, amount = 0.6 }: LivingPaletteDr
     );
 
     // Drop → kick the wheel, alternating direction so back-to-back drops
-    // feel like call and answer instead of a ratchet.
+    // feel like call and answer instead of a ratchet. Scaled by life so
+    // automatic kicks respect the Color life setting (manual ones don't).
     if (m.dropEvent > 0.85 && prevDropRef.current <= 0.85) {
       kickSignRef.current *= -1;
-      hueKickRef.current = 0.08 * kickSignRef.current;
+      hueKickRef.current = 0.08 * life * kickSignRef.current;
     }
     prevDropRef.current = m.dropEvent;
-    hueKickRef.current *= Math.exp(-dt / 1.5);
 
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
-    const hueShift = life * (drift + hueKickRef.current);
+    const hueShift = life * drift + hueKickRef.current;
     const satBoost = 1 + life * (m.swell * 0.22 + m.impact * 0.1 - m.silence * 0.4);
     const lightBoost =
       1 + life * (m.swell * 0.14 + m.impact * 0.18 + m.shimmer * 0.08 - m.silence * 0.22);

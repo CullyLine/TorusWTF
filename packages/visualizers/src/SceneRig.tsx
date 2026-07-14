@@ -6,6 +6,7 @@ import { EffectComposer, Vignette } from '@react-three/postprocessing';
 import { BloomEffect } from 'postprocessing';
 import type { PerspectiveCamera, PointLight } from 'three';
 import { useMetricsRef } from './metrics';
+import type { VisualImpulses } from './impulse';
 import { useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
@@ -63,6 +64,8 @@ interface SceneRigProps {
    * works for shader presets too (which bypass scene lights entirely).
    */
   lightLevel?: number;
+  /** One-shot commands from trigger mappings / MIDI (camPunch, bloomPulse, flash). */
+  impulses?: VisualImpulses;
 }
 
 /**
@@ -81,6 +84,7 @@ export function SceneRig({
   cinematicSpeed = 1,
   cameraDistance = 1,
   lightLevel = 1,
+  impulses,
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
   const bassLight = useRef<PointLight>(null);
@@ -88,6 +92,11 @@ export function SceneRig({
   const highLight = useRef<PointLight>(null);
   const resolvedBloomRef = useRef(1);
   const baseFovRef = useRef<number | null>(null);
+  // Trigger-impulse envelopes: consumed from `impulses` on the frame they
+  // fire, then rung down here (same struck-bell shape as the audio pulses).
+  const camPunchEnvRef = useRef(0);
+  const bloomPulseEnvRef = useRef(0);
+  const flashEnvRef = useRef(0);
 
   // Constructed directly (not via the <Bloom> wrapper) so the frame loop
   // can pulse `intensity` with the music. The wrapper memoizes with
@@ -117,11 +126,35 @@ export function SceneRig({
   const flowCamScratch = useRef<Vec3Like>({ x: 0, y: 0, z: 0 });
   const prevFrameTime = useRef(0);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const m = metricsRef.current;
     const t = state.clock.elapsedTime;
     const dist = Math.max(0.3, cameraDistance);
     const baseZ = (zoomDistanceRef?.current ?? fallbackZ) * dist;
+    const dtImp = Math.min(delta, 0.1);
+
+    // Consume one-shot trigger impulses, then decay their envelopes.
+    if (impulses) {
+      if (impulses.camPunch > 0.001) {
+        camPunchEnvRef.current = Math.max(camPunchEnvRef.current, Math.min(1.5, impulses.camPunch));
+        impulses.camPunch = 0;
+      }
+      if (impulses.bloomPulse > 0.001) {
+        bloomPulseEnvRef.current = Math.max(
+          bloomPulseEnvRef.current,
+          Math.min(1.5, impulses.bloomPulse),
+        );
+        impulses.bloomPulse = 0;
+      }
+      if (impulses.flash > 0.001) {
+        flashEnvRef.current = Math.max(flashEnvRef.current, Math.min(1.5, impulses.flash));
+        impulses.flash = 0;
+      }
+    }
+    camPunchEnvRef.current *= Math.exp(-dtImp / 0.22);
+    bloomPulseEnvRef.current *= Math.exp(-dtImp / 0.35);
+    flashEnvRef.current *= Math.exp(-dtImp / 0.16);
+    const flash = flashEnvRef.current;
 
     // Low tier has no post-processing exposure pass, so the light level is
     // baked into the light intensities instead (see render section below).
@@ -131,16 +164,19 @@ export function SceneRig({
     // frame so the living palette breathes through the lighting too.
     const frameLightScale = tier === 'low' ? Math.max(0, lightLevel) : 1;
     if (bassLight.current) {
-      bassLight.current.intensity = (0.55 + m.bass * 2.4 + m.impact * 2.2) * frameLightScale;
+      bassLight.current.intensity =
+        (0.55 + m.bass * 2.4 + m.impact * 2.2 + flash * 3) * frameLightScale;
       bassLight.current.distance = 12 + m.breath * 6;
       bassLight.current.color.set(palette.bass);
     }
     if (midLight.current) {
-      midLight.current.intensity = (0.45 + m.mid * 2.0 + m.swell * 0.8) * frameLightScale;
+      midLight.current.intensity =
+        (0.45 + m.mid * 2.0 + m.swell * 0.8 + flash * 3) * frameLightScale;
       midLight.current.color.set(palette.mid);
     }
     if (highLight.current) {
-      highLight.current.intensity = (0.3 + m.high * 1.6 + m.shimmer * 1.9) * frameLightScale;
+      highLight.current.intensity =
+        (0.3 + m.high * 1.6 + m.shimmer * 1.9 + flash * 3) * frameLightScale;
       highLight.current.color.set(palette.high);
     }
 
@@ -280,7 +316,10 @@ export function SceneRig({
     const cam = state.camera as PerspectiveCamera;
     if (cam.isPerspectiveCamera) {
       if (baseFovRef.current === null) baseFovRef.current = cam.fov;
-      const punchIn = Math.min(4, m.impact * (0.9 + m.swell * 2.1));
+      const punchIn = Math.min(
+        7,
+        m.impact * (0.9 + m.swell * 2.1) + camPunchEnvRef.current * 5,
+      );
       const targetFov = baseFovRef.current - punchIn;
       if (Math.abs(cam.fov - targetFov) > 0.005) {
         cam.fov = targetFov;
@@ -289,8 +328,10 @@ export function SceneRig({
     }
 
     // Bloom breathes with the music: swells through loud sections, blooms
-    // a little brighter the instant a hit lands.
-    bloomEffect.intensity = resolvedBloomRef.current * (0.7 + m.swell * 0.5 + m.impact * 0.3);
+    // a little brighter the instant a hit lands. Trigger pulses surge on top.
+    bloomEffect.intensity =
+      resolvedBloomRef.current *
+      (0.7 + m.swell * 0.5 + m.impact * 0.3 + bloomPulseEnvRef.current * 1.1 + flash * 0.6);
   });
 
   const tierBloom = tier === 'low' ? 0.8 : 1.1;
