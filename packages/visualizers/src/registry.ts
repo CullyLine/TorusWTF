@@ -52,6 +52,12 @@ export interface VisualizerSceneProps {
    */
   scale?: number;
   /**
+   * Motion pace multiplier. 1 = natural pace. Presets that accumulate
+   * their own animation phase should multiply their per-frame advance by
+   * this so the Speed control actually changes what the user sees.
+   */
+  speed?: number;
+  /**
    * Liquid-Blob-specific deformation control. 0 = pure stretch (taffy-pull
    * along a wobble axis); 1 = pure inflate (uniform radial puff). Default
    * 0.5. Other presets ignore this prop.
@@ -145,19 +151,25 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   // The `defaults` blocks below are starting points — tune freely. They're
   // applied whenever the user switches TO that preset; omitted fields keep
   // the user's current values.
+  //
+  // Framing philosophy (the Pulse Update): every preset should OWN the
+  // frame at its defaults — subject filling most of the screen at the
+  // default camera distance (z≈3.1, fov 50) — with real glow (bloom ≥ 0.5)
+  // so the first impression is close, bright, and alive. Wheel zoom is the
+  // escape hatch for establishing shots, not the default state.
   anima: {
     id: 'anima',
     label: 'Anima',
     hint: 'The living creature \u2014 aurora curtains + soul core, listens with you.',
     Scene: AnimaScene,
     defaults: {
-      speed: 1.5,
+      speed: 1,
       smoothness: 0.8,
       scale: 1,
       anima: 1,
       aura: 0.4,
       cameraMode: 'still',
-      bloomIntensity: 0.6,
+      bloomIntensity: 0.55,
       cameraDistance: 1,
       lightLevel: 1,
     },
@@ -168,12 +180,12 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'A quarter-million particles riding living currents \u2014 chaos that flows into collective motion. Stir it with your cursor.',
     Scene: FlowFieldScene,
     defaults: {
-      speed: 1.5,
-      smoothness: 0.55,
-      scale: 0.4,
-      bassShake: 0.6,
+      speed: 1,
+      smoothness: 0.6,
+      scale: 0.62,
+      bassShake: 0.5,
       cameraMode: 'flow',
-      bloomIntensity: 0.3,
+      bloomIntensity: 0.9,
       cameraDistance: 1,
       lightLevel: 1,
       turbulence: 1,
@@ -189,10 +201,10 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'Sacred-geometry energy flow \u2014 the brand signature.',
     Scene: TorusFieldScene,
     defaults: {
-      speed: 1.5,
+      speed: 1,
       smoothness: 0.6,
-      scale: 1,
-      bassShake: 1,
+      scale: 0.85,
+      bassShake: 0.8,
       cameraMode: 'cinematic',
       cinematicSpeed: 1,
       bloomIntensity: 1.1,
@@ -206,10 +218,10 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'Frequency-driven swarm. Punchy energy for big drops.',
     Scene: ParticleStormScene,
     defaults: {
-      speed: 2,
-      smoothness: 0.4,
+      speed: 1.2,
+      smoothness: 0.45,
       scale: 1,
-      bassShake: 1.5,
+      bassShake: 1.2,
       cameraMode: 'cinematic',
       cinematicSpeed: 1,
       bloomIntensity: 1.1,
@@ -223,10 +235,10 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'An infinite tunnel rushing past \u2014 walls explode on bass, pyramids bite on mids, souls ride the current.',
     Scene: InfiniteTunnelScene,
     defaults: {
-      speed: 1.5,
+      speed: 1,
       smoothness: 0.55,
       scale: 1,
-      bassShake: 1,
+      bassShake: 0.8,
       cameraMode: 'drift',
       bloomIntensity: 0.9,
       cameraDistance: 1,
@@ -242,12 +254,12 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'The waveform extruded into 3D \u2014 minimal, universal.',
     Scene: VolumetricWaveformScene,
     defaults: {
-      speed: 1.5,
+      speed: 1,
       smoothness: 0.5,
-      scale: 1,
-      bassShake: 0.8,
+      scale: 1.15,
+      bassShake: 0.7,
       cameraMode: 'drift',
-      bloomIntensity: 0.8,
+      bloomIntensity: 0.9,
       cameraDistance: 1,
       lightLevel: 1,
     },
@@ -258,7 +270,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'Sacred-geometry rings in radial symmetry \u2014 brand-aligned calm power.',
     Scene: CosmicMandalaScene,
     defaults: {
-      speed: 1.2,
+      speed: 1,
       smoothness: 0.7,
       scale: 1,
       bassShake: 0.5,
@@ -274,14 +286,14 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'Galaxy spiral arms that tighten with the bass and twinkle on highs.',
     Scene: StarFieldScene,
     defaults: {
-      speed: 1.5,
+      speed: 1,
       smoothness: 0.6,
       scale: 1,
-      bassShake: 0.8,
+      bassShake: 0.6,
       cameraMode: 'cinematic',
       cinematicSpeed: 1,
-      bloomIntensity: 1,
-      cameraDistance: 1,
+      bloomIntensity: 0.9,
+      cameraDistance: 1.15,
       lightLevel: 1,
     },
   },
@@ -291,12 +303,12 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'Synthwave horizon grid with a pulsing sun \u2014 producer-nightdrive vibes.',
     Scene: OutrunGridScene,
     defaults: {
-      speed: 1.8,
+      speed: 1.2,
       smoothness: 0.5,
       scale: 1,
-      bassShake: 1,
+      bassShake: 0.8,
       cameraMode: 'still',
-      bloomIntensity: 1.2,
+      bloomIntensity: 0.7,
       cameraDistance: 1,
       lightLevel: 1,
     },
@@ -307,13 +319,13 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     hint: 'Metallic blob morphing with bass and beats \u2014 high-gloss centerpiece.',
     Scene: LiquidChromeScene,
     defaults: {
-      speed: 1.5,
+      speed: 1,
       smoothness: 0.6,
-      scale: 1,
-      bassShake: 1.2,
+      scale: 0.9,
+      bassShake: 1,
       cameraMode: 'cinematic',
       cinematicSpeed: 1,
-      bloomIntensity: 1,
+      bloomIntensity: 0.8,
       cameraDistance: 1,
       lightLevel: 1,
     },
@@ -323,20 +335,22 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     label: 'Liquid Blob',
     hint: 'Amorphous raymarched metaballs that fuse and split. Pure goo, no edges.',
     Scene: LiquidBlobScene,
-    // Matches the app's first-load DEFAULT_CONTROLS tuning.
+    // The blob renders through its own in-shader camera, so framing comes
+    // entirely from `scale` — 0.6 puts the goo at ~"here in the room".
+    // Camera mode is 'still' because the rig camera can't move this preset.
     defaults: {
-      speed: 5.95,
-      smoothness: 0.95,
-      scale: 0.15,
-      bassShake: 2.55,
+      speed: 1.1,
+      smoothness: 0.7,
+      scale: 0.72,
+      bassShake: 0.6,
       anima: 1,
       aura: 0,
-      cameraMode: 'cinematic',
-      cinematicSpeed: 3,
+      cameraMode: 'still',
+      cinematicSpeed: 1,
       inflate: 0.45,
       appendages: 4,
       subSpheres: 6,
-      bloomIntensity: 0,
+      bloomIntensity: 0.55,
       cameraDistance: 1,
       lightLevel: 1,
     },
@@ -352,7 +366,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       scale: 1,
       bassShake: 0,
       cameraMode: 'still',
-      bloomIntensity: 0.5,
+      bloomIntensity: 0.6,
       cameraDistance: 1,
       lightLevel: 1,
     },

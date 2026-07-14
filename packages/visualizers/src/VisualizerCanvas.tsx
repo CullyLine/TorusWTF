@@ -9,6 +9,7 @@ import { detectTier } from './tier';
 import { VISUALIZERS, FULLSCREEN_SHADER_PRESETS, type VisualizerId } from './registry';
 import { BackgroundLayer, type BackgroundMode } from './BackgroundLayer';
 import { AudioMetricsProvider, type MetricsScales } from './metrics';
+import { LivingPaletteDriver, type LivingPaletteTarget } from './livingPalette';
 import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 import type { AnalyserHandle } from './audio';
@@ -97,6 +98,11 @@ interface VisualizerCanvasProps {
   /** Flow Field: pointer-stir strength 0..2. */
   interactStrength?: number;
   /**
+   * Living-color amount. 0 = palette stays exactly as picked; 1 = full
+   * breathing color (hue drift, loudness saturation, drop hue-kicks).
+   */
+  colorLife?: number;
+  /**
    * Optional reactive background behind the preset. Default 'none' keeps the
    * clip player and all current presets unchanged. Skipped automatically for
    * fullscreen-shader presets that would occlude it.
@@ -147,6 +153,7 @@ export function VisualizerCanvas({
   density,
   vortexAmount,
   interactStrength,
+  colorLife = 0.6,
   background = 'none',
   backgroundIntensity = 0.6,
   frameloop = 'always',
@@ -158,7 +165,18 @@ export function VisualizerCanvas({
   const audioAnalyser = useAudioAnalyser(audioRef?.current ?? null, fftSize);
   const analyser = analyserOverride ?? audioAnalyser;
   const def = VISUALIZERS[preset] ?? VISUALIZERS.torus_field;
-  const defaultZ = embedded ? 3.2 : 4;
+  const defaultZ = embedded ? 2.8 : 3.1;
+
+  // Stable identity, mutated per-frame by LivingPaletteDriver (which reads
+  // the base palette fresh each frame). Everything inside the canvas reads
+  // colors from this object so the whole scene — lights, backgrounds,
+  // preset shaders — breathes together.
+  // Intentionally empty deps: identity must stay stable while the driver
+  // mutates the fields; the base palette is re-read fresh each frame.
+  const livingPalette = useMemo<LivingPaletteTarget>(
+    () => ({ bass: palette.bass, mid: palette.mid, high: palette.high }),
+    [],
+  );
 
   const metricsScales: MetricsScales = {
     reactivity,
@@ -202,8 +220,9 @@ export function VisualizerCanvas({
           >
             <color attach="background" args={['#0a0b1e']} />
             <AudioMetricsProvider analyser={analyser} {...metricsScales}>
+              <LivingPaletteDriver base={palette} out={livingPalette} amount={colorLife} />
               <SceneRig
-                palette={palette}
+                palette={livingPalette}
                 tier={tier}
                 embedded={embedded}
                 bloomIntensity={bloomIntensity}
@@ -220,16 +239,17 @@ export function VisualizerCanvas({
                 <BackgroundLayer
                   mode={background}
                   intensity={backgroundIntensity}
-                  palette={palette}
+                  palette={livingPalette}
                   tier={tier}
                 />
               ) : null}
               <group scale={scale}>
                 <def.Scene
                   analyser={analyser}
-                  palette={palette}
+                  palette={livingPalette}
                   tier={tier}
                   scale={scale}
+                  speed={speed}
                   inflate={inflate}
                   appendages={appendages}
                   subSpheres={subSpheres}

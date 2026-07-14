@@ -71,12 +71,16 @@ varying float vDist;
 
 void main() {
   vec2 grid = abs(fract(vUv * 40.0) - 0.5);
-  float line = smoothstep(0.48, 0.0, min(grid.x, grid.y));
-  float glow = exp(-vDist * 0.08);
+  // Crisp neon lines: a tight core stroke plus a faint halo. The previous
+  // wide smoothstep made every cell glow edge-to-edge and the whole floor
+  // washed out into a white carpet on loud passages.
+  float d = min(grid.x, grid.y);
+  float line = smoothstep(0.1, 0.0, d) + smoothstep(0.3, 0.0, d) * 0.25;
+  float glow = exp(-vDist * 0.11);
   vec3 gridCol = mix(uColorA, uColorB, sin(vUv.y * 12.0 + uTime) * 0.5 + 0.5);
-  vec3 col = gridCol * line * glow * (0.45 + uMid * 0.55 + vHeight * 0.25);
+  vec3 col = gridCol * line * glow * (0.4 + uMid * 0.5 + vHeight * 0.3);
   col *= 1.0 + uBloom * 0.4;
-  gl_FragColor = vec4(col, line * glow);
+  gl_FragColor = vec4(col, min(1.0, line) * glow);
 }
 `;
 
@@ -93,18 +97,23 @@ uniform float uTime;
 uniform float uBass;
 uniform float uHigh;
 uniform float uBeat;
+uniform vec3 uSunColor;
+uniform vec3 uSkyColor;
 
 varying vec2 vUv;
 
 void main() {
   vec2 uv = vUv;
-  vec3 sky = mix(vec3(0.02, 0.0, 0.06), vec3(0.35, 0.02, 0.25), uv.y);
-  sky = mix(sky, vec3(0.05, 0.0, 0.12), smoothstep(0.0, 0.35, uv.y));
+  // Horizon gradient tinted by the bass color so the sky follows the palette.
+  vec3 duskLow = uSkyColor * 0.08;
+  vec3 duskHigh = uSkyColor * 0.55;
+  vec3 sky = mix(duskLow, duskHigh, uv.y);
+  sky = mix(sky, uSkyColor * 0.16, smoothstep(0.0, 0.35, uv.y));
 
   float sunY = 0.62;
   vec2 sunCenter = vec2(0.5 + sin(uTime * 0.15) * 0.02, sunY);
   float sun = smoothstep(0.14 + uBass * 0.05, 0.0, distance(uv, sunCenter));
-  vec3 sunCol = vec3(1.0, 0.25 + uBass * 0.35, 0.55) * sun;
+  vec3 sunCol = mix(uSunColor, vec3(1.0, 0.9, 0.7), 0.25 + uBass * 0.3) * sun;
 
   float bandMask = smoothstep(0.02, 0.0, abs(fract((uv.y - sunY) * 28.0 + uTime * 0.5) - 0.5));
   sunCol *= 0.6 + bandMask * 0.8;
@@ -113,12 +122,12 @@ void main() {
   uv.x += shimmer;
 
   vec3 col = sky + sunCol;
-  col += vec3(1.0, 0.4, 0.7) * uBeat * 0.25;
+  col += uSunColor * uBeat * 0.3;
   gl_FragColor = vec4(col, 1.0);
 }
 `;
 
-export function OutrunGridScene({ analyser, palette, tier }: VisualizerSceneProps) {
+export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const terrainMatRef = useRef<THREE.ShaderMaterial>(null);
   const skyMatRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -144,12 +153,16 @@ export function OutrunGridScene({ analyser, palette, tier }: VisualizerSceneProp
     [palette.mid, palette.high, bloom],
   );
 
+  // Intentionally empty deps: uniform colors are re-set from the live
+  // palette every frame in useFrame.
   const skyUniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uBass: { value: 0 },
       uHigh: { value: 0 },
       uBeat: { value: 0 },
+      uSunColor: { value: new THREE.Color(palette.bass) },
+      uSkyColor: { value: new THREE.Color(palette.bass) },
     }),
     [],
   );
@@ -160,13 +173,13 @@ export function OutrunGridScene({ analyser, palette, tier }: VisualizerSceneProp
     if (!terrainMat || !skyMat) return;
 
     const m = metricsRef.current;
-    scrollRef.current += delta * (0.45 + m.energy * 1.6);
+    scrollRef.current += delta * speed * (0.45 + m.energy * 1.4 + m.impact * 0.8);
     beatDollyRef.current = Math.max(0, beatDollyRef.current - delta * 4);
-    if (m.beat > 0.35) beatDollyRef.current = 1;
+    if (m.impact > 0.35) beatDollyRef.current = 1;
 
     terrainMat.uniforms.uTime!.value = state.clock.elapsedTime;
     terrainMat.uniforms.uScroll!.value = scrollRef.current;
-    terrainMat.uniforms.uBass!.value = m.bass + m.beat * 0.35;
+    terrainMat.uniforms.uBass!.value = m.bass + m.impact * 0.4;
     terrainMat.uniforms.uMid!.value = m.mid;
     terrainMat.uniforms.uEnergy!.value = m.energy;
     (terrainMat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
@@ -175,7 +188,9 @@ export function OutrunGridScene({ analyser, palette, tier }: VisualizerSceneProp
     skyMat.uniforms.uTime!.value = state.clock.elapsedTime;
     skyMat.uniforms.uBass!.value = m.bass;
     skyMat.uniforms.uHigh!.value = m.high;
-    skyMat.uniforms.uBeat!.value = m.beat;
+    skyMat.uniforms.uBeat!.value = m.impact;
+    (skyMat.uniforms.uSunColor!.value as THREE.Color).set(palette.bass);
+    (skyMat.uniforms.uSkyColor!.value as THREE.Color).set(palette.bass);
 
     camera.position.z = 3.2 + beatDollyRef.current * 0.35;
     camera.position.y = 1.4 + m.mid * 0.15;

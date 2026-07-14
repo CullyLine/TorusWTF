@@ -144,11 +144,12 @@ void main() {
 }
 `;
 
-export function AnimaScene({ analyser, palette }: VisualizerSceneProps) {
+export function AnimaScene({ analyser, palette, speed = 1 }: VisualizerSceneProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const { size } = useThree();
+  const timeRef = useRef(0);
 
   const uniforms = useMemo(
     () => ({
@@ -175,13 +176,14 @@ export function AnimaScene({ analyser, palette }: VisualizerSceneProps) {
     [palette.bass, palette.mid, palette.high],
   );
 
-  useFrame((state) => {
+  useFrame((_state, delta) => {
     const mat = matRef.current;
     if (!mat) return;
     const m = metricsRef.current;
 
+    timeRef.current += Math.min(delta, 0.1) * speed;
     mat.uniforms.uResolution!.value.set(size.width, size.height);
-    mat.uniforms.uTime!.value = state.clock.elapsedTime;
+    mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;

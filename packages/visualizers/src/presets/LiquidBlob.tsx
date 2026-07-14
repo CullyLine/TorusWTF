@@ -377,6 +377,7 @@ export function LiquidBlobScene({
   palette,
   tier,
   scale = 1,
+  speed = 1,
   inflate = 0.5,
   appendages = 4,
   subSpheres = 6,
@@ -387,11 +388,6 @@ export function LiquidBlobScene({
   const { size } = useThree();
   const phaseRef = useRef(0);
   const orbitPhaseRef = useRef(0);
-  // Sub-sphere envelope: snaps up on detected high-freq transients,
-  // decays exponentially. Kept in JS (not the shader) so we can do
-  // proper edge-detection against the previous frame's high value.
-  const subAmountRef = useRef(0);
-  const prevHighRef = useRef(0);
 
   const steps = tier === 'high' ? RAY_STEPS_HIGH : tier === 'mid' ? RAY_STEPS_MID : RAY_STEPS_LOW;
   const fragmentShader = useMemo(() => buildFragmentShader(steps), [steps]);
@@ -426,19 +422,18 @@ export function LiquidBlobScene({
     const mat = matRef.current;
     if (!mat) return;
     const m = metricsRef.current;
-    // Forward-only motion phase. Speed modulates with energy but the phase
+    const pace = Math.max(0.05, speed);
+    // Forward-only motion phase. Rate modulates with energy but the phase
     // itself never decreases, which prevents satellites from oscillating
     // when energy fluctuates rapidly.
-    const speed = 0.35 + Math.min(m.energy, 1.5) * 0.18;
-    phaseRef.current += Math.min(delta, 0.05) * speed;
+    const phaseRate = (0.35 + Math.min(m.energy, 1.5) * 0.18) * pace;
+    phaseRef.current += Math.min(delta, 0.05) * phaseRate;
 
-    // Orbit phase: heavily mid/high/beat-driven so the satellites visibly
-    // whip around the blob on busy passages. Floored so it never stalls.
+    // Orbit phase: heavily mid/high-driven (impact envelope for the kick)
+    // so the satellites visibly whip around the blob on busy passages.
+    // Floored so it never stalls.
     const orbitSpeed =
-      0.6 +
-      Math.min(m.mid, 2) * 1.6 +
-      Math.min(m.high, 2) * 0.9 +
-      m.beat * 0.7;
+      (0.6 + Math.min(m.mid, 2) * 1.6 + Math.min(m.high, 2) * 0.9 + m.impact * 0.8) * pace;
     orbitPhaseRef.current += Math.min(delta, 0.05) * orbitSpeed;
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
@@ -449,7 +444,9 @@ export function LiquidBlobScene({
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
     mat.uniforms.uEnergy!.value = m.energy;
-    mat.uniforms.uBeat!.value = m.beat;
+    // Impact envelope, not the raw beat spike: the pop swells in and melts
+    // out over ~¼s so hits read as a fluid pulse of mass.
+    mat.uniforms.uBeat!.value = m.impact;
     mat.uniforms.uScale!.value = scale;
     mat.uniforms.uInflate!.value = Math.max(0, Math.min(1, inflate));
     // Round + clamp to the shader's hard cap. 0 = anchor sphere alone.
@@ -458,31 +455,14 @@ export function LiquidBlobScene({
       Math.min(MAX_APPENDAGES, Math.round(appendages)),
     );
 
-    // Sub-sphere transient envelope.
-    //
-    // We detect a rising-edge transient in the High band: if the
-    // current frame's high reading exceeds a decayed version of the
-    // previous frame, that *delta* is treated as a fresh transient.
-    // A small floor on absolute high handles sustained hi-hat washes
-    // so the sub-spheres don't completely vanish during constant-hat
-    // sections of a track.
-    const highNow = m.high;
-    const transient = Math.max(0, highNow - prevHighRef.current * 0.72);
-    prevHighRef.current = highNow;
-    const sustain = Math.max(0, highNow - 0.3) * 0.6;
-    const target = Math.min(1, transient * 2.2 + sustain);
-
-    // Fast attack, slow melt — keeps sub-spheres fluidly visible longer.
-    const dt = Math.min(delta, 0.05);
-    const prevSub = subAmountRef.current;
-    const next = target > prevSub ? target : prevSub * Math.exp(-dt * 1.4);
-    subAmountRef.current = Math.max(0, Math.min(1, next));
-
     mat.uniforms.uSubSphereCount!.value = Math.max(
       0,
       Math.min(MAX_SUB_SPHERES, Math.round(subSpheres)),
     );
-    mat.uniforms.uSubAmount!.value = subAmountRef.current;
+    // Shared shimmer envelope (hi-hat / cymbal transients with a slow melt)
+    // drives the sub-sphere presence — same signal the rest of the engine
+    // sparkles to, so the whole scene agrees on what the hats are doing.
+    mat.uniforms.uSubAmount!.value = m.shimmer;
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uDrop!.value = m.dropEvent;
     mat.uniforms.uSilence!.value = m.silence;

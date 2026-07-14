@@ -13,9 +13,11 @@ import {
   type Vec3Like,
 } from '../dsp/flowfield';
 
+import { getDotTexture } from '../dotTexture';
+
 const FOLDS = 8;
 
-export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneProps) {
+export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const groupRef = useRef<THREE.Group>(null);
   const ringsRef = useRef<THREE.Group>(null);
   const shimmerRef = useRef<THREE.Points>(null);
@@ -23,6 +25,8 @@ export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneP
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const pulseRef = useRef(0);
+  const scratchColor = useRef(new THREE.Color());
+  const sprite = useMemo(() => getDotTexture(), []);
 
   const layerCount = tier === 'high' ? 7 : tier === 'mid' ? 5 : 3;
   const shimmerCount = tier === 'high' ? 900 : tier === 'mid' ? 420 : 180;
@@ -48,17 +52,6 @@ export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneP
     return { shimmerPos: p, shimmerHome: home };
   }, [shimmerCount]);
 
-  const shimmerColors = useMemo(() => {
-    const c = new Float32Array(shimmerCount * 3);
-    const high = new THREE.Color(palette.high);
-    for (let i = 0; i < shimmerCount; i++) {
-      c[i * 3] = high.r;
-      c[i * 3 + 1] = high.g;
-      c[i * 3 + 2] = high.b;
-    }
-    return c;
-  }, [shimmerCount, palette.high]);
-
   useFrame((_state, delta) => {
     const root = groupRef.current;
     const rings = ringsRef.current;
@@ -68,38 +61,49 @@ export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneP
 
     const m = metricsRef.current;
     pulseRef.current = Math.max(0, pulseRef.current - delta * 2.5);
-    if (m.beat > 0.55) pulseRef.current = 1;
+    if (m.impact > 0.55) pulseRef.current = 1;
 
-    const breath = 1 + m.bass * 0.22 + m.breath * 0.12 + pulseRef.current * 0.18;
+    const breath = 1 + m.bass * 0.22 + m.swell * 0.12 + m.impact * 0.14;
     root.scale.setScalar(breath);
-    // Whole-mandala spin: now picks up mid + high + beat so the wheel
+    // Whole-mandala spin: now picks up mid + high + impact so the wheel
     // visibly turns at normal listening gain instead of waiting for the
     // user to crank everything to mad-scientist mode.
     root.rotation.y +=
-      delta * (0.18 + m.mid * 0.65 + m.high * 0.28 + m.beat * 0.5);
+      delta * speed * (0.18 + m.mid * 0.65 + m.high * 0.28 + m.impact * 0.5);
 
+    // Rings follow the living palette: color assignments happen every frame
+    // (the JSX material color would otherwise stay frozen at mount).
+    const c = scratchColor.current;
     rings.children.forEach((child, i) => {
       // Per-ring spin: was 0.12 + i*0.04 + m.mid*0.5. That made the inner
       // rings barely turn unless gain was huge. Tripled the music-driven
-      // term and added high + beat so each ring flies on energy.
-      const speed =
-        0.22 + i * 0.05 + m.mid * 1.7 + m.high * 0.95 + m.beat * 0.6;
-      child.rotation.z += delta * speed * (i % 2 === 0 ? 1 : -1);
+      // term and added high + impact so each ring flies on energy.
+      const spin =
+        0.22 + i * 0.05 + m.mid * 1.7 + m.high * 0.95 + m.impact * 0.6;
+      child.rotation.z += delta * speed * spin * (i % 2 === 0 ? 1 : -1);
       child.rotation.x =
         Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12);
-      const mat = (child as THREE.Mesh).material;
-      if (mat && !Array.isArray(mat) && 'emissiveIntensity' in mat) {
-        (mat as THREE.MeshStandardMaterial).emissiveIntensity =
-          0.08 + m.flow * 0.35 + (i === layerCount - 1 ? m.beat * 0.25 : 0);
+      const hex = i % 3 === 0 ? palette.bass : i % 3 === 1 ? palette.mid : palette.high;
+      c.set(hex);
+      for (const grand of child.children) {
+        const mat = (grand as THREE.Mesh).material;
+        if (mat && !Array.isArray(mat) && 'emissiveIntensity' in mat) {
+          const sm = mat as THREE.MeshStandardMaterial;
+          sm.emissiveIntensity =
+            0.25 + m.swell * 0.5 + (i === layerCount - 1 ? m.impact * 0.35 : 0);
+          sm.color.copy(c);
+          sm.emissive.copy(c);
+        }
       }
     });
 
     if (shimmer && shimmerMat) {
-      shimmerMat.size = 0.02 + m.high * 0.05 + pulseRef.current * 0.03;
-      shimmerMat.opacity = 0.35 + m.high * 0.5;
+      shimmerMat.size = 0.035 + m.shimmer * 0.05 + pulseRef.current * 0.03;
+      shimmerMat.opacity = 0.45 + m.high * 0.45;
+      shimmerMat.color.set(palette.high);
       // Counter-rotating shimmer cloud — also bumped up so it streaks
       // visibly across the rings on busy passages.
-      shimmer.rotation.y -= delta * (0.35 + m.high * 1.6 + m.mid * 0.5);
+      shimmer.rotation.y -= delta * speed * (0.35 + m.high * 1.6 + m.mid * 0.5);
 
       // Advect the halo through the shared current, spring-tethered to its
       // home ring so the mandala's silhouette survives the swirl.
@@ -146,12 +150,12 @@ export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneP
                 <meshStandardMaterial
                   color={color}
                   emissive={color}
-                  emissiveIntensity={0.12}
+                  emissiveIntensity={0.3}
                   metalness={0.55}
                   roughness={0.4}
                   wireframe
                   transparent
-                  opacity={0.42 - key * 0.03}
+                  opacity={0.5 - key * 0.03}
                 />
               </mesh>
             ))}
@@ -162,15 +166,15 @@ export function CosmicMandalaScene({ analyser, palette, tier }: VisualizerSceneP
       <points ref={shimmerRef}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[shimmerPos, 3]} count={shimmerCount} itemSize={3} />
-          <bufferAttribute attach="attributes-color" args={[shimmerColors, 3]} count={shimmerCount} itemSize={3} />
         </bufferGeometry>
         <pointsMaterial
           ref={shimmerMatRef}
-          size={0.03}
+          size={0.04}
+          map={sprite}
+          color={palette.high}
           sizeAttenuation
           transparent
           opacity={0.7}
-          vertexColors
           depthWrite={false}
           blending={THREE.AdditiveBlending}
         />

@@ -284,6 +284,7 @@ export function FlowFieldScene({
   analyser,
   palette,
   tier,
+  speed = 1,
   turbulence = 1,
   trailLength = 1,
   density = 1,
@@ -551,8 +552,11 @@ export function FlowFieldScene({
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.05);
 
-    // Field-evolution time: monotonic, music-paced.
-    timeRef.current += dt * (0.5 + Math.min(m.energy, 1.5) * 0.45 + m.beat * 0.3);
+    // Field-evolution time: monotonic, music-paced, user-paced. The impact
+    // envelope (not the raw beat spike) surges the current on hits so the
+    // acceleration reads as a fluid push rather than a jolt.
+    timeRef.current +=
+      dt * (0.5 + Math.min(m.energy, 1.5) * 0.4 + m.impact * 0.45) * Math.max(0.05, speed);
 
     // Drop → the field reorganizes into a new pattern.
     if (m.dropEvent > 0.9 && prevDropRef.current <= 0.9) {
@@ -606,7 +610,9 @@ export function FlowFieldScene({
     su.uBandSpread!.value = fp.bandSpread;
     su.uVortex!.value = fp.vortex;
     su.uBuoyancy!.value = fp.buoyancy;
-    su.uBeat!.value = m.beat;
+    // Impact envelope: each hit becomes a sustained outward breath the sim
+    // integrates over several frames — a bloom, not a single-frame jolt.
+    su.uBeat!.value = m.impact;
     su.uGather!.value = m.gather;
     su.uEcho!.value = m.echo;
     su.uRelease!.value = m.release;
@@ -630,12 +636,14 @@ export function FlowFieldScene({
     ru.uTurbulence.value = fp.turbulence;
     ru.uSwirl.value = fp.swirl;
     ru.uBandSpread.value = fp.bandSpread;
-    ru.uTrailLen.value = 0.04 + trailLength * 0.07 * (1 + m.energy * 0.5);
+    ru.uTrailLen.value = 0.04 + trailLength * 0.07 * (1 + m.swell * 0.55 + m.impact * 0.2);
     ru.uDensity.value = Math.max(0.02, Math.min(1, density));
     // Additive overdraw normalization: a quarter-million translucent lines
     // saturate to white unless per-line alpha shrinks with the swarm size.
+    // Brightness breathes with the swell and lands with impacts.
     const alphaNorm = Math.min(1, Math.max(0.15, 70000 / count));
-    ru.uOpacity.value = (0.3 + m.flow * 0.22) * (1 - m.silence * 0.55) * alphaNorm;
+    ru.uOpacity.value =
+      (0.34 + m.swell * 0.3 + m.impact * 0.08) * (1 - m.silence * 0.5) * alphaNorm;
     (ru.uColorBass.value as THREE.Color).set(palette.bass);
     (ru.uColorMid.value as THREE.Color).set(palette.mid);
     (ru.uColorHigh.value as THREE.Color).set(palette.high);
@@ -644,8 +652,11 @@ export function FlowFieldScene({
     hu.uPositions.value = writeTarget.texture;
     hu.uDensity.value = Math.max(0.02, Math.min(1, density));
     hu.uOpacity.value =
-      (0.45 + m.energy * 0.3) * (1 - m.silence * 0.5) * Math.min(1, Math.max(0.15, 60000 / count));
-    hu.uHigh.value = m.high;
+      (0.52 + m.swell * 0.32 + m.impact * 0.12) *
+      (1 - m.silence * 0.45) *
+      Math.min(1, Math.max(0.15, 60000 / count));
+    // Sparkle rides the shimmer envelope so hats leave glinting trails.
+    hu.uHigh.value = m.high * 0.5 + m.shimmer * 1.4;
     (hu.uColorBass.value as THREE.Color).set(palette.bass);
     (hu.uColorMid.value as THREE.Color).set(palette.mid);
     (hu.uColorHigh.value as THREE.Color).set(palette.high);

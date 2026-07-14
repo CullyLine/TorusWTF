@@ -26,6 +26,9 @@ uniform float uEnergy;
 uniform float uFlowTime;
 uniform float uFlowAmt;
 uniform float uBandSpread;
+uniform vec3 uColorBass;
+uniform vec3 uColorMid;
+uniform vec3 uColorHigh;
 
 varying vec3 vColor;
 varying float vAlpha;
@@ -46,10 +49,24 @@ void main() {
 
   float core = 1.0 - smoothstep(0.0, 2.5, aRadius);
   float rim = smoothstep(1.5, 5.0, aRadius);
-  vec3 hotCore = mix(vec3(0.55, 0.75, 1.0), vec3(1.0, 0.95, 0.85), core);
-  vec3 warm = mix(vec3(1.0, 0.85, 0.45), vec3(0.9, 0.35, 0.25), rim);
-  vColor = mix(hotCore, warm, rim) * (0.85 + twinkle * 0.25 + core * uBass * 0.2);
-  vAlpha = 0.28 + twinkle * 0.32 + core * 0.25 + uEnergy * 0.12;
+  // Galaxy body follows the user's palette: hot bright core (high color),
+  // mid-tone arms, and bass-colored outer rim — with a whisper of the
+  // natural astronomy tint mixed in so it still reads as a galaxy.
+  vec3 hotCore = mix(uColorHigh, vec3(1.0, 0.97, 0.9), core * 0.3);
+  vec3 armCol = mix(uColorMid, uColorHigh, aPhase * 0.4);
+  vec3 rimCol = uColorBass;
+  vec3 body = mix(mix(hotCore, armCol, smoothstep(0.0, 1.8, aRadius)), rimCol, rim);
+  // Per-star brightness also falls toward the packed center — the summed
+  // additive light keeps the core glowing without clipping to white.
+  float lumDamp = mix(0.62, 1.0, smoothstep(0.2, 2.6, aRadius));
+  vColor = body * (1.0 + twinkle * 0.35 + core * uBass * 0.2) * lumDamp;
+  // Alpha eases DOWN toward the dense center — tens of thousands of additive
+  // sprites overlap there, so per-star opacity must shrink or it whites out.
+  // The damp band is wide (radius 0..3.2) because the inner arms are nearly
+  // as dense as the core itself.
+  float dense = 1.0 - smoothstep(0.0, 3.2, aRadius);
+  float coreDamp = 1.0 - dense * 0.6;
+  vAlpha = (0.34 + twinkle * 0.3 + uEnergy * 0.08) * coreDamp + core * 0.04;
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   // Base size kept small: 50k+ additively-blended points saturate the framebuffer
@@ -57,7 +74,11 @@ void main() {
   // The depth divisor is floored and the final size capped: a star drifting
   // near the camera plane must not become a screen-filling sprite.
   float pz = max(0.9, -mvPosition.z);
-  gl_PointSize = min((1.2 + sizeBoost * 1.4) * (22.0 / pz), 26.0);
+  // Dense-center sprites shrink hard: overdraw scales with sprite AREA, so
+  // pixel-size stars in the packed core keep it luminous instead of white.
+  float sizeScale = mix(0.45, 1.0, smoothstep(0.4, 3.0, aRadius));
+  float sizeCap = mix(6.0, 18.0, smoothstep(0.6, 3.5, aRadius));
+  gl_PointSize = min((1.2 + sizeBoost * 1.4) * (22.0 / pz) * sizeScale, sizeCap);
   gl_Position = projectionMatrix * mvPosition;
 }
 `;
@@ -75,7 +96,7 @@ void main() {
 }
 `;
 
-export function StarFieldScene({ analyser, tier }: VisualizerSceneProps) {
+export function StarFieldScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -121,6 +142,9 @@ export function StarFieldScene({ analyser, tier }: VisualizerSceneProps) {
       uFlowTime: { value: 0 },
       uFlowAmt: { value: 0 },
       uBandSpread: { value: 0.9 },
+      uColorBass: { value: new THREE.Color('#FF2E93') },
+      uColorMid: { value: new THREE.Color('#8A5CFF') },
+      uColorHigh: { value: new THREE.Color('#33E5FF') },
     }),
     [],
   );
@@ -136,20 +160,23 @@ export function StarFieldScene({ analyser, tier }: VisualizerSceneProps) {
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
-    mat.uniforms.uBeat!.value = m.beat;
+    mat.uniforms.uBeat!.value = m.impact;
     mat.uniforms.uEnergy!.value = m.energy;
+    (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
+    (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
+    (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
 
-    flowTimeRef.current += Math.min(delta, 0.05) * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+    flowTimeRef.current += Math.min(delta, 0.05) * speed * (0.4 + Math.min(m.energy, 1.5) * 0.4);
     mat.uniforms.uFlowTime!.value = flowTimeRef.current;
     // Calm at rest, swirling on energy, surging on drops.
-    mat.uniforms.uFlowAmt!.value = 0.04 + m.energy * 0.16 + m.dropEvent * 0.4;
+    mat.uniforms.uFlowAmt!.value = 0.04 + m.swell * 0.18 + m.dropEvent * 0.4;
     mat.uniforms.uBandSpread!.value = (1 - m.convergence) * 0.9;
 
     beatZoomRef.current = Math.max(0, beatZoomRef.current - delta * 3.5);
-    if (m.beat > 0.35) beatZoomRef.current = 1;
+    if (m.impact > 0.35) beatZoomRef.current = 1;
 
     const sway = m.energy * 0.08;
-    points.rotation.y += delta * (0.03 + m.mid * 0.06);
+    points.rotation.y += delta * speed * (0.03 + m.mid * 0.06);
     // Sway AROUND the base tilt — assigning the raw sway here used to stomp
     // the JSX rotation and flatten the disc edge-on (white-hot smear).
     points.rotation.x = Math.PI / 3 + Math.sin(state.clock.elapsedTime * 0.12) * 0.08 + sway;

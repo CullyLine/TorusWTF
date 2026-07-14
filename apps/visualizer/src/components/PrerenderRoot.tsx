@@ -104,6 +104,7 @@ export function PrerenderRoot({
         lightLevel={controls.lightLevel ?? 1}
         energy={controls.energy ?? 0}
         autoGain={controls.autoGain ?? true}
+        colorLife={controls.colorLife ?? 0.6}
         background={background?.mode ?? 'none'}
         backgroundIntensity={background?.intensity ?? 0.6}
         inflate={controls.inflate ?? 0.5}

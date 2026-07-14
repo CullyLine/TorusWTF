@@ -39,6 +39,25 @@ export interface AudioMetrics {
   beat: number;
   breath: number;
   flow: number;
+  /**
+   * 0..~1.2 beat-impact envelope: snaps up the instant a hit lands, then
+   * decays like a struck bell (~¼s). THE shared "something just hit"
+   * signal — smooth enough to drive scale/light/camera directly with zero
+   * jitter, punchy enough that every kick drum visibly lands.
+   */
+  impact: number;
+  /**
+   * 0..1 slow loudness swell (~⅓s rise, ~2s fall). The scene's breath —
+   * grows through choruses and drops, exhales in verses. Drive bloom,
+   * exposure, saturation, and scene presence from this.
+   */
+  swell: number;
+  /**
+   * 0..1 high-frequency sparkle envelope: pops on hi-hats / cymbals /
+   * sibilance and melts over ~½s. Drive glints, rim light, and particle
+   * sparkle from this instead of raw `high` flux.
+   */
+  shimmer: number;
   /** Detected tempo (whole BPM). null = not enough confidence yet. */
   bpm: number | null;
   /** 0..1 phase within the current beat. Advances even between detected onsets. */
@@ -104,6 +123,9 @@ export const DEFAULT_METRICS: AudioMetrics = {
   beat: 0,
   breath: 0.15,
   flow: 0.15,
+  impact: 0,
+  swell: 0.15,
+  shimmer: 0,
   bpm: null,
   beatPhase: 0,
   barPhase: 0,
@@ -199,6 +221,11 @@ export function AudioMetricsProvider({
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const prevBass = useRef(0.15);
   const prevEnergy = useRef(0.15);
+  // Pulse envelope state (impact / swell / shimmer).
+  const impactEnvRef = useRef(0);
+  const swellEnvRef = useRef(0.15);
+  const shimmerEnvRef = useRef(0);
+  const shimmerPrevHighRef = useRef(0.15);
   // Auto-gain state: slow loudness envelope + the smoothed gain it drives.
   const agcEnvRef = useRef(AGC_TARGET);
   const agcGainRef = useRef(1);
@@ -358,6 +385,34 @@ export function AudioMetricsProvider({
     prevBass.current = lerp(prevBass.current, bass, Math.min(1, 0.35 * speed));
     prevEnergy.current = lerp(prevEnergy.current, energy, Math.min(1, 0.2 * speed));
 
+    // --- Pulse envelopes: the shared musical-motion vocabulary ---
+    // Impact: the beat tracker's flux spike is a 1-frame impulse; here it
+    // becomes a struck-bell envelope — instant attack, exponential ring-down.
+    // Presets that scale/flash/kick from `impact` move fluidly by
+    // construction instead of each re-inventing its own decay.
+    const impactHit = Math.min(1.2, beat);
+    impactEnvRef.current =
+      impactHit > impactEnvRef.current
+        ? impactHit
+        : impactEnvRef.current * Math.exp(-dtClamped / IMPACT_DECAY_TAU);
+
+    // Swell: asymmetric loudness breath — blooms quickly when the track
+    // opens up, exhales slowly when it pulls back.
+    const swellTarget = Math.min(1, energy * 0.8 + beat * 0.1);
+    const swellTau = swellTarget > swellEnvRef.current ? SWELL_RISE_TAU : SWELL_FALL_TAU;
+    swellEnvRef.current +=
+      (swellTarget - swellEnvRef.current) * (1 - Math.exp(-dtClamped / swellTau));
+
+    // Shimmer: rising-edge detector on the high band (hi-hats, cymbals,
+    // sibilance) with a slow melt, plus a floor for sustained hat washes.
+    const highTransient = Math.max(0, high - shimmerPrevHighRef.current * 0.75);
+    shimmerPrevHighRef.current = high;
+    const shimmerTarget = Math.min(1, highTransient * 2.4 + Math.max(0, high - 0.55) * 0.4);
+    shimmerEnvRef.current =
+      shimmerTarget > shimmerEnvRef.current
+        ? shimmerTarget
+        : shimmerEnvRef.current * Math.exp(-dtClamped / SHIMMER_DECAY_TAU);
+
     // Smoothness 0..1 → response rate 1..~0.02. Kept as a per-frame lerp for
     // the secondary signals (drum/vocal/lead/mood) below.
     const smoothClamped = Math.max(0, Math.min(0.99, smoothness));
@@ -467,6 +522,9 @@ export function AudioMetricsProvider({
       beat: lerp(prev.beat, Math.min(METRIC_CEILING, beat), Math.max(respond, 0.4)),
       breath: lerp(prev.breath, bass, breathSmooth),
       flow: lerp(prev.flow, energy, flowSmooth),
+      impact: impactEnvRef.current,
+      swell: swellEnvRef.current,
+      shimmer: shimmerEnvRef.current,
       bpm: bpmNow,
       beatPhase,
       barPhase,
@@ -532,6 +590,16 @@ const AGC_GAIN_TAU = 0.6; // seconds — how slowly the gain itself moves
 // Baseline dynamic-range expansion applied even when the Energy slider is 0,
 // so the visualizer feels reactive out of the box.
 const BASE_PUNCH = 0.3;
+
+// --- Pulse envelope tuning ---
+// Impact rings down like a struck bell (~¼s to mostly-quiet). Swell rises
+// fast enough to catch a chorus opening but exhales over ~2s so loud
+// sections read as sustained presence, not flicker. Shimmer melts over
+// ~½s so hat patterns read as sparkle trails rather than strobing.
+const IMPACT_DECAY_TAU = 0.24;
+const SWELL_RISE_TAU = 0.3;
+const SWELL_FALL_TAU = 2.1;
+const SHIMMER_DECAY_TAU = 0.45;
 
 // Soft cap with 10x headroom: lets cranked-up sliders push past the
 // "everything looks normal" 0..1 range without ever going NaN/Infinity.

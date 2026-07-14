@@ -5,6 +5,13 @@
  * hand-rolled median-cut algorithm (no external deps), and the three most
  * useful colors are mapped to the bass / mid / high bands by luminance.
  *
+ * The raw extraction is then "vivified": the visualizer is a light show, so
+ * a palette that is technically faithful but gray makes every scene look
+ * broken. We keep the artwork's hues and tonal ordering, but guarantee
+ * enough saturation and a usable lightness range. Truly grayscale artwork
+ * (no hue information at all) borrows the house hues instead, keeping the
+ * art's light/dark character.
+ *
  * Nothing leaves the browser: the image is decoded, sampled, and discarded.
  */
 
@@ -12,6 +19,12 @@ import type { WaveformPalette } from '@torus/shared';
 
 const SAMPLE_EDGE = 72;
 const MAX_BOXES = 8;
+
+/** Below this saturation a swatch carries no meaningful hue. */
+const GRAY_SAT = 0.12;
+
+/** Hues used when the artwork itself is colorless (Prism: pink/violet/cyan). */
+const FALLBACK_HUES = { bass: 0.925, mid: 0.713, high: 0.522 } as const;
 
 interface Rgb {
   r: number;
@@ -65,11 +78,35 @@ export function paletteFromPixels(pixels: Rgb[]): WaveformPalette {
   chosen.sort((a, b) => luminance(a) - luminance(b));
 
   const [bass, mid, high] = chosen;
-  return {
-    bass: toHex(bass ?? { r: 10, g: 12, b: 40 }),
-    mid: toHex(mid ?? bass ?? { r: 80, g: 120, b: 200 }),
-    high: toHex(high ?? mid ?? bass ?? { r: 200, g: 220, b: 255 }),
-  };
+  return vivify({
+    bass: bass ?? { r: 10, g: 12, b: 40 },
+    mid: mid ?? bass ?? { r: 80, g: 120, b: 200 },
+    high: high ?? mid ?? bass ?? { r: 200, g: 220, b: 255 },
+  });
+}
+
+/**
+ * Make an extracted trio usable as a light-show palette: keep the artwork's
+ * hues but enforce minimum saturation and a spread of lightness so bass reads
+ * deep, mid reads rich, and high reads bright. Colorless swatches inherit the
+ * house hues (so grayscale covers still produce a beautiful show).
+ */
+function vivify(raw: { bass: Rgb; mid: Rgb; high: Rgb }): WaveformPalette {
+  const bands = [
+    { key: 'bass' as const, minSat: 0.75, minL: 0.32, maxL: 0.52 },
+    { key: 'mid' as const, minSat: 0.7, minL: 0.45, maxL: 0.62 },
+    { key: 'high' as const, minSat: 0.6, minL: 0.55, maxL: 0.74 },
+  ];
+
+  const out = {} as Record<'bass' | 'mid' | 'high', string>;
+  for (const band of bands) {
+    const { h, s, l } = rgbToHsl(raw[band.key]);
+    const hue = s < GRAY_SAT ? FALLBACK_HUES[band.key] : h;
+    const sat = Math.max(s, band.minSat);
+    const light = Math.min(Math.max(l, band.minL), band.maxL);
+    out[band.key] = toHex(hslToRgb(hue, sat, light));
+  }
+  return out;
 }
 
 function medianCut(pixels: Rgb[], maxBoxes: number): ColorBox[] {
@@ -178,6 +215,46 @@ function saturation({ r, g, b }: Rgb): number {
 
 function luminance({ r, g, b }: Rgb): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function rgbToHsl({ r, g, b }: Rgb): { h: number; s: number; l: number } {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+  else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+  else h = ((rn - gn) / d + 4) / 6;
+  return { h, s, l };
+}
+
+function hslToRgb(h: number, s: number, l: number): Rgb {
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return { r: v, g: v, b: v };
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = (t: number): number => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  return {
+    r: Math.round(channel(h + 1 / 3) * 255),
+    g: Math.round(channel(h) * 255),
+    b: Math.round(channel(h - 1 / 3) * 255),
+  };
 }
 
 function toHex({ r, g, b }: Rgb): string {

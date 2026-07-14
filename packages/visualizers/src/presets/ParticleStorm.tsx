@@ -12,8 +12,9 @@ import {
   type FlowParams,
   type Vec3Like,
 } from '../dsp/flowfield';
+import { getDotTexture } from '../dotTexture';
 
-export function ParticleStormScene({ analyser, palette, tier }: VisualizerSceneProps) {
+export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -23,6 +24,10 @@ export function ParticleStormScene({ analyser, palette, tier }: VisualizerSceneP
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
   const flowTimeRef = useRef(0);
   const flowScratch = useRef<Vec3Like>({ x: 0, y: 0, z: 0 });
+  const scratchBass = useRef(new THREE.Color());
+  const scratchMid = useRef(new THREE.Color());
+  const scratchHigh = useRef(new THREE.Color());
+  const sprite = useMemo(() => getDotTexture(), []);
 
   const { positions, velocities, phases, bands } = useMemo(() => {
     const p = new Float32Array(baseCount * 3);
@@ -64,42 +69,52 @@ export function ParticleStormScene({ analyser, palette, tier }: VisualizerSceneP
     if (!points || !mat) return;
 
     const m = metricsRef.current;
-    const speed = delta * (0.15 + m.energy * 2.8 + m.beat * 3.5);
-    const pulse = 1 + m.bass * 0.9 + m.beat * 0.6;
-    const activeRatio = 0.25 + m.flow * 0.75;
+    const drive = delta * speed * (0.15 + m.energy * 2.4 + m.impact * 3);
+    const pulse = 1 + m.bass * 0.8 + m.impact * 0.55;
+    const activeRatio = 0.35 + m.flow * 0.65;
 
     // Shared flow current — same math as the Flow Field flagship.
     const dtClamped = Math.min(delta, 0.05);
-    flowTimeRef.current += dtClamped * (0.5 + Math.min(m.energy, 1.5) * 0.4);
+    flowTimeRef.current += dtClamped * speed * (0.5 + Math.min(m.energy, 1.5) * 0.4);
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    const flowAmount = dtClamped * (0.45 + m.energy * 0.6 + m.dropEvent * 1.2);
+    const flowAmount = dtClamped * (0.45 + m.swell * 0.7 + m.dropEvent * 1.2);
     const fv = flowScratch.current;
 
-    mat.size = 0.025 + m.energy * 0.06 + m.beat * 0.04;
-    mat.opacity = 0.35 + m.flow * 0.55;
+    mat.size = 0.045 + m.swell * 0.05 + m.impact * 0.04;
+    mat.opacity = 0.55 + m.swell * 0.4;
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
     const colorAttr = points.geometry.getAttribute('color') as THREE.BufferAttribute;
     const colArr = colorAttr.array as Float32Array;
 
+    // Live palette: bands re-tint every frame so color life and palette
+    // swaps reach every particle (the mount-time buffer would stay frozen).
+    const bassC = scratchBass.current.set(palette.bass);
+    const midC = scratchMid.current.set(palette.mid);
+    const highC = scratchHigh.current.set(palette.high);
+    const bassGain = 1 + m.impact * 0.35;
+    const midGain = 1 + m.mid * 0.25;
+    const highGain = 1 + m.shimmer * 0.45;
+
     for (let i = 0; i < baseCount; i++) {
       const i3 = i * 3;
       const alive = phases[i]! < activeRatio;
-      if (!alive) {
-        colArr[i3]! *= 0.92;
-        colArr[i3 + 1]! *= 0.92;
-        colArr[i3 + 2]! *= 0.92;
-        continue;
-      }
+      const band = bands[i]!;
+      const color = band === 0 ? bassC : band === 1 ? midC : highC;
+      const gain = (alive ? 1 : 0.3) * (band === 0 ? bassGain : band === 1 ? midGain : highGain);
+      colArr[i3] = Math.min(1, color.r * gain);
+      colArr[i3 + 1] = Math.min(1, color.g * gain);
+      colArr[i3 + 2] = Math.min(1, color.b * gain);
+      if (!alive) continue;
 
-      let x = (arr[i3] ?? 0) + (velocities[i3] ?? 0) * pulse * speed * 40;
-      let y = (arr[i3 + 1] ?? 0) + (velocities[i3 + 1] ?? 0) * pulse * speed * 40;
-      let z = (arr[i3 + 2] ?? 0) + (velocities[i3 + 2] ?? 0) * pulse * speed * 40;
+      let x = (arr[i3] ?? 0) + (velocities[i3] ?? 0) * pulse * drive * 40;
+      let y = (arr[i3 + 1] ?? 0) + (velocities[i3 + 1] ?? 0) * pulse * drive * 40;
+      let z = (arr[i3 + 2] ?? 0) + (velocities[i3 + 2] ?? 0) * pulse * drive * 40;
       // Advect through the band's current. Each band rides its own field
       // until convergence merges them into one collective stream.
-      sampleFlow(fv, x, y, z, bands[i]!, fp);
+      sampleFlow(fv, x, y, z, band, fp);
       x += fv.x * flowAmount;
       y += fv.y * flowAmount;
       z += fv.z * flowAmount;
@@ -112,15 +127,11 @@ export function ParticleStormScene({ analyser, palette, tier }: VisualizerSceneP
       arr[i3] = x;
       arr[i3 + 1] = y;
       arr[i3 + 2] = z;
-
-      colArr[i3] = Math.min(1, colArr[i3]! * (1 + m.beat * 0.15));
-      colArr[i3 + 1] = Math.min(1, colArr[i3 + 1]! * (1 + m.mid * 0.1));
-      colArr[i3 + 2] = Math.min(1, colArr[i3 + 2]! * (1 + m.high * 0.12));
     }
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
-    points.rotation.y += speed * (0.5 + m.mid);
-    points.rotation.x += m.beat * 0.08;
+    points.rotation.y += drive * (0.5 + m.mid);
+    points.rotation.x += m.impact * 0.05;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
@@ -133,7 +144,8 @@ export function ParticleStormScene({ analyser, palette, tier }: VisualizerSceneP
       </bufferGeometry>
       <pointsMaterial
         ref={matRef}
-        size={0.04}
+        size={0.055}
+        map={sprite}
         sizeAttenuation
         transparent
         vertexColors

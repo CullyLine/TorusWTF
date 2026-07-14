@@ -6,12 +6,18 @@ import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
 
-export function VolumetricWaveformScene({ analyser, palette, tier }: VisualizerSceneProps) {
+import { getDotTexture } from '../dotTexture';
+
+export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const groupRef = useRef<THREE.Group>(null);
   const lineRef = useRef<THREE.LineSegments>(null);
   const dustRef = useRef<THREE.Points>(null);
   const timeBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
+  const scratchBass = useRef(new THREE.Color());
+  const scratchMid = useRef(new THREE.Color());
+  const scratchHigh = useRef(new THREE.Color());
+  const sprite = useMemo(() => getDotTexture(), []);
 
   const samples = tier === 'high' ? 512 : tier === 'mid' ? 256 : 128;
   const dustCount = tier === 'high' ? 2000 : tier === 'mid' ? 900 : 400;
@@ -53,14 +59,31 @@ export function VolumetricWaveformScene({ analyser, palette, tier }: VisualizerS
     if (!line || !group) return;
 
     const m = metricsRef.current;
-    group.rotation.y += delta * (0.1 + m.mid * 0.4 + m.beat * 0.2);
-    group.scale.setScalar(1 + m.breath * 0.12);
+    group.rotation.y += delta * speed * (0.1 + m.mid * 0.4 + m.impact * 0.2);
+    group.scale.setScalar(1 + m.swell * 0.1 + m.impact * 0.06);
+
+    // Live palette: re-tint the waveform gradient every frame so color life
+    // and palette swaps reach the line (the mount-time buffer stays frozen).
+    const cAttr = line.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const cArr = cAttr.array as Float32Array;
+    const bassC = scratchBass.current.set(palette.bass);
+    const midC = scratchMid.current.set(palette.mid);
+    const highC = scratchHigh.current.set(palette.high);
+    const vertCount = samples * 2;
+    for (let i = 0; i < vertCount; i++) {
+      const t = i / vertCount;
+      const color = t < 0.33 ? bassC : t < 0.66 ? midC : highC;
+      cArr[i * 3] = color.r;
+      cArr[i * 3 + 1] = color.g;
+      cArr[i * 3 + 2] = color.b;
+    }
+    cAttr.needsUpdate = true;
 
     if (analyser) {
       const bins = analyser.getTimeDomainData(timeBuf.current);
       if (bins > 0) {
         const arr = line.geometry.getAttribute('position').array as Float32Array;
-        const amp = 1.2 + m.energy * 1.5 + m.beat * 0.8;
+        const amp = 1.2 + m.energy * 1.3 + m.impact * 0.8;
         for (let i = 0; i < samples; i++) {
           const src = Math.floor((i / samples) * bins);
           const v = (timeBuf.current[src]! / 128 - 1) * amp;
@@ -79,18 +102,19 @@ export function VolumetricWaveformScene({ analyser, palette, tier }: VisualizerS
 
     if (dust) {
       const mat = dust.material as THREE.PointsMaterial;
-      mat.size = 0.02 + m.flow * 0.05;
-      mat.opacity = 0.2 + m.energy * 0.6;
+      mat.size = 0.035 + m.flow * 0.05;
+      mat.opacity = 0.3 + m.swell * 0.55;
+      mat.color.set(palette.mid);
       const posAttr = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
       const arr = posAttr.array as Float32Array;
-      const speed = delta * (0.5 + m.energy * 4 + m.beat * 3);
+      const drive = delta * speed * (0.5 + m.energy * 3.5 + m.impact * 3);
       const active = 0.2 + m.flow * 0.8;
       for (let i = 0; i < dustCount; i++) {
         if (i / dustCount > active) continue;
         const i3 = i * 3;
-        arr[i3] = (arr[i3] ?? 0) + (dustVel[i3] ?? 0) * speed * 20;
-        arr[i3 + 1] = (arr[i3 + 1] ?? 0) + (dustVel[i3 + 1] ?? 0) * speed * 20;
-        arr[i3 + 2] = (arr[i3 + 2] ?? 0) + (dustVel[i3 + 2] ?? 0) * speed * 20;
+        arr[i3] = (arr[i3] ?? 0) + (dustVel[i3] ?? 0) * drive * 20;
+        arr[i3 + 1] = (arr[i3 + 1] ?? 0) + (dustVel[i3 + 1] ?? 0) * drive * 20;
+        arr[i3 + 2] = (arr[i3 + 2] ?? 0) + (dustVel[i3 + 2] ?? 0) * drive * 20;
         if (Math.abs(arr[i3 + 1]!) > 2.5) arr[i3 + 1] = 0;
       }
       posAttr.needsUpdate = true;
@@ -129,7 +153,9 @@ export function VolumetricWaveformScene({ analyser, palette, tier }: VisualizerS
         </bufferGeometry>
         <pointsMaterial
           color={palette.mid}
-          size={0.03}
+          size={0.04}
+          map={sprite}
+          sizeAttenuation
           transparent
           opacity={0.5}
           blending={THREE.AdditiveBlending}

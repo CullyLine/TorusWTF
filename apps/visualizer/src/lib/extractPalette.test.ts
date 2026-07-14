@@ -26,13 +26,31 @@ describe('paletteFromPixels', () => {
     expect(lum(palette.mid)).toBeLessThanOrEqual(lum(palette.high));
   });
 
-  it('produces near-monochrome output for a grayscale image', () => {
+  it('vivifies grayscale artwork with the house hues instead of going monochrome', () => {
     const grays = [];
     for (let v = 0; v < 256; v += 4) grays.push({ r: v, g: v, b: v });
     const palette = paletteFromPixels(grays);
-    expect(chan(hexToRgb(palette.bass))).toBeLessThan(12);
-    expect(chan(hexToRgb(palette.mid))).toBeLessThan(12);
-    expect(chan(hexToRgb(palette.high))).toBeLessThan(12);
+    // A light show can't run on gray — each band must carry real color.
+    expect(chan(hexToRgb(palette.bass))).toBeGreaterThan(40);
+    expect(chan(hexToRgb(palette.mid))).toBeGreaterThan(40);
+    expect(chan(hexToRgb(palette.high))).toBeGreaterThan(40);
+  });
+
+  it('keeps the hue of colorful artwork while boosting weak saturation', () => {
+    // Washed-out desaturated blue artwork.
+    const pixels = [
+      ...Array(60).fill({ r: 90, g: 100, b: 120 }),
+      ...Array(60).fill({ r: 140, g: 150, b: 170 }),
+      ...Array(60).fill({ r: 190, g: 200, b: 220 }),
+    ];
+    const palette = paletteFromPixels(pixels);
+    for (const hex of [palette.bass, palette.mid, palette.high]) {
+      const { r, g, b } = hexToRgb(hex);
+      // Blue channel should dominate (hue preserved)...
+      expect(b).toBeGreaterThan(r);
+      // ...and the color should be saturated enough to glow.
+      expect(chan({ r, g, b })).toBeGreaterThan(40);
+    }
   });
 
   it('always returns three valid hex colors', () => {

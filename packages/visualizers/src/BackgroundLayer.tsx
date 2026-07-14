@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMetricsRef } from './metrics';
+import { getDotTexture } from './dotTexture';
 
 /**
  * BackgroundLayer — the always-subtle reactive backdrop.
@@ -159,6 +160,8 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
     // Slow swell: breath + flow, gentle drop bump. Capped hard.
     const swell = 0.4 + m.breath * 0.5 + m.flow * 0.35 + m.dropEvent * 0.25;
     mat.uniforms.uIntensity!.value = Math.min(NEBULA_CAP, swell * intensity * NEBULA_CAP);
+    // Live palette: both fog colors track the (mutating) palette per frame.
+    (mat.uniforms.uColorA!.value as THREE.Color).set(palette.bass);
     // Warm/cool drift toward the high color on positive valence.
     const warmth = Math.max(0, Math.min(1, 0.5 + m.moodValence * 0.4));
     (mat.uniforms.uColorB!.value as THREE.Color).lerpColors(
@@ -197,27 +200,27 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const groupRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const metricsRef = useMetricsRef();
+  const scratchMid = useRef(new THREE.Color());
+  const scratchHigh = useRef(new THREE.Color());
+  const sprite = useMemo(() => getDotTexture(), []);
   const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
 
-  const { positions, colors } = useMemo(() => {
+  const { positions, colors, starBand, starVariance } = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const col = new Float32Array(count * 3);
-    const mid = new THREE.Color(palette.mid);
-    const high = new THREE.Color(palette.high);
+    const band = new Uint8Array(count);
+    const variance = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       // Spread across a wide deep slab behind the scene.
       pos[i * 3] = (Math.random() - 0.5) * 40;
       pos[i * 3 + 1] = (Math.random() - 0.5) * 26;
       pos[i * 3 + 2] = -10 - Math.random() * 8;
-      const c = Math.random() < 0.7 ? high : mid;
-      // Slight per-star brightness variance baked into color.
-      const v = 0.5 + Math.random() * 0.5;
-      col[i * 3] = c.r * v;
-      col[i * 3 + 1] = c.g * v;
-      col[i * 3 + 2] = c.b * v;
+      band[i] = Math.random() < 0.7 ? 1 : 0;
+      // Slight per-star brightness variance, applied at tint time.
+      variance[i] = 0.5 + Math.random() * 0.5;
     }
-    return { positions: pos, colors: col };
-  }, [count, palette.mid, palette.high]);
+    return { positions: pos, colors: col, starBand: band, starVariance: variance };
+  }, [count]);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
@@ -232,6 +235,21 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       mat.size = 0.06 + m.high * 0.14;
       mat.opacity = Math.min(STAR_OPACITY_CAP, (0.3 + m.high * 0.4 + m.flow * 0.15) * intensity);
     }
+    // Live palette: stars re-tint per frame so they follow color life.
+    if (g) {
+      const cAttr = g.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const cArr = cAttr.array as Float32Array;
+      const midC = scratchMid.current.set(palette.mid);
+      const highC = scratchHigh.current.set(palette.high);
+      for (let i = 0; i < count; i++) {
+        const c = starBand[i] === 1 ? highC : midC;
+        const v = starVariance[i]!;
+        cArr[i * 3] = c.r * v;
+        cArr[i * 3 + 1] = c.g * v;
+        cArr[i * 3 + 2] = c.b * v;
+      }
+      cAttr.needsUpdate = true;
+    }
   });
 
   return (
@@ -243,6 +261,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       <pointsMaterial
         ref={matRef}
         size={0.08}
+        map={sprite}
         sizeAttenuation
         transparent
         opacity={0.4}
@@ -306,6 +325,9 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uIntensity!.value = Math.min(AURORA_CAP, levelRef.current * intensity * AURORA_CAP);
+    // Live palette: curtain colors track the (mutating) palette per frame.
+    (mat.uniforms.uColorA!.value as THREE.Color).set(palette.bass);
+    (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
   });
 
   return (

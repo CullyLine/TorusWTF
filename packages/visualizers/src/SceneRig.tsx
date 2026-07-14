@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
-import type { PointLight } from 'three';
+import { EffectComposer, Vignette } from '@react-three/postprocessing';
+import { BloomEffect } from 'postprocessing';
+import type { PerspectiveCamera, PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
@@ -85,8 +86,26 @@ export function SceneRig({
   const bassLight = useRef<PointLight>(null);
   const midLight = useRef<PointLight>(null);
   const highLight = useRef<PointLight>(null);
+  const resolvedBloomRef = useRef(1);
+  const baseFovRef = useRef<number | null>(null);
+
+  // Constructed directly (not via the <Bloom> wrapper) so the frame loop
+  // can pulse `intensity` with the music. The wrapper memoizes with
+  // JSON.stringify(props), which both blocks per-frame updates and chokes
+  // on object props.
+  const bloomEffect = useMemo(
+    () =>
+      new BloomEffect({
+        intensity: 1,
+        luminanceThreshold: 0.1,
+        luminanceSmoothing: 0.9,
+        mipmapBlur: true,
+      }),
+    [],
+  );
+  useEffect(() => () => bloomEffect.dispose(), [bloomEffect]);
   const zoomDistanceRef = useCameraZoomDistanceRef();
-  const fallbackZ = embedded ? 3.2 : 4;
+  const fallbackZ = embedded ? 2.8 : 3.1;
   const animaState = useRef<AnimaState>({ ...NEUTRAL_ANIMA });
   const cinematicState = useRef<CinematicState>(createCinematicState());
   // Flow camera: a virtual anchor advected through the shared curl field.
@@ -106,19 +125,26 @@ export function SceneRig({
 
     // Low tier has no post-processing exposure pass, so the light level is
     // baked into the light intensities instead (see render section below).
+    // Lights ride the pulse envelopes (impact rings down like a struck
+    // bell, shimmer melts) so illumination lands with hits and glides to
+    // rest instead of strobing on raw FFT flux. Colors are re-read every
+    // frame so the living palette breathes through the lighting too.
     const frameLightScale = tier === 'low' ? Math.max(0, lightLevel) : 1;
     if (bassLight.current) {
-      bassLight.current.intensity = (0.6 + m.bass * 2.8 + m.beat * 1.5) * frameLightScale;
+      bassLight.current.intensity = (0.55 + m.bass * 2.4 + m.impact * 2.2) * frameLightScale;
       bassLight.current.distance = 12 + m.breath * 6;
+      bassLight.current.color.set(palette.bass);
     }
     if (midLight.current) {
-      midLight.current.intensity = (0.5 + m.mid * 2.2) * frameLightScale;
+      midLight.current.intensity = (0.45 + m.mid * 2.0 + m.swell * 0.8) * frameLightScale;
+      midLight.current.color.set(palette.mid);
     }
     if (highLight.current) {
-      highLight.current.intensity = (0.35 + m.high * 2.5) * frameLightScale;
+      highLight.current.intensity = (0.3 + m.high * 1.6 + m.shimmer * 1.9) * frameLightScale;
+      highLight.current.color.set(palette.high);
     }
 
-    const shake = m.beat * (embedded ? 0.06 : 0.1) + m.bass * 0.02;
+    const shake = m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015;
 
     // Look-at target the rest of the rig will use. Cinematic overrides this;
     // every other mode leaves it at the scene origin.
@@ -176,24 +202,28 @@ export function SceneRig({
         anchor.x /= alen;
         anchor.y /= alen;
         anchor.z /= alen;
-        // Breathe the radius slightly with the music.
-        const radius = baseZ * (1 - m.bass * 0.06 + Math.sin(t * 0.4) * 0.03);
+        // Lean into the music: the camera drifts closer as the track
+        // swells and eases back out as it exhales.
+        const radius = baseZ * (1 - m.swell * 0.09 - m.impact * 0.03 + Math.sin(t * 0.4) * 0.03);
         state.camera.position.set(anchor.x * radius, anchor.y * radius, anchor.z * radius);
         break;
       }
       case 'drift':
       default:
-        state.camera.position.x = Math.sin(t * 18.7) * shake;
-        state.camera.position.y = Math.cos(t * 14.3) * shake * 0.7;
-        state.camera.position.z = baseZ + Math.sin(t * 11.1) * shake * 0.4;
+        // A slow lissajous float (actual drifting) + impact-driven shake.
+        state.camera.position.x = Math.sin(t * 0.21) * 0.3 + Math.sin(t * 18.7) * shake;
+        state.camera.position.y = Math.cos(t * 0.17) * 0.2 + Math.cos(t * 14.3) * shake * 0.7;
+        state.camera.position.z =
+          baseZ * (1 - m.swell * 0.06) + Math.sin(t * 0.13) * 0.22 + Math.sin(t * 11.1) * shake * 0.4;
         break;
     }
     prevFrameTime.current = t;
 
     // Subwoofer rumble: high-frequency low-amplitude wobble that scales with
-    // current bass + recent beat. Lives ON TOP of cameraMode placement.
+    // current bass + the impact envelope (rings down after each hit instead
+    // of cutting off). Lives ON TOP of cameraMode placement.
     if (bassShake > 0) {
-      const bassPunch = m.bass * 0.6 + m.beat * 1.4;
+      const bassPunch = m.bass * 0.5 + m.impact * 1.3;
       const amp = bassShake * bassPunch * (embedded ? 0.04 : 0.07);
       // Two slightly desynced sines so it doesn't feel like a clean wave;
       // y dominates because real subs you feel in your chest vertically.
@@ -243,10 +273,31 @@ export function SceneRig({
     } else {
       state.camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
     }
+
+    // FOV punch-in: hits tighten the lens a couple of degrees and the
+    // impact envelope eases it back — the classic music-video kick. Scales
+    // with swell so quiet passages stay lens-still.
+    const cam = state.camera as PerspectiveCamera;
+    if (cam.isPerspectiveCamera) {
+      if (baseFovRef.current === null) baseFovRef.current = cam.fov;
+      const punchIn = Math.min(4, m.impact * (0.9 + m.swell * 2.1));
+      const targetFov = baseFovRef.current - punchIn;
+      if (Math.abs(cam.fov - targetFov) > 0.005) {
+        cam.fov = targetFov;
+        cam.updateProjectionMatrix();
+      }
+    }
+
+    // Bloom breathes with the music: swells through loud sections, blooms
+    // a little brighter the instant a hit lands.
+    bloomEffect.intensity = resolvedBloomRef.current * (0.7 + m.swell * 0.5 + m.impact * 0.3);
   });
 
   const tierBloom = tier === 'low' ? 0.8 : 1.1;
   const resolvedBloom = bloomIntensity ?? tierBloom;
+  // Ref-mirror so the frame loop reads the latest slider value without
+  // re-creating the closure.
+  resolvedBloomRef.current = resolvedBloom;
   const level = Math.max(0, lightLevel);
   // High/mid tiers get the exact multiplicative exposure pass below. The
   // low tier has no composer, so approximate by scaling the scene lights —
@@ -287,14 +338,9 @@ export function SceneRig({
 
       {tier !== 'low' ? (
         <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
-          <Bloom
-            intensity={resolvedBloom}
-            luminanceThreshold={0.12}
-            luminanceSmoothing={0.9}
-            mipmapBlur
-          />
+          <primitive object={bloomEffect} dispose={null} />
           <LightLevel level={level} />
-          <Vignette eskil={false} offset={0.2} darkness={0.55} />
+          <Vignette eskil={false} offset={0.16} darkness={0.38} />
         </EffectComposer>
       ) : null}
     </>

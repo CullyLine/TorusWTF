@@ -11,10 +11,13 @@ import {
   type RefObject,
 } from 'react';
 
-const DEFAULT_DISTANCE = { embedded: 3.2, fullscreen: 4 } as const;
+// The default framing is intentionally close — the scene should own the
+// frame, not float in the middle of it. Wheel/pinch pulls back when the
+// user wants an establishing view.
+const DEFAULT_DISTANCE = { embedded: 2.8, fullscreen: 3.1 } as const;
 const LIMITS = {
-  embedded: { min: 1.6, max: 7.5 },
-  fullscreen: { min: 2, max: 12 },
+  embedded: { min: 1.4, max: 7.5 },
+  fullscreen: { min: 1.6, max: 10 },
 } as const;
 
 const WHEEL_SENSITIVITY = 0.0045;

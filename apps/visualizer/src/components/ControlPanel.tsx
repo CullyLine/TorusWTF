@@ -96,31 +96,39 @@ export function ControlPanel({
     hint?: string;
   };
   const autoGain = controls.autoGain ?? true;
-  const audioSliders: SliderDef[] = [
+  // The Pulse Update panel: grouped by intent (how it feels / how it's lit
+  // and colored / how it's framed), with ranges tightened to the musical
+  // zone — the old 0–12.5 ranges left 95% of each slider useless.
+  const feelSliders: SliderDef[] = [
     {
       key: 'reactivity',
-      label: autoGain ? 'Gain (trim)' : 'Gain',
+      label: autoGain ? 'Intensity (trim)' : 'Intensity',
       min: 0.2,
-      max: 12.5,
+      max: 4,
       step: 0.05,
       hint: autoGain
-        ? 'Fine-tune on top of auto sensitivity'
-        : 'How strongly the visuals react to the audio',
+        ? 'How big the visuals move — fine-tune on top of auto sensitivity'
+        : 'How big the visuals move with the audio',
     },
-    { key: 'energy', label: 'Energy (punch)', min: 0, max: 2, step: 0.05, hint: 'Extra kick on transients — drums hit harder' },
-    { key: 'bassMix', label: 'Bass', min: 0, max: 10, step: 0.05, hint: 'How much the low end drives the visuals' },
-    { key: 'midMix', label: 'Mid', min: 0, max: 10, step: 0.05, hint: 'How much the mids drive the visuals' },
-    { key: 'highMix', label: 'High', min: 0, max: 10, step: 0.05, hint: 'How much the highs drive the visuals' },
-    { key: 'bassShake', label: 'Bass Shake', min: 0, max: 3, step: 0.05, hint: 'Camera shake on heavy bass' },
-    { key: 'smoothness', label: 'Smoothness', min: 0, max: 0.95, step: 0.01, hint: 'Higher = calmer, more flowing motion' },
+    { key: 'energy', label: 'Punch', min: 0, max: 2, step: 0.05, hint: 'Extra snap on hits — drums land harder without raising the quiet parts' },
+    { key: 'smoothness', label: 'Flow', min: 0, max: 0.95, step: 0.01, hint: 'How silkily motion glides between hits — hits still land instantly' },
+    { key: 'speed', label: 'Speed', min: 0.25, max: 3, step: 0.05, hint: 'Pace of the motion' },
+    { key: 'anima', label: 'Life', min: 0, max: 1, step: 0.01, hint: 'How alive the scene stays between beats — breathing, drifting attention' },
   ];
-  const lookSliders: SliderDef[] = [
-    { key: 'bloomIntensity', label: 'Bloom', min: 0.3, max: 12.5, step: 0.05, hint: 'Glow around bright areas' },
-    { key: 'lightLevel', label: 'Light level', min: 0.2, max: 2, step: 0.05, hint: 'Overall brightness of the world — dim presets that are too hot even at 0 bloom' },
-    { key: 'speed', label: 'Speed', min: 0.3, max: 12.5, step: 0.05, hint: 'Animation speed of the preset' },
-    { key: 'scale', label: 'Scale', min: 0.2, max: 5, step: 0.05, hint: 'Size of the scene in frame' },
-    { key: 'anima', label: 'Anima', min: 0, max: 1, step: 0.01, hint: 'How "alive" the scene behaves between beats' },
-    { key: 'aura', label: 'Aura', min: 0, max: 1, step: 0.01, hint: 'Ambient glow field around the scene' },
+  const colorSliders: SliderDef[] = [
+    { key: 'colorLife', label: 'Color life', min: 0, max: 1, step: 0.01, hint: 'Colors breathe with loudness, drift over time, and shift on drops' },
+    { key: 'bloomIntensity', label: 'Glow', min: 0, max: 3, step: 0.05, hint: 'Bloom around bright areas — swells with the music' },
+    { key: 'lightLevel', label: 'Light', min: 0.2, max: 2, step: 0.05, hint: 'Overall brightness of the world' },
+    { key: 'aura', label: 'Aura', min: 0, max: 1, step: 0.01, hint: 'Ambient wisp field around the scene' },
+  ];
+  const framingSliders: SliderDef[] = [
+    { key: 'scale', label: 'Size', min: 0.2, max: 3, step: 0.05, hint: 'How much of the frame the scene fills' },
+    { key: 'bassShake', label: 'Shake', min: 0, max: 3, step: 0.05, hint: 'Subwoofer camera rumble on heavy bass' },
+  ];
+  const bandSliders: SliderDef[] = [
+    { key: 'bassMix', label: 'Bass', min: 0, max: 4, step: 0.05, hint: 'How much the low end drives the visuals' },
+    { key: 'midMix', label: 'Mid', min: 0, max: 4, step: 0.05, hint: 'How much the mids drive the visuals' },
+    { key: 'highMix', label: 'High', min: 0, max: 4, step: 0.05, hint: 'How much the highs drive the visuals' },
   ];
   const blobSliders: SliderDef[] = [
     { key: 'inflate', label: 'Inflate', min: 0, max: 1, step: 0.01, hint: '0 = stretchy taffy, 1 = round puff' },
@@ -163,15 +171,17 @@ export function ControlPanel({
           ? 0.5
           : key === 'aura'
             ? 0.4
-            : key === 'inflate'
-              ? 0.5
-              : key === 'vortexAmount'
-                ? 0.25
-                : key === 'appendages'
-                  ? 4
-                  : key === 'subSpheres'
-                    ? 6
-                    : 0;
+            : key === 'colorLife'
+              ? 0.6
+              : key === 'inflate'
+                ? 0.5
+                : key === 'vortexAmount'
+                  ? 0.25
+                  : key === 'appendages'
+                    ? 4
+                    : key === 'subSpheres'
+                      ? 6
+                      : 0;
     const value = controls[key] ?? fallback;
     const outOfRange = value < min || value > max;
     const sliderValue = Math.max(min, Math.min(max, value));
@@ -217,14 +227,14 @@ export function ControlPanel({
       <div className="space-y-3">
         <details open className="space-y-3">
           <summary className={sectionSummary}>
-            Audio response
+            Feel
             {sectionChevron}
           </summary>
           <label className="flex items-center justify-between gap-2 text-xs text-torus-fg-dim">
             <span className="flex flex-col">
               <span>Auto sensitivity</span>
               <span className="text-[10px] text-torus-fg-faint">
-                Levels any track automatically — Gain just trims it
+                Levels any track automatically — Intensity just trims it
               </span>
             </span>
             <input
@@ -234,33 +244,35 @@ export function ControlPanel({
               className="accent-torus-mid"
             />
           </label>
-          {renderSlider(audioSliders[0]!)}
-          <BandSplitter
-            analyser={analyser}
-            palette={palette}
-            bassMaxHz={controls.bassMaxHz ?? 250}
-            midMaxHz={controls.midMaxHz ?? 2000}
-            onChange={onChange}
-          />
-          {audioSliders.slice(1).map(renderSlider)}
+          {feelSliders.map(renderSlider)}
         </details>
 
         <details open className="space-y-3 border-t border-torus-border pt-3">
           <summary className={sectionSummary}>
-            Look
+            Color &amp; light
             {sectionChevron}
           </summary>
-          {lookSliders.map(renderSlider)}
-          {showBlobSliders ? blobSliders.map(renderSlider) : null}
-          {showFlowSliders ? flowSliders.map(renderSlider) : null}
-          {showTunnelSliders ? tunnelSliders.map(renderSlider) : null}
+          {colorSliders.map(renderSlider)}
         </details>
 
-        <details className="space-y-3 border-t border-torus-border pt-3">
+        {showBlobSliders || showFlowSliders || showTunnelSliders ? (
+          <details open className="space-y-3 border-t border-torus-border pt-3">
+            <summary className={sectionSummary}>
+              This preset
+              {sectionChevron}
+            </summary>
+            {showBlobSliders ? blobSliders.map(renderSlider) : null}
+            {showFlowSliders ? flowSliders.map(renderSlider) : null}
+            {showTunnelSliders ? tunnelSliders.map(renderSlider) : null}
+          </details>
+        ) : null}
+
+        <details open className="space-y-3 border-t border-torus-border pt-3">
           <summary className={sectionSummary}>
-            Camera
+            Framing &amp; camera
             {sectionChevron}
           </summary>
+          {renderSlider(framingSliders[0]!)}
           <label className="block text-xs text-torus-fg-dim">
             Camera motion
             <select
@@ -284,6 +296,7 @@ export function ControlPanel({
             step: 0.05,
             hint: 'How far the camera sits from the center — it never gets close enough to clip into the scene',
           })}
+          {renderSlider(framingSliders[1]!)}
 
           {controls.cameraMode === 'cinematic'
             ? (() => {
@@ -320,6 +333,21 @@ export function ControlPanel({
                 );
               })()
             : null}
+        </details>
+
+        <details className="space-y-3 border-t border-torus-border pt-3">
+          <summary className={sectionSummary}>
+            Bands (advanced)
+            {sectionChevron}
+          </summary>
+          <BandSplitter
+            analyser={analyser}
+            palette={palette}
+            bassMaxHz={controls.bassMaxHz ?? 250}
+            midMaxHz={controls.midMaxHz ?? 2000}
+            onChange={onChange}
+          />
+          {bandSliders.map(renderSlider)}
         </details>
 
         <details className="space-y-2 border-t border-torus-border pt-3">

@@ -265,6 +265,7 @@ export function InfiniteTunnelScene({
   analyser,
   palette,
   tier,
+  speed = 1,
   turbulence = 1,
   density = 1,
   vortexAmount = 0.25,
@@ -439,7 +440,7 @@ export function InfiniteTunnelScene({
     // ---- The throttle: audio drives the conveyor (the original's soul) ----
     const silenceDamp = 1 - m.silence * 0.88;
     const tunnelSpeed =
-      (0.55 + m.energy * 5.0 + m.beat * 2.2 + m.dropEvent * 7.0) * silenceDamp + 0.12;
+      ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) * silenceDamp + 0.12) * speed;
 
     // ---- Segment conveyor + counter-roll ----
     const rollRate = (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt;
@@ -457,9 +458,9 @@ export function InfiniteTunnelScene({
     // ---- Band-driven uniforms ----
     // Transient-driven so the bore stays intact between hits — sustained
     // bass only swells it slightly; beats and drops blow it open.
-    const explodeTarget = Math.min(1.3, m.bass * 0.18 + m.beat * 0.5 + m.dropEvent * 0.9);
+    const explodeTarget = Math.min(1.3, m.bass * 0.18 + m.impact * 0.55 + m.dropEvent * 0.9);
     explodeRef.current += (explodeTarget - explodeRef.current) * Math.min(1, dt * 10);
-    const teethTarget = Math.min(1.4, m.mid * 0.9 + m.beat * 0.35);
+    const teethTarget = Math.min(1.4, m.mid * 0.9 + m.impact * 0.4);
     teethRef.current += (teethTarget - teethRef.current) * Math.min(1, dt * 8);
     flashRef.current = Math.max(0, flashRef.current - dt * 1.6);
     if (m.dropEvent > 0.6) flashRef.current = Math.min(1, m.dropEvent);
@@ -491,7 +492,7 @@ export function InfiniteTunnelScene({
 
     // High band lights the corner rails.
     railMaterial.color.copy(cs.high);
-    railMaterial.opacity = 0.1 + m.high * 0.55 + m.beat * 0.15;
+    railMaterial.opacity = 0.1 + m.high * 0.55 + m.shimmer * 0.25;
 
     // ---- Echo rings: phrase memory rushing back up the tunnel ----
     if (m.echo > 0.45 && prevEchoRef.current <= 0.45) {
@@ -570,7 +571,7 @@ export function InfiniteTunnelScene({
     const pu = particles.mat.uniforms;
     pu.uTime!.value = t;
     pu.uHigh!.value = m.high;
-    pu.uBeat!.value = m.beat;
+    pu.uBeat!.value = m.impact;
     (pu.uColorBass!.value as THREE.Color).copy(cs.bass);
     (pu.uColorMid!.value as THREE.Color).copy(cs.mid);
     (pu.uColorHigh!.value as THREE.Color).copy(cs.high);

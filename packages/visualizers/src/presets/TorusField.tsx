@@ -13,7 +13,9 @@ import {
   type Vec3Like,
 } from '../dsp/flowfield';
 
-export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProps) {
+import { getDotTexture } from '../dotTexture';
+
+export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const torusRef = useRef<THREE.Mesh>(null);
   const particlesRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
@@ -24,8 +26,12 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
   const flowTimeRef = useRef(0);
   const flowScratch = useRef<Vec3Like>({ x: 0, y: 0, z: 0 });
+  const scratchBass = useRef(new THREE.Color());
+  const scratchMid = useRef(new THREE.Color());
+  const scratchHigh = useRef(new THREE.Color());
 
   const particleCount = tier === 'high' ? 6000 : tier === 'mid' ? 2500 : 800;
+  const sprite = useMemo(() => getDotTexture(), []);
 
   const { positions, baseTheta, basePhi } = useMemo(() => {
     const pos = new Float32Array(particleCount * 3);
@@ -63,12 +69,12 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
     if (!torus || !points || !pointsMat) return;
 
     const m = metricsRef.current;
-    const flowSpeed = delta * (0.35 + m.mid * 3.5 + m.beat * 2);
-    const activeRatio = 0.3 + m.flow * 0.7;
+    const flowSpeed = delta * speed * (0.35 + m.mid * 3 + m.impact * 2);
+    const activeRatio = 0.45 + m.flow * 0.55;
 
-    torus.scale.setScalar(1 + m.bass * 0.35 + m.beat * 0.15);
+    torus.scale.setScalar(1 + m.bass * 0.3 + m.impact * 0.18);
     torus.rotation.y += flowSpeed * 0.4;
-    torus.rotation.x += delta * (0.03 + m.high * 0.2);
+    torus.rotation.x += delta * speed * (0.03 + m.high * 0.2);
 
     // Downbeat flash: peaks at the start of each 4/4 bar then decays in <0.5 beats.
     const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 8) : 0;
@@ -79,28 +85,51 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
 
     const torusMat = torus.material;
     if (torusMat && !Array.isArray(torusMat) && 'emissiveIntensity' in torusMat) {
-      (torusMat as THREE.MeshStandardMaterial).emissiveIntensity =
-        (0.1 + m.breath * 0.5 + m.beat * 0.3 + barFlash * 0.7 + dropPunch) * silenceMute;
+      const sm = torusMat as THREE.MeshStandardMaterial;
+      sm.emissiveIntensity =
+        (0.35 + m.swell * 0.7 + m.impact * 0.5 + barFlash * 0.6 + dropPunch) * silenceMute;
+      // Follow the living palette so the shell breathes color too.
+      sm.color.set(palette.mid);
+      sm.emissive.set(palette.mid);
+      sm.opacity = 0.2 + m.swell * 0.2;
     }
 
-    pointsMat.size = 0.02 + m.energy * 0.05;
-    pointsMat.opacity = 0.5 + m.flow * 0.45;
+    pointsMat.size = 0.05 + m.swell * 0.05 + m.impact * 0.04;
+    pointsMat.opacity = 0.75 + m.swell * 0.25;
+
+    // Re-tint particle bands from the living palette (mutates in place, so
+    // the mount-time buffer would otherwise stay frozen forever).
+    const cAttr = points.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const cArr = cAttr.array as Float32Array;
+    const bassC = scratchBass.current.set(palette.bass);
+    const midC = scratchMid.current.set(palette.mid);
+    const highC = scratchHigh.current.set(palette.high);
+    for (let i = 0; i < particleCount; i++) {
+      const t = (i / particleCount) % 1;
+      const color = t < 0.33 ? bassC : t < 0.66 ? midC : highC;
+      const i3 = i * 3;
+      cArr[i3] = color.r;
+      cArr[i3 + 1] = color.g;
+      cArr[i3 + 2] = color.b;
+    }
+    cAttr.needsUpdate = true;
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
 
     // Shared flow current: off-surface drift that grows with the music and
     // vanishes at rest, so the sacred geometry stays clean when calm.
-    flowTimeRef.current += Math.min(delta, 0.05) * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+    flowTimeRef.current += Math.min(delta, 0.05) * speed * (0.4 + Math.min(m.energy, 1.5) * 0.4);
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    const flowLift = 0.05 + m.energy * 0.2 + m.dropEvent * 0.45;
+    const flowLift = 0.05 + m.swell * 0.22 + m.dropEvent * 0.45;
     const fv = flowScratch.current;
 
     for (let i = 0; i < particleCount; i++) {
       if (i / particleCount > activeRatio) continue;
       basePhi[i] = (basePhi[i]! + flowSpeed) % (Math.PI * 2);
-      baseTheta[i] = (baseTheta[i]! + delta * (0.15 + m.high * 1.2 + m.beat)) % (Math.PI * 2);
+      baseTheta[i] =
+        (baseTheta[i]! + delta * speed * (0.15 + m.high * 1.2 + m.impact)) % (Math.PI * 2);
       const radius = 1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08;
       const tube = 0.5 + m.breath * 0.15;
       const i3 = i * 3;
@@ -122,12 +151,12 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
         <meshStandardMaterial
           color={palette.mid}
           emissive={palette.mid}
-          emissiveIntensity={0.15}
+          emissiveIntensity={0.35}
           metalness={0.6}
           roughness={0.35}
           wireframe
           transparent
-          opacity={0.35}
+          opacity={0.28}
         />
       </mesh>
 
@@ -148,7 +177,8 @@ export function TorusFieldScene({ analyser, palette, tier }: VisualizerSceneProp
         </bufferGeometry>
         <pointsMaterial
           ref={matRef}
-          size={0.035}
+          size={0.06}
+          map={sprite}
           sizeAttenuation
           transparent
           opacity={0.9}

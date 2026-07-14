@@ -407,6 +407,7 @@ export function VisualizerApp() {
       cameraDistance: saved.cameraDistance ?? 1,
       lightLevel: saved.lightLevel ?? 1,
       autoGain: saved.autoGain ?? true,
+      colorLife: saved.colorLife ?? 0.6,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
@@ -818,6 +819,7 @@ export function VisualizerApp() {
                 lightLevel={controls.lightLevel ?? 1}
                 energy={controls.energy ?? 0}
                 autoGain={controls.autoGain ?? true}
+                colorLife={controls.colorLife ?? 0.6}
                 background={background.mode}
                 backgroundIntensity={background.intensity}
                 inflate={controls.inflate ?? 0.5}

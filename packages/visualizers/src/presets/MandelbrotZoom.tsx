@@ -8,7 +8,9 @@ import { useMetricsRef } from '../metrics';
 
 const CENTER_X = -0.743643887037151;
 const CENTER_Y = 0.131825904205330;
-const MAX_ZOOM = 1e6;
+// Float32 fractal math pixelates past ~1e4–1e5 zoom; reset well before the
+// artifacts become visible.
+const MAX_ZOOM = 2.5e4;
 const FADE_DURATION = 0.8;
 
 function buildFragmentShader(maxIter: number): string {
@@ -84,7 +86,7 @@ void main() {
 }
 `;
 
-export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerSceneProps) {
+export function MandelbrotZoomScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
@@ -122,7 +124,7 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
     if (!mat) return;
 
     const m = metricsRef.current;
-    let zoomRate = 0.18 + m.energy * 0.45 + m.beat * 0.6;
+    let zoomRate = (0.18 + m.energy * 0.4 + m.impact * 0.55) * speed;
     // Drift the palette around the ramp slowly, faster on mids. Stays inside
     // the bass/mid/high palette regardless of value.
     let shiftRate = 0.04 + m.mid * 0.18;
@@ -162,7 +164,7 @@ export function MandelbrotZoomScene({ analyser, palette, tier }: VisualizerScene
     mat.uniforms.uZoom!.value = zoomRef.current;
     mat.uniforms.uPaletteShift!.value = paletteShiftRef.current;
     mat.uniforms.uBassPulse!.value =
-      (m.bass + m.beat * 0.35 + barFlash * 0.4 + dropPunch) * (1 - m.silence * 0.7);
+      (m.bass + m.impact * 0.4 + barFlash * 0.4 + dropPunch) * (1 - m.silence * 0.7);
     mat.uniforms.uHigh!.value = m.high;
     mat.uniforms.uFade!.value = fadeRef.current;
     (mat.uniforms.uBassColor!.value as THREE.Color).set(palette.bass);

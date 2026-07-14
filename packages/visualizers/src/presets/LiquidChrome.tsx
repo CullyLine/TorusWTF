@@ -131,19 +131,24 @@ void main() {
 
   float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
   vec3 base = mix(uColorA, uColorB, vNoise * 0.5 + 0.5);
-  vec3 chrome = mix(base * 0.35, env, 0.55 + fresnel * 0.4);
-  chrome += uEmissive * (0.15 + uEnergy * 0.45 + uBeat * 0.35);
-  chrome += vec3(1.0) * fresnel * 0.35;
+  // Chrome leans on the palette (not the fixed env) so the body stays
+  // colorful; emissive is kept low or loud passages clip the whole blob
+  // to white.
+  vec3 tintedEnv = mix(env, base, 0.45);
+  vec3 chrome = mix(base * 0.4, tintedEnv, 0.5 + fresnel * 0.4);
+  chrome += uEmissive * (0.08 + uEnergy * 0.2 + uBeat * 0.22);
+  chrome += mix(uColorB, vec3(1.0), 0.4) * fresnel * 0.3;
 
   gl_FragColor = vec4(chrome, 1.0);
 }
 `;
 
-export function LiquidChromeScene({ analyser, palette, tier }: VisualizerSceneProps) {
+export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
+  const timeRef = useRef(0);
 
   const detail = tier === 'high' ? 6 : tier === 'mid' ? 5 : 4;
 
@@ -169,16 +174,18 @@ export function LiquidChromeScene({ analyser, palette, tier }: VisualizerScenePr
     if (!mesh || !mat) return;
 
     const m = metricsRef.current;
-    mat.uniforms.uTime!.value = state.clock.elapsedTime;
+    // Music-paced clock: flows faster in loud passages, honors Speed.
+    timeRef.current += Math.min(delta, 0.1) * speed * (0.6 + m.swell * 0.9 + m.impact * 0.4);
+    mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uEnergy!.value = m.energy;
-    mat.uniforms.uBeat!.value = m.beat;
+    mat.uniforms.uBeat!.value = m.impact;
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (mat.uniforms.uEmissive!.value as THREE.Color).set(palette.high);
 
-    mesh.rotation.y += delta * (0.15 + m.mid * 0.4);
+    mesh.rotation.y += delta * speed * (0.15 + m.mid * 0.4);
     mesh.rotation.x = Math.sin(state.clock.elapsedTime * 0.35) * 0.12 + m.high * 0.08;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
