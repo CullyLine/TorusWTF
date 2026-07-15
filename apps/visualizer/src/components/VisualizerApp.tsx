@@ -1,12 +1,14 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Logo } from '@torus/ui';
 import {
+  createImpulses,
   pickRandomVisualizerPreset,
   VISUALIZERS,
+  type AudioMetrics,
   type Creature,
   type VisualizerId,
 } from '@torus/visualizers';
@@ -28,6 +30,8 @@ import { TitleOverlayPanel } from '@/components/TitleOverlayPanel';
 import { PrerenderRoot } from '@/components/PrerenderRoot';
 import { UnlockBanner } from '@/components/UnlockBanner';
 import { YouTubePanel } from '@/components/YouTubePanel';
+import { ShowFileControls } from '@/components/ShowFileControls';
+import { TriggerPanel } from '@/components/TriggerPanel';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import type { DesktopCaptureMode } from '@/hooks/useTabCapture';
 import { useExport } from '@/hooks/useExport';
@@ -36,9 +40,19 @@ import { useBPM } from '@/hooks/useBPM';
 import { useIdleHide } from '@/hooks/useIdleHide';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePersistedState } from '@/hooks/usePersistedState';
+import { useProjectorBridge } from '@/hooks/useProjectorBridge';
 import { useToast } from '@/hooks/useToast';
+import { useTriggerEngine } from '@/hooks/useTriggerEngine';
 import { useUnlock } from '@/hooks/useUnlock';
-import { DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
+import { useWebMidi } from '@/lib/midi';
+import { BUILTIN_PALETTES, DEFAULT_PALETTE, isChromium } from '@/lib/palettes';
+import type { ProjectorStatePayload } from '@/lib/projectorSync';
+import type { ShowFileState, TorusShowFile } from '@/lib/showFile';
+import {
+  loadTriggerMappings,
+  persistTriggerMappings,
+  type TriggerMapping,
+} from '@/lib/triggerActions';
 import { readAudioTags } from '@/lib/audioMetadata';
 import { extractPaletteFromBlob } from '@/lib/extractPalette';
 import { captureThumbnailDataUrl, downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
@@ -94,6 +108,8 @@ function formatTime(sec: number): string {
 }
 
 const AUDIO_FILE_RE = /\.(mp3|wav|flac|ogg|opus|m4a|aac|weba|webm)$/i;
+
+const PRESET_ORDER = Object.keys(VISUALIZERS) as VisualizerId[];
 
 const RESOLUTION_VALUES: readonly ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
 const FPS_VALUES: readonly ExportFps[] = [30, 60, 120, 240];
@@ -374,6 +390,109 @@ export function VisualizerApp() {
   const handleRandomPreset = useCallback(() => {
     handlePresetChange(pickRandomVisualizerPreset());
   }, [handlePresetChange]);
+
+  const stepPreset = useCallback(
+    (dir: 1 | -1) => {
+      const idx = PRESET_ORDER.indexOf(preset);
+      const next = PRESET_ORDER[(idx + dir + PRESET_ORDER.length) % PRESET_ORDER.length]!;
+      handlePresetChange(next);
+    },
+    [preset, handlePresetChange],
+  );
+
+  const handleRandomPalette = useCallback(() => {
+    const others = BUILTIN_PALETTES.filter(
+      (p) =>
+        p.palette.bass !== palette.bass ||
+        p.palette.mid !== palette.mid ||
+        p.palette.high !== palette.high,
+    );
+    const pick = others[Math.floor(Math.random() * others.length)] ?? BUILTIN_PALETTES[0]!;
+    setPalette(pick.palette);
+  }, [palette, setPalette]);
+
+  // --- Triggers, MIDI, and the projector link ---
+  // The canvas mirrors its freshest metrics into this ref every frame; the
+  // trigger engine and projector bridge read it from outside the canvas.
+  const metricsOutRef = useRef<AudioMetrics | null>(null);
+  // One-shot visual commands (camera punch, color kick…). Stable identity;
+  // consumed field-by-field inside the canvas frame loop.
+  const impulses = useMemo(() => createImpulses(), []);
+
+  const [triggerMappings, setTriggerMappingsState] = useState<TriggerMapping[]>([]);
+  useEffect(() => {
+    setTriggerMappingsState(loadTriggerMappings());
+  }, []);
+  const setTriggerMappings = useCallback((next: TriggerMapping[]) => {
+    setTriggerMappingsState(next);
+    persistTriggerMappings(next);
+  }, []);
+
+  const projectorState = useMemo<ProjectorStatePayload>(
+    () => ({ preset, palette, controls, background }),
+    [preset, palette, controls, background],
+  );
+  const projector = useProjectorBridge({ state: projectorState, metricsRef: metricsOutRef });
+
+  const triggerEngine = useTriggerEngine({
+    enabled: Boolean(audio.source),
+    mappings: triggerMappings,
+    metricsRef: metricsOutRef,
+    impulses,
+    actions: {
+      nextPreset: () => stepPreset(1),
+      prevPreset: () => stepPreset(-1),
+      randomPreset: handleRandomPreset,
+      randomPalette: handleRandomPalette,
+    },
+    onImpulse: projector.postImpulse,
+  });
+  const midi = useWebMidi(triggerEngine.handleMidiNote);
+
+  const buildShowState = useCallback(
+    (): ShowFileState => ({
+      preset,
+      palette,
+      controls,
+      background,
+      titleOverlay,
+      triggerMappings,
+      savedPresets: loadSavedPresets(),
+    }),
+    [preset, palette, controls, background, titleOverlay, triggerMappings],
+  );
+
+  const handleImportShow = useCallback(
+    (show: TorusShowFile) => {
+      setPreset(show.preset);
+      setPalette(show.palette);
+      setControls(show.controls);
+      setBackground(show.background);
+      setTitleOverlay(show.titleOverlay);
+      setTriggerMappings(show.triggerMappings);
+      if (show.savedPresets.length > 0) {
+        // Union by id — imported presets win, existing ones survive.
+        const merged = new Map(loadSavedPresets().map((p) => [p.id, p]));
+        for (const p of show.savedPresets) merged.set(p.id, p);
+        try {
+          persistSavedPresets([...merged.values()]);
+          setPresetsVersion((v) => v + 1);
+        } catch {
+          // Storage full — the look still loads, the preset bank just doesn't.
+        }
+      }
+      toast({ message: 'Show loaded', variant: 'success' });
+    },
+    [
+      setPreset,
+      setPalette,
+      setControls,
+      setBackground,
+      setTitleOverlay,
+      setTriggerMappings,
+      toast,
+    ],
+  );
 
   const handleLoadSaved = useCallback((saved: SavedPreset) => {
     // Legacy saved presets may still point at the removed Spectral Tunnel.
@@ -738,6 +857,31 @@ export function VisualizerApp() {
         background={background}
         onBackgroundChange={(patch) => setBackground((b) => ({ ...b, ...patch }))}
       />
+      <TriggerPanel mappings={triggerMappings} onChange={setTriggerMappings} midi={midi} />
+      <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-torus-fg-dim">Show</h2>
+          <ShowFileControls
+            buildState={buildShowState}
+            onImport={handleImportShow}
+            onError={(message) => toast({ message, variant: 'error' })}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={projector.openProjector}
+          className={`mt-3 w-full rounded-lg border px-3 py-2 text-xs ${
+            projector.projectorOpen
+              ? 'border-torus-mid/50 text-torus-mid'
+              : 'border-torus-border text-torus-fg-dim hover:border-torus-mid/40'
+          }`}
+        >
+          {projector.projectorOpen ? '● Projector live — click to focus' : 'Open projector window'}
+        </button>
+        <p className="mt-1.5 text-[10px] text-torus-fg-faint">
+          A clean output window for a second display — drag it over, double-click for fullscreen.
+        </p>
+      </section>
       <TitleOverlayPanel
         overlay={titleOverlay}
         onChange={(patch) => setTitleOverlay((o) => ({ ...o, ...patch }))}
@@ -835,6 +979,8 @@ export function VisualizerApp() {
                 creature={creature?.personality}
                 bpmRef={bpmRef}
                 lastOnsetRef={lastOnsetRef}
+                impulses={impulses}
+                metricsOutRef={metricsOutRef}
               />
             </div>
           </div>
