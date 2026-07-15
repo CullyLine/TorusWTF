@@ -1,39 +1,59 @@
 'use client';
 
 import { useMemo, useRef } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 
-const CENTER_X = -0.743643887037151;
-const CENTER_Y = 0.131825904205330;
-// Float32 fractal math pixelates past ~1e4–1e5 zoom; reset well before the
-// artifacts become visible.
-const MAX_ZOOM = 2.5e4;
-const FADE_DURATION = 0.8;
+/**
+ * Mandelbulb — a true 3D fractal, raymarched inside a bounding-sphere mesh.
+ *
+ * Unlike a fullscreen-quad raymarcher, the march happens inside a REAL
+ * sphere proxy sitting at the origin: the rasterizer only shades pixels the
+ * bulb could occupy, and the shader writes a correct per-fragment depth
+ * (gl_FragDepth) from the ray hit point. That makes the bulb a first-class
+ * 3D citizen — SceneRig aura particles drift in front of and behind it,
+ * background skies wrap around it, and every rig camera mode (orbit /
+ * cinematic / flow) parallaxes it like any other mesh.
+ *
+ * Musical anatomy:
+ *  - `swell` grows the fractal power (6 → ~9.5): choruses literally grow
+ *    more ornate geometry, verses relax back to smoother lobes
+ *  - drops kick the power an extra step — a visible "the world just
+ *    changed shape" morph
+ *  - orbit-trap coloring rides the living palette; mids scroll the ramp
+ *  - `impact` flashes the surface glow, `shimmer` lights the rim
+ *  - `afterglow` holds a warm emissive floor for seconds after a peak
+ *  - the whole domain slowly tumbles so even a still camera sees it evolve
+ */
 
-function buildFragmentShader(maxIter: number): string {
+/** DE-space radius that encloses the bulb at any power ≥ 2. */
+const BULB_BOUND = 1.35;
+
+function buildFragmentShader(marchSteps: number, deIters: number): string {
   return /* glsl */ `
-#define MAX_ITER ${maxIter}
+#define MARCH_STEPS ${marchSteps}
+#define DE_ITERS ${deIters}
 
-uniform vec2 uResolution;
-uniform float uZoom;
+uniform mat4 uProj;        // camera projection (for gl_FragDepth)
+uniform float uPower;
+uniform float uScale;
+uniform float uYaw;
+uniform float uPitch;
 uniform float uPaletteShift;
-uniform float uBassPulse;
-uniform float uHigh;
-uniform float uFade;
+uniform float uGlow;       // impact-driven surface flash
+uniform float uRim;        // shimmer-driven fresnel rim
+uniform float uAfterglow;  // lingering emissive floor
 uniform vec3 uBassColor;
 uniform vec3 uMidColor;
 uniform vec3 uHighColor;
-varying vec2 vUv;
+varying vec3 vWorldPos;
 
 // Three-stop palette ramp scrolled by uPaletteShift (audio-driven, [0,1)).
-// Stays inside the user palette (bass -> mid -> high -> bass) instead of
-// rotating through full HSV.
 vec3 paletteRamp(float t) {
   t = fract(t + uPaletteShift);
-  // Three equal stops at 0, 1/3, 2/3, looping back at 1.
   if (t < 1.0 / 3.0) {
     return mix(uBassColor, uMidColor, smoothstep(0.0, 1.0, t * 3.0));
   } else if (t < 2.0 / 3.0) {
@@ -43,151 +63,246 @@ vec3 paletteRamp(float t) {
   }
 }
 
+mat3 rotY(float a) {
+  float c = cos(a); float s = sin(a);
+  return mat3(c, 0.0, -s, 0.0, 1.0, 0.0, s, 0.0, c);
+}
+mat3 rotX(float a) {
+  float c = cos(a); float s = sin(a);
+  return mat3(1.0, 0.0, 0.0, 0.0, c, s, 0.0, -s, c);
+}
+
+// Distance estimator for the power-N Mandelbulb. "trap" records the
+// closest orbit approach — the classic fractal coloring signal.
+float mandelbulbDE(vec3 pos, out float trap) {
+  vec3 z = pos;
+  float dr = 1.0;
+  float r = 0.0;
+  trap = 1e10;
+  for (int i = 0; i < DE_ITERS; i++) {
+    r = length(z);
+    trap = min(trap, r);
+    if (r > 2.0) break;
+    float theta = acos(clamp(z.z / r, -1.0, 1.0)) * uPower;
+    float phi = atan(z.y, z.x) * uPower;
+    float zr = pow(r, uPower);
+    dr = pow(r, uPower - 1.0) * uPower * dr + 1.0;
+    z = zr * vec3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta)) + pos;
+  }
+  return 0.5 * log(r) * r / dr;
+}
+
+// World-space scene distance: rotate + scale the domain, evaluate the bulb.
+float sceneDE(vec3 p, out float trap) {
+  vec3 q = rotX(uPitch) * rotY(uYaw) * (p / uScale);
+  return mandelbulbDE(q, trap) * uScale;
+}
+
+vec3 calcNormal(vec3 p) {
+  float t0;
+  vec2 e = vec2(1.0, -1.0) * 0.0007 * uScale;
+  return normalize(
+    e.xyy * sceneDE(p + e.xyy, t0) +
+    e.yyx * sceneDE(p + e.yyx, t0) +
+    e.yxy * sceneDE(p + e.yxy, t0) +
+    e.xxx * sceneDE(p + e.xxx, t0));
+}
+
+// Ray / bounding-sphere intersection (the bulb lives inside r = ${BULB_BOUND}).
+vec2 sphereBounds(vec3 ro, vec3 rd, float radius) {
+  float b = dot(ro, rd);
+  float c = dot(ro, ro) - radius * radius;
+  float h = b * b - c;
+  if (h < 0.0) return vec2(-1.0);
+  h = sqrt(h);
+  return vec2(-b - h, -b + h);
+}
+
 void main() {
-  // Aspect-correct sampling using the actual viewport so the fractal is not
-  // distorted on portrait or ultrawide aspect ratios.
-  vec2 res = uResolution;
-  vec2 uv = (vUv - 0.5) * vec2(max(res.x / res.y, 1.0), max(res.y / res.x, 1.0));
-  vec2 c = vec2(${CENTER_X}, ${CENTER_Y}) + uv * (4.0 / uZoom);
+  // March along the eye ray through this fragment of the proxy sphere.
+  // cameraPosition / viewMatrix are three.js built-ins, valid in world space.
+  vec3 ro = cameraPosition;
+  vec3 rd = normalize(vWorldPos - cameraPosition);
 
-  vec2 z = vec2(0.0);
-  float iter = 0.0;
-  for (int i = 0; i < MAX_ITER; i++) {
-    if (dot(z, z) > 4.0) break;
-    z = vec2(z.x * z.x - z.y * z.y, 2.0 * z.x * z.y) + c;
-    iter = float(i + 1);
+  float bound = ${BULB_BOUND} * uScale;
+  vec2 bs = sphereBounds(ro, rd, bound);
+  if (bs.y < 0.0) discard;
+
+  float t = max(bs.x, 0.0);
+  float tMax = bs.y;
+  float trap = 1e10;
+  float hitTrap = 1e10;
+  bool hit = false;
+  int steps = 0;
+  for (int i = 0; i < MARCH_STEPS; i++) {
+    steps = i;
+    vec3 p = ro + rd * t;
+    float d = sceneDE(p, trap);
+    if (d < max(0.0006, t * 0.0012) * uScale) {
+      hit = true;
+      hitTrap = trap;
+      break;
+    }
+    t += d * 0.9;
+    if (t > tMax) break;
   }
 
-  vec3 col;
-  if (iter >= float(MAX_ITER) - 0.5) {
-    // Interior of the set: a deep tint of the bass color. No black background.
-    col = uBassColor * 0.08;
-  } else {
-    float t = iter / float(MAX_ITER);
-    col = paletteRamp(t);
-    // Audio-reactive brightness + tiny chromatic-aberration on highs.
-    float aberr = uHigh * 0.012 * (1.0 - t);
-    col.r += aberr;
-    col.b -= aberr;
-    col *= 0.85 + t * 0.35 + uBassPulse * 0.25;
-  }
+  // Miss: leave color AND depth untouched so the sky / other objects show.
+  if (!hit) discard;
 
-  col *= 1.0 - uFade * 0.85;
+  vec3 p = ro + rd * t;
+  vec3 n = calcNormal(p);
+
+  // True depth of the ray hit (not the proxy surface) — this is what lets
+  // particles and wisps weave in front of and behind the fractal.
+  vec4 clipPos = uProj * viewMatrix * vec4(p, 1.0);
+  gl_FragDepth = clamp((clipPos.z / clipPos.w) * 0.5 + 0.5, 0.0, 1.0);
+
+  // Orbit-trap palette: crevices (small trap) take the deep end of the
+  // ramp, outer lobes the bright end. Scaled so the surface spans the
+  // whole bass→mid→high ramp instead of clustering at one stop.
+  float trapT = clamp(hitTrap * 0.62, 0.0, 1.0);
+  vec3 albedo = paletteRamp(trapT);
+
+  // Two colored lights that agree with the SceneRig point lights.
+  vec3 keyDir = normalize(vec3(0.55, 0.65, 0.5));
+  vec3 fillDir = normalize(vec3(-0.6, -0.15, -0.35));
+  float key = max(dot(n, keyDir), 0.0);
+  float fill = max(dot(n, fillDir), 0.0) * 0.45;
+  vec3 halfV = normalize(keyDir - rd);
+  float spec = pow(max(dot(n, halfV), 0.0), 24.0);
+
+  // Iteration-count AO: deep crevices stay shadowed, tips catch light.
+  float ao = 1.0 - float(steps) / float(MARCH_STEPS);
+  ao = 0.25 + 0.75 * ao * ao;
+
+  float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+
+  vec3 col =
+    albedo * (0.22 + key * 0.95 + fill) * ao +
+    uHighColor * spec * 0.7 +
+    albedo * uGlow * 0.85 +
+    uHighColor * fresnel * uRim +
+    albedo * uAfterglow * 0.22;
+
   gl_FragColor = vec4(col, 1.0);
 }
 `;
 }
 
 const vertexShader = /* glsl */ `
-varying vec2 vUv;
+varying vec3 vWorldPos;
 void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vWorldPos = wp.xyz;
+  gl_Position = projectionMatrix * viewMatrix * wp;
 }
 `;
 
-export function MandelbrotZoomScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
+export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: VisualizerSceneProps) {
+  const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
+  const meshRef = useRef<THREE.Mesh>(null);
   const metricsRef = useMetricsRef();
-  const zoomRef = useRef(2.0);
+  const yawRef = useRef(0);
+  const pitchRef = useRef(0);
+  const powerWanderRef = useRef(0);
   const paletteShiftRef = useRef(0);
-  const fadeRef = useRef(0);
-  const fadePhaseRef = useRef<'idle' | 'out' | 'in'>('idle');
-  const { size, viewport } = useThree();
+  const worldScale = useRef(new THREE.Vector3());
 
-  const maxIter = tier === 'high' ? 192 : tier === 'mid' ? 128 : 72;
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
 
-  const fragmentShader = useMemo(() => buildFragmentShader(maxIter), [maxIter]);
+  const [marchSteps, deIters] =
+    tier === 'high' ? [96, 9] : tier === 'mid' ? [72, 8] : [48, 7];
+  const fragmentShader = useMemo(
+    () => buildFragmentShader(marchSteps, deIters),
+    [marchSteps, deIters],
+  );
 
   const uniforms = useMemo(
     () => ({
-      uResolution: { value: new THREE.Vector2(1, 1) },
-      uZoom: { value: 2.0 },
+      uProj: { value: new THREE.Matrix4() },
+      uPower: { value: 8 },
+      uScale: { value: 1 },
+      uYaw: { value: 0 },
+      uPitch: { value: 0 },
       uPaletteShift: { value: 0 },
-      uBassPulse: { value: 0 },
-      uHigh: { value: 0 },
-      uFade: { value: 0 },
+      uGlow: { value: 0 },
+      uRim: { value: 0.3 },
+      uAfterglow: { value: 0 },
       uBassColor: { value: new THREE.Color(palette.bass) },
       uMidColor: { value: new THREE.Color(palette.mid) },
       uHighColor: { value: new THREE.Color(palette.high) },
     }),
-    [palette.bass, palette.mid, palette.high],
+    // Intentionally empty: colors are re-set every frame from the living
+    // palette inside useFrame, so the uniform objects must stay stable.
+    [],
   );
 
-  useFrame((_state, delta) => {
+  useFrame((state, delta) => {
     const mat = matRef.current;
-    if (!mat) return;
-
+    const mesh = meshRef.current;
+    if (!mat || !mesh) return;
     const m = metricsRef.current;
-    let zoomRate = (0.18 + m.energy * 0.4 + m.impact * 0.55) * speed;
-    // Drift the palette around the ramp slowly, faster on mids. Stays inside
-    // the bass/mid/high palette regardless of value.
-    let shiftRate = 0.04 + m.mid * 0.18;
-    if (reducedMotion) {
-      zoomRate = Math.min(zoomRate, 0.08);
-      shiftRate /= 3;
-    }
+    const dt = Math.min(delta, 0.1);
+    const pace = reducedMotion ? 0.25 : 1;
+    const spd = mods.current.speed ?? speed;
 
-    if (fadePhaseRef.current === 'idle') {
-      zoomRef.current *= Math.exp(delta * zoomRate);
-      if (zoomRef.current >= MAX_ZOOM) {
-        fadePhaseRef.current = 'out';
-      }
-    }
+    // Slow tumble so the fractal evolves even under a still camera;
+    // energy leans into the spin, quiet valleys nearly freeze it.
+    yawRef.current += dt * spd * pace * (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04);
+    pitchRef.current += dt * spd * pace * 0.017;
 
-    if (fadePhaseRef.current === 'out') {
-      fadeRef.current = Math.min(1, fadeRef.current + delta / (FADE_DURATION * 0.5));
-      if (fadeRef.current >= 1) {
-        zoomRef.current = 2.0;
-        fadePhaseRef.current = 'in';
-      }
-    } else if (fadePhaseRef.current === 'in') {
-      fadeRef.current = Math.max(0, fadeRef.current - delta / (FADE_DURATION * 0.5));
-      if (fadeRef.current <= 0) {
-        fadePhaseRef.current = 'idle';
-      }
-    }
+    // Power morph: an autonomous slow wander + the musical swell. The
+    // bulb grows more ornate as the music opens up; drops kick an extra
+    // step of complexity that eases back with the envelope.
+    powerWanderRef.current += dt * spd * pace * 0.11;
+    const power =
+      7.0 +
+      Math.sin(powerWanderRef.current) * 0.8 +
+      m.swell * 1.6 +
+      m.dropEvent * 0.7;
 
-    paletteShiftRef.current = (paletteShiftRef.current + delta * shiftRate) % 1;
+    // Vocals gently accelerate the color ramp — sung passages iridesce.
+    paletteShiftRef.current =
+      (paletteShiftRef.current + dt * (0.03 + m.mid * 0.14 + m.vocalActivity * 0.05) * pace) % 1;
 
-    // Bar-aware brightness flash: spikes at the downbeat, decays in <0.5 beats.
-    const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 7) : 0;
-    // Drop punch: explosive brightness on detected bass drops.
-    const dropPunch = m.dropEvent * 1.0;
-
-    mat.uniforms.uResolution!.value.set(size.width, size.height);
-    mat.uniforms.uZoom!.value = zoomRef.current;
+    // The fractal domain tracks the proxy mesh's real world scale, so both
+    // the user Scale slider AND the modulation matrix (via the modulated
+    // scale group upstream) resize the bulb and its bounds together.
+    const s = Math.max(0.2, mesh.getWorldScale(worldScale.current).x);
+    (mat.uniforms.uProj!.value as THREE.Matrix4).copy(state.camera.projectionMatrix);
+    mat.uniforms.uPower!.value = power;
+    mat.uniforms.uScale!.value = s;
+    mat.uniforms.uYaw!.value = yawRef.current;
+    mat.uniforms.uPitch!.value = 0.35 + Math.sin(pitchRef.current) * 0.25;
     mat.uniforms.uPaletteShift!.value = paletteShiftRef.current;
-    mat.uniforms.uBassPulse!.value =
-      (m.bass + m.impact * 0.4 + barFlash * 0.4 + dropPunch) * (1 - m.silence * 0.7);
-    mat.uniforms.uHigh!.value = m.high;
-    mat.uniforms.uFade!.value = fadeRef.current;
+    mat.uniforms.uGlow!.value = Math.min(1.2, m.impact * 0.7 + m.kick * 0.35) * (1 - m.silence * 0.6);
+    mat.uniforms.uRim!.value = 0.25 + m.shimmer * 0.9 + m.hat * 0.25;
+    mat.uniforms.uAfterglow!.value = m.afterglow;
     (mat.uniforms.uBassColor!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uMidColor!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uHighColor!.value as THREE.Color).set(palette.high);
-
-    if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
-  // Size the plane to cover the full viewport at z=0 so no canvas background
-  // ever shows through. `viewport.width/height` give world units at the focal
-  // plane; multiply by a safety factor for camera shake / aspect changes.
-  const planeW = viewport.width * 1.6;
-  const planeH = viewport.height * 1.6;
-
+  // Proxy sphere at the DE bound: BackSide so the march still runs when the
+  // camera flies INSIDE the bound; depth comes from gl_FragDepth per pixel.
+  // NOTE: `scale` reaches this mesh through the modulated scale group that
+  // wraps every preset, so we don't re-apply it here.
   return (
-    <mesh position={[0, 0, 0]}>
-      <planeGeometry args={[planeW, planeH]} />
+    <mesh ref={meshRef} frustumCulled={false}>
+      <sphereGeometry args={[BULB_BOUND, 48, 32]} />
       <shaderMaterial
         ref={matRef}
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
         uniforms={uniforms}
+        side={THREE.BackSide}
+        depthWrite
+        depthTest
       />
     </mesh>
   );

@@ -5,6 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 
 const terrainVertex = /* glsl */ `
 uniform float uTime;
@@ -128,6 +129,7 @@ void main() {
 `;
 
 export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
+  const mods = useModulation();
   const terrainMatRef = useRef<THREE.ShaderMaterial>(null);
   const skyMatRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -173,22 +175,27 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     if (!terrainMat || !skyMat) return;
 
     const m = metricsRef.current;
-    scrollRef.current += delta * speed * (0.45 + m.energy * 1.4 + m.impact * 0.8);
+    const spd = mods.current.speed ?? speed;
+    // Drive speed follows the song's arc: valleys cruise, peaks floor it.
+    const sectionPace = 0.7 + m.sectionLevel * 0.55;
+    scrollRef.current += delta * spd * (0.45 + m.energy * 1.4 + m.impact * 0.8) * sectionPace;
     beatDollyRef.current = Math.max(0, beatDollyRef.current - delta * 4);
     if (m.impact > 0.35) beatDollyRef.current = 1;
 
     terrainMat.uniforms.uTime!.value = state.clock.elapsedTime;
     terrainMat.uniforms.uScroll!.value = scrollRef.current;
     terrainMat.uniforms.uBass!.value = m.bass + m.impact * 0.4;
-    terrainMat.uniforms.uMid!.value = m.mid;
+    terrainMat.uniforms.uMid!.value = m.mid + m.afterglow * 0.2;
     terrainMat.uniforms.uEnergy!.value = m.energy;
     (terrainMat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (terrainMat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
 
     skyMat.uniforms.uTime!.value = state.clock.elapsedTime;
-    skyMat.uniforms.uBass!.value = m.bass;
+    // Build-ups swell the sun before the drop lands; afterglow keeps the
+    // horizon warm after it passes.
+    skyMat.uniforms.uBass!.value = m.bass + m.tension * 0.35 + m.afterglow * 0.15;
     skyMat.uniforms.uHigh!.value = m.high;
-    skyMat.uniforms.uBeat!.value = m.impact;
+    skyMat.uniforms.uBeat!.value = m.impact + m.dropEvent * 0.6;
     (skyMat.uniforms.uSunColor!.value as THREE.Color).set(palette.bass);
     (skyMat.uniforms.uSkyColor!.value as THREE.Color).set(palette.bass);
 

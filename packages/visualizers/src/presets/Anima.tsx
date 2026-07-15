@@ -5,6 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 
 /**
  * Anima — the showcase preset for the living visualizer.
@@ -41,6 +42,10 @@ uniform float uTenderness;
 uniform float uMoodValence;
 uniform float uSilence;
 uniform float uTension;
+// Heuristic stem activity + song structure (0..1 each).
+uniform float uVocal;
+uniform float uSection;
+uniform float uAfterglow;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -71,9 +76,10 @@ void main() {
   float liveTime = uTime * (1.0 - uHoldBreath * 0.85);
 
   // ===== SOUL CORE =====
-  // A central glow that breathes; bass + barFlash punch it.
+  // A central glow that breathes; bass + barFlash punch it. Section level
+  // grows the core through choruses; afterglow keeps it warm after them.
   float r = length(uv);
-  float coreSize = 0.18 + uBass * 0.12 + uRelease * 0.25;
+  float coreSize = 0.18 + uBass * 0.12 + uRelease * 0.25 + uSection * 0.06 + uAfterglow * 0.04;
   float core = exp(-pow(r / coreSize, 2.2)) * (1.0 + uBeat * 0.6);
 
   // ===== AURORA CURTAINS =====
@@ -117,9 +123,11 @@ void main() {
   vec3 wispCol = uColorHigh;
 
   vec3 col = vec3(0.0);
-  col += coreCol * core * (1.0 + uRelease * 1.6);
-  col += auroraColor * aurora * (0.7 + uTenderness * 0.6);
-  col += wispCol * wisp * (0.8 + uHigh * 1.2);
+  col += coreCol * core * (1.0 + uRelease * 1.6 + uAfterglow * 0.35);
+  // Vocals literally light the curtains: when a voice is present the aurora
+  // breathes brighter, so singing passages read differently from drops.
+  col += auroraColor * aurora * (0.7 + uTenderness * 0.6 + uVocal * 0.55);
+  col += wispCol * wisp * (0.8 + uHigh * 1.2 + uVocal * 0.5);
 
   // ===== EFFECTS =====
   // Drop punch — momentary fullscreen wash.
@@ -144,7 +152,8 @@ void main() {
 }
 `;
 
-export function AnimaScene({ analyser, palette, speed = 1 }: VisualizerSceneProps) {
+export function AnimaScene({ analyser, palette, speed = 1, backdrop = false }: VisualizerSceneProps) {
+  const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
@@ -169,6 +178,9 @@ export function AnimaScene({ analyser, palette, speed = 1 }: VisualizerSceneProp
       uMoodValence: { value: 0 },
       uSilence: { value: 0 },
       uTension: { value: 0 },
+      uVocal: { value: 0 },
+      uSection: { value: 0 },
+      uAfterglow: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -181,7 +193,7 @@ export function AnimaScene({ analyser, palette, speed = 1 }: VisualizerSceneProp
     if (!mat) return;
     const m = metricsRef.current;
 
-    timeRef.current += Math.min(delta, 0.1) * speed;
+    timeRef.current += Math.min(delta, 0.1) * (mods.current.speed ?? speed);
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass;
@@ -198,6 +210,9 @@ export function AnimaScene({ analyser, palette, speed = 1 }: VisualizerSceneProp
     mat.uniforms.uMoodValence!.value = m.moodValence;
     mat.uniforms.uSilence!.value = m.silence;
     mat.uniforms.uTension!.value = m.tension;
+    mat.uniforms.uVocal!.value = m.vocalActivity;
+    mat.uniforms.uSection!.value = m.sectionLevel;
+    mat.uniforms.uAfterglow!.value = m.afterglow;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
@@ -206,8 +221,11 @@ export function AnimaScene({ analyser, palette, speed = 1 }: VisualizerSceneProp
   });
 
   // Fullscreen triangle in clip space — no model/view matrices needed.
+  // With a BackgroundLayer sky active, switch to additive compositing so
+  // Anima's black regions become windows onto the environment instead of
+  // painting over it.
   return (
-    <mesh frustumCulled={false}>
+    <mesh frustumCulled={false} renderOrder={1}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
@@ -221,6 +239,8 @@ export function AnimaScene({ analyser, palette, speed = 1 }: VisualizerSceneProp
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
         uniforms={uniforms}
+        transparent={backdrop}
+        blending={backdrop ? THREE.AdditiveBlending : THREE.NormalBlending}
         depthWrite={false}
       />
     </mesh>

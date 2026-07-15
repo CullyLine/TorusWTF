@@ -30,6 +30,7 @@ import {
   type CallResponseState,
 } from './dsp/callResponse';
 import { extractBands } from './dsp/bands';
+import { createStructureState, updateStructure, type StructureState } from './dsp/structure';
 
 export interface AudioMetrics {
   bass: number;
@@ -58,6 +59,37 @@ export interface AudioMetrics {
    * sparkle from this instead of raw `high` flux.
    */
   shimmer: number;
+  /**
+   * 0..~1.2 kick-drum envelope: fires on low-band transients (the actual
+   * kick pattern, not sustained bass), rings down in ~0.16s. The tightest
+   * of the drum trio — drive floor punches and ground shocks from this.
+   */
+  kick: number;
+  /**
+   * 0..~1.2 snare/clap envelope: mid-band transients with hi-hat bleed
+   * subtracted, ~0.2s ring-down. The backbeat — drive lateral accents and
+   * crack-flash moments from this.
+   */
+  snare: number;
+  /**
+   * 0..~1.2 hi-hat/cymbal envelope: high-band transients with a very fast
+   * ~0.11s decay — faster and spikier than `shimmer` (which melts slowly).
+   * Drive tick-tick sparkle rhythm from this.
+   */
+  hat: number;
+  /**
+   * 0..1 song-relative intensity: the current moment's percentile against
+   * ~48s of rolling history. 0.9+ = the biggest the song has been; 0.2 =
+   * a valley. Falls much slower than it rises (~4s) so section ends
+   * linger instead of snapping.
+   */
+  sectionLevel: number;
+  /**
+   * 0..1 lingering warmth after peaks and drops — decays over ~6.5s once
+   * the moment passes. Drive residual saturation/bloom/light from this so
+   * big moments leave a visible trace.
+   */
+  afterglow: number;
   /** Detected tempo (whole BPM). null = not enough confidence yet. */
   bpm: number | null;
   /** 0..1 phase within the current beat. Advances even between detected onsets. */
@@ -126,6 +158,11 @@ export const DEFAULT_METRICS: AudioMetrics = {
   impact: 0,
   swell: 0.15,
   shimmer: 0,
+  kick: 0,
+  snare: 0,
+  hat: 0,
+  sectionLevel: 0.35,
+  afterglow: 0,
   bpm: null,
   beatPhase: 0,
   barPhase: 0,
@@ -208,6 +245,14 @@ export interface MetricsScales {
    * old raw behavior where `reactivity` is the only gain.
    */
   autoGain?: boolean;
+  /**
+   * 0..1 — how long big moments echo after they pass. Scales the RELEASE
+   * side only of the musical envelopes (swell, shimmer, impact ring-down,
+   * band release, section fall, afterglow fade); attacks stay instant so
+   * hits land just as hard. 0 = the old tight feel, 1 = peaks take ~3x
+   * longer to fade out.
+   */
+  linger?: number;
 }
 
 export function AudioMetricsProvider({
@@ -226,6 +271,7 @@ export function AudioMetricsProvider({
   lastOnsetRef,
   energy: energyExpand = 0,
   autoGain = true,
+  linger = 0.3,
   metricsOutRef,
   externalMetricsRef,
 }: {
@@ -241,6 +287,13 @@ export function AudioMetricsProvider({
   const swellEnvRef = useRef(0.15);
   const shimmerEnvRef = useRef(0);
   const shimmerPrevHighRef = useRef(0.15);
+  // Drum-trio envelope state (kick / snare / hat).
+  const kickEnvRef = useRef(0);
+  const snareEnvRef = useRef(0);
+  const hatEnvRef = useRef(0);
+  const fluxPrevBassRef = useRef(0.15);
+  // Song-structure awareness (sectionLevel / afterglow).
+  const structureState = useRef<StructureState>(createStructureState());
   // Auto-gain state: slow loudness envelope + the smoothed gain it drives.
   const agcEnvRef = useRef(AGC_TARGET);
   const agcGainRef = useRef(1);
@@ -280,6 +333,13 @@ export function AudioMetricsProvider({
     let bassActivity = 0;
     let leadActivity = 0;
     let centroidHz = 0;
+    // Per-band transient flux (drum classification) + pre-AGC level
+    // (song-structure detection — AGC would flatten exactly the loudness
+    // differences that section detection needs).
+    let bassFlux = 0;
+    let midFlux = 0;
+    let highFlux = 0;
+    let rawLevel = 0;
 
     if (analyser) {
       const bins = analyser.getFrequencyData(freqBuf.current);
@@ -355,10 +415,13 @@ export function AudioMetricsProvider({
         high = Math.max(0, Math.min(METRIC_CEILING, high));
         energy = Math.max(0, Math.min(METRIC_CEILING, energy));
 
+        rawLevel = levels.full;
+
         // --- Heuristic stem detection (no ML, just band patterns) ---
         // Drums: spectral flux at mid/high — transient bursts (snare, hat).
-        const midFlux = Math.max(0, mid - prevMid.current);
-        const highFlux = Math.max(0, high - prevHigh.current);
+        bassFlux = Math.max(0, bass - fluxPrevBassRef.current);
+        midFlux = Math.max(0, mid - prevMid.current);
+        highFlux = Math.max(0, high - prevHigh.current);
         drumActivity = Math.min(1, (midFlux * 3 + highFlux * 4) * 1.2);
 
         // Vocals: energy concentrated in vocal formant range (~200-3000Hz).
@@ -397,6 +460,7 @@ export function AudioMetricsProvider({
 
         prevMid.current = mid;
         prevHigh.current = high;
+        fluxPrevBassRef.current = bass;
       }
     }
 
@@ -411,6 +475,13 @@ export function AudioMetricsProvider({
     prevEnergy.current = lerp(prevEnergy.current, energy, Math.min(1, 0.2 * speed));
 
     // --- Pulse envelopes: the shared musical-motion vocabulary ---
+    // Linger stretches ONLY the release side of every envelope below —
+    // attacks stay instant so hits land, but the way back down slows so
+    // moments hang in the air. Impact keeps most of its ring-down (punch
+    // must stay punch); the breathier signals stretch further.
+    const lingerAmt = Math.max(0, Math.min(1, linger));
+    const lingerRelease = 1 + lingerAmt * 2.2;
+
     // Impact: the beat tracker's flux spike is a 1-frame impulse; here it
     // becomes a struck-bell envelope — instant attack, exponential ring-down.
     // Presets that scale/flash/kick from `impact` move fluidly by
@@ -419,12 +490,13 @@ export function AudioMetricsProvider({
     impactEnvRef.current =
       impactHit > impactEnvRef.current
         ? impactHit
-        : impactEnvRef.current * Math.exp(-dtClamped / IMPACT_DECAY_TAU);
+        : impactEnvRef.current * Math.exp(-dtClamped / (IMPACT_DECAY_TAU * (1 + lingerAmt * 0.7)));
 
     // Swell: asymmetric loudness breath — blooms quickly when the track
     // opens up, exhales slowly when it pulls back.
     const swellTarget = Math.min(1, energy * 0.8 + beat * 0.1);
-    const swellTau = swellTarget > swellEnvRef.current ? SWELL_RISE_TAU : SWELL_FALL_TAU;
+    const swellTau =
+      swellTarget > swellEnvRef.current ? SWELL_RISE_TAU : SWELL_FALL_TAU * lingerRelease;
     swellEnvRef.current +=
       (swellTarget - swellEnvRef.current) * (1 - Math.exp(-dtClamped / swellTau));
 
@@ -436,7 +508,27 @@ export function AudioMetricsProvider({
     shimmerEnvRef.current =
       shimmerTarget > shimmerEnvRef.current
         ? shimmerTarget
-        : shimmerEnvRef.current * Math.exp(-dtClamped / SHIMMER_DECAY_TAU);
+        : shimmerEnvRef.current *
+          Math.exp(-dtClamped / (SHIMMER_DECAY_TAU * (1 + lingerAmt * 1.5)));
+
+    // Drum trio: per-band transient flux → struck-bell envelopes. Kick is
+    // the low thump, snare the mid crack (with hat bleed subtracted so a
+    // busy hat pattern doesn't read as snares), hat the fast top tick.
+    const kickHit = Math.min(1.2, Math.max(0, bassFlux - 0.035) * 5.5);
+    kickEnvRef.current =
+      kickHit > kickEnvRef.current
+        ? kickHit
+        : kickEnvRef.current * Math.exp(-dtClamped / KICK_DECAY_TAU);
+    const snareHit = Math.min(1.2, Math.max(0, midFlux - highFlux * 0.35 - 0.028) * 6);
+    snareEnvRef.current =
+      snareHit > snareEnvRef.current
+        ? snareHit
+        : snareEnvRef.current * Math.exp(-dtClamped / SNARE_DECAY_TAU);
+    const hatHit = Math.min(1.2, Math.max(0, highFlux - 0.022) * 6.5);
+    hatEnvRef.current =
+      hatHit > hatEnvRef.current
+        ? hatHit
+        : hatEnvRef.current * Math.exp(-dtClamped / HAT_DECAY_TAU);
 
     // Smoothness 0..1 → response rate 1..~0.02. Kept as a per-frame lerp for
     // the secondary signals (drum/vocal/lead/mood) below.
@@ -446,9 +538,10 @@ export function AudioMetricsProvider({
     // Asymmetric attack/release envelope for the headline bands. Attack is
     // always quick so hits land; release slows with smoothness so motion
     // glides to rest instead of stalling uniformly. Time-constant based, so
-    // it behaves the same regardless of frame rate.
+    // it behaves the same regardless of frame rate. Linger stretches the
+    // release further still.
     const attackTau = 0.015 + smoothClamped * 0.06;
-    const releaseTau = 0.06 + smoothClamped * 0.85;
+    const releaseTau = (0.06 + smoothClamped * 0.85) * (1 + lingerAmt * 1.2);
     const envFollow = (prevVal: number, target: number): number => {
       const tau = target >= prevVal ? attackTau : releaseTau;
       const a = 1 - Math.exp(-dtClamped / Math.max(1e-4, tau));
@@ -469,6 +562,18 @@ export function AudioMetricsProvider({
       },
       Math.min(delta, 0.1),
       performance.now() / 1000,
+    );
+
+    // Song structure — where this moment sits vs the song's history, plus
+    // the lingering afterglow of peaks. Fed the pre-AGC level so section
+    // dynamics survive auto-gain. Linger stretches how slowly sections and
+    // afterglow exhale.
+    updateStructure(
+      structureState.current,
+      rawLevel,
+      macroState.current.dropEvent,
+      dtClamped,
+      lingerRelease,
     );
 
     // Compute instantaneous arousal/valence for choreography input.
@@ -550,6 +655,11 @@ export function AudioMetricsProvider({
       impact: impactEnvRef.current,
       swell: swellEnvRef.current,
       shimmer: shimmerEnvRef.current,
+      kick: kickEnvRef.current,
+      snare: snareEnvRef.current,
+      hat: hatEnvRef.current,
+      sectionLevel: structureState.current.sectionLevel,
+      afterglow: structureState.current.afterglow,
       bpm: bpmNow,
       beatPhase,
       barPhase,
@@ -626,6 +736,13 @@ const IMPACT_DECAY_TAU = 0.24;
 const SWELL_RISE_TAU = 0.3;
 const SWELL_FALL_TAU = 2.1;
 const SHIMMER_DECAY_TAU = 0.45;
+
+// --- Drum trio envelope tuning ---
+// Kick is tight (a thump, not a hum), snare slightly rounder, hat a fast
+// tick that clears before the next 16th note at typical tempos.
+const KICK_DECAY_TAU = 0.16;
+const SNARE_DECAY_TAU = 0.2;
+const HAT_DECAY_TAU = 0.11;
 
 // Soft cap with 10x headroom: lets cranked-up sliders push past the
 // "everything looks normal" 0..1 range without ever going NaN/Infinity.

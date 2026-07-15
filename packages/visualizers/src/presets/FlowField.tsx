@@ -5,6 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 import { FLOW_GLSL } from '../dsp/flowGlsl';
 import {
   DEFAULT_FLOW_PARAMS,
@@ -292,6 +293,7 @@ export function FlowFieldScene({
   interactStrength = 1,
 }: VisualizerSceneProps) {
   const metricsRef = useMetricsRef();
+  const mods = useModulation();
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const { gl, camera } = useThree();
 
@@ -551,12 +553,22 @@ export function FlowFieldScene({
   useFrame((_state, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.05);
+    // Modulation-matrix values (fall back to slider props when unrouted).
+    const mv = mods.current;
+    const spd = mv.speed ?? speed;
+    const turbulenceNow = mv.turbulence ?? turbulence;
+    const vortexNow = mv.vortexAmount ?? vortexAmount;
+    const trailNow = mv.trailLength ?? trailLength;
+    const densityNow = mv.density ?? density;
+    const stirNow = mv.interactStrength ?? interactStrength;
 
     // Field-evolution time: monotonic, music-paced, user-paced. The impact
     // envelope (not the raw beat spike) surges the current on hits so the
     // acceleration reads as a fluid push rather than a jolt.
     timeRef.current +=
-      dt * (0.5 + Math.min(m.energy, 1.5) * 0.4 + m.impact * 0.45) * Math.max(0.05, speed);
+      dt *
+      (0.5 + Math.min(m.energy, 1.5) * 0.4 + m.impact * 0.45 + m.sectionLevel * 0.12) *
+      Math.max(0.05, spd);
 
     // Drop → the field reorganizes into a new pattern.
     if (m.dropEvent > 0.9 && prevDropRef.current <= 0.9) {
@@ -566,8 +578,8 @@ export function FlowFieldScene({
 
     // Audio → flow params (CPU twin drives GPU field uniforms).
     const fp = flowParamsFromMetrics(m, cpuParamsRef.current, {
-      turbulence,
-      vortex: vortexAmount,
+      turbulence: turbulenceNow,
+      vortex: vortexNow,
     });
     fp.time = timeRef.current;
     fp.seed = seedRef.current;
@@ -592,7 +604,7 @@ export function FlowFieldScene({
     // moves, decays within ~0.6s of stillness so a parked cursor lets go.
     const ptr = pointerRef.current;
     ptr.movement = Math.max(0, ptr.movement - dt * 1.8);
-    const ptrTarget = Math.min(1, ptr.movement) * 0.8 * interactStrength;
+    const ptrTarget = Math.min(1, ptr.movement) * 0.8 * stirNow;
     ptr.strength += (ptrTarget - ptr.strength) * Math.min(1, dt * 8);
 
     // ---- Sim pass (ping-pong) ----
@@ -636,21 +648,24 @@ export function FlowFieldScene({
     ru.uTurbulence.value = fp.turbulence;
     ru.uSwirl.value = fp.swirl;
     ru.uBandSpread.value = fp.bandSpread;
-    ru.uTrailLen.value = 0.04 + trailLength * 0.07 * (1 + m.swell * 0.55 + m.impact * 0.2);
-    ru.uDensity.value = Math.max(0.02, Math.min(1, density));
+    ru.uTrailLen.value =
+      0.04 + trailNow * 0.07 * (1 + m.swell * 0.55 + m.impact * 0.2 + m.afterglow * 0.15);
+    ru.uDensity.value = Math.max(0.02, Math.min(1, densityNow));
     // Additive overdraw normalization: a quarter-million translucent lines
     // saturate to white unless per-line alpha shrinks with the swarm size.
     // Brightness breathes with the swell and lands with impacts.
     const alphaNorm = Math.min(1, Math.max(0.15, 70000 / count));
     ru.uOpacity.value =
-      (0.34 + m.swell * 0.3 + m.impact * 0.08) * (1 - m.silence * 0.5) * alphaNorm;
+      (0.34 + m.swell * 0.3 + m.impact * 0.08 + m.afterglow * 0.12) *
+      (1 - m.silence * 0.5) *
+      alphaNorm;
     (ru.uColorBass.value as THREE.Color).set(palette.bass);
     (ru.uColorMid.value as THREE.Color).set(palette.mid);
     (ru.uColorHigh.value as THREE.Color).set(palette.high);
 
     const hu = headUniforms;
     hu.uPositions.value = writeTarget.texture;
-    hu.uDensity.value = Math.max(0.02, Math.min(1, density));
+    hu.uDensity.value = Math.max(0.02, Math.min(1, densityNow));
     hu.uOpacity.value =
       (0.52 + m.swell * 0.32 + m.impact * 0.12) *
       (1 - m.silence * 0.45) *

@@ -1,16 +1,18 @@
 'use client';
 
-import { useMemo, type MutableRefObject, type RefObject } from 'react';
-import { Canvas, type RootState } from '@react-three/fiber';
+import { useMemo, useRef, type MutableRefObject, type ReactNode, type RefObject } from 'react';
+import { Canvas, useFrame, type RootState } from '@react-three/fiber';
+import type { Group } from 'three';
 
 export type { RootState } from '@react-three/fiber';
 import { useAudioAnalyser } from './audio';
 import { detectTier } from './tier';
-import { VISUALIZERS, FULLSCREEN_SHADER_PRESETS, type VisualizerId } from './registry';
+import { VISUALIZERS, type VisualizerId } from './registry';
 import { BackgroundLayer, type BackgroundMode } from './BackgroundLayer';
 import { AudioMetricsProvider, type AudioMetrics, type MetricsScales } from './metrics';
 import type { VisualImpulses } from './impulse';
 import { LivingPaletteDriver, type LivingPaletteTarget } from './livingPalette';
+import { ModulationProvider, useModulation, type ModRouting, type ModulatedValues } from './modulation';
 import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 import type { AnalyserHandle } from './audio';
@@ -112,6 +114,16 @@ interface VisualizerCanvasProps {
   /** Background visibility 0..1. Default 0.6. */
   backgroundIntensity?: number;
   /**
+   * 0..1 — how long big moments echo after they pass. Stretches only the
+   * release side of the musical envelopes; hits still land instantly.
+   */
+  linger?: number;
+  /**
+   * Modulation matrix routings — continuous audio-signal → control-value
+   * mappings computed per frame inside the canvas. See `modulation.tsx`.
+   */
+  modMatrix?: ModRouting[];
+  /**
    * One-shot visual commands (trigger mappings / MIDI). Mutable object with
    * a stable identity; the rig and palette driver consume fields per frame.
    */
@@ -172,6 +184,8 @@ export function VisualizerCanvas({
   colorLife = 0.6,
   background = 'none',
   backgroundIntensity = 0.6,
+  linger = 0.3,
+  modMatrix,
   impulses,
   metricsOutRef,
   externalMetricsRef,
@@ -211,8 +225,27 @@ export function VisualizerCanvas({
     lastOnsetRef,
     energy,
     autoGain,
+    linger,
     metricsOutRef,
     externalMetricsRef,
+  };
+
+  // Base values the modulation matrix modulates AROUND — the current slider
+  // positions. Rebuilt on render (slider edits), read per frame by the driver.
+  const modBase: ModulatedValues = {
+    speed,
+    scale,
+    bloomIntensity,
+    lightLevel,
+    colorLife,
+    cameraDistance,
+    bassShake,
+    inflate,
+    turbulence,
+    trailLength,
+    density,
+    vortexAmount,
+    interactStrength,
   };
 
   const containerStyle = exportSize
@@ -241,56 +274,80 @@ export function VisualizerCanvas({
           >
             <color attach="background" args={['#0a0b1e']} />
             <AudioMetricsProvider analyser={analyser} {...metricsScales}>
-              <LivingPaletteDriver
-                base={palette}
-                out={livingPalette}
-                amount={colorLife}
-                impulses={impulses}
-              />
-              <SceneRig
-                palette={livingPalette}
-                tier={tier}
-                embedded={embedded}
-                bloomIntensity={bloomIntensity}
-                cameraMode={cameraMode}
-                bassShake={bassShake}
-                anima={anima}
-                aura={aura}
-                creature={creature}
-                cinematicSpeed={cinematicSpeed}
-                cameraDistance={cameraDistance}
-                lightLevel={lightLevel}
-                impulses={impulses}
-              />
-              {background !== 'none' && !FULLSCREEN_SHADER_PRESETS.has(preset) ? (
-                <BackgroundLayer
-                  mode={background}
-                  intensity={backgroundIntensity}
+              <ModulationProvider routings={modMatrix} base={modBase}>
+                <LivingPaletteDriver
+                  base={palette}
+                  out={livingPalette}
+                  amount={colorLife}
+                  impulses={impulses}
+                />
+                <SceneRig
                   palette={livingPalette}
                   tier={tier}
+                  embedded={embedded}
+                  bloomIntensity={bloomIntensity}
+                  cameraMode={cameraMode}
+                  bassShake={bassShake}
+                  anima={anima}
+                  aura={aura}
+                  creature={creature}
+                  cinematicSpeed={cinematicSpeed}
+                  cameraDistance={cameraDistance}
+                  lightLevel={lightLevel}
+                  impulses={impulses}
                 />
-              ) : null}
-              <group scale={scale}>
-                <def.Scene
-                  analyser={analyser}
-                  palette={livingPalette}
-                  tier={tier}
-                  scale={scale}
-                  speed={speed}
-                  inflate={inflate}
-                  appendages={appendages}
-                  subSpheres={subSpheres}
-                  turbulence={turbulence}
-                  trailLength={trailLength}
-                  density={density}
-                  vortexAmount={vortexAmount}
-                  interactStrength={interactStrength}
-                />
-              </group>
+                {background !== 'none' ? (
+                  <BackgroundLayer
+                    mode={background}
+                    intensity={backgroundIntensity}
+                    palette={livingPalette}
+                    tier={tier}
+                  />
+                ) : null}
+                <ModulatedScaleGroup scale={scale}>
+                  <def.Scene
+                    analyser={analyser}
+                    palette={livingPalette}
+                    tier={tier}
+                    scale={scale}
+                    speed={speed}
+                    inflate={inflate}
+                    appendages={appendages}
+                    subSpheres={subSpheres}
+                    turbulence={turbulence}
+                    trailLength={trailLength}
+                    density={density}
+                    vortexAmount={vortexAmount}
+                    interactStrength={interactStrength}
+                    backdrop={background !== 'none'}
+                  />
+                </ModulatedScaleGroup>
+              </ModulationProvider>
             </AudioMetricsProvider>
           </Canvas>
         </div>
       </VisualizerZoomSurface>
     </CameraZoomProvider>
+  );
+}
+
+/**
+ * The scene-scale wrapper, made modulation-aware: reads the live `scale`
+ * value from the mod matrix every frame (falling back to the slider prop)
+ * so routings like "Kick → Size" physically pump the whole scene.
+ */
+function ModulatedScaleGroup({ scale, children }: { scale: number; children: ReactNode }) {
+  const groupRef = useRef<Group>(null);
+  const mods = useModulation();
+  useFrame(() => {
+    const g = groupRef.current;
+    if (!g) return;
+    const s = mods.current.scale ?? scale;
+    if (g.scale.x !== s) g.scale.setScalar(s);
+  });
+  return (
+    <group ref={groupRef} scale={scale}>
+      {children}
+    </group>
   );
 }

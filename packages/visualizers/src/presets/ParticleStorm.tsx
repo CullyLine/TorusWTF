@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 import {
   DEFAULT_FLOW_PARAMS,
   flowParamsFromMetrics,
@@ -15,6 +16,7 @@ import {
 import { getDotTexture } from '../dotTexture';
 
 export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
+  const mods = useModulation();
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -69,20 +71,29 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     if (!points || !mat) return;
 
     const m = metricsRef.current;
-    const drive = delta * speed * (0.15 + m.energy * 2.4 + m.impact * 3);
+    const spd = mods.current.speed ?? speed;
+    // The storm's rage follows the song's arc: valleys drift, peaks tear.
+    // Live drums whip the wind beyond what raw band energy reports.
+    const sectionPace = 0.7 + m.sectionLevel * 0.5;
+    const drive =
+      delta * spd * (0.15 + m.energy * 2.4 + m.impact * 3 + m.drumActivity * 0.8) * sectionPace;
     const pulse = 1 + m.bass * 0.8 + m.impact * 0.55;
     const activeRatio = 0.35 + m.flow * 0.65;
 
     // Shared flow current — same math as the Flow Field flagship.
     const dtClamped = Math.min(delta, 0.05);
-    flowTimeRef.current += dtClamped * speed * (0.5 + Math.min(m.energy, 1.5) * 0.4);
+    flowTimeRef.current += dtClamped * spd * (0.5 + Math.min(m.energy, 1.5) * 0.4);
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
     const flowAmount = dtClamped * (0.45 + m.swell * 0.7 + m.dropEvent * 1.2);
+    // Pre-beat gather: the swarm contracts toward center in the breath
+    // before each predicted beat, then the hit flings it back out.
+    const gatherPull = 1 - m.gather * dtClamped * 1.6;
     const fv = flowScratch.current;
 
     mat.size = 0.045 + m.swell * 0.05 + m.impact * 0.04;
-    mat.opacity = 0.55 + m.swell * 0.4;
+    // Afterglow keeps the swarm faintly incandescent after big moments.
+    mat.opacity = Math.min(1, 0.55 + m.swell * 0.4 + m.afterglow * 0.15);
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
@@ -115,9 +126,9 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
       // Advect through the band's current. Each band rides its own field
       // until convergence merges them into one collective stream.
       sampleFlow(fv, x, y, z, band, fp);
-      x += fv.x * flowAmount;
-      y += fv.y * flowAmount;
-      z += fv.z * flowAmount;
+      x = (x + fv.x * flowAmount) * gatherPull;
+      y = (y + fv.y * flowAmount) * gatherPull;
+      z = (z + fv.z * flowAmount) * gatherPull;
       const dist = Math.hypot(x, y, z);
       if (dist > 5 + m.breath * 2) {
         x *= 0.45;
@@ -131,7 +142,7 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
     points.rotation.y += drive * (0.5 + m.mid);
-    points.rotation.x += m.impact * 0.05;
+    points.rotation.x += m.impact * 0.05 + m.dropEvent * 0.02;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });

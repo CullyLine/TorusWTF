@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 
 const vertexShader = /* glsl */ `
 uniform float uTime;
@@ -144,6 +145,7 @@ void main() {
 `;
 
 export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
+  const mods = useModulation();
   const meshRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
@@ -174,18 +176,24 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
     if (!mesh || !mat) return;
 
     const m = metricsRef.current;
+    const spd = mods.current.speed ?? speed;
     // Music-paced clock: flows faster in loud passages, honors Speed.
-    timeRef.current += Math.min(delta, 0.1) * speed * (0.6 + m.swell * 0.9 + m.impact * 0.4);
+    // Tenderness stills the surface — vocal-led quiet passages read as a
+    // calm pool instead of churning metal.
+    const calm = 1 - m.tenderness * 0.35;
+    timeRef.current +=
+      Math.min(delta, 0.1) * spd * (0.6 + m.swell * 0.9 + m.impact * 0.4) * calm;
     mat.uniforms.uTime!.value = timeRef.current;
-    mat.uniforms.uBass!.value = m.bass;
+    mat.uniforms.uBass!.value = m.bass * calm;
     mat.uniforms.uMid!.value = m.mid;
-    mat.uniforms.uEnergy!.value = m.energy;
+    // Afterglow keeps the chrome softly lit from within after big moments.
+    mat.uniforms.uEnergy!.value = m.energy + m.afterglow * 0.4;
     mat.uniforms.uBeat!.value = m.impact;
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (mat.uniforms.uEmissive!.value as THREE.Color).set(palette.high);
 
-    mesh.rotation.y += delta * speed * (0.15 + m.mid * 0.4);
+    mesh.rotation.y += delta * spd * (0.15 + m.mid * 0.4) * (0.72 + m.sectionLevel * 0.5);
     mesh.rotation.x = Math.sin(state.clock.elapsedTime * 0.35) * 0.12 + m.high * 0.08;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);

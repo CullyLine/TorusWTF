@@ -58,12 +58,11 @@ const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
   glow: 'Glow',
 };
 
-// Presets that paint their own fullscreen background — the layer is hidden
-// behind them, so we surface a hint rather than letting it look broken.
+// Presets that still paint their own backdrop shader — the shared sky
+// composites additively instead of replacing the scene.
 const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'liquid_blob',
   'anima',
-  'mandelbrot_zoom',
 ]);
 
 export function ControlPanel({

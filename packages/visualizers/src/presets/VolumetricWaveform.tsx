@@ -5,10 +5,12 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 
 import { getDotTexture } from '../dotTexture';
 
 export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
+  const mods = useModulation();
   const groupRef = useRef<THREE.Group>(null);
   const lineRef = useRef<THREE.LineSegments>(null);
   const dustRef = useRef<THREE.Points>(null);
@@ -59,8 +61,18 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     if (!line || !group) return;
 
     const m = metricsRef.current;
-    group.rotation.y += delta * speed * (0.1 + m.mid * 0.4 + m.impact * 0.2);
-    group.scale.setScalar(1 + m.swell * 0.1 + m.impact * 0.06);
+    const spd = mods.current.speed ?? speed;
+    group.rotation.y += delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2);
+    // Afterglow lets the whole form stay slightly swelled after peaks.
+    group.scale.setScalar(1 + m.swell * 0.1 + m.impact * 0.06 + m.afterglow * 0.04);
+
+    // The line itself brightens when a lead/vocal carries the moment —
+    // the waveform IS the melody's voice, so give it presence.
+    const lineMat = line.material as THREE.LineBasicMaterial;
+    lineMat.opacity = Math.min(
+      1,
+      0.72 + m.leadActivity * 0.18 + m.vocalActivity * 0.1 + m.afterglow * 0.1,
+    );
 
     // Live palette: re-tint the waveform gradient every frame so color life
     // and palette swaps reach the line (the mount-time buffer stays frozen).
@@ -83,7 +95,9 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       const bins = analyser.getTimeDomainData(timeBuf.current);
       if (bins > 0) {
         const arr = line.geometry.getAttribute('position').array as Float32Array;
-        const amp = 1.2 + m.energy * 1.3 + m.impact * 0.8;
+        // Section level scales the wave's reach: quiet valleys draw close
+        // and intimate, the song's biggest sections fill the frame.
+        const amp = (1.2 + m.energy * 1.3 + m.impact * 0.8) * (0.75 + m.sectionLevel * 0.45);
         for (let i = 0; i < samples; i++) {
           const src = Math.floor((i / samples) * bins);
           const v = (timeBuf.current[src]! / 128 - 1) * amp;
@@ -103,11 +117,11 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     if (dust) {
       const mat = dust.material as THREE.PointsMaterial;
       mat.size = 0.035 + m.flow * 0.05;
-      mat.opacity = 0.3 + m.swell * 0.55;
+      mat.opacity = Math.min(1, 0.3 + m.swell * 0.55 + m.afterglow * 0.2);
       mat.color.set(palette.mid);
       const posAttr = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
       const arr = posAttr.array as Float32Array;
-      const drive = delta * speed * (0.5 + m.energy * 3.5 + m.impact * 3);
+      const drive = delta * spd * (0.5 + m.energy * 3.5 + m.impact * 3);
       const active = 0.2 + m.flow * 0.8;
       for (let i = 0; i < dustCount; i++) {
         if (i / dustCount > active) continue;

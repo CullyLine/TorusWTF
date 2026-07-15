@@ -20,7 +20,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 }
 `;
 
-class LightLevelEffectImpl extends Effect {
+export class LightLevelEffectImpl extends Effect {
   constructor(level = 1) {
     super('LightLevelEffect', fragmentShader, {
       uniforms: new Map<string, Uniform>([['level', new Uniform(level)]]),

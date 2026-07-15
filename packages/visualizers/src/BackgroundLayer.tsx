@@ -9,18 +9,16 @@ import { getDotTexture } from './dotTexture';
 /**
  * BackgroundLayer — the always-subtle reactive backdrop.
  *
- * Fills the navy void behind the hero preset with slow, contrast-capped
- * beauty that reacts to the music without ever competing with the
- * foreground. Rendered at deep negative Z with additive, depth-write-off
- * materials so it sits firmly behind everything.
+ * Every mode is a true 360° environment (sky spheres / spherical star
+ * shells), not a flat card: whichever way the camera flies — orbit,
+ * cinematic sweeps, flow-riding — the backdrop is there. Shader modes
+ * compute color from the per-pixel WORLD DIRECTION on an inward-facing
+ * sphere, so there are no seams, no edges, and no "back of the set".
  *
  * Driven mostly by SLOW signals (`breath`, `flow`, `moodValence`,
- * `dropEvent`) so the background drifts and swells rather than strobing.
- * Honors `prefers-reduced-motion` by freezing the drift.
- *
- * This is intentionally shaped as the first schema-driven "scene node":
- * an explicit, serializable props bag (`mode`, `intensity`, `palette`)
- * that the future builder can route and edit.
+ * `dropEvent`, `afterglow`) so the background drifts and swells rather
+ * than strobing. Honors `prefers-reduced-motion` by freezing the drift.
+ * Contrast-capped so it never competes with the foreground preset.
  */
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
@@ -43,10 +41,15 @@ export interface BackgroundLayerProps {
 
 // Contrast caps per mode — the hard ceiling on how loud the background can
 // ever get, so it stays a background no matter the intensity slider.
-const NEBULA_CAP = 0.34;
-const AURORA_CAP = 0.4;
-const GLOW_CAP = 0.36;
-const STAR_OPACITY_CAP = 0.62;
+// (Raised slightly vs the old flat-card versions: the same energy budget
+// spread across a full sky sphere reads dimmer per pixel.)
+const NEBULA_CAP = 0.42;
+const AURORA_CAP = 0.5;
+const GLOW_CAP = 0.42;
+const STAR_OPACITY_CAP = 0.68;
+
+/** Sky sphere radius: far outside every camera path (max ~12 world units). */
+const SKY_RADIUS = 50;
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -86,7 +89,9 @@ interface ModeProps {
   reducedMotion: boolean;
 }
 
-// Shared GLSL fbm noise used by the shader-based modes.
+// Shared GLSL: 2D fbm noise + a seamless direction-domain fbm that blends
+// three axis projections (triplanar-on-the-sphere), so sky patterns have
+// no pole pinching and no wrap seam anywhere.
 const NOISE_GLSL = /* glsl */ `
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float noise(vec2 p) {
@@ -103,18 +108,55 @@ const NOISE_GLSL = /* glsl */ `
     for (int i = 0; i < 5; i++) { v += a * noise(p); p *= 2.0; a *= 0.5; }
     return v;
   }
+  float fbmDir(vec3 d, float s, vec2 drift) {
+    vec3 w = abs(d);
+    w /= (w.x + w.y + w.z);
+    return fbm(d.yz * s + drift) * w.x
+         + fbm(d.xz * s + drift * 1.13) * w.y
+         + fbm(d.xy * s + drift * 0.87) * w.z;
+  }
 `;
 
-const FULLSCREEN_VERTEX = /* glsl */ `
-  varying vec2 vUv;
+// Sky vertex shader: pass the world-space view direction for this fragment.
+// The sphere is camera-agnostic — direction is (worldPos - cameraPos), so
+// turning or flying the camera reveals the rest of a coherent sky.
+const SKY_VERTEX = /* glsl */ `
+  varying vec3 vDir;
   void main() {
-    vUv = uv;
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vDir = normalize(wp.xyz - cameraPosition);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
+interface SkySphereProps {
+  matRef: React.RefObject<THREE.ShaderMaterial | null>;
+  fragment: string;
+  uniforms: Record<string, THREE.IUniform>;
+}
+
+/** Inward-facing sphere shared by all shader sky modes. */
+function SkySphere({ matRef, fragment, uniforms }: SkySphereProps) {
+  return (
+    <mesh renderOrder={-10} frustumCulled={false}>
+      <sphereGeometry args={[SKY_RADIUS, 48, 32]} />
+      <shaderMaterial
+        ref={matRef}
+        vertexShader={SKY_VERTEX}
+        fragmentShader={fragment}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+        depthTest
+        side={THREE.BackSide}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Nebula — drifting fbm fog tinted by palette + mood valence.
+// Nebula — drifting fbm fog wrapped around the whole sky.
 // ---------------------------------------------------------------------------
 
 const NEBULA_FRAGMENT = /* glsl */ `
@@ -122,17 +164,18 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform vec3 uColorA;
   uniform vec3 uColorB;
   uniform float uIntensity;
-  varying vec2 vUv;
+  varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
-    vec2 p = vUv * 3.0;
-    float n1 = fbm(p + vec2(uTime * 0.02, uTime * 0.015));
-    float n2 = fbm(p * 1.7 - vec2(uTime * 0.012, uTime * 0.008));
-    float density = smoothstep(0.25, 0.95, n1 * 0.6 + n2 * 0.4);
+    vec3 d = normalize(vDir);
+    float n1 = fbmDir(d, 2.6, vec2(uTime * 0.020, uTime * 0.015));
+    float n2 = fbmDir(d, 4.4, vec2(-uTime * 0.012, uTime * 0.008));
+    float density = smoothstep(0.28, 0.95, n1 * 0.62 + n2 * 0.38);
     vec3 col = mix(uColorA, uColorB, n2);
-    // Vignette into black at the edges so it never forms a hard rectangle.
-    float edge = smoothstep(1.05, 0.35, length(vUv - 0.5));
-    float a = density * edge * uIntensity;
+    // Slightly thinner straight overhead/underfoot so the fog reads as a
+    // horizon-hugging cloudscape instead of a uniform wash.
+    float band = 1.0 - 0.35 * abs(d.y);
+    float a = density * band * uIntensity;
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -157,8 +200,8 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
     const mat = matRef.current;
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
-    // Slow swell: breath + flow, gentle drop bump. Capped hard.
-    const swell = 0.4 + m.breath * 0.5 + m.flow * 0.35 + m.dropEvent * 0.25;
+    // Slow swell: breath + flow + lingering afterglow. Capped hard.
+    const swell = 0.4 + m.breath * 0.5 + m.flow * 0.35 + m.dropEvent * 0.25 + m.afterglow * 0.2;
     mat.uniforms.uIntensity!.value = Math.min(NEBULA_CAP, swell * intensity * NEBULA_CAP);
     // Live palette: both fog colors track the (mutating) palette per frame.
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.bass);
@@ -171,30 +214,16 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
     );
   });
 
-  return (
-    <mesh position={[0, 0, -8]} renderOrder={-10}>
-      <planeGeometry args={[34, 22]} />
-      <shaderMaterial
-        ref={matRef}
-        vertexShader={FULLSCREEN_VERTEX}
-        fragmentShader={NEBULA_FRAGMENT}
-        uniforms={uniforms}
-        transparent
-        depthWrite={false}
-        depthTest={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </mesh>
-  );
+  return <SkySphere matRef={matRef} fragment={NEBULA_FRAGMENT} uniforms={uniforms} />;
 }
 
 // ---------------------------------------------------------------------------
-// Starfield — deep parallax stars, twinkle on highs.
+// Starfield — full spherical shell of stars, twinkle on highs.
 // ---------------------------------------------------------------------------
 
-const STAR_COUNT_HIGH = 900;
-const STAR_COUNT_MID = 450;
-const STAR_COUNT_LOW = 180;
+const STAR_COUNT_HIGH = 1400;
+const STAR_COUNT_MID = 700;
+const STAR_COUNT_LOW = 280;
 
 function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const groupRef = useRef<THREE.Points>(null);
@@ -211,10 +240,22 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const band = new Uint8Array(count);
     const variance = new Float32Array(count);
     for (let i = 0; i < count; i++) {
-      // Spread across a wide deep slab behind the scene.
-      pos[i * 3] = (Math.random() - 0.5) * 40;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 26;
-      pos[i * 3 + 2] = -10 - Math.random() * 8;
+      // Uniform random direction (normalized gaussian) × a deep shell
+      // radius — stars surround the camera in every direction.
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      let len = 0;
+      do {
+        x = Math.random() * 2 - 1;
+        y = Math.random() * 2 - 1;
+        z = Math.random() * 2 - 1;
+        len = Math.hypot(x, y, z);
+      } while (len < 0.05 || len > 1);
+      const r = 26 + Math.random() * 16;
+      pos[i * 3] = (x / len) * r;
+      pos[i * 3 + 1] = (y / len) * r;
+      pos[i * 3 + 2] = (z / len) * r;
       band[i] = Math.random() < 0.7 ? 1 : 0;
       // Slight per-star brightness variance, applied at tint time.
       variance[i] = 0.5 + Math.random() * 0.5;
@@ -226,13 +267,16 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const m = metricsRef.current;
     const g = groupRef.current;
     if (g && !reducedMotion) {
-      // Very slow parallax rotation — deep-space drift.
-      g.rotation.z += delta * 0.005;
+      // Very slow whole-sky rotation — deep-space drift.
+      g.rotation.y += delta * 0.004;
+      g.rotation.z += delta * 0.002;
     }
     const mat = matRef.current;
     if (mat) {
       // Twinkle: base size + high-frequency sparkle. Opacity capped.
-      mat.size = 0.06 + m.high * 0.14;
+      // Sized up ~4x vs the old near-slab because the shell sits ~30
+      // units out (point size attenuates with distance).
+      mat.size = 0.26 + m.high * 0.5;
       mat.opacity = Math.min(STAR_OPACITY_CAP, (0.3 + m.high * 0.4 + m.flow * 0.15) * intensity);
     }
     // Live palette: stars re-tint per frame so they follow color life.
@@ -253,21 +297,21 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   });
 
   return (
-    <points ref={groupRef} renderOrder={-10}>
+    <points ref={groupRef} renderOrder={-10} frustumCulled={false}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} count={count} itemSize={3} />
         <bufferAttribute attach="attributes-color" args={[colors, 3]} count={count} itemSize={3} />
       </bufferGeometry>
       <pointsMaterial
         ref={matRef}
-        size={0.08}
+        size={0.3}
         map={sprite}
         sizeAttenuation
         transparent
         opacity={0.4}
         vertexColors
         depthWrite={false}
-        depthTest={false}
+        depthTest
         blending={THREE.AdditiveBlending}
       />
     </points>
@@ -275,7 +319,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Aurora — low-anchored shimmering curtains, bass-driven.
+// Aurora — shimmering curtains wrapping the full horizon, bass-driven.
 // ---------------------------------------------------------------------------
 
 const AURORA_FRAGMENT = /* glsl */ `
@@ -283,18 +327,24 @@ const AURORA_FRAGMENT = /* glsl */ `
   uniform vec3 uColorA;
   uniform vec3 uColorB;
   uniform float uIntensity;
-  varying vec2 vUv;
+  varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
-    // Wavy top edge of the curtain, anchored to the bottom of the frame.
-    float topEdge = 0.35 + 0.28 * fbm(vec2(vUv.x * 3.0 + uTime * 0.05, 1.7));
-    float curtain = smoothstep(topEdge, topEdge - 0.55, vUv.y);
-    // Vertical shimmer striations that scroll horizontally.
-    float shimmer = 0.55 + 0.45 * fbm(vec2(vUv.x * 9.0, vUv.y * 2.0 + uTime * 0.18));
-    vec3 col = mix(uColorA, uColorB, vUv.y + 0.2 * fbm(vec2(vUv.x * 5.0, uTime * 0.1)));
-    // Soft horizontal fade at left/right edges.
-    float edge = smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.8, vUv.x);
-    float a = curtain * shimmer * edge * uIntensity;
+    vec3 d = normalize(vDir);
+    // Horizontal domain (seam-free): the direction's x/z components,
+    // ignoring elevation — curtains wrap 360° around the viewer.
+    vec3 flat3 = normalize(vec3(d.x, 0.0, d.z) + 1e-4);
+    // Wavy top edge of the curtain, different at every compass heading.
+    float wave = fbmDir(flat3, 2.4, vec2(uTime * 0.05, 0.0));
+    float topEdge = 0.16 + 0.34 * wave;
+    // Curtain: bright ribbon below its wavy top edge, fading out toward
+    // the nadir so it hugs the horizon like the real thing.
+    float curtain = smoothstep(topEdge, topEdge - 0.55, d.y) * smoothstep(-0.75, -0.25, d.y);
+    // Vertical shimmer striations that scroll around the horizon.
+    float shimmer = 0.55 + 0.45 * fbmDir(d, 7.0, vec2(uTime * 0.18, uTime * 0.06));
+    float hueBand = clamp(d.y * 1.3 + 0.55, 0.0, 1.0);
+    vec3 col = mix(uColorA, uColorB, hueBand + 0.2 * wave);
+    float a = curtain * shimmer * uIntensity;
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -319,7 +369,7 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     const dt = Math.min(delta, 0.1);
     timeRef.current += reducedMotion ? 0 : dt;
     // Smooth the bass drive so curtains billow rather than flicker.
-    const target = 0.35 + m.bass * 0.6 + m.breath * 0.4 + m.dropEvent * 0.3;
+    const target = 0.35 + m.bass * 0.6 + m.breath * 0.4 + m.dropEvent * 0.3 + m.afterglow * 0.25;
     levelRef.current += (target - levelRef.current) * (1 - Math.exp(-dt / 0.4));
     const mat = matRef.current;
     if (!mat) return;
@@ -330,35 +380,25 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
   });
 
-  return (
-    <mesh position={[0, 0, -7.5]} renderOrder={-10}>
-      <planeGeometry args={[34, 22]} />
-      <shaderMaterial
-        ref={matRef}
-        vertexShader={FULLSCREEN_VERTEX}
-        fragmentShader={AURORA_FRAGMENT}
-        uniforms={uniforms}
-        transparent
-        depthWrite={false}
-        depthTest={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </mesh>
-  );
+  return <SkySphere matRef={matRef} fragment={AURORA_FRAGMENT} uniforms={uniforms} />;
 }
 
 // ---------------------------------------------------------------------------
-// Glow — soft radial energy bloom that breathes with the music.
+// Glow — a soft energy source that slowly orbits the sky and breathes.
 // ---------------------------------------------------------------------------
 
 const GLOW_FRAGMENT = /* glsl */ `
   uniform vec3 uColor;
+  uniform vec3 uSunDir;
   uniform float uIntensity;
-  varying vec2 vUv;
+  varying vec3 vDir;
   void main() {
-    vec2 p = vUv - 0.5;
-    float d = length(p) / 0.5;
-    float a = (1.0 - smoothstep(0.0, 1.0, d)) * uIntensity;
+    vec3 d = normalize(vDir);
+    // Wide soft halo around the drifting energy source...
+    float core = pow(max(dot(d, uSunDir), 0.0), 3.0);
+    // ...plus a faint horizon glow so the rest of the sky isn't dead.
+    float horizon = (1.0 - abs(d.y)) * 0.18;
+    float a = (core + horizon) * uIntensity;
     gl_FragColor = vec4(uColor, a);
   }
 `;
@@ -369,6 +409,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(palette.mid) },
+      uSunDir: { value: new THREE.Vector3(0, 0.2, -1).normalize() },
       uIntensity: { value: 0 },
     }),
     [palette.mid],
@@ -380,9 +421,16 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     tRef.current += reducedMotion ? 0 : Math.min(delta, 0.1);
     const mat = matRef.current;
     if (!mat) return;
+    // The energy source drifts around the sky over ~4 minutes and bobs
+    // gently in elevation — walking around it (orbit/flow cameras) works.
+    const az = tRef.current * 0.026;
+    const el = 0.15 + Math.sin(tRef.current * 0.05) * 0.25;
+    (mat.uniforms.uSunDir!.value as THREE.Vector3)
+      .set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el))
+      .normalize();
     // Slow autonomous breath plus energy swell; drops punch softly through.
     const autoBreath = 0.45 + 0.12 * Math.sin(tRef.current * 0.4);
-    const swell = autoBreath + m.flow * 0.5 + m.bass * 0.3 + m.dropEvent * 0.4;
+    const swell = autoBreath + m.flow * 0.5 + m.bass * 0.3 + m.dropEvent * 0.4 + m.afterglow * 0.3;
     const silenceMute = 1 - m.silence * 0.5;
     mat.uniforms.uIntensity!.value = Math.min(GLOW_CAP, swell * silenceMute * intensity * GLOW_CAP);
     // Warm vs cool target color follows mood valence.
@@ -394,19 +442,5 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     );
   });
 
-  return (
-    <mesh position={[0, 0, -7]} renderOrder={-10}>
-      <planeGeometry args={[26, 26]} />
-      <shaderMaterial
-        ref={matRef}
-        vertexShader={FULLSCREEN_VERTEX}
-        fragmentShader={GLOW_FRAGMENT}
-        uniforms={uniforms}
-        transparent
-        depthWrite={false}
-        depthTest={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </mesh>
-  );
+  return <SkySphere matRef={matRef} fragment={GLOW_FRAGMENT} uniforms={uniforms} />;
 }

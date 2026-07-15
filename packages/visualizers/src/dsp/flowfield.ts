@@ -213,10 +213,12 @@ export function flowParamsFromMetrics(
   out.fieldScale = 0.65 - Math.min(m.bass, 1.5) * 0.18 + Math.min(m.high, 1.5) * 0.1;
   out.turbulence = Math.min(1, (0.3 + m.high * 0.5 + m.arousal * 0.35) * userTurb);
   out.swirl = 0.55 + Math.min(m.mid, 2) * 0.6 + m.beat * 0.5 + m.dropEvent * 0.9;
+  out.swirl *= 0.85 + m.sectionLevel * 0.3;
   // Convergence collapses the three band-fields into one shared current.
   out.bandSpread = (1 - (m.convergence ?? 0)) * 0.9;
   out.vortex = userVortex * (0.4 + m.bassActivity * 0.8 + m.dropEvent * 1.2);
-  out.buoyancy = m.valence * 0.22 * m.moodConfidence;
+  out.buoyancy = m.valence * 0.22 * m.moodConfidence + m.vocalActivity * 0.08;
+  out.turbulence *= 0.9 + m.afterglow * 0.25;
   return out;
 }
 

@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useMetricsRef } from './metrics';
+import { useModulation } from './modulation';
 import type { VisualImpulses } from './impulse';
 
 /**
@@ -57,13 +58,14 @@ function clamp(v: number, lo: number, hi: number): number {
 
 export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: LivingPaletteDriverProps) {
   const metricsRef = useMetricsRef();
+  const mods = useModulation();
   const huePhaseRef = useRef(Math.random());
   const hueKickRef = useRef(0);
   const kickSignRef = useRef(1);
   const prevDropRef = useRef(0);
 
   useFrame((_state, delta) => {
-    const life = clamp(amount, 0, 1);
+    const life = clamp(mods.current.colorLife ?? amount, 0, 1);
     const dt = Math.min(delta, 0.1);
 
     // Manual color kick (trigger mapping / MIDI) — fires even at Color life
@@ -86,8 +88,11 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
 
     // Hue orbit advances with the music's presence — faster in loud
     // passages, near-still in silence. One full lap takes minutes.
+    // Section level gates the pace so color moods linger through valleys
+    // and evolve during peaks.
+    const sectionPace = 0.6 + m.sectionLevel * 0.55;
     huePhaseRef.current = wrap01(
-      huePhaseRef.current + dt * (0.006 + m.swell * 0.016 + m.impact * 0.004),
+      huePhaseRef.current + dt * (0.006 + m.swell * 0.016 + m.impact * 0.004) * sectionPace,
     );
 
     // Drop → kick the wheel, alternating direction so back-to-back drops
@@ -101,9 +106,14 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
 
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
     const hueShift = life * drift + hueKickRef.current;
-    const satBoost = 1 + life * (m.swell * 0.22 + m.impact * 0.1 - m.silence * 0.4);
+    // Afterglow holds saturation and light elevated for seconds after a
+    // peak — the color equivalent of a room still ringing.
+    const satBoost =
+      1 + life * (m.swell * 0.22 + m.impact * 0.1 + m.afterglow * 0.16 - m.silence * 0.4);
     const lightBoost =
-      1 + life * (m.swell * 0.14 + m.impact * 0.18 + m.shimmer * 0.08 - m.silence * 0.22);
+      1 +
+      life *
+        (m.swell * 0.14 + m.impact * 0.18 + m.shimmer * 0.08 + m.afterglow * 0.08 - m.silence * 0.22);
 
     applyLife(out, 'bass', base.bass, hueShift, satBoost, lightBoost * 0.96);
     applyLife(out, 'mid', base.mid, hueShift + life * 0.006, satBoost, lightBoost);

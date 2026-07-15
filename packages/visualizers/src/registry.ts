@@ -30,16 +30,12 @@ export type VisualizerId =
   | 'mandelbrot_zoom';
 
 /**
- * Presets that paint their own fullscreen background (raymarched / fractal /
- * shader curtains) and would fully occlude a 3D BackgroundLayer behind them.
- * BackgroundLayer is therefore skipped for these and applied to the
- * mesh-based presets first.
+ * Legacy set — used to gate the BackgroundLayer off for presets that painted
+ * an opaque fullscreen quad. Every preset now supports a live backdrop (the
+ * fullscreen shaders switch to transparent-miss / additive compositing when
+ * `backdrop` is set), so this is empty. Kept exported for API stability.
  */
-export const FULLSCREEN_SHADER_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
-  'liquid_blob',
-  'anima',
-  'mandelbrot_zoom',
-]);
+export const FULLSCREEN_SHADER_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>();
 
 export interface VisualizerSceneProps {
   analyser: AnalyserHandle | null;
@@ -87,6 +83,13 @@ export interface VisualizerSceneProps {
   vortexAmount?: number;
   /** Flow Field: pointer-stir strength 0..2. Other presets ignore. */
   interactStrength?: number;
+  /**
+   * True when a BackgroundLayer environment is active behind the preset.
+   * Fullscreen-shader presets use this to composite over the sky (alpha-out
+   * their ray misses / switch to additive) instead of painting an opaque
+   * built-in background.
+   */
+  backdrop?: boolean;
 }
 
 /**
@@ -367,16 +370,17 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   },
   mandelbrot_zoom: {
     id: 'mandelbrot_zoom',
-    label: 'Mandelbrot Zoom',
-    hint: 'Infinite fractal dive — color cycles to the music, dives faster on drops.',
+    label: 'Mandelbulb',
+    hint: 'A living 3D fractal — grows more ornate as the music swells, morphs shape on drops. Fly around it.',
     Scene: MandelbrotZoomScene,
     defaults: {
       speed: 1,
       smoothness: 0.7,
-      scale: 1,
-      bassShake: 0,
-      cameraMode: 'still',
-      bloomIntensity: 0.6,
+      scale: 1.15,
+      bassShake: 0.4,
+      cameraMode: 'cinematic',
+      cinematicSpeed: 1,
+      bloomIntensity: 0.75,
       cameraDistance: 1,
       lightLevel: 1,
     },

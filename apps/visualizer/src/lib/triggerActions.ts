@@ -12,8 +12,17 @@
 export type TriggerSourceKind =
   | 'beat' // every detected beat onset
   | 'bar' // every 4/4 bar boundary (needs BPM lock)
-  | 'bassHit' // strong bass transient (kick-drum-ish)
+  | 'kick' // kick-drum envelope peak
+  | 'snare' // snare/clap envelope peak
+  | 'hat' // hi-hat/cymbal envelope peak
+  | 'bassHit' // strong bass transient (big low thump)
   | 'drop' // detected drop moment
+  | 'buildUp' // tension crosses into a build (sweep / snare roll)
+  | 'vocalIn' // a voice enters after a vocal-free stretch
+  | 'leadIn' // sustained lead/synth enters after a quiet stretch
+  | 'peak' // the song reaches a new peak section (chorus/climax)
+  | 'echoPhrase' // phrase echo fires into a quiet gap
+  | 'silenceBreak' // sustained quiet after activity
   | 'midiNote'; // a MIDI note-on (optionally filtered to one note)
 
 /** What a trigger does when it fires. */
@@ -42,8 +51,17 @@ export interface TriggerMapping {
 export const TRIGGER_SOURCE_LABELS: Record<TriggerSourceKind, string> = {
   beat: 'Every beat',
   bar: 'Every bar',
+  kick: 'Kick drum',
+  snare: 'Snare / clap',
+  hat: 'Hi-hat',
   bassHit: 'Bass hit',
   drop: 'Drop',
+  buildUp: 'Build-up',
+  vocalIn: 'Vocals enter',
+  leadIn: 'Lead enters',
+  peak: 'Song peak',
+  echoPhrase: 'Phrase echo',
+  silenceBreak: 'Silence',
   midiNote: 'MIDI note',
 };
 

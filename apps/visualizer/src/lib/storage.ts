@@ -118,6 +118,8 @@ export interface SavedPreset {
   autoGain?: boolean;
   /** Living-color amount. Absent for legacy presets → default life. */
   colorLife?: number;
+  /** Linger amount. Absent for legacy presets → default echo. */
+  linger?: number;
 }
 
 export interface VisualizerControls {
@@ -195,6 +197,12 @@ export interface VisualizerControls {
    * color wheel. Default 0.6.
    */
   colorLife?: number;
+  /**
+   * How long big moments echo after they pass, 0..1. Scales only the release
+   * side of the musical envelopes (attack stays instant) — 0 is the old
+   * tight feel, 1 lets peaks take ~3x longer to fade. Default 0.3.
+   */
+  linger?: number;
   bloomIntensity: number;
   cameraMode: CameraMode;
 }
@@ -235,6 +243,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   lightLevel: 1,
   autoGain: true,
   colorLife: 0.6,
+  linger: 0.3,
   bloomIntensity: 0.9,
   cameraMode: 'flow',
 };

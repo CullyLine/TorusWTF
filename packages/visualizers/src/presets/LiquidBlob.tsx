@@ -5,6 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 
 /**
  * Liquid Blob — raymarched metaballs with smooth-minimum fusion.
@@ -76,6 +77,10 @@ uniform float uBarPhase;
 uniform float uDrop;
 // 0..1 sustained silence — mutes color punch when high.
 uniform float uSilence;
+// 1 = paint the built-in radial background on ray miss; 0 = output
+// transparent pixels instead so a BackgroundLayer sky shows through and
+// the blob reads as an object IN the environment.
+uniform float uBgAlpha;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -306,6 +311,7 @@ void main() {
   }
 
   vec3 col;
+  float alpha = 1.0;
   if (hit) {
     vec3 p = ro + t * rd;
     vec3 n = calcNormal(p);
@@ -358,10 +364,11 @@ void main() {
     float ao = clamp(0.6 + 0.4 * dot(n, V), 0.0, 1.0);
     col *= ao;
   } else {
-    col = background(uv);
+    col = background(uv) * uBgAlpha;
+    alpha = uBgAlpha;
   }
 
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col, alpha);
 }
 `;
 }
@@ -381,7 +388,9 @@ export function LiquidBlobScene({
   inflate = 0.5,
   appendages = 4,
   subSpheres = 6,
+  backdrop = false,
 }: VisualizerSceneProps) {
+  const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
@@ -411,6 +420,7 @@ export function LiquidBlobScene({
       uBarPhase: { value: 0 },
       uDrop: { value: 0 },
       uSilence: { value: 0 },
+      uBgAlpha: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -422,18 +432,24 @@ export function LiquidBlobScene({
     const mat = matRef.current;
     if (!mat) return;
     const m = metricsRef.current;
-    const pace = Math.max(0.05, speed);
+    // Modulation-matrix values (fall back to slider props when unrouted).
+    const mv = mods.current;
+    const pace = Math.max(0.05, mv.speed ?? speed);
     // Forward-only motion phase. Rate modulates with energy but the phase
     // itself never decreases, which prevents satellites from oscillating
-    // when energy fluctuates rapidly.
-    const phaseRate = (0.35 + Math.min(m.energy, 1.5) * 0.18) * pace;
+    // when energy fluctuates rapidly. Section level paces the whole organism:
+    // choruses writhe, verses breathe.
+    const sectionPace = 0.75 + m.sectionLevel * 0.45;
+    const phaseRate = (0.35 + Math.min(m.energy, 1.5) * 0.18) * pace * sectionPace;
     phaseRef.current += Math.min(delta, 0.05) * phaseRate;
 
     // Orbit phase: heavily mid/high-driven (impact envelope for the kick)
     // so the satellites visibly whip around the blob on busy passages.
     // Floored so it never stalls.
     const orbitSpeed =
-      (0.6 + Math.min(m.mid, 2) * 1.6 + Math.min(m.high, 2) * 0.9 + m.impact * 0.8) * pace;
+      (0.6 + Math.min(m.mid, 2) * 1.6 + Math.min(m.high, 2) * 0.9 + m.impact * 0.8) *
+      pace *
+      sectionPace;
     orbitPhaseRef.current += Math.min(delta, 0.05) * orbitSpeed;
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
@@ -443,12 +459,13 @@ export function LiquidBlobScene({
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
-    mat.uniforms.uEnergy!.value = m.energy;
+    // Afterglow keeps the body luminous for a few bars after a big chorus.
+    mat.uniforms.uEnergy!.value = m.energy + m.afterglow * 0.3;
     // Impact envelope, not the raw beat spike: the pop swells in and melts
     // out over ~¼s so hits read as a fluid pulse of mass.
     mat.uniforms.uBeat!.value = m.impact;
-    mat.uniforms.uScale!.value = scale;
-    mat.uniforms.uInflate!.value = Math.max(0, Math.min(1, inflate));
+    mat.uniforms.uScale!.value = mv.scale ?? scale;
+    mat.uniforms.uInflate!.value = Math.max(0, Math.min(1, mv.inflate ?? inflate));
     // Round + clamp to the shader's hard cap. 0 = anchor sphere alone.
     mat.uniforms.uAppendages!.value = Math.max(
       0,
@@ -466,6 +483,9 @@ export function LiquidBlobScene({
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uDrop!.value = m.dropEvent;
     mat.uniforms.uSilence!.value = m.silence;
+    // With an environment behind us, ray misses go transparent so the sky
+    // shows through and the blob reads as an object IN the world.
+    mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
@@ -473,9 +493,11 @@ export function LiquidBlobScene({
   });
 
   // Fullscreen triangle (clip-space, no matrices). Disable depth so the
-  // post-process Bloom in SceneRig still picks up bright pixels.
+  // post-process Bloom in SceneRig still picks up bright pixels. Transparent
+  // + renderOrder 1 so, when a BackgroundLayer sky is active behind us, the
+  // triangle composites over it instead of erasing it.
   return (
-    <mesh frustumCulled={false}>
+    <mesh frustumCulled={false} renderOrder={1}>
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
@@ -489,6 +511,7 @@ export function LiquidBlobScene({
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
         uniforms={uniforms}
+        transparent
         depthTest={false}
         depthWrite={false}
       />

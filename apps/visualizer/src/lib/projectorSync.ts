@@ -1,4 +1,4 @@
-import type { AudioMetrics, VisualImpulses, VisualizerId } from '@torus/visualizers';
+import type { AudioMetrics, ModRouting, VisualImpulses, VisualizerId } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import type { BackgroundSettings, VisualizerControls } from '@/lib/storage';
 
@@ -20,6 +20,8 @@ export interface ProjectorStatePayload {
   palette: WaveformPalette;
   controls: VisualizerControls;
   background: BackgroundSettings;
+  /** Modulation-matrix routings — the projector runs the same math locally. */
+  modMatrix: ModRouting[];
 }
 
 export type ProjectorMessage =

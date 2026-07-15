@@ -44,8 +44,6 @@ export function useTriggerEngine({
   actions,
   onImpulse,
 }: UseTriggerEngineOptions): { handleMidiNote: (e: MidiNoteEvent) => void } {
-  // Refs so the rAF loop and MIDI handler always see fresh values without
-  // rebinding.
   const mappingsRef = useRef(mappings);
   mappingsRef.current = mappings;
   const actionsRef = useRef(actions);
@@ -55,10 +53,18 @@ export function useTriggerEngine({
   const onImpulseRef = useRef(onImpulse);
   onImpulseRef.current = onImpulse;
 
-  // Detector state machines.
   const beatArmedRef = useRef(true);
+  const kickArmedRef = useRef(true);
+  const snareArmedRef = useRef(true);
+  const hatArmedRef = useRef(true);
   const bassArmedRef = useRef(true);
   const dropArmedRef = useRef(true);
+  const buildArmedRef = useRef(true);
+  const vocalArmedRef = useRef(true);
+  const leadArmedRef = useRef(true);
+  const peakArmedRef = useRef(true);
+  const echoArmedRef = useRef(true);
+  const silenceArmedRef = useRef(true);
   const prevBarPhaseRef = useRef(0);
   const lastFireRef = useRef<Record<string, number>>({});
 
@@ -101,8 +107,6 @@ export function useTriggerEngine({
     if (!enabled) return;
     let raf = 0;
 
-    // Per-mapping cooldown keeps beat-mapped preset switches sane and
-    // absorbs detector jitter. Impulse actions can retrigger faster.
     const cooldownFor = (action: TriggerActionKind): number =>
       action === 'nextPreset' ||
       action === 'prevPreset' ||
@@ -127,8 +131,6 @@ export function useTriggerEngine({
       if (!m) return;
       const now = performance.now() / 1000;
 
-      // Beat: impact envelope snaps above the fire level, re-arms once it
-      // rings down (hysteresis — no machine-gunning on one hit).
       if (beatArmedRef.current && m.impact > 0.55) {
         beatArmedRef.current = false;
         fireSource('beat', Math.min(1, m.impact), now);
@@ -136,7 +138,27 @@ export function useTriggerEngine({
         beatArmedRef.current = true;
       }
 
-      // Bass hit: only the big ones — higher fire level, deeper re-arm.
+      if (kickArmedRef.current && m.kick > 0.65) {
+        kickArmedRef.current = false;
+        fireSource('kick', Math.min(1, m.kick), now);
+      } else if (!kickArmedRef.current && m.kick < 0.2) {
+        kickArmedRef.current = true;
+      }
+
+      if (snareArmedRef.current && m.snare > 0.6) {
+        snareArmedRef.current = false;
+        fireSource('snare', Math.min(1, m.snare), now);
+      } else if (!snareArmedRef.current && m.snare < 0.18) {
+        snareArmedRef.current = true;
+      }
+
+      if (hatArmedRef.current && m.hat > 0.5) {
+        hatArmedRef.current = false;
+        fireSource('hat', Math.min(1, m.hat), now);
+      } else if (!hatArmedRef.current && m.hat < 0.15) {
+        hatArmedRef.current = true;
+      }
+
       if (bassArmedRef.current && m.impact > 0.92 && m.bass > 0.5) {
         bassArmedRef.current = false;
         fireSource('bassHit', 1, now);
@@ -144,7 +166,6 @@ export function useTriggerEngine({
         bassArmedRef.current = true;
       }
 
-      // Bar: fire on bar-phase wraparound (needs a confident BPM lock).
       if (m.bpm !== null) {
         if (prevBarPhaseRef.current > 0.8 && m.barPhase < 0.2) {
           fireSource('bar', 1, now);
@@ -152,12 +173,53 @@ export function useTriggerEngine({
         prevBarPhaseRef.current = m.barPhase;
       }
 
-      // Drop: same crossing the living palette uses for automatic kicks.
       if (dropArmedRef.current && m.dropEvent > 0.85) {
         dropArmedRef.current = false;
         fireSource('drop', 1, now);
       } else if (!dropArmedRef.current && m.dropEvent < 0.3) {
         dropArmedRef.current = true;
+      }
+
+      if (buildArmedRef.current && m.tension > 0.72) {
+        buildArmedRef.current = false;
+        fireSource('buildUp', Math.min(1, m.tension), now);
+      } else if (!buildArmedRef.current && m.tension < 0.35) {
+        buildArmedRef.current = true;
+      }
+
+      if (vocalArmedRef.current && m.vocalActivity > 0.55) {
+        vocalArmedRef.current = false;
+        fireSource('vocalIn', Math.min(1, m.vocalActivity), now);
+      } else if (!vocalArmedRef.current && m.vocalActivity < 0.18) {
+        vocalArmedRef.current = true;
+      }
+
+      if (leadArmedRef.current && m.leadActivity > 0.5) {
+        leadArmedRef.current = false;
+        fireSource('leadIn', Math.min(1, m.leadActivity), now);
+      } else if (!leadArmedRef.current && m.leadActivity < 0.15) {
+        leadArmedRef.current = true;
+      }
+
+      if (peakArmedRef.current && m.sectionLevel > 0.82) {
+        peakArmedRef.current = false;
+        fireSource('peak', 1, now);
+      } else if (!peakArmedRef.current && m.sectionLevel < 0.5) {
+        peakArmedRef.current = true;
+      }
+
+      if (echoArmedRef.current && m.echo > 0.45) {
+        echoArmedRef.current = false;
+        fireSource('echoPhrase', Math.min(1, m.echo), now);
+      } else if (!echoArmedRef.current && m.echo < 0.12) {
+        echoArmedRef.current = true;
+      }
+
+      if (silenceArmedRef.current && m.silence > 0.72 && m.energy < 0.2) {
+        silenceArmedRef.current = false;
+        fireSource('silenceBreak', Math.min(1, m.silence), now);
+      } else if (!silenceArmedRef.current && m.silence < 0.35) {
+        silenceArmedRef.current = true;
       }
     };
 
@@ -167,7 +229,6 @@ export function useTriggerEngine({
 
   const handleMidiNoteRef = useRef((e: MidiNoteEvent) => {
     const now = performance.now() / 1000;
-    // Velocity shapes the impulse: soft pads whisper, hard hits slam.
     const strength = 0.5 + e.velocity * 0.7;
     for (const mapping of mappingsRef.current) {
       if (!mapping.enabled || mapping.source !== 'midiNote') continue;
@@ -181,4 +242,4 @@ export function useTriggerEngine({
   });
 
   return { handleMidiNote: handleMidiNoteRef.current };
-}
+};

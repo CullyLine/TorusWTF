@@ -29,6 +29,7 @@ const baseState: ShowFileState = {
       midiNote: null,
     },
   ],
+  modMatrix: [],
   savedPresets: [
     {
       id: 'sp-1',

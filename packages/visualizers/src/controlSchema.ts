@@ -17,6 +17,7 @@ export type ControlKey =
   | 'reactivity'
   | 'energy'
   | 'smoothness'
+  | 'linger'
   | 'speed'
   | 'anima'
   | 'colorLife'
@@ -92,6 +93,16 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     step: 0.01,
     fallback: 0.6,
     hint: 'How silkily motion glides between hits — hits still land instantly',
+    group: 'feel',
+  },
+  {
+    key: 'linger',
+    label: 'Linger',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    fallback: 0.3,
+    hint: 'How long big moments echo after they pass — hits still land instantly',
     group: 'feel',
   },
   {

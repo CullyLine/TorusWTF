@@ -6,12 +6,13 @@ import { EffectComposer, Vignette } from '@react-three/postprocessing';
 import { BloomEffect } from 'postprocessing';
 import type { PerspectiveCamera, PointLight } from 'three';
 import { useMetricsRef } from './metrics';
+import { useModulation } from './modulation';
 import type { VisualImpulses } from './impulse';
 import { useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
 import { AuraLayer } from './AuraLayer';
-import { LightLevel } from './LightLevelEffect';
+import { LightLevel, type LightLevelEffectImpl } from './LightLevelEffect';
 import {
   createCinematicState,
   updateCinematicCamera,
@@ -87,10 +88,12 @@ export function SceneRig({
   impulses,
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
+  const mods = useModulation();
   const bassLight = useRef<PointLight>(null);
   const midLight = useRef<PointLight>(null);
   const highLight = useRef<PointLight>(null);
   const resolvedBloomRef = useRef(1);
+  const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
   // Trigger-impulse envelopes: consumed from `impulses` on the frame they
   // fire, then rung down here (same struck-bell shape as the audio pulses).
@@ -128,8 +131,12 @@ export function SceneRig({
 
   useFrame((state, delta) => {
     const m = metricsRef.current;
+    // Modulation-matrix values (fall back to props when a key isn't routed).
+    const mv = mods.current;
     const t = state.clock.elapsedTime;
-    const dist = Math.max(0.3, cameraDistance);
+    const dist = Math.max(0.3, mv.cameraDistance ?? cameraDistance);
+    const bassShakeNow = mv.bassShake ?? bassShake;
+    const lightLevelNow = Math.max(0, mv.lightLevel ?? lightLevel);
     const baseZ = (zoomDistanceRef?.current ?? fallbackZ) * dist;
     const dtImp = Math.min(delta, 0.1);
 
@@ -162,16 +169,17 @@ export function SceneRig({
     // bell, shimmer melts) so illumination lands with hits and glides to
     // rest instead of strobing on raw FFT flux. Colors are re-read every
     // frame so the living palette breathes through the lighting too.
-    const frameLightScale = tier === 'low' ? Math.max(0, lightLevel) : 1;
+    const frameLightScale = tier === 'low' ? lightLevelNow : 1;
+    if (lightLevelRef.current) lightLevelRef.current.level = lightLevelNow;
     if (bassLight.current) {
       bassLight.current.intensity =
-        (0.55 + m.bass * 2.4 + m.impact * 2.2 + flash * 3) * frameLightScale;
+        (0.55 + m.bass * 2.4 + m.impact * 2.2 + m.afterglow * 0.7 + flash * 3) * frameLightScale;
       bassLight.current.distance = 12 + m.breath * 6;
       bassLight.current.color.set(palette.bass);
     }
     if (midLight.current) {
       midLight.current.intensity =
-        (0.45 + m.mid * 2.0 + m.swell * 0.8 + flash * 3) * frameLightScale;
+        (0.45 + m.mid * 2.0 + m.swell * 0.8 + m.afterglow * 0.4 + flash * 3) * frameLightScale;
       midLight.current.color.set(palette.mid);
     }
     if (highLight.current) {
@@ -212,7 +220,11 @@ export function SceneRig({
         }
         break;
       case 'cinematic': {
-        const cine = updateCinematicCamera(cinematicState.current, t, m.bpm, cinematicSpeed);
+        // Section-aware pacing: shots hold longer through quiet valleys
+        // and cut faster at peaks. Integrated per-frame, so the varying
+        // rate stays perfectly smooth.
+        const pacing = cinematicSpeed * (0.55 + m.sectionLevel * 0.6);
+        const cine = updateCinematicCamera(cinematicState.current, t, m.bpm, pacing);
         state.camera.position.set(cine.pos.x * dist, cine.pos.y * dist, cine.pos.z * dist);
         lookTargetX = cine.look.x;
         lookTargetY = cine.look.y;
@@ -245,22 +257,29 @@ export function SceneRig({
         break;
       }
       case 'drift':
-      default:
+      default: {
         // A slow lissajous float (actual drifting) + impact-driven shake.
-        state.camera.position.x = Math.sin(t * 0.21) * 0.3 + Math.sin(t * 18.7) * shake;
-        state.camera.position.y = Math.cos(t * 0.17) * 0.2 + Math.cos(t * 14.3) * shake * 0.7;
+        // Drift amplitude follows the song's section level so quiet
+        // valleys hold nearly still — the camera lingers with the music.
+        const driftAmp = 0.55 + m.sectionLevel * 0.45;
+        state.camera.position.x = Math.sin(t * 0.21) * 0.3 * driftAmp + Math.sin(t * 18.7) * shake;
+        state.camera.position.y =
+          Math.cos(t * 0.17) * 0.2 * driftAmp + Math.cos(t * 14.3) * shake * 0.7;
         state.camera.position.z =
-          baseZ * (1 - m.swell * 0.06) + Math.sin(t * 0.13) * 0.22 + Math.sin(t * 11.1) * shake * 0.4;
+          baseZ * (1 - m.swell * 0.06) +
+          Math.sin(t * 0.13) * 0.22 * driftAmp +
+          Math.sin(t * 11.1) * shake * 0.4;
         break;
+      }
     }
     prevFrameTime.current = t;
 
     // Subwoofer rumble: high-frequency low-amplitude wobble that scales with
     // current bass + the impact envelope (rings down after each hit instead
     // of cutting off). Lives ON TOP of cameraMode placement.
-    if (bassShake > 0) {
+    if (bassShakeNow > 0) {
       const bassPunch = m.bass * 0.5 + m.impact * 1.3;
-      const amp = bassShake * bassPunch * (embedded ? 0.04 : 0.07);
+      const amp = bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07);
       // Two slightly desynced sines so it doesn't feel like a clean wave;
       // y dominates because real subs you feel in your chest vertically.
       state.camera.position.y += Math.sin(t * 87.3) * amp;
@@ -320,7 +339,9 @@ export function SceneRig({
         7,
         m.impact * (0.9 + m.swell * 2.1) + camPunchEnvRef.current * 5,
       );
-      const targetFov = baseFovRef.current - punchIn;
+      // Afterglow breathes the lens slightly wider after big moments —
+      // the exhale that lets a peak linger instead of snapping shut.
+      const targetFov = baseFovRef.current - punchIn + m.afterglow * 1.3;
       if (Math.abs(cam.fov - targetFov) > 0.005) {
         cam.fov = targetFov;
         cam.updateProjectionMatrix();
@@ -330,8 +351,13 @@ export function SceneRig({
     // Bloom breathes with the music: swells through loud sections, blooms
     // a little brighter the instant a hit lands. Trigger pulses surge on top.
     bloomEffect.intensity =
-      resolvedBloomRef.current *
-      (0.7 + m.swell * 0.5 + m.impact * 0.3 + bloomPulseEnvRef.current * 1.1 + flash * 0.6);
+      (mv.bloomIntensity ?? resolvedBloomRef.current) *
+      (0.7 +
+        m.swell * 0.5 +
+        m.impact * 0.3 +
+        m.afterglow * 0.28 +
+        bloomPulseEnvRef.current * 1.1 +
+        flash * 0.6);
   });
 
   const tierBloom = tier === 'low' ? 0.8 : 1.1;
@@ -380,7 +406,7 @@ export function SceneRig({
       {tier !== 'low' ? (
         <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
           <primitive object={bloomEffect} dispose={null} />
-          <LightLevel level={level} />
+          <LightLevel ref={lightLevelRef} level={level} />
           <Vignette eskil={false} offset={0.16} darkness={0.38} />
         </EffectComposer>
       ) : null}

@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 import {
   DEFAULT_FLOW_PARAMS,
   flowParamsFromMetrics,
@@ -16,6 +17,7 @@ import {
 import { getDotTexture } from '../dotTexture';
 
 export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
+  const mods = useModulation();
   const torusRef = useRef<THREE.Mesh>(null);
   const particlesRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
@@ -69,12 +71,19 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     if (!torus || !points || !pointsMat) return;
 
     const m = metricsRef.current;
-    const flowSpeed = delta * speed * (0.35 + m.mid * 3 + m.impact * 2);
+    const spd = mods.current.speed ?? speed;
+    // Section pacing: the field turns with the song's arc — near-still in
+    // valleys, flying at peaks. Tenderness (vocal-led soft passages) eases
+    // the pace further so intimate moments feel held, not spun.
+    const sectionPace = (0.65 + m.sectionLevel * 0.55) * (1 - m.tenderness * 0.25);
+    const flowSpeed = delta * spd * (0.35 + m.mid * 3 + m.impact * 2) * sectionPace;
     const activeRatio = 0.45 + m.flow * 0.55;
 
-    torus.scale.setScalar(1 + m.bass * 0.3 + m.impact * 0.18);
+    // Gather: the pre-beat inhale pulls the shell in a breath before each
+    // predicted hit, so downbeats read as exhale-release.
+    torus.scale.setScalar(1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05);
     torus.rotation.y += flowSpeed * 0.4;
-    torus.rotation.x += delta * speed * (0.03 + m.high * 0.2);
+    torus.rotation.x += delta * spd * (0.03 + m.high * 0.2);
 
     // Downbeat flash: peaks at the start of each 4/4 bar then decays in <0.5 beats.
     const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 8) : 0;
@@ -86,12 +95,15 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const torusMat = torus.material;
     if (torusMat && !Array.isArray(torusMat) && 'emissiveIntensity' in torusMat) {
       const sm = torusMat as THREE.MeshStandardMaterial;
+      // Afterglow holds the shell warm for seconds after a peak — the room
+      // still ringing after the chorus ends.
       sm.emissiveIntensity =
-        (0.35 + m.swell * 0.7 + m.impact * 0.5 + barFlash * 0.6 + dropPunch) * silenceMute;
+        (0.35 + m.swell * 0.7 + m.impact * 0.5 + barFlash * 0.6 + dropPunch + m.afterglow * 0.4) *
+        silenceMute;
       // Follow the living palette so the shell breathes color too.
       sm.color.set(palette.mid);
       sm.emissive.set(palette.mid);
-      sm.opacity = 0.2 + m.swell * 0.2;
+      sm.opacity = 0.2 + m.swell * 0.2 + m.afterglow * 0.06;
     }
 
     pointsMat.size = 0.05 + m.swell * 0.05 + m.impact * 0.04;
@@ -119,17 +131,17 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     // Shared flow current: off-surface drift that grows with the music and
     // vanishes at rest, so the sacred geometry stays clean when calm.
-    flowTimeRef.current += Math.min(delta, 0.05) * speed * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+    flowTimeRef.current += Math.min(delta, 0.05) * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4);
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    const flowLift = 0.05 + m.swell * 0.22 + m.dropEvent * 0.45;
+    const flowLift = 0.05 + m.swell * 0.22 + m.dropEvent * 0.45 + m.afterglow * 0.06;
     const fv = flowScratch.current;
 
     for (let i = 0; i < particleCount; i++) {
       if (i / particleCount > activeRatio) continue;
       basePhi[i] = (basePhi[i]! + flowSpeed) % (Math.PI * 2);
       baseTheta[i] =
-        (baseTheta[i]! + delta * speed * (0.15 + m.high * 1.2 + m.impact)) % (Math.PI * 2);
+        (baseTheta[i]! + delta * spd * (0.15 + m.high * 1.2 + m.impact)) % (Math.PI * 2);
       const radius = 1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08;
       const tube = 0.5 + m.breath * 0.15;
       const i3 = i * 3;

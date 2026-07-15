@@ -25,6 +25,21 @@ export {
   type ControlKey,
 } from './controlSchema';
 export { createImpulses, type VisualImpulses } from './impulse';
+export {
+  MOD_SOURCES,
+  MOD_SOURCES_BY_KEY,
+  MOD_CURVES,
+  MOD_GLOBAL_TARGETS,
+  modTargetsForPreset,
+  shapeModValue,
+  isValidModRouting,
+  sanitizeModRoutings,
+  type ModSourceKey,
+  type ModSourceDef,
+  type ModCurve,
+  type ModRouting,
+  type ModulatedValues,
+} from './modulation';
 export { DEFAULT_METRICS } from './metrics';
 export type { AudioMetrics, MetricsScales } from './metrics';
 export type { CameraMode } from './SceneRig';

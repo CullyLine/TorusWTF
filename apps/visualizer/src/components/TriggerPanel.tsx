@@ -65,7 +65,9 @@ export function TriggerPanel({ mappings, onChange, midi }: TriggerPanelProps): J
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Triggers</h2>
       <p className="mb-3 text-[10px] text-torus-fg-faint">
-        Fire visual moments from the music or a MIDI controller.
+        Fire one-shot moments from the music or MIDI — color kicks, camera punches, preset
+        changes. For continuous control (vocals opening the glow, drums driving size), use
+        Modulate below.
       </p>
 
       <div className="space-y-2">

@@ -110,6 +110,7 @@ export default function ProjectorPage() {
           highMix={controls.highMix}
           speed={controls.speed}
           smoothness={controls.smoothness ?? 0}
+          linger={controls.linger ?? 0.3}
           scale={controls.scale ?? 1}
           bassShake={controls.bassShake ?? 0}
           bassMaxHz={controls.bassMaxHz ?? 250}
@@ -134,6 +135,7 @@ export default function ProjectorPage() {
           interactStrength={controls.interactStrength ?? 1}
           bloomIntensity={controls.bloomIntensity}
           cameraMode={controls.cameraMode}
+          modMatrix={look.modMatrix}
         />
       ) : null}
 

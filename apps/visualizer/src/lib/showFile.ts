@@ -2,8 +2,10 @@ import type { WaveformPalette } from '@torus/shared';
 import {
   BACKGROUND_MODES,
   VISUALIZERS,
+  sanitizeModRoutings,
   type BackgroundMode,
   type CameraMode,
+  type ModRouting,
   type VisualizerId,
 } from '@torus/visualizers';
 import {
@@ -32,6 +34,8 @@ export interface TorusShowFile {
   background: BackgroundSettings;
   titleOverlay: TitleOverlay;
   triggerMappings: TriggerMapping[];
+  /** Modulation-matrix routings. Absent in pre-matrix show files → []. */
+  modMatrix: ModRouting[];
   savedPresets: SavedPreset[];
 }
 
@@ -42,6 +46,7 @@ export interface ShowFileState {
   background: BackgroundSettings;
   titleOverlay: TitleOverlay;
   triggerMappings: TriggerMapping[];
+  modMatrix: ModRouting[];
   savedPresets: SavedPreset[];
 }
 
@@ -69,6 +74,7 @@ export function buildShowFile(state: ShowFileState): TorusShowFile {
     background: state.background,
     titleOverlay: state.titleOverlay,
     triggerMappings: state.triggerMappings,
+    modMatrix: state.modMatrix,
     savedPresets: state.savedPresets,
   };
 }
@@ -121,6 +127,7 @@ export function parseShowFile(text: string): ParseShowResult {
   const background = sanitizeBackground(raw.background);
   const titleOverlay = sanitizeTitleOverlay(raw.titleOverlay);
   const triggerMappings = sanitizeTriggerMappings(raw.triggerMappings);
+  const modMatrix = sanitizeModRoutings(raw.modMatrix);
   const savedPresets = sanitizeSavedPresets(raw.savedPresets);
 
   const exportedAt =
@@ -140,6 +147,7 @@ export function parseShowFile(text: string): ParseShowResult {
       background,
       titleOverlay,
       triggerMappings,
+      modMatrix,
       savedPresets,
     },
   };

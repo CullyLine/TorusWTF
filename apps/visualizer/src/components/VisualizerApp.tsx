@@ -10,6 +10,7 @@ import {
   VISUALIZERS,
   type AudioMetrics,
   type Creature,
+  type ModRouting,
   type VisualizerId,
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
@@ -32,6 +33,7 @@ import { UnlockBanner } from '@/components/UnlockBanner';
 import { YouTubePanel } from '@/components/YouTubePanel';
 import { ShowFileControls } from '@/components/ShowFileControls';
 import { TriggerPanel } from '@/components/TriggerPanel';
+import { ModulationPanel } from '@/components/ModulationPanel';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import type { DesktopCaptureMode } from '@/hooks/useTabCapture';
 import { useExport } from '@/hooks/useExport';
@@ -53,6 +55,7 @@ import {
   persistTriggerMappings,
   type TriggerMapping,
 } from '@/lib/triggerActions';
+import { loadModMatrix, persistModMatrix } from '@/lib/modMatrix';
 import { readAudioTags } from '@/lib/audioMetadata';
 import { extractPaletteFromBlob } from '@/lib/extractPalette';
 import { captureThumbnailDataUrl, downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
@@ -428,9 +431,20 @@ export function VisualizerApp() {
     persistTriggerMappings(next);
   }, []);
 
+  // Modulation matrix — continuous signal→control routings (vs. triggers,
+  // which fire one-shots). Same persistence pattern as trigger mappings.
+  const [modMatrix, setModMatrixState] = useState<ModRouting[]>([]);
+  useEffect(() => {
+    setModMatrixState(loadModMatrix());
+  }, []);
+  const setModMatrix = useCallback((next: ModRouting[]) => {
+    setModMatrixState(next);
+    persistModMatrix(next);
+  }, []);
+
   const projectorState = useMemo<ProjectorStatePayload>(
-    () => ({ preset, palette, controls, background }),
-    [preset, palette, controls, background],
+    () => ({ preset, palette, controls, background, modMatrix }),
+    [preset, palette, controls, background, modMatrix],
   );
   const projector = useProjectorBridge({ state: projectorState, metricsRef: metricsOutRef });
 
@@ -457,9 +471,10 @@ export function VisualizerApp() {
       background,
       titleOverlay,
       triggerMappings,
+      modMatrix,
       savedPresets: loadSavedPresets(),
     }),
-    [preset, palette, controls, background, titleOverlay, triggerMappings],
+    [preset, palette, controls, background, titleOverlay, triggerMappings, modMatrix],
   );
 
   const handleImportShow = useCallback(
@@ -470,6 +485,7 @@ export function VisualizerApp() {
       setBackground(show.background);
       setTitleOverlay(show.titleOverlay);
       setTriggerMappings(show.triggerMappings);
+      setModMatrix(show.modMatrix);
       if (show.savedPresets.length > 0) {
         // Union by id — imported presets win, existing ones survive.
         const merged = new Map(loadSavedPresets().map((p) => [p.id, p]));
@@ -490,6 +506,7 @@ export function VisualizerApp() {
       setBackground,
       setTitleOverlay,
       setTriggerMappings,
+      setModMatrix,
       toast,
     ],
   );
@@ -858,6 +875,12 @@ export function VisualizerApp() {
         onBackgroundChange={(patch) => setBackground((b) => ({ ...b, ...patch }))}
       />
       <TriggerPanel mappings={triggerMappings} onChange={setTriggerMappings} midi={midi} />
+      <ModulationPanel
+        routings={modMatrix}
+        onChange={setModMatrix}
+        activePreset={preset}
+        metricsRef={metricsOutRef}
+      />
       <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-torus-fg-dim">Show</h2>
@@ -952,6 +975,7 @@ export function VisualizerApp() {
                 highMix={controls.highMix}
                 speed={controls.speed}
                 smoothness={controls.smoothness ?? 0}
+                linger={controls.linger ?? 0.3}
                 scale={controls.scale ?? 1}
                 bassShake={controls.bassShake ?? 0}
                 bassMaxHz={controls.bassMaxHz ?? 250}
@@ -981,6 +1005,7 @@ export function VisualizerApp() {
                 lastOnsetRef={lastOnsetRef}
                 impulses={impulses}
                 metricsOutRef={metricsOutRef}
+                modMatrix={modMatrix}
               />
             </div>
           </div>

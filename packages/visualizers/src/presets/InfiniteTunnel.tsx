@@ -23,6 +23,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
 import {
   DEFAULT_FLOW_PARAMS,
   flowParamsFromMetrics,
@@ -271,6 +272,7 @@ export function InfiniteTunnelScene({
   vortexAmount = 0.25,
 }: VisualizerSceneProps) {
   const metricsRef = useMetricsRef();
+  const mods = useModulation();
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
 
   const segmentCount = tier === 'high' ? 26 : tier === 'mid' ? 18 : 12;
@@ -436,11 +438,17 @@ export function InfiniteTunnelScene({
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.05);
     const t = state.clock.elapsedTime;
+    // Modulation-matrix values (fall back to slider props when unrouted).
+    const mv = mods.current;
+    const spd = mv.speed ?? speed;
+    const turbulenceNow = mv.turbulence ?? turbulence;
+    const densityNow = mv.density ?? density;
+    const vortexNow = mv.vortexAmount ?? vortexAmount;
 
     // ---- The throttle: audio drives the conveyor (the original's soul) ----
     const silenceDamp = 1 - m.silence * 0.88;
     const tunnelSpeed =
-      ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) * silenceDamp + 0.12) * speed;
+      ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) * silenceDamp + 0.12) * spd;
 
     // ---- Segment conveyor + counter-roll ----
     const rollRate = (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt;
@@ -460,7 +468,9 @@ export function InfiniteTunnelScene({
     // bass only swells it slightly; beats and drops blow it open.
     const explodeTarget = Math.min(1.3, m.bass * 0.18 + m.impact * 0.55 + m.dropEvent * 0.9);
     explodeRef.current += (explodeTarget - explodeRef.current) * Math.min(1, dt * 10);
-    const teethTarget = Math.min(1.4, m.mid * 0.9 + m.impact * 0.4);
+    // Teeth bite hardest when the drum section is actually playing — the
+    // heuristic drum-activity signal, not just any mid-band energy.
+    const teethTarget = Math.min(1.4, m.mid * 0.9 + m.impact * 0.4 + m.drumActivity * 0.3);
     teethRef.current += (teethTarget - teethRef.current) * Math.min(1, dt * 8);
     flashRef.current = Math.max(0, flashRef.current - dt * 1.6);
     if (m.dropEvent > 0.6) flashRef.current = Math.min(1, m.dropEvent);
@@ -523,13 +533,16 @@ export function InfiniteTunnelScene({
     flowTimeRef.current += dt * (0.4 + Math.min(m.energy, 1.5) * 0.4);
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    fp.turbulence *= turbulence;
+    fp.turbulence *= turbulenceNow;
     const drift = dt * (0.35 + m.energy * 0.65 + m.dropEvent * 1.2);
-    const swirl = vortexAmount * dt * (0.6 + m.mid * 1.2);
+    const swirl = vortexNow * dt * (0.6 + m.mid * 1.2);
     const sweep = tunnelSpeed * dt * 0.85;
     const fv = flowScratch.current;
     const arr = particles.positions;
-    const visible = Math.max(1, Math.floor(particleCount * Math.min(1, Math.max(0.05, density))));
+    const visible = Math.max(
+      1,
+      Math.floor(particleCount * Math.min(1, Math.max(0.05, densityNow))),
+    );
     for (let i = 0; i < visible; i++) {
       const i3 = i * 3;
       let x = arr[i3]!;
