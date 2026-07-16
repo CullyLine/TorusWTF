@@ -100,6 +100,11 @@ export function SceneRig({
   const camPunchEnvRef = useRef(0);
   const bloomPulseEnvRef = useRef(0);
   const flashEnvRef = useRef(0);
+  // Musical bloom breath: slow chorus/verse envelope (swell + afterglow).
+  // Separate from hit flash so kicks punch without owning the glow.
+  const bloomBreathRef = useRef(0.55);
+  // Soft hit ring-down for bloom — faster than swell, slower than raw impact.
+  const bloomHitRef = useRef(0);
 
   // Constructed directly (not via the <Bloom> wrapper) so the frame loop
   // can pulse `intensity` with the music. The wrapper memoizes with
@@ -348,14 +353,26 @@ export function SceneRig({
       }
     }
 
-    // Bloom breathes with the music: swells through loud sections, blooms
-    // a little brighter the instant a hit lands. Trigger pulses surge on top.
+    // Bloom musical breath: choruses glow via swell, peaks linger on
+    // afterglow, gather lifts just before the downbeat, and hits flash
+    // through a soft ring-down so kicks punch without strobing.
+    const breathTarget = 0.5 + m.swell * 0.82 + m.afterglow * 0.5;
+    // Rise through builds a touch faster than the verse exhale.
+    const breathTau = breathTarget > bloomBreathRef.current ? 0.2 : 0.55;
+    bloomBreathRef.current +=
+      (breathTarget - bloomBreathRef.current) * (1 - Math.exp(-dtImp / breathTau));
+
+    if (m.impact > bloomHitRef.current) {
+      bloomHitRef.current = m.impact;
+    } else {
+      bloomHitRef.current *= Math.exp(-dtImp / 0.3);
+    }
+
     bloomEffect.intensity =
       (mv.bloomIntensity ?? resolvedBloomRef.current) *
-      (0.7 +
-        m.swell * 0.5 +
-        m.impact * 0.3 +
-        m.afterglow * 0.28 +
+      (bloomBreathRef.current +
+        m.gather * 0.28 +
+        bloomHitRef.current * 0.16 +
         bloomPulseEnvRef.current * 1.1 +
         flash * 0.6);
   });
