@@ -149,7 +149,8 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
 
     if (crestTravel.current < 1) {
       // One slow sweep across the ribbon (~0.9–1.2s depending on speed).
-      crestTravel.current = Math.min(1, crestTravel.current + dt * spd * (0.85 + m.bpm / 180));
+      const bpm = m.bpm ?? 120;
+      crestTravel.current = Math.min(1, crestTravel.current + dt * spd * (0.85 + bpm / 180));
     }
 
     if (analyser) {
