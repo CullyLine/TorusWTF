@@ -72,7 +72,11 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     const soften = 1 - m.tenderness * 0.3;
     const sectionPace = (0.72 + m.sectionLevel * 0.5) * soften;
 
-    const breath = 1 + m.bass * 0.22 + m.swell * 0.12 + m.impact * 0.14 * soften;
+    // Gather: whole mandala inhales before the predicted beat, then the
+    // existing impact/bass breath reads as the release.
+    const gatherSqueeze = 1 - m.gather * 0.14;
+    const breath =
+      (1 + m.bass * 0.22 + m.swell * 0.12 + m.impact * 0.14 * soften) * gatherSqueeze;
     root.scale.setScalar(breath);
     // Whole-mandala spin: now picks up mid + high + impact so the wheel
     // visibly turns at normal listening gain instead of waiting for the
@@ -82,16 +86,32 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
 
     // Rings follow the living palette: color assignments happen every frame
     // (the JSX material color would otherwise stay frozen at mount).
+    // Kit split: kick pulses the inner rings; snare cracks the outer ones.
+    const ringDenom = Math.max(1, layerCount - 1);
     const c = scratchColor.current;
     rings.children.forEach((child, i) => {
+      const outerness = i / ringDenom;
+      const innerness = 1 - outerness;
+      const kickPulse = Math.min(1.2, m.kick) * innerness;
+      const snareCrack = Math.min(1.2, m.snare) * outerness;
       // Per-ring spin: was 0.12 + i*0.04 + m.mid*0.5. That made the inner
       // rings barely turn unless gain was huge. Tripled the music-driven
       // term and added high + impact so each ring flies on energy.
       const spin =
-        (0.22 + i * 0.05 + m.mid * 1.7 + m.high * 0.95 + m.impact * 0.6) * sectionPace;
+        (0.22 +
+          i * 0.05 +
+          m.mid * 1.7 +
+          m.high * 0.95 +
+          m.impact * 0.6 +
+          snareCrack * 1.1 +
+          kickPulse * 0.55) *
+        sectionPace;
       child.rotation.z += delta * spd * spin * (i % 2 === 0 ? 1 : -1);
       child.rotation.x =
-        Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12);
+        Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12) +
+        snareCrack * 0.08;
+      // Kick: inner rings bloom outward; snare: outer rings briefly flare.
+      child.scale.setScalar(1 + kickPulse * 0.2 + snareCrack * 0.14);
       const hex = i % 3 === 0 ? palette.bass : i % 3 === 1 ? palette.mid : palette.high;
       c.set(hex);
       for (const grand of child.children) {
@@ -104,7 +124,9 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
             0.25 +
             m.swell * 0.5 +
             m.afterglow * 0.35 +
-            (i === layerCount - 1 ? m.impact * 0.35 : 0);
+            (i === layerCount - 1 ? m.impact * 0.35 : 0) +
+            kickPulse * 0.55 +
+            snareCrack * 0.7;
           sm.color.copy(c);
           sm.emissive.copy(c);
         }
@@ -112,24 +134,31 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     });
 
     if (shimmer && shimmerMat) {
-      shimmerMat.size = 0.035 + m.shimmer * 0.05 + pulseRef.current * 0.03;
+      // Hat ticks: sharp, short twinkles on the halo — distinct from the
+      // slower shimmer envelope and the impact pulse.
+      shimmerMat.size =
+        0.035 + m.shimmer * 0.05 + pulseRef.current * 0.03 + m.hat * 0.07;
       // Lead lines make the halo glitter — melody gets its own voice here.
       shimmerMat.opacity = Math.min(
         1,
-        0.45 + m.high * 0.45 + m.afterglow * 0.15 + m.leadActivity * 0.2,
+        0.45 + m.high * 0.45 + m.afterglow * 0.15 + m.leadActivity * 0.2 + m.hat * 0.35,
       );
       shimmerMat.color.set(palette.high);
+      // Phrase echo briefly reverses shimmer drift in post-phrase gaps —
+      // the halo answers the silence by turning back on itself.
+      const echoFlip = 1 - Math.min(1, m.echo) * 2;
       // Counter-rotating shimmer cloud — also bumped up so it streaks
       // visibly across the rings on busy passages.
-      shimmer.rotation.y -= delta * spd * (0.35 + m.high * 1.6 + m.mid * 0.5) * sectionPace;
+      shimmer.rotation.y -=
+        delta * spd * (0.35 + m.high * 1.6 + m.mid * 0.5) * sectionPace * echoFlip;
 
       // Advect the halo through the shared current, spring-tethered to its
       // home ring so the mandala's silhouette survives the swirl.
       const dtClamped = Math.min(delta, 0.05);
-      flowTimeRef.current += dtClamped * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+      flowTimeRef.current += dtClamped * (0.4 + Math.min(m.energy, 1.5) * 0.4) * echoFlip;
       const fp = flowParamsFromMetrics(m, flowParamsRef.current);
       fp.time = flowTimeRef.current;
-      const drift = dtClamped * (0.3 + m.energy * 0.7 + m.dropEvent * 1.4);
+      const drift = dtClamped * (0.3 + m.energy * 0.7 + m.dropEvent * 1.4) * echoFlip;
       const spring = dtClamped * 1.6;
       const fv = flowScratch.current;
       const posAttr = shimmer.geometry.getAttribute('position') as THREE.BufferAttribute;
