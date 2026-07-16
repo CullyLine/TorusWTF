@@ -15,6 +15,10 @@ import type { VisualImpulses } from './impulse';
  *
  *  - a slow hue orbit (~±12°) that drifts at the music's pace, so long
  *    sessions never sit on one static color
+ *  - mood warmth from `moodValence` + `tenderness` (EMA-smoothed): warm
+ *    vocal passages drift amber and bloom in saturation; cool instrumental
+ *    valleys drift cyan and lean leaner — color feels emotional, not only
+ *    loudness-driven
  *  - saturation and brightness swell with loudness and land with beat
  *    impacts — choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
@@ -63,6 +67,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
   const hueKickRef = useRef(0);
   const kickSignRef = useRef(1);
   const prevDropRef = useRef(0);
+  /** EMA of mood warmth (−1 cool … +1 warm) so hue never jumps with noisy valence. */
+  const moodWarmthRef = useRef(0);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
@@ -78,6 +84,7 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     hueKickRef.current *= Math.exp(-dt / 1.5);
 
     if (life <= 0.001 && Math.abs(hueKickRef.current) < 0.002) {
+      moodWarmthRef.current *= Math.exp(-dt / 0.6);
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
       if (out.high !== base.high) out.high = base.high;
@@ -104,16 +111,47 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     }
     prevDropRef.current = m.dropEvent;
 
+    // Mood warmth: long-EMA valence (confidence-gated) + tenderness, with a
+    // gentle vocal lift so ballads amber-drift while cold techno cyan-drifts.
+    // ~1.1s time constant keeps the cast continuous — never a hue pop.
+    const confidence = clamp(m.moodConfidence, 0, 1);
+    const moodTarget = clamp(
+      m.moodValence * (0.45 + 0.4 * confidence) +
+        m.tenderness * 0.55 +
+        m.vocalActivity * m.tenderness * 0.25 -
+        // Cool instrumental valleys: low vocals + low tenderness + cool valence
+        (1 - m.vocalActivity) * (1 - m.tenderness) * Math.max(0, -m.moodValence) * 0.2,
+      -1,
+      1,
+    );
+    const moodAlpha = 1 - Math.exp(-dt / 1.1);
+    moodWarmthRef.current += (moodTarget - moodWarmthRef.current) * moodAlpha;
+    const warmth = moodWarmthRef.current;
+
+    // Signed hue cast: + → amber (~+14°), − → cyan (~−14°). Independent of
+    // the slow orbit and additive with drop kicks so drops still punch.
+    const moodHue = life * warmth * 0.038;
+    // Warm passages bloom saturation; cool valleys lean a touch leaner.
+    const moodSat = life * (warmth * 0.14 + m.tenderness * 0.06);
+
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
-    const hueShift = life * drift + hueKickRef.current;
+    const hueShift = life * drift + hueKickRef.current + moodHue;
     // Afterglow holds saturation and light elevated for seconds after a
     // peak — the color equivalent of a room still ringing.
     const satBoost =
-      1 + life * (m.swell * 0.22 + m.impact * 0.1 + m.afterglow * 0.16 - m.silence * 0.4);
+      1 +
+      life * (m.swell * 0.22 + m.impact * 0.1 + m.afterglow * 0.16 - m.silence * 0.4) +
+      moodSat;
     const lightBoost =
       1 +
       life *
-        (m.swell * 0.14 + m.impact * 0.18 + m.shimmer * 0.08 + m.afterglow * 0.08 - m.silence * 0.22);
+        (m.swell * 0.14 +
+          m.impact * 0.18 +
+          m.shimmer * 0.08 +
+          m.afterglow * 0.08 -
+          m.silence * 0.22 +
+          // Soft warm lift — amber passages feel lit, not just tinted.
+          Math.max(0, warmth) * 0.05);
 
     applyLife(out, 'bass', base.bass, hueShift, satBoost, lightBoost * 0.96);
     applyLife(out, 'mid', base.mid, hueShift + life * 0.006, satBoost, lightBoost);
