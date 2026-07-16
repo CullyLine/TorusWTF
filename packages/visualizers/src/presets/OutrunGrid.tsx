@@ -283,7 +283,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     (terrainMat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (terrainMat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (terrainMat.uniforms.uHeatColor!.value as THREE.Color)
-      .copy(heatColorScratch.current.set(palette.bass).lerp(heatColorScratch.current.set(palette.high), 0.35));
+      .copy(heatColorScratch.current.set(palette.bass))
+      .lerp(heatHighScratch.current.set(palette.high), 0.35);
 
     skyMat.uniforms.uTime!.value = state.clock.elapsedTime;
     skyMat.uniforms.uBass!.value = m.bass + tensionSmooth.current * 0.4 + m.afterglow * 0.15;
