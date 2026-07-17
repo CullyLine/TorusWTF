@@ -151,7 +151,8 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
   // Kit envelopes (smoothed) + continuous spin accumulator for bar-lock.
   const hatSmooth = useRef(0);
   const kickSmooth = useRef(0);
-  const spinAccum = useRef(0);
+  // Seed with the JSX Y twist so absolute assignment doesn't flatten the disc.
+  const spinAccum = useRef(Math.PI / 10);
 
   const count = tier === 'high' ? 50_000 : tier === 'mid' ? 24_000 : 8_000;
   // Low tier: slightly softer kit so sparse stars don't strobe; mid/high full.
