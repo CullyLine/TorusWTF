@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * Liquid Chrome — glossy displaced icosahedron. Call-and-response layer:
+ *  - gather → surface inhales (scale + displacement squeeze) before the beat
+ *  - impact → release punch expands the metal
+ *  - hat / shimmer → fresnel rim sparkles
+ *  - echo → faint delayed ripples travel across the chrome in phrase gaps
+ */
+
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -13,10 +21,14 @@ uniform float uBass;
 uniform float uMid;
 uniform float uEnergy;
 uniform float uBeat;
+uniform float uGather;
+uniform float uEcho;
 
 varying vec3 vNormal;
 varying vec3 vViewDir;
 varying float vNoise;
+varying float vRimSeed;
+varying float vEchoWave;
 
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -84,11 +96,23 @@ void main() {
   vec3 pos = position;
   vec3 n = normalize(normal);
   float t = uTime;
-  float disp = 0.12 + uBass * 0.35 + uBeat * 0.25 + uEnergy * 0.08;
+  // Gather softens displacement (the metal holds its breath); impact
+  // and energy still push the surface out on the release.
+  float inhale = 1.0 - uGather * 0.55;
+  float disp = (0.12 + uBass * 0.35 + uBeat * 0.32 + uEnergy * 0.08) * inhale;
   vec3 samplePos = pos * 2.1 + vec3(t * 0.35, t * 0.28, t * 0.22);
   float noise = fbm(samplePos + uMid * 0.35);
   vNoise = noise;
   pos += n * noise * disp;
+
+  // Echo: a traveling radial ripple across the shell — phrase memory.
+  float radial = length(pos.xy) * 4.2 + pos.z * 1.6;
+  float echoWave = sin(radial - t * 5.5) * uEcho;
+  pos += n * echoWave * 0.085;
+  vEchoWave = echoWave;
+
+  // Whole-body inhale / hit-release (paired with mesh.scale in JS).
+  pos *= 1.0 - uGather * 0.07 + uBeat * 0.045;
 
   float eps = 0.02;
   float nx = fbm(samplePos + vec3(eps, 0.0, 0.0)) - fbm(samplePos - vec3(eps, 0.0, 0.0));
@@ -96,6 +120,8 @@ void main() {
   float nz = fbm(samplePos + vec3(0.0, 0.0, eps)) - fbm(samplePos - vec3(0.0, 0.0, eps));
   vec3 grad = normalize(vec3(nx, ny, nz));
   vNormal = normalize(normalMatrix * grad);
+  // Stable-ish seed for rim glitter (view-independent enough to tick).
+  vRimSeed = fract(noise * 7.13 + pos.x * 3.1 + pos.y * 5.7);
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
   vViewDir = normalize(-mvPosition.xyz);
@@ -107,6 +133,8 @@ const fragmentShader = /* glsl */ `
 uniform float uTime;
 uniform float uEnergy;
 uniform float uBeat;
+uniform float uSparkle;
+uniform float uEcho;
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform vec3 uEmissive;
@@ -114,6 +142,8 @@ uniform vec3 uEmissive;
 varying vec3 vNormal;
 varying vec3 vViewDir;
 varying float vNoise;
+varying float vRimSeed;
+varying float vEchoWave;
 
 vec3 envColor(vec3 dir) {
   float t = dir.y * 0.5 + 0.5;
@@ -140,9 +170,23 @@ void main() {
   chrome += uEmissive * (0.08 + uEnergy * 0.2 + uBeat * 0.22);
   chrome += mix(uColorB, vec3(1.0), 0.4) * fresnel * 0.3;
 
+  // Hat / shimmer: sharp rim sparkles — glitter, not a soft wash.
+  float twinkle = step(0.72, fract(vRimSeed * 17.0 + uTime * 11.0));
+  float sparkGate = smoothstep(0.12, 0.55, uSparkle);
+  chrome += vec3(1.0) * fresnel * twinkle * sparkGate * (0.35 + uSparkle * 0.65);
+
+  // Echo ripple leaves a faint bright crest on the metal.
+  chrome += mix(uColorB, vec3(1.0), 0.5) * max(vEchoWave, 0.0) * uEcho * 0.22;
+
   gl_FragColor = vec4(chrome, 1.0);
 }
 `;
+
+function smoothToward(current: number, target: number, dt: number, riseTau: number, fallTau: number) {
+  const tau = target > current ? riseTau : fallTau;
+  const k = 1 - Math.exp(-dt / Math.max(tau, 1e-4));
+  return current + (target - current) * k;
+}
 
 export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
@@ -151,8 +195,16 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const timeRef = useRef(0);
+  const gatherSmooth = useRef(0);
+  const echoSmooth = useRef(0);
+  const sparkleSmooth = useRef(0);
+  const scaleSmooth = useRef(1);
 
   const detail = tier === 'high' ? 6 : tier === 'mid' ? 5 : 4;
+  // Low tier still gets call-and-response (cheap uniforms); mid/high just
+  // have denser geometry so ripples and rim glitter read sharper.
+  const echoAmp = tier === 'low' ? 0.75 : 1;
+  const sparkleAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const geometry = useMemo(() => new THREE.IcosahedronGeometry(1.1, detail), [detail]);
 
@@ -163,6 +215,9 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
       uMid: { value: 0 },
       uEnergy: { value: 0 },
       uBeat: { value: 0 },
+      uGather: { value: 0 },
+      uEcho: { value: 0 },
+      uSparkle: { value: 0 },
       uColorA: { value: new THREE.Color(palette.mid) },
       uColorB: { value: new THREE.Color(palette.high) },
       uEmissive: { value: new THREE.Color(palette.high) },
@@ -176,22 +231,40 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
     if (!mesh || !mat) return;
 
     const m = metricsRef.current;
+    const dt = Math.min(delta, 0.1);
     const spd = mods.current.speed ?? speed;
     // Music-paced clock: flows faster in loud passages, honors Speed.
     // Tenderness stills the surface — vocal-led quiet passages read as a
     // calm pool instead of churning metal.
     const calm = 1 - m.tenderness * 0.35;
-    timeRef.current +=
-      Math.min(delta, 0.1) * spd * (0.6 + m.swell * 0.9 + m.impact * 0.4) * calm;
+    timeRef.current += dt * spd * (0.6 + m.swell * 0.9 + m.impact * 0.4) * calm;
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass * calm;
     mat.uniforms.uMid!.value = m.mid;
     // Afterglow keeps the chrome softly lit from within after big moments.
     mat.uniforms.uEnergy!.value = m.energy + m.afterglow * 0.4;
     mat.uniforms.uBeat!.value = m.impact;
+
+    // Call-and-response envelopes — springy rise, slower release so the
+    // inhale and echo ripples feel continuous rather than gated.
+    gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.045, 0.14);
+    echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.28);
+    const sparkleTarget = Math.min(1.2, m.hat * 0.85 + m.shimmer * 0.55) * sparkleAmp;
+    sparkleSmooth.current = smoothToward(sparkleSmooth.current, sparkleTarget, dt, 0.03, 0.12);
+
+    mat.uniforms.uGather!.value = gatherSmooth.current;
+    mat.uniforms.uEcho!.value = echoSmooth.current;
+    mat.uniforms.uSparkle!.value = sparkleSmooth.current;
+
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (mat.uniforms.uEmissive!.value as THREE.Color).set(palette.high);
+
+    // Mesh-scale inhale / hit-release on top of vertex squeeze.
+    const scaleTarget =
+      1 - gatherSmooth.current * 0.08 + m.impact * 0.055 + m.release * 0.02;
+    scaleSmooth.current = smoothToward(scaleSmooth.current, scaleTarget, dt, 0.04, 0.11);
+    mesh.scale.setScalar(scaleSmooth.current);
 
     mesh.rotation.y += delta * spd * (0.15 + m.mid * 0.4) * (0.72 + m.sectionLevel * 0.5);
     mesh.rotation.x = Math.sin(state.clock.elapsedTime * 0.35) * 0.12 + m.high * 0.08;

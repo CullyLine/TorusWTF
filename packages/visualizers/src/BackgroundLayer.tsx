@@ -16,9 +16,11 @@ import { getDotTexture } from './dotTexture';
  * sphere, so there are no seams, no edges, and no "back of the set".
  *
  * Driven mostly by SLOW signals (`breath`, `flow`, `moodValence`,
- * `dropEvent`, `afterglow`) so the background drifts and swells rather
- * than strobing. Honors `prefers-reduced-motion` by freezing the drift.
- * Contrast-capped so it never competes with the foreground preset.
+ * `dropEvent`, `afterglow`, `tension`) so the background drifts and
+ * swells rather than strobing. Pre-beat `gather` eases the sky inward /
+ * dim (musical inhale); `shimmer`/`hat` add a faint glitter distinct
+ * from bass swell. Honors `prefers-reduced-motion` by freezing the
+ * drift. Contrast-capped so it never competes with the foreground preset.
  */
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
@@ -164,18 +166,27 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform vec3 uColorA;
   uniform vec3 uColorB;
   uniform float uIntensity;
+  uniform float uInhale;
+  uniform float uGlitter;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
     vec3 d = normalize(vDir);
     float n1 = fbmDir(d, 2.6, vec2(uTime * 0.020, uTime * 0.015));
     float n2 = fbmDir(d, 4.4, vec2(-uTime * 0.012, uTime * 0.008));
-    float density = smoothstep(0.28, 0.95, n1 * 0.62 + n2 * 0.38);
+    // Gather raises the density floor so fog thins / pulls toward denser
+    // pockets — a pre-beat inhale instead of a flat dim.
+    float lo = 0.28 + uInhale * 0.16;
+    float hi = 0.95 + uInhale * 0.04;
+    float density = smoothstep(lo, hi, n1 * 0.62 + n2 * 0.38);
     vec3 col = mix(uColorA, uColorB, n2);
     // Slightly thinner straight overhead/underfoot so the fog reads as a
     // horizon-hugging cloudscape instead of a uniform wash.
-    float band = 1.0 - 0.35 * abs(d.y);
-    float a = density * band * uIntensity;
+    float band = 1.0 - 0.35 * abs(d.y) - uInhale * 0.18 * (1.0 - abs(d.y));
+    // Hat/shimmer glitter: brief high-frequency sparkle, not bass swell.
+    float sparkle = noise(d.xy * 38.0 + vec2(uTime * 9.0, uTime * 6.5));
+    float glitter = 1.0 + uGlitter * (0.25 + 0.75 * sparkle);
+    float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * glitter;
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -183,33 +194,54 @@ const NEBULA_FRAGMENT = /* glsl */ `
 function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
+  const scratchMid = useRef(new THREE.Color());
+  const scratchHigh = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
       uColorA: { value: new THREE.Color(palette.bass) },
       uColorB: { value: new THREE.Color(palette.mid) },
       uIntensity: { value: 0 },
+      uInhale: { value: 0 },
+      uGlitter: { value: 0 },
     }),
     [palette.bass, palette.mid],
   );
   const timeRef = useRef(0);
+  const inhaleRef = useRef(0);
+  const glitterRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
-    timeRef.current += reducedMotion ? 0 : Math.min(delta, 0.1);
+    const dt = Math.min(delta, 0.1);
+    timeRef.current += reducedMotion ? 0 : dt;
     const mat = matRef.current;
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
-    // Slow swell: breath + flow + lingering afterglow. Capped hard.
-    const swell = 0.4 + m.breath * 0.5 + m.flow * 0.35 + m.dropEvent * 0.25 + m.afterglow * 0.2;
+    // Slow swell: breath + flow + build tension + lingering afterglow.
+    const swell =
+      0.4 +
+      m.breath * 0.5 +
+      m.flow * 0.35 +
+      m.tension * 0.42 +
+      m.dropEvent * 0.25 +
+      m.afterglow * 0.2;
     mat.uniforms.uIntensity!.value = Math.min(NEBULA_CAP, swell * intensity * NEBULA_CAP);
+    // Ease gather/glitter so the sky inhales and sparkles fluidly.
+    inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
+    const glitterTarget = Math.min(1, m.shimmer * 0.9 + m.hat * 0.55);
+    const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
+    glitterRef.current +=
+      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    mat.uniforms.uInhale!.value = inhaleRef.current;
+    mat.uniforms.uGlitter!.value = glitterRef.current;
     // Live palette: both fog colors track the (mutating) palette per frame.
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.bass);
     // Warm/cool drift toward the high color on positive valence.
     const warmth = Math.max(0, Math.min(1, 0.5 + m.moodValence * 0.4));
     (mat.uniforms.uColorB!.value as THREE.Color).lerpColors(
-      new THREE.Color(palette.mid),
-      new THREE.Color(palette.high),
+      scratchMid.current.set(palette.mid),
+      scratchHigh.current.set(palette.high),
       warmth * 0.6,
     );
   });
@@ -231,6 +263,8 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const metricsRef = useMetricsRef();
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
+  const inhaleRef = useRef(0);
+  const glitterRef = useRef(0);
   const sprite = useMemo(() => getDotTexture(), []);
   const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
 
@@ -265,19 +299,37 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
+    const dt = Math.min(delta, 0.1);
     const g = groupRef.current;
     if (g && !reducedMotion) {
       // Very slow whole-sky rotation — deep-space drift.
       g.rotation.y += delta * 0.004;
       g.rotation.z += delta * 0.002;
     }
+    inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
+    const glitterTarget = Math.min(1, m.shimmer * 0.95 + m.hat * 0.6);
+    const glitterTau = glitterTarget > glitterRef.current ? 0.04 : 0.18;
+    glitterRef.current +=
+      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     const mat = matRef.current;
     if (mat) {
       // Twinkle: base size + high-frequency sparkle. Opacity capped.
       // Sized up ~4x vs the old near-slab because the shell sits ~30
       // units out (point size attenuates with distance).
-      mat.size = 0.26 + m.high * 0.5;
-      mat.opacity = Math.min(STAR_OPACITY_CAP, (0.3 + m.high * 0.4 + m.flow * 0.15) * intensity);
+      // Gather dims the field; tension swells through builds; shimmer/hat
+      // glitter is a sharp tick distinct from bass flow.
+      const gatherDim = 1 - inhaleRef.current * 0.32;
+      mat.size = 0.26 + m.high * 0.45 + glitterRef.current * 0.38;
+      mat.opacity = Math.min(
+        STAR_OPACITY_CAP,
+        (0.3 +
+          m.high * 0.35 +
+          m.flow * 0.15 +
+          m.tension * 0.22 +
+          glitterRef.current * 0.28) *
+          intensity *
+          gatherDim,
+      );
     }
     // Live palette: stars re-tint per frame so they follow color life.
     if (g) {
@@ -327,6 +379,8 @@ const AURORA_FRAGMENT = /* glsl */ `
   uniform vec3 uColorA;
   uniform vec3 uColorB;
   uniform float uIntensity;
+  uniform float uInhale;
+  uniform float uGlitter;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
@@ -336,15 +390,19 @@ const AURORA_FRAGMENT = /* glsl */ `
     vec3 flat3 = normalize(vec3(d.x, 0.0, d.z) + 1e-4);
     // Wavy top edge of the curtain, different at every compass heading.
     float wave = fbmDir(flat3, 2.4, vec2(uTime * 0.05, 0.0));
-    float topEdge = 0.16 + 0.34 * wave;
+    // Gather drops the curtain edge toward the horizon (inward inhale).
+    float topEdge = 0.16 + 0.34 * wave - uInhale * 0.14;
     // Curtain: bright ribbon below its wavy top edge, fading out toward
     // the nadir so it hugs the horizon like the real thing.
     float curtain = smoothstep(topEdge, topEdge - 0.55, d.y) * smoothstep(-0.75, -0.25, d.y);
     // Vertical shimmer striations that scroll around the horizon.
     float shimmer = 0.55 + 0.45 * fbmDir(d, 7.0, vec2(uTime * 0.18, uTime * 0.06));
+    // Hat glitter: sharp sparkle ticks on the curtain, not bass billow.
+    float sparkle = noise(d.xz * 52.0 + vec2(uTime * 11.0, -uTime * 7.0));
+    shimmer += uGlitter * (0.35 + 0.65 * sparkle);
     float hueBand = clamp(d.y * 1.3 + 0.55, 0.0, 1.0);
     vec3 col = mix(uColorA, uColorB, hueBand + 0.2 * wave);
-    float a = curtain * shimmer * uIntensity;
+    float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38);
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -358,23 +416,41 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
       uColorA: { value: new THREE.Color(palette.bass) },
       uColorB: { value: new THREE.Color(palette.high) },
       uIntensity: { value: 0 },
+      uInhale: { value: 0 },
+      uGlitter: { value: 0 },
     }),
     [palette.bass, palette.high],
   );
   const timeRef = useRef(0);
   const levelRef = useRef(0);
+  const inhaleRef = useRef(0);
+  const glitterRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
     timeRef.current += reducedMotion ? 0 : dt;
     // Smooth the bass drive so curtains billow rather than flicker.
-    const target = 0.35 + m.bass * 0.6 + m.breath * 0.4 + m.dropEvent * 0.3 + m.afterglow * 0.25;
+    // Tension swells through builds on top of the slow breath.
+    const target =
+      0.35 +
+      m.bass * 0.6 +
+      m.breath * 0.4 +
+      m.tension * 0.48 +
+      m.dropEvent * 0.3 +
+      m.afterglow * 0.25;
     levelRef.current += (target - levelRef.current) * (1 - Math.exp(-dt / 0.4));
+    inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
+    const glitterTarget = Math.min(1, m.shimmer * 0.9 + m.hat * 0.55);
+    const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.2;
+    glitterRef.current +=
+      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     const mat = matRef.current;
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uIntensity!.value = Math.min(AURORA_CAP, levelRef.current * intensity * AURORA_CAP);
+    mat.uniforms.uInhale!.value = inhaleRef.current;
+    mat.uniforms.uGlitter!.value = glitterRef.current;
     // Live palette: curtain colors track the (mutating) palette per frame.
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
@@ -391,14 +467,19 @@ const GLOW_FRAGMENT = /* glsl */ `
   uniform vec3 uColor;
   uniform vec3 uSunDir;
   uniform float uIntensity;
+  uniform float uInhale;
+  uniform float uGlitter;
   varying vec3 vDir;
   void main() {
     vec3 d = normalize(vDir);
     // Wide soft halo around the drifting energy source...
-    float core = pow(max(dot(d, uSunDir), 0.0), 3.0);
+    // Gather tightens the core (inward inhale) instead of only dimming.
+    float core = pow(max(dot(d, uSunDir), 0.0), 3.0 + uInhale * 2.2);
     // ...plus a faint horizon glow so the rest of the sky isn't dead.
-    float horizon = (1.0 - abs(d.y)) * 0.18;
-    float a = (core + horizon) * uIntensity;
+    float horizon = (1.0 - abs(d.y)) * 0.18 * (1.0 - uInhale * 0.35);
+    float sparkle = fract(sin(dot(d.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    float glitter = 1.0 + uGlitter * (0.2 + 0.8 * sparkle);
+    float a = (core + horizon) * uIntensity * (1.0 - uInhale * 0.3) * glitter;
     gl_FragColor = vec4(uColor, a);
   }
 `;
@@ -406,19 +487,26 @@ const GLOW_FRAGMENT = /* glsl */ `
 function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
+  const scratchBass = useRef(new THREE.Color());
+  const scratchMid = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(palette.mid) },
       uSunDir: { value: new THREE.Vector3(0, 0.2, -1).normalize() },
       uIntensity: { value: 0 },
+      uInhale: { value: 0 },
+      uGlitter: { value: 0 },
     }),
     [palette.mid],
   );
   const tRef = useRef(0);
+  const inhaleRef = useRef(0);
+  const glitterRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
-    tRef.current += reducedMotion ? 0 : Math.min(delta, 0.1);
+    const dt = Math.min(delta, 0.1);
+    tRef.current += reducedMotion ? 0 : dt;
     const mat = matRef.current;
     if (!mat) return;
     // The energy source drifts around the sky over ~4 minutes and bobs
@@ -428,16 +516,29 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     (mat.uniforms.uSunDir!.value as THREE.Vector3)
       .set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el))
       .normalize();
-    // Slow autonomous breath plus energy swell; drops punch softly through.
+    // Slow autonomous breath plus energy swell; tension builds; drops punch.
     const autoBreath = 0.45 + 0.12 * Math.sin(tRef.current * 0.4);
-    const swell = autoBreath + m.flow * 0.5 + m.bass * 0.3 + m.dropEvent * 0.4 + m.afterglow * 0.3;
+    const swell =
+      autoBreath +
+      m.flow * 0.5 +
+      m.bass * 0.3 +
+      m.tension * 0.4 +
+      m.dropEvent * 0.4 +
+      m.afterglow * 0.3;
     const silenceMute = 1 - m.silence * 0.5;
+    inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
+    const glitterTarget = Math.min(1, m.shimmer * 0.85 + m.hat * 0.5);
+    const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
+    glitterRef.current +=
+      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     mat.uniforms.uIntensity!.value = Math.min(GLOW_CAP, swell * silenceMute * intensity * GLOW_CAP);
+    mat.uniforms.uInhale!.value = inhaleRef.current;
+    mat.uniforms.uGlitter!.value = glitterRef.current;
     // Warm vs cool target color follows mood valence.
     const warmth = Math.max(0, Math.min(1, 0.5 + m.moodValence * 0.4));
     (mat.uniforms.uColor!.value as THREE.Color).lerpColors(
-      new THREE.Color(palette.bass),
-      new THREE.Color(palette.mid),
+      scratchBass.current.set(palette.bass),
+      scratchMid.current.set(palette.mid),
       warmth,
     );
   });
