@@ -35,10 +35,19 @@ const RESERVED = new Set([
   'localhost',
 ]);
 
+function isIpHost(hostNoPort: string): boolean {
+  // IPv4 (e.g. 127.0.0.1) — dots make it look like a multi-label domain.
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostNoPort)) return true;
+  // IPv6 in brackets or bare (Next usually strips brackets from Host).
+  if (hostNoPort.includes(':') || hostNoPort === '::1') return true;
+  return false;
+}
+
 export function middleware(req: NextRequest) {
   const url = req.nextUrl;
   const host = req.headers.get('host')?.toLowerCase() ?? '';
   const hostNoPort = host.split(':')[0]!;
+  if (isIpHost(hostNoPort)) return NextResponse.next();
   const labels = hostNoPort.split('.');
 
   // Need at least three labels to be a subdomain of an apex domain (sub.domain.tld)

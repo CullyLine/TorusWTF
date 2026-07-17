@@ -2,10 +2,32 @@ import { createClient as createRemoteClient, type Client } from '@libsql/client/
 import type { createClient as CreateNativeClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql/web';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
-import { createRequire } from 'node:module';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import * as schema from './schema';
+
+declare const __non_webpack_require__: NodeRequire | undefined;
+
+/**
+ * Load the native libsql client for local `file:` DBs via a tiny on-disk CJS
+ * bridge. Webpack stubs `createRequire` in the RSC bundle; `__non_webpack_require__`
+ * is the escape hatch that calls real Node `require`.
+ */
+function loadNativeCreateClient(): typeof CreateNativeClient {
+  const root = findRepoRoot(process.cwd());
+  const bridge = resolve(root, 'packages/db/src/native-libsql.cjs');
+  if (!existsSync(bridge)) {
+    throw new Error(`Missing native libsql bridge at ${bridge}`);
+  }
+  const nodeRequire =
+    typeof __non_webpack_require__ === 'function'
+      ? __non_webpack_require__
+      : // Outside webpack (tests / migrate script).
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require;
+  const mod = nodeRequire(bridge) as { createClient: typeof CreateNativeClient };
+  return mod.createClient;
+}
 
 let cachedDb: LibSQLDatabase<typeof schema> | null = null;
 let cachedClient: Client | null = null;
@@ -55,13 +77,9 @@ function normalizeUrl(url: string): string {
  */
 function createLibsqlClient(url: string, authToken?: string): Client {
   if (url.startsWith('file:')) {
-    // On-disk SQLite needs the native client. Build the specifier at runtime so
-    // the bundler never sees it: this keeps the native module (and its `libsql`
-    // binding) out of the serverless build, where only the remote web client is
-    // ever used.
-    const nodeRequire = createRequire(import.meta.url);
-    const nativeId = ['@libsql', 'client'].join('/');
-    const { createClient } = nodeRequire(nativeId) as { createClient: typeof CreateNativeClient };
+    // On-disk SQLite needs the native client. Production/Vercel never hits
+    // this branch (remote Turso only).
+    const createClient = loadNativeCreateClient();
     return createClient({ url, authToken }) as unknown as Client;
   }
   // Force plain HTTPS for remote Turso. The `libsql://` scheme makes the client

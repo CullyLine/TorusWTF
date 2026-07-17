@@ -26,7 +26,10 @@ const config: NextConfig = {
   // at runtime. The native `@libsql/client` (default entry) + `libsql` bindings
   // are only loaded lazily for local `file:` databases, so they stay external and
   // out of the bundle (and never run on Vercel).
-  serverExternalPackages: ['libsql'],
+  // Include `@libsql/client` so the lazy `createRequire` path for local
+  // `file:` SQLite isn't emptied by webpack (that surfaces as
+  // "Cannot find module '@libsql/client'" on /api/auth/me in dev).
+  serverExternalPackages: ['libsql', '@libsql/client'],
   webpack: (webpackConfig, { isServer, webpack }) => {
     if (!isServer) {
       // libsonare's emscripten glue has a Node-only branch that does

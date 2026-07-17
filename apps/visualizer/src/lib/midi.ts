@@ -56,13 +56,13 @@ function listInputs(access: MIDIAccess): { id: string; name: string }[] {
 }
 
 export function useWebMidi(onNoteOn?: (e: MidiNoteEvent) => void): UseWebMidiResult {
-  const supported =
-    typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator;
-
+  // Keep SSR and the client's first paint identical — detect MIDI / restore
+  // the saved input only after mount (otherwise TriggerPanel hydrates wrong).
+  const [supported, setSupported] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inputs, setInputs] = useState<{ id: string; name: string }[]>([]);
-  const [activeInputId, setActiveInputIdState] = useState<string | null>(readPersistedInputId);
+  const [activeInputId, setActiveInputIdState] = useState<string | null>(null);
   const [lastNote, setLastNote] = useState<MidiNoteEvent | null>(null);
 
   const onNoteOnRef = useRef(onNoteOn);
@@ -70,6 +70,11 @@ export function useWebMidi(onNoteOn?: (e: MidiNoteEvent) => void): UseWebMidiRes
 
   const activeInputIdRef = useRef(activeInputId);
   activeInputIdRef.current = activeInputId;
+
+  useEffect(() => {
+    setSupported(typeof navigator !== 'undefined' && 'requestMIDIAccess' in navigator);
+    setActiveInputIdState(readPersistedInputId());
+  }, []);
 
   const accessRef = useRef<MIDIAccess | null>(null);
   const handlerRef = useRef<((event: MIDIMessageEvent) => void) | null>(null);

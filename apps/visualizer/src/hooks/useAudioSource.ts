@@ -40,10 +40,21 @@ export function useAudioSource() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [volume, setVolumeState] = useState<number>(readInitialVolume);
+  // Always start at DEFAULT_VOLUME so SSR HTML matches the client's first
+  // paint. Reading localStorage in useState() causes a hydration mismatch
+  // when a saved volume differs from the default.
+  const [volume, setVolumeState] = useState<number>(DEFAULT_VOLUME);
   const [muted, setMutedState] = useState(false);
   const volumeRef = useRef(volume);
   const mutedRef = useRef(muted);
+
+  useEffect(() => {
+    const saved = readInitialVolume();
+    if (saved === DEFAULT_VOLUME) return;
+    volumeRef.current = saved;
+    setVolumeState(saved);
+    if (audioRef.current) audioRef.current.volume = saved;
+  }, []);
 
   const mic = useMicCapture();
   const tab = useTabCapture();
