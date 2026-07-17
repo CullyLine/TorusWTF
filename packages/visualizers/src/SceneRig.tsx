@@ -258,22 +258,45 @@ export function SceneRig({
     // bell, shimmer melts) so illumination lands with hits and glides to
     // rest instead of strobing on raw FFT flux. Colors are re-read every
     // frame so the living palette breathes through the lighting too.
+    //
+    // Kit accents: kick punches the bass light, snare cracks the mid light
+    // laterally, hat ticks the high light — discrete drum answers on top of
+    // the continuous swell/impact/shimmer ride. Envelopes already ring down,
+    // so accents land as soft hits rather than strobing the whole stage.
     const frameLightScale = tier === 'low' ? lightLevelNow : 1;
     if (lightLevelRef.current) lightLevelRef.current.level = lightLevelNow;
+    const kickPunch = Math.min(1.2, m.kick);
+    const snareCrack = Math.min(1.2, m.snare);
+    const hatTick = Math.min(1.2, m.hat);
     if (bassLight.current) {
       bassLight.current.intensity =
-        (0.55 + m.bass * 2.4 + m.impact * 2.2 + m.afterglow * 0.7 + flash * 3) * frameLightScale;
-      bassLight.current.distance = 12 + m.breath * 6;
+        (0.55 +
+          m.bass * 2.4 +
+          m.impact * 2.2 +
+          kickPunch * 1.6 +
+          m.afterglow * 0.7 +
+          flash * 3) *
+        frameLightScale;
+      bassLight.current.distance = 12 + m.breath * 6 + kickPunch * 2.5;
       bassLight.current.color.set(palette.bass);
     }
     if (midLight.current) {
       midLight.current.intensity =
-        (0.45 + m.mid * 2.0 + m.swell * 0.8 + m.afterglow * 0.4 + flash * 3) * frameLightScale;
+        (0.45 +
+          m.mid * 2.0 +
+          m.swell * 0.8 +
+          snareCrack * 1.8 +
+          m.afterglow * 0.4 +
+          flash * 3) *
+        frameLightScale;
+      // Lateral crack: snare snaps the mid light outward on its home axis
+      // then the envelope eases it home — a sideways flash, not a strobe.
+      midLight.current.position.set(2 + snareCrack * 0.85, 1 + snareCrack * 0.15, 1);
       midLight.current.color.set(palette.mid);
     }
     if (highLight.current) {
       highLight.current.intensity =
-        (0.3 + m.high * 1.6 + m.shimmer * 1.9 + flash * 3) * frameLightScale;
+        (0.3 + m.high * 1.6 + m.shimmer * 1.9 + hatTick * 1.4 + flash * 3) * frameLightScale;
       highLight.current.color.set(palette.high);
     }
 
