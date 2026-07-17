@@ -37,6 +37,42 @@ export type CameraMode = 'still' | 'drift' | 'orbit' | 'dive' | 'cinematic' | 'f
  */
 const SAFE_MIN_CAMERA_DISTANCE = 1.5;
 
+/** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
+const FOV_SPRING_SMOOTH = 0.09;
+
+interface FovSpring {
+  value: number;
+  velocity: number;
+  initialized: boolean;
+}
+
+/**
+ * Unity-style SmoothDamp (critically damped) for FOV. Mutates spring state.
+ * First call snaps to the target so the lens doesn't fly in on mount.
+ */
+function smoothDampFov(
+  state: FovSpring,
+  target: number,
+  dt: number,
+  smoothTime: number,
+): number {
+  if (!state.initialized) {
+    state.value = target;
+    state.velocity = 0;
+    state.initialized = true;
+    return target;
+  }
+  const st = Math.max(1e-4, smoothTime);
+  const omega = 2 / st;
+  const x = omega * dt;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = state.value - target;
+  const temp = (state.velocity + omega * change) * dt;
+  state.velocity = (state.velocity - omega * temp) * exp;
+  state.value = target + (change + temp) * exp;
+  return state.value;
+}
+
 interface SceneRigProps {
   palette: { bass: string; mid: string; high: string };
   tier: 'high' | 'mid' | 'low';
@@ -95,6 +131,7 @@ export function SceneRig({
   const resolvedBloomRef = useRef(1);
   const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
+  const fovSpringRef = useRef<FovSpring>({ value: 0, velocity: 0, initialized: false });
   // Trigger-impulse envelopes: consumed from `impulses` on the frame they
   // fire, then rung down here (same struck-bell shape as the audio pulses).
   const camPunchEnvRef = useRef(0);
@@ -329,9 +366,9 @@ export function SceneRig({
       state.camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
     }
 
-    // FOV punch-in: hits tighten the lens a couple of degrees and the
-    // impact envelope eases it back — the classic music-video kick. Scales
-    // with swell so quiet passages stay lens-still.
+    // FOV punch-in: hits tighten the lens a couple of degrees and afterglow
+    // exhales wider — classic music-video kick. Target is sprung via a short
+    // SmoothDamp so envelope/FFT stair-steps never write FOV directly.
     const cam = state.camera as PerspectiveCamera;
     if (cam.isPerspectiveCamera) {
       if (baseFovRef.current === null) baseFovRef.current = cam.fov;
@@ -342,8 +379,10 @@ export function SceneRig({
       // Afterglow breathes the lens slightly wider after big moments —
       // the exhale that lets a peak linger instead of snapping shut.
       const targetFov = baseFovRef.current - punchIn + m.afterglow * 1.3;
-      if (Math.abs(cam.fov - targetFov) > 0.005) {
-        cam.fov = targetFov;
+      const dtFov = Math.min(Math.max(delta, 0), 0.05);
+      const nextFov = smoothDampFov(fovSpringRef.current, targetFov, dtFov, FOV_SPRING_SMOOTH);
+      if (Math.abs(cam.fov - nextFov) > 0.005) {
+        cam.fov = nextFov;
         cam.updateProjectionMatrix();
       }
     }
