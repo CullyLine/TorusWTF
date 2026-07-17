@@ -15,6 +15,27 @@ import {
 } from '../dsp/flowfield';
 import { getDotTexture } from '../dotTexture';
 
+/** EMA toward target with separate rise/fall time constants. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
+  return current + (target - current) * a;
+}
+
+/**
+ * Particle Storm — curl-advected swarm with kit whip + phrase echo.
+ *  - gather → contracts toward center (existing inhale)
+ *  - kick → floor punch along Y
+ *  - snare → lateral crack along X
+ *  - hat → sparkle size-ticks
+ *  - echo → one reverse swirl in post-phrase gaps
+ */
 export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const ref = useRef<THREE.Points>(null);
@@ -30,6 +51,19 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
   const sprite = useMemo(() => getDotTexture(), []);
+
+  // Kit whip envelopes + one-shot phrase-echo reverse swirl.
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+
+  // Low tier keeps the gestures readable without strobing sparse points.
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const { positions, velocities, phases, bands } = useMemo(() => {
     const p = new Float32Array(baseCount * 3);
@@ -82,18 +116,67 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
 
     // Shared flow current — same math as the Flow Field flagship.
     const dtClamped = Math.min(delta, 0.05);
-    flowTimeRef.current += dtClamped * spd * (0.5 + Math.min(m.energy, 1.5) * 0.4);
+
+    // Smooth kit envelopes so punches feel fluid, not gated snaps.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dtClamped,
+      0.018,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dtClamped,
+      0.016,
+      0.11,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dtClamped,
+      0.012,
+      0.055,
+    );
+
+    // One reverse swirl per echo impulse — arm on quiet, fire on rise.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      m.echo * echoAmp,
+      dtClamped,
+      0.05,
+      0.3,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm ?? 120;
+      echoTravel.current = Math.min(1, echoTravel.current + dtClamped * (0.85 + bpm / 180));
+    }
+    const traveling = echoTravel.current < 1;
+    // Fades from full reverse (−1) back to forward (1) over the travel.
+    const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
+    const flowSign = 1 - reverseAmt * 2;
+
+    flowTimeRef.current += dtClamped * spd * (0.5 + Math.min(m.energy, 1.5) * 0.4) * flowSign;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    const flowAmount = dtClamped * (0.45 + m.swell * 0.7 + m.dropEvent * 1.2);
+    const flowAmount = dtClamped * (0.45 + m.swell * 0.7 + m.dropEvent * 1.2) * flowSign;
     // Pre-beat gather: the swarm contracts toward center in the breath
     // before each predicted beat, then the hit flings it back out.
     const gatherPull = 1 - m.gather * dtClamped * 1.6;
     const fv = flowScratch.current;
 
-    mat.size = 0.045 + m.swell * 0.05 + m.impact * 0.04;
+    // Hat sparkle: sharp size ticks on top of swell/impact body size.
+    mat.size = 0.045 + m.swell * 0.05 + m.impact * 0.04 + hatSmooth.current * 0.055;
     // Afterglow keeps the swarm faintly incandescent after big moments.
-    mat.opacity = Math.min(1, 0.55 + m.swell * 0.4 + m.afterglow * 0.15);
+    mat.opacity = Math.min(1, 0.55 + m.swell * 0.4 + m.afterglow * 0.15 + hatSmooth.current * 0.12);
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
@@ -105,9 +188,13 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     const bassC = scratchBass.current.set(palette.bass);
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
-    const bassGain = 1 + m.impact * 0.35;
-    const midGain = 1 + m.mid * 0.25;
-    const highGain = 1 + m.shimmer * 0.45;
+    const bassGain = 1 + m.impact * 0.35 + kickSmooth.current * 0.25;
+    const midGain = 1 + m.mid * 0.25 + snareSmooth.current * 0.3;
+    const highGain = 1 + m.shimmer * 0.45 + hatSmooth.current * 0.55;
+
+    // Kit punches: kick floors Y, snare cracks X — distinct axes.
+    const kickY = kickSmooth.current * dtClamped * 5.2;
+    const snareX = snareSmooth.current * dtClamped * 5.0;
 
     for (let i = 0; i < baseCount; i++) {
       const i3 = i * 3;
@@ -129,6 +216,10 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
       x = (x + fv.x * flowAmount) * gatherPull;
       y = (y + fv.y * flowAmount) * gatherPull;
       z = (z + fv.z * flowAmount) * gatherPull;
+      // Kick floor punch (down); snare lateral crack (phase-split L/R).
+      y -= kickY;
+      const lateral = phases[i]! > 0.5 ? 1 : -1;
+      x += snareX * lateral;
       const dist = Math.hypot(x, y, z);
       if (dist > 5 + m.breath * 2) {
         x *= 0.45;
@@ -141,8 +232,11 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     }
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
-    points.rotation.y += drive * (0.5 + m.mid);
-    points.rotation.x += m.impact * 0.05 + m.dropEvent * 0.02;
+    // Echo reverse also flips the whole-cloud spin so the reverse swirl reads.
+    points.rotation.y += drive * (0.5 + m.mid) * flowSign;
+    points.rotation.x += m.impact * 0.05 + m.dropEvent * 0.02 + kickSmooth.current * 0.012;
+    // Snare briefly tilts the storm on Z so the lateral crack owns the frame.
+    points.rotation.z += snareSmooth.current * 0.018 * (snareSmooth.current > 0.15 ? 1 : 0);
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
