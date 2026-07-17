@@ -216,7 +216,7 @@ void main() {
 }
 `;
 
-export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: VisualizerSceneProps) {
+export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const meshRef = useRef<THREE.Mesh>(null);
