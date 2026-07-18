@@ -8,7 +8,7 @@ import type { PerspectiveCamera, PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useModulation } from './modulation';
 import type { VisualImpulses } from './impulse';
-import { useCameraZoomDistanceRef } from './cameraZoom';
+import { useAdvanceCameraZoom, useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
 import { AuraLayer } from './AuraLayer';
@@ -224,6 +224,7 @@ export function SceneRig({
   );
   useEffect(() => () => bloomEffect.dispose(), [bloomEffect]);
   const zoomDistanceRef = useCameraZoomDistanceRef();
+  const advanceZoom = useAdvanceCameraZoom();
   const fallbackZ = embedded ? 2.8 : 3.1;
   const animaState = useRef<AnimaState>({ ...NEUTRAL_ANIMA });
   const cinematicState = useRef<CinematicState>(createCinematicState());
@@ -251,6 +252,9 @@ export function SceneRig({
     const dist = Math.max(0.3, mv.cameraDistance ?? cameraDistance);
     const bassShakeNow = mv.bassShake ?? bassShake;
     const lightLevelNow = Math.max(0, mv.lightLevel ?? lightLevel);
+    // Wheel/pinch write a zoom *target*; SmoothDamp eases distanceRef so
+    // framing pulls feel fluid (no stair-steps) and settle cleanly at rest.
+    if (advanceZoom) advanceZoom(delta);
     const baseZ = (zoomDistanceRef?.current ?? fallbackZ) * dist;
     const dtImp = Math.min(delta, 0.1);
 
