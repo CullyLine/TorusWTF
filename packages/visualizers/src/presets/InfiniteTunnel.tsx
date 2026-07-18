@@ -21,6 +21,20 @@
  * field while the conveyor sweeps them past the camera.
  */
 
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import type { VisualizerSceneProps } from '../registry';
+import { useMetricsRef } from '../metrics';
+import { useModulation } from '../modulation';
+import {
+  DEFAULT_FLOW_PARAMS,
+  flowParamsFromMetrics,
+  sampleFlow,
+  type FlowParams,
+  type Vec3Like,
+} from '../dsp/flowfield';
+
 /**
  * Smooth toward a target with asymmetric rise/fall (seconds).
  * Keeps kit accents fluid — no linear snaps on kick/snare/hat envelopes.
@@ -36,20 +50,6 @@ function smoothToward(
   const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
   return current + (target - current) * a;
 }
-
-import { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
-import * as THREE from 'three';
-import type { VisualizerSceneProps } from '../registry';
-import { useMetricsRef } from '../metrics';
-import { useModulation } from '../modulation';
-import {
-  DEFAULT_FLOW_PARAMS,
-  flowParamsFromMetrics,
-  sampleFlow,
-  type FlowParams,
-  type Vec3Like,
-} from '../dsp/flowfield';
 
 // Tunnel dimensions (scene units; camera sits at z≈4 inside the mouth).
 const HALF = 2.2; // half width/height of the square bore
