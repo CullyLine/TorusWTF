@@ -91,7 +91,7 @@ Runs several times a day. Ships exactly one item per run.
 - [x] NS-20260718-07 (S) **Living palette gather cool** — Shared palette cools/desaturates slightly on `gather`, then blooms warmer/brighter on impact/`kick` (on top of existing mood-warmth EMA) so color anticipates the hit. Beautiful engine-wide. Area: `livingPalette.tsx`. Accept: pre-beat colors visibly cool a notch then warm on the kick; quiet passages stay mood-stable without flicker. — PR #38
 - [x] NS-20260718-08 (S) **Modulation release SmoothDamp** — Mod-matrix envelope release uses critically-damped SmoothDamp instead of a single-tau exp glide so routed params settle with inertia rather than lagging linearly. Fluid control response. Area: `modulation.tsx`. Accept: a kick→bloom (or similar) routing punches fast then eases back smoothly — no rubber-band overshoot, no stair-step decay. — PR #39
 - [x] NS-20260718-09 (S) **Volumetric Waveform kit accents** — Ribbon already pinches on gather and ghosts on echo; add `kick` floor thump, `snare` lateral crease, and `hat` dust ticks so the waveform drums. Alive and beautiful. Area: `presets/VolumetricWaveform.tsx`. Accept: kick vs snare deform different axes; hats glitter dust distinctly from bass thumps. — PR #40
-- [~] building 2026-07-18T22:02:02Z NS-20260718-10 (S) **Outrun Grid kit road ticks** — Build-and-drop cinema stays; add `hat` dash-line ticks, `kick` sun-core punch, and `snare` roadside flash so the synthwave drive keeps drum time. Alive. Area: `presets/OutrunGrid.tsx`. Accept: hats tick the road dashes; kick punches the sun; snare flashes a roadside accent without washing the whole sky.
+- [x] NS-20260718-10 (S) **Outrun Grid kit road ticks** — Build-and-drop cinema stays; add `hat` dash-line ticks, `kick` sun-core punch, and `snare` roadside flash so the synthwave drive keeps drum time. Alive. Area: `presets/OutrunGrid.tsx`. Accept: hats tick the road dashes; kick punches the sun; snare flashes a roadside accent without washing the whole sky. — PR #41
 
 ## Built log
 
@@ -122,3 +122,4 @@ Runs several times a day. Ships exactly one item per run.
 - 2026-07-18 — NS-20260718-07 — PR #38 — Living palette gather cool + impact/kick warm bloom on mood-warmth EMA.
 - 2026-07-18 — NS-20260718-08 — PR #39 — Mod-matrix release SmoothDamp: fast attack, inertial settle, no overshoot.
 - 2026-07-18 — NS-20260718-09 — PR #40 — Volumetric Waveform kit accents: kick Y floor thump, snare X crease, hat dust glitter.
+- 2026-07-18 — NS-20260718-10 — PR #41 — Outrun Grid kit: hat dash ticks, kick sun-core punch, snare roadside flash.
