@@ -16,6 +16,11 @@ import { useModulation } from '../modulation';
  * `smin`. The whole thing is a single fullscreen quad — there is no surface
  * mesh that can spike, so high-gain audio just inflates and warps the blob
  * instead of producing pointy artifacts.
+ *
+ * Kit accents (alive goo):
+ *  - kick → anchor inflates along Y (floor thump)
+ *  - snare → satellites shear laterally on X (mid crack)
+ *  - hat / shimmer → sub-sphere pops (unchanged)
  */
 
 const RAY_STEPS_HIGH = 96;
@@ -77,6 +82,10 @@ uniform float uBarPhase;
 uniform float uDrop;
 // 0..1 sustained silence — mutes color punch when high.
 uniform float uSilence;
+// 0..~1.2 kick envelope — anisotropic Y inflate on the anchor sphere.
+uniform float uKick;
+// 0..~1.2 snare envelope — lateral X shear on satellite centers.
+uniform float uSnare;
 // 1 = paint the built-in radial background on ray miss; 0 = output
 // transparent pixels instead so a BackgroundLayer sky shows through and
 // the blob reads as an object IN the environment.
@@ -192,9 +201,12 @@ float sceneInner(vec3 p) {
 
   // Anchor sphere — bass contributes here ONLY through the Inflate slider.
   // The beat still gets a small pop so taps register no matter where the
-  // user has Inflate set.
-  float r0 = 0.42 + uBass * 0.28 * uInflate + uBeat * 0.12;
-  float d = sdSphere(p, r0);
+  // user has Inflate set. Kick elongates the anchor along Y (floor thump)
+  // via anisotropic SDF scale — distinct from uniform inflate/bass puff.
+  float r0 = 0.42 + uBass * 0.28 * uInflate + uBeat * 0.12 + uKick * 0.04;
+  float kickY = 1.0 + uKick * 0.38;
+  vec3 pKick = vec3(p.x, p.y / kickY, p.z);
+  float d = sdSphere(pKick, r0) * mix(1.0, kickY, 0.35);
 
   float k = 0.44 + uMid * 0.24 + uHigh * 0.14;
 
@@ -238,9 +250,15 @@ float sceneInner(vec3 p) {
     // satellites get pushed in opposite directions, which reads as
     // taffy-pull instead of a uniform drift.
     center += stretchAxis * stretchAmt * cos(a + fi * 1.7) * 1.1;
+    // Snare: lateral shear — phase-split L/R so satellites crack sideways
+    // on the mid hit, distinct from the kick's Y inflate.
+    float side = mod(fi, 2.0) < 0.5 ? 1.0 : -1.0;
+    center.x += uSnare * (0.18 + 0.08 * sin(a + fi)) * side;
+    center.z += uSnare * 0.04 * cos(b + fi * 0.7) * side;
 
     float rr = 0.20 + (uMid * 0.12 + uHigh * 0.08) * (0.45 + uInflate * 0.55)
-             + 0.05 * sin(t * 1.37 + fi * 2.13);
+             + 0.05 * sin(t * 1.37 + fi * 2.13)
+             + uSnare * 0.02;
     d = smin(d, sdSphere(p - center, rr), k);
   }
 
@@ -355,10 +373,13 @@ void main() {
     float subWeight = 1.0 - smoothstep(-0.02, 0.10, subAtHit);
     col = mix(col, uColorHigh * (1.4 + uHigh * 0.6), subWeight * 0.55);
 
-    // Beat injection + downbeat flash + drop punch.
+    // Beat injection + downbeat flash + drop punch. Kick adds a brief bass
+    // body glow; snare a mid crease flash — axes stay the main read.
     float barFlash = uBarPhase > 0.0 ? pow(1.0 - uBarPhase, 6.0) : 0.0;
     float silenceMute = 1.0 - uSilence * 0.7;
     col += uColorHigh * (uBeat * 0.35 + uEnergy * 0.12 + barFlash * 0.4 + uDrop * 0.9) * silenceMute;
+    col += uColorBass * uKick * 0.18 * silenceMute;
+    col += mix(uColorMid, uColorHigh, 0.35) * uSnare * 0.16 * silenceMute;
 
     // Soft AO via distance to the next hit (cheap fake).
     float ao = clamp(0.6 + 0.4 * dot(n, V), 0.0, 1.0);
@@ -379,6 +400,12 @@ void main() {
 }
 `;
 
+function smoothToward(current: number, target: number, dt: number, riseTau: number, fallTau: number) {
+  const tau = target > current ? riseTau : fallTau;
+  const k = 1 - Math.exp(-dt / Math.max(tau, 1e-4));
+  return current + (target - current) * k;
+}
+
 export function LiquidBlobScene({
   analyser,
   palette,
@@ -397,9 +424,13 @@ export function LiquidBlobScene({
   const { size } = useThree();
   const phaseRef = useRef(0);
   const orbitPhaseRef = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
 
   const steps = tier === 'high' ? RAY_STEPS_HIGH : tier === 'mid' ? RAY_STEPS_MID : RAY_STEPS_LOW;
   const fragmentShader = useMemo(() => buildFragmentShader(steps), [steps]);
+  // Low tier still gets the kit axes; mid/high just read cleaner.
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -420,6 +451,8 @@ export function LiquidBlobScene({
       uBarPhase: { value: 0 },
       uDrop: { value: 0 },
       uSilence: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
       uBgAlpha: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
@@ -432,6 +465,7 @@ export function LiquidBlobScene({
     const mat = matRef.current;
     if (!mat) return;
     const m = metricsRef.current;
+    const dt = Math.min(delta, 0.05);
     // Modulation-matrix values (fall back to slider props when unrouted).
     const mv = mods.current;
     const pace = Math.max(0.05, mv.speed ?? speed);
@@ -441,7 +475,7 @@ export function LiquidBlobScene({
     // choruses writhe, verses breathe.
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
     const phaseRate = (0.35 + Math.min(m.energy, 1.5) * 0.18) * pace * sectionPace;
-    phaseRef.current += Math.min(delta, 0.05) * phaseRate;
+    phaseRef.current += dt * phaseRate;
 
     // Orbit phase: heavily mid/high-driven (impact envelope for the kick)
     // so the satellites visibly whip around the blob on busy passages.
@@ -450,7 +484,24 @@ export function LiquidBlobScene({
       (0.6 + Math.min(m.mid, 2) * 1.6 + Math.min(m.high, 2) * 0.9 + m.impact * 0.8) *
       pace *
       sectionPace;
-    orbitPhaseRef.current += Math.min(delta, 0.05) * orbitSpeed;
+    orbitPhaseRef.current += dt * orbitSpeed;
+
+    // Kit axes: fast attack so four-on-the-floor reads punchy, slower fall
+    // so the goo settles instead of gating off.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.028,
+      0.11,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.025,
+      0.1,
+    );
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = state.clock.elapsedTime;
@@ -483,6 +534,8 @@ export function LiquidBlobScene({
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uDrop!.value = m.dropEvent;
     mat.uniforms.uSilence!.value = m.silence;
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
     // With an environment behind us, ray misses go transparent so the sky
     // shows through and the blob reads as an object IN the world.
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
