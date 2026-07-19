@@ -302,7 +302,7 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     }
     prevEcho.current = echoNow;
     if (echoTravel.current < 1) {
-      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      const bpm = m.bpm ?? 120;
       echoTravel.current = Math.min(1, echoTravel.current + dt * (0.85 + bpm / 180));
     }
     const reverseAmt =
