@@ -48,18 +48,24 @@ const LOOK_SPRING_SMOOTH = 0.14;
 /** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
 const FOV_SPRING_SMOOTH = 0.09;
 
-interface FovSpring {
+/**
+ * Gentle SmoothDamp for Light-level musical breath — chorus lift and
+ * afterglow linger, slower than FOV so exposure never flashes with kicks.
+ */
+const LIGHT_BREATH_SPRING_SMOOTH = 0.28;
+
+interface ScalarSpring {
   value: number;
   velocity: number;
   initialized: boolean;
 }
 
 /**
- * Unity-style SmoothDamp (critically damped) for FOV. Mutates spring state.
- * First call snaps to the target so the lens doesn't fly in on mount.
+ * Unity-style SmoothDamp (critically damped) for a scalar. Mutates spring
+ * state. First call snaps to the target so values don't fly in on mount.
  */
-function smoothDampFov(
-  state: FovSpring,
+function smoothDamp(
+  state: ScalarSpring,
   target: number,
   dt: number,
   smoothTime: number,
@@ -164,6 +170,8 @@ interface SceneRigProps {
    * Global light level. 1 = current look; <1 dims the whole frame, >1
    * brightens. Applied as a multiplicative exposure pass after bloom so it
    * works for shader presets too (which bypass scene lights entirely).
+   * Musical swell/afterglow gently lifts this baseline via SmoothDamp —
+   * the slider still sets the floor.
    */
   lightLevel?: number;
   /** One-shot commands from trigger mappings / MIDI (camPunch, bloomPulse, flash). */
@@ -196,7 +204,14 @@ export function SceneRig({
   const resolvedBloomRef = useRef(1);
   const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
-  const fovSpringRef = useRef<FovSpring>({ value: 0, velocity: 0, initialized: false });
+  const fovSpringRef = useRef<ScalarSpring>({ value: 0, velocity: 0, initialized: false });
+  // Light-level musical breath: swell/afterglow multiplier eases via SmoothDamp
+  // on top of the user Light level baseline (baseline stays the floor).
+  const lightBreathSpringRef = useRef<ScalarSpring>({
+    value: 1,
+    velocity: 0,
+    initialized: false,
+  });
   // Trigger-impulse envelopes: consumed from `impulses` on the frame they
   // fire, then rung down here (same struck-bell shape as the audio pulses).
   const camPunchEnvRef = useRef(0);
@@ -289,6 +304,19 @@ export function SceneRig({
     flashEnvRef.current *= Math.exp(-dtImp / 0.16);
     const flash = flashEnvRef.current;
 
+    // Light-level musical breath: choruses gently lift exposure via swell,
+    // peaks linger on afterglow. SmoothDamp keeps the lift fluid — never a
+    // kick strobe. Multiplier sits on the user Light level so the slider
+    // still sets the floor (quiet ≈ 1×, loud lifts a notch).
+    const lightBreathTarget = 1 + m.swell * 0.14 + m.afterglow * 0.1;
+    const lightBreath = smoothDamp(
+      lightBreathSpringRef.current,
+      lightBreathTarget,
+      dtImp,
+      LIGHT_BREATH_SPRING_SMOOTH,
+    );
+    const effectiveLightLevel = lightLevelNow * lightBreath;
+
     // Low tier has no post-processing exposure pass, so the light level is
     // baked into the light intensities instead (see render section below).
     // Lights ride the pulse envelopes (impact rings down like a struck
@@ -300,8 +328,8 @@ export function SceneRig({
     // laterally, hat ticks the high light — discrete drum answers on top of
     // the continuous swell/impact/shimmer ride. Envelopes already ring down,
     // so accents land as soft hits rather than strobing the whole stage.
-    const frameLightScale = tier === 'low' ? lightLevelNow : 1;
-    if (lightLevelRef.current) lightLevelRef.current.level = lightLevelNow;
+    const frameLightScale = tier === 'low' ? effectiveLightLevel : 1;
+    if (lightLevelRef.current) lightLevelRef.current.level = effectiveLightLevel;
     const kickPunch = Math.min(1.2, m.kick);
     const snareCrack = Math.min(1.2, m.snare);
     const hatTick = Math.min(1.2, m.hat);
@@ -524,7 +552,7 @@ export function SceneRig({
       );
       const targetFov = baseFovRef.current - punchIn + m.afterglow * 1.3;
       const dtFov = Math.min(Math.max(delta, 0), 0.05);
-      const nextFov = smoothDampFov(fovSpringRef.current, targetFov, dtFov, FOV_SPRING_SMOOTH);
+      const nextFov = smoothDamp(fovSpringRef.current, targetFov, dtFov, FOV_SPRING_SMOOTH);
       if (Math.abs(cam.fov - nextFov) > 0.005) {
         cam.fov = nextFov;
         cam.updateProjectionMatrix();
