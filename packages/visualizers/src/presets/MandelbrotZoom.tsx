@@ -23,11 +23,28 @@ import { useModulation } from '../modulation';
  *    more ornate geometry, verses relax back to smoother lobes
  *  - drops kick the power an extra step — a visible "the world just
  *    changed shape" morph
+ *  - `snare` shears the fractal domain laterally (X←Y) — a brief sideways
+ *    crack distinct from any radial kick/impact dive
+ *  - `echo` fires a one-shot ghost orbit reverse in phrase gaps, then
+ *    tumble resumes forward
  *  - orbit-trap coloring rides the living palette; mids scroll the ramp
  *  - `impact` flashes the surface glow, `shimmer` lights the rim
  *  - `afterglow` holds a warm emissive floor for seconds after a peak
  *  - the whole domain slowly tumbles so even a still camera sees it evolve
  */
+
+/** Ease a value toward a target with asymmetric rise/fall time constants. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+) {
+  const tau = target > current ? riseTau : fallTau;
+  const k = 1 - Math.exp(-dt / Math.max(tau, 1e-4));
+  return current + (target - current) * k;
+}
 
 /** DE-space radius that encloses the bulb at any power ≥ 2. */
 const BULB_BOUND = 1.35;
@@ -46,6 +63,7 @@ uniform float uPaletteShift;
 uniform float uGlow;       // impact-driven surface flash
 uniform float uRim;        // shimmer-driven fresnel rim
 uniform float uAfterglow;  // lingering emissive floor
+uniform float uSnareShear; // snare lateral domain crack (X sheared by Y)
 uniform vec3 uBassColor;
 uniform vec3 uMidColor;
 uniform vec3 uHighColor;
@@ -93,8 +111,11 @@ float mandelbulbDE(vec3 pos, out float trap) {
 }
 
 // World-space scene distance: rotate + scale the domain, evaluate the bulb.
+// Snare shear is applied in fractal space after rotation so the crack reads
+// as a sideways split rather than a camera tilt or radial zoom.
 float sceneDE(vec3 p, out float trap) {
   vec3 q = rotX(uPitch) * rotY(uYaw) * (p / uScale);
+  q.x += q.y * uSnareShear;
   return mandelbulbDE(q, trap) * uScale;
 }
 
@@ -208,12 +229,21 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
   const pitchRef = useRef(0);
   const powerWanderRef = useRef(0);
   const paletteShiftRef = useRef(0);
+  const snareSmooth = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const worldScale = useRef(new THREE.Vector3());
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
+
+  // Low tier still gets the crack + reverse; mid/high just read deeper.
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const [marchSteps, deIters] =
     tier === 'high' ? [96, 9] : tier === 'mid' ? [72, 8] : [48, 7];
@@ -233,6 +263,7 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
       uGlow: { value: 0 },
       uRim: { value: 0.3 },
       uAfterglow: { value: 0 },
+      uSnareShear: { value: 0 },
       uBassColor: { value: new THREE.Color(palette.bass) },
       uMidColor: { value: new THREE.Color(palette.mid) },
       uHighColor: { value: new THREE.Color(palette.high) },
@@ -251,9 +282,39 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     const pace = reducedMotion ? 0.25 : 1;
     const spd = mods.current.speed ?? speed;
 
+    // Snare: fast attack, short fall — a crack, not a sustained warp.
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.028,
+      0.14,
+    );
+
+    // Phrase-echo: arm on quiet, fire once on the rise so the orbit
+    // answers a gap instead of strobing through sustained silence.
+    echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.3);
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      echoTravel.current = Math.min(1, echoTravel.current + dt * (0.85 + bpm / 180));
+    }
+    const reverseAmt =
+      echoTravel.current < 1 ? echoSmooth.current * (1 - echoTravel.current) : 0;
+    // Full reverse at peak travel envelope, then ease back to forward tumble.
+    const orbitDir = 1 - reverseAmt * 2;
+
     // Slow tumble so the fractal evolves even under a still camera;
     // energy leans into the spin, quiet valleys nearly freeze it.
-    yawRef.current += dt * spd * pace * (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04);
+    // Phrase-echo briefly flips yaw so the bulb ghosts backward once.
+    yawRef.current +=
+      dt * spd * pace * (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04) * orbitDir;
     pitchRef.current += dt * spd * pace * 0.017;
 
     // Power morph: an autonomous slow wander + the musical swell. The
@@ -283,6 +344,8 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     mat.uniforms.uGlow!.value = Math.min(1.2, m.impact * 0.7 + m.kick * 0.35) * (1 - m.silence * 0.6);
     mat.uniforms.uRim!.value = 0.25 + m.shimmer * 0.9 + m.hat * 0.25;
     mat.uniforms.uAfterglow!.value = m.afterglow;
+    // Peak shear ~0.28 — readable crack without collapsing the DE.
+    mat.uniforms.uSnareShear!.value = snareSmooth.current * 0.28 * pace;
     (mat.uniforms.uBassColor!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uMidColor!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uHighColor!.value as THREE.Color).set(palette.high);
