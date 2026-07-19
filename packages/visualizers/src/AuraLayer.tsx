@@ -13,7 +13,8 @@ import { useMetricsRef } from './metrics';
  *  - soulGlow: a soft persistent radial halo that breathes with audio energy
  *
  * Both exist regardless of audio source. With music they brighten and
- * cluster; in silence they keep drifting like dust in a beam of light.
+ * cluster; during `holdBreath` / deep silence they nearly freeze and huddle
+ * toward center — listening — then resume drifting when sound returns.
  */
 
 interface AuraLayerProps {
@@ -27,12 +28,36 @@ const WISP_COUNT_HIGH = 280;
 const WISP_COUNT_MID = 160;
 const WISP_COUNT_LOW = 60;
 
+/** Soft huddle center — matches the spawn-region bias (z −1.5). */
+const HUDDLE_CX = 0;
+const HUDDLE_CY = 0;
+const HUDDLE_CZ = -1.5;
+
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+) {
+  const tau = target > current ? riseTau : fallTau;
+  const k = 1 - Math.exp(-dt / Math.max(tau, 1e-4));
+  return current + (target - current) * k;
+}
+
 export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const glowRef = useRef<THREE.Mesh>(null);
   const glowMatRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
+
+  // Smoothed stillness so freeze/thaw never pops.
+  const stillnessSmooth = useRef(0);
+
+  // Reused color temps — avoid per-frame Color allocations in the glow lerp.
+  const bassColor = useRef(new THREE.Color(palette.bass));
+  const midColor = useRef(new THREE.Color(palette.mid));
 
   const wispCount = tier === 'high' ? WISP_COUNT_HIGH : tier === 'mid' ? WISP_COUNT_MID : WISP_COUNT_LOW;
 
@@ -103,8 +128,29 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     if (amount <= 0) return;
     const m = metricsRef.current;
     const now = performance.now() / 1000;
+    const dt = Math.min(delta, 0.05);
 
-    // Update wisp positions (gentle Perlin-style drift).
+    // Hold-breath + deep silence → presence listens. Rise a touch slower than
+    // fall so the freeze feels attentive, not gated; thaw resumes promptly.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.12,
+      0.07,
+    );
+    const stillness = stillnessSmooth.current;
+    // Drift nearly stops at full stillness; a whisper of motion remains so
+    // the cloud never looks frozen-dead.
+    const driftMul = 1 - stillness * 0.92;
+    // Soft radial huddle toward spawn center while listening.
+    const huddle = stillness * 1.35;
+
+    // Update wisp positions (gentle Perlin-style drift + stillness huddle).
     const points = pointsRef.current;
     const mat = matRef.current;
     if (points && mat) {
@@ -114,34 +160,59 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         const fx = seeds[i * 4]!;
         const fy = seeds[i * 4 + 1]!;
         const fz = seeds[i * 4 + 2]!;
+        const i3 = i * 3;
+        let x = arr[i3] ?? 0;
+        let y = arr[i3 + 1] ?? 0;
+        let z = arr[i3 + 2] ?? 0;
+
         // Drift along a wandering path. Bass slightly amplifies vertical motion
-        // so the cloud "swells" subtly with the kick.
-        arr[i * 3] = (arr[i * 3] ?? 0) + Math.sin(now * fx + i * 0.13) * delta * 0.08;
-        arr[i * 3 + 1] = (arr[i * 3 + 1] ?? 0) + Math.cos(now * fy + i * 0.17) * delta * 0.06 * (1 + m.bass * 0.4);
-        arr[i * 3 + 2] = (arr[i * 3 + 2] ?? 0) + Math.sin(now * fz + i * 0.21) * delta * 0.04;
-        // Soft attractor back toward spawn region so wisps don't escape.
-        const x = arr[i * 3]!;
-        const y = arr[i * 3 + 1]!;
-        const z = arr[i * 3 + 2]!;
-        const r = Math.sqrt(x * x + y * y + z * z);
-        if (r > 6) {
-          const pull = (r - 6) * delta * 0.5;
-          arr[i * 3] = x - (x / r) * pull;
-          arr[i * 3 + 1] = y - (y / r) * pull;
-          arr[i * 3 + 2] = z - (z / r) * pull;
+        // so the cloud "swells" subtly with the kick. Stillness scales the
+        // wander so flock gather/burst (when present) still owns the radial axis.
+        x += Math.sin(now * fx + i * 0.13) * dt * 0.08 * driftMul;
+        y += Math.cos(now * fy + i * 0.17) * dt * 0.06 * (1 + m.bass * 0.4) * driftMul;
+        z += Math.sin(now * fz + i * 0.21) * dt * 0.04 * driftMul;
+
+        // Huddle: gentle pull toward center — attentive, not a collapse.
+        if (huddle > 0.01) {
+          const dx = x - HUDDLE_CX;
+          const dy = y - HUDDLE_CY;
+          const dz = z - HUDDLE_CZ;
+          const r = Math.sqrt(dx * dx + dy * dy + dz * dz) + 1e-4;
+          // Per-wisp phase so the cloud coheres without locking into a sphere.
+          const phase = 0.75 + 0.35 * Math.sin(seeds[i * 4 + 3]! * 2.1 + i * 0.07);
+          const pull = huddle * phase * dt * Math.min(1, r * 0.35);
+          const invR = 1 / r;
+          x -= dx * invR * pull;
+          y -= dy * invR * pull;
+          z -= dz * invR * pull;
         }
+
+        // Soft attractor back toward spawn region so wisps don't escape.
+        const escapeR = Math.sqrt(x * x + y * y + z * z);
+        if (escapeR > 6) {
+          const pull = (escapeR - 6) * dt * 0.5;
+          const eInv = 1 / escapeR;
+          x -= x * eInv * pull;
+          y -= y * eInv * pull;
+          z -= z * eInv * pull;
+        }
+
+        arr[i3] = x;
+        arr[i3 + 1] = y;
+        arr[i3 + 2] = z;
       }
       posAttr.needsUpdate = true;
-      // Wisp brightness pulses with high frequencies; opacity scales with amount.
-      mat.size = (0.04 + m.high * 0.12) * (0.7 + amount * 0.3);
-      mat.opacity = (0.25 + m.high * 0.5 + m.flow * 0.15) * amount;
+      // Wisp brightness pulses with high frequencies; stillness softens the pulse.
+      const livePulse = 1 - stillness * 0.55;
+      mat.size = (0.04 + m.high * 0.12 * livePulse) * (0.7 + amount * 0.3);
+      mat.opacity = (0.25 + (m.high * 0.5 + m.flow * 0.15) * livePulse) * amount;
     }
 
     // Soul glow breathes with energy + a slow autonomous pulse (the heartbeat
     // is also handled in SceneRig as camera breath; here it just keeps glow alive).
     const glowMat = glowMatRef.current;
     if (glowMat) {
-      const autoBreath = 0.18 + 0.06 * Math.sin(now * 0.4);
+      const autoBreath = 0.18 + 0.06 * Math.sin(now * 0.4) * (1 - stillness * 0.7);
       // Tenderness expands the glow softly; silence quiets it; drops punch through.
       const tenderExpand = 1 + m.tenderness * 0.7;
       const silenceMute = 1 - m.silence * 0.6;
@@ -152,11 +223,15 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         tenderExpand;
       // Warm vs cool target color depends on moodValence and tenderness.
       const warmth = 0.5 + m.moodValence * 0.35 + m.tenderness * 0.2;
+      bassColor.current.set(palette.bass);
+      midColor.current.set(palette.mid);
       (glowMat.uniforms.uColor!.value as THREE.Color).lerpColors(
-        new THREE.Color(palette.bass),
-        new THREE.Color(palette.mid),
+        bassColor.current,
+        midColor.current,
         Math.max(0, Math.min(1, warmth)),
       );
+      // Halo tightens slightly while listening.
+      glowMat.uniforms.uRadius!.value = 1 - stillness * 0.1;
     }
   });
 
