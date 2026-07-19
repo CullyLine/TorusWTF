@@ -14,6 +14,7 @@ import { LiquidBlobScene } from './presets/LiquidBlob';
 import { MandelbrotZoomScene } from './presets/MandelbrotZoom';
 import { AnimaScene } from './presets/Anima';
 import { FlowFieldScene } from './presets/FlowField';
+import { HaloRainScene } from './presets/HaloRain';
 
 export type VisualizerId =
   | 'anima'
@@ -27,6 +28,7 @@ export type VisualizerId =
   | 'outrun_grid'
   | 'liquid_chrome'
   | 'liquid_blob'
+  | 'halo_rain'
   | 'mandelbrot_zoom';
 
 /**
@@ -366,6 +368,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 0.55,
       cameraDistance: 1,
       lightLevel: 1,
+    },
+  },
+  halo_rain: {
+    id: 'halo_rain',
+    label: 'Halo Rain',
+    hint: 'Concentric luminous rings drifting like celestial rain — inhale before the beat, flare on impact, tick on hats.',
+    Scene: HaloRainScene,
+    // Fullscreen sheet owns the frame via clip-space quad; still camera
+    // keeps the rain stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.3,
+      cameraMode: 'still',
+      bloomIntensity: 0.8,
+      cameraDistance: 1,
+      lightLevel: 1.05,
     },
   },
   mandelbrot_zoom: {
