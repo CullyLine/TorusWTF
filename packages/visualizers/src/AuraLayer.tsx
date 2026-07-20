@@ -17,8 +17,13 @@ import { useMetricsRef } from './metrics';
  *  - impact / release → burst outward
  *  - shimmer / hat → glitter ticks on size + opacity
  *
+ * Stillness (holdBreath / deep silence):
+ *  - Perlin drift nearly freezes
+ *  - soft huddle toward the spawn center
+ *  - thaw resumes promptly when music returns
+ *
  * Both exist regardless of audio source. With music they brighten and
- * flock; in silence they keep drifting like dust in a beam of light.
+ * flock; in silence they listen, then keep drifting like dust in a beam.
  */
 
 interface AuraLayerProps {
@@ -60,6 +65,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const gatherSmooth = useRef(0);
   const burstSmooth = useRef(0);
   const glitterSmooth = useRef(0);
+  // Smoothed stillness so freeze/thaw never pops.
+  const stillnessSmooth = useRef(0);
 
   // Reused color temps — avoid per-frame Color allocations in the glow lerp.
   const bassColor = useRef(new THREE.Color(palette.bass));
@@ -144,11 +151,30 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const glitterTarget = Math.min(1.3, m.hat * 0.95 + m.shimmer * 0.55);
     glitterSmooth.current = smoothToward(glitterSmooth.current, glitterTarget, dt, 0.025, 0.11);
 
+    // Hold-breath + deep silence → presence listens. Rise a touch slower than
+    // fall so the freeze feels attentive, not gated; thaw resumes promptly.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.12,
+      0.07,
+    );
+
     const gather = gatherSmooth.current;
     const burst = burstSmooth.current;
     const glitter = glitterSmooth.current;
+    const stillness = stillnessSmooth.current;
+    // Drift nearly stops at full stillness; a whisper remains so the cloud
+    // never looks frozen-dead. Flock gather/burst still owns the radial axis.
+    const driftMul = 1 - stillness * 0.92;
+    const huddle = stillness * 1.35;
 
-    // Update wisp positions (gentle Perlin-style drift + musical flock).
+    // Update wisp positions (gentle Perlin-style drift + musical flock + stillness).
     const points = pointsRef.current;
     const mat = matRef.current;
     if (points && mat) {
@@ -158,8 +184,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // the inhale reads clearly; burst rides impact without exploding.
       const flockIn = gather * 2.4;
       const flockOut = burst * 3.2;
-      // Soften idle wander during the inhale so the cloud coheres.
-      const wanderScale = 1 - gather * 0.55;
+      // Soften idle wander during the inhale so the cloud coheres; stillness
+      // scales the leftover wander further.
+      const wanderScale = (1 - gather * 0.55) * driftMul;
       for (let i = 0; i < wispCount; i++) {
         const fx = seeds[i * 4]!;
         const fy = seeds[i * 4 + 1]!;
@@ -188,6 +215,15 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         y += dy * invR * radial;
         z += dz * invR * radial;
 
+        // Huddle: gentle pull toward center while listening — attentive, not a collapse.
+        if (huddle > 0.01) {
+          const huddlePhase = 0.75 + 0.35 * Math.sin(seeds[i * 4 + 3]! * 2.1 + i * 0.07);
+          const pull = huddle * huddlePhase * dt * Math.min(1, r * 0.35);
+          x -= dx * invR * pull;
+          y -= dy * invR * pull;
+          z -= dz * invR * pull;
+        }
+
         // Soft attractor back toward spawn region so wisps don't escape.
         const escapeR = Math.sqrt(x * x + y * y + z * z);
         if (escapeR > 6) {
@@ -205,14 +241,22 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       posAttr.needsUpdate = true;
 
       // Wisp brightness: high-band wash + sharp hat/shimmer glitter ticks.
+      // Stillness softens the live pulse so listening feels quieter.
+      const livePulse = 1 - stillness * 0.55;
       const phaseTwinkle =
         glitter > 0.08 ? 0.5 + 0.5 * Math.sin(now * 28 + glitter * 9) : 0;
       mat.size =
-        (0.04 + m.high * 0.1 + glitter * 0.09 * (0.55 + phaseTwinkle * 0.9)) *
+        (0.04 +
+          m.high * 0.1 * livePulse +
+          glitter * 0.09 * (0.55 + phaseTwinkle * 0.9)) *
         (0.7 + amount * 0.3);
       mat.opacity = Math.min(
         1,
-        (0.25 + m.high * 0.4 + m.flow * 0.12 + glitter * 0.45 + gather * 0.08) * amount,
+        (0.25 +
+          (m.high * 0.4 + m.flow * 0.12) * livePulse +
+          glitter * 0.45 +
+          gather * 0.08) *
+          amount,
       );
     }
 
@@ -221,7 +265,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const glowMat = glowMatRef.current;
     const glowMesh = glowRef.current;
     if (glowMat) {
-      const autoBreath = 0.18 + 0.06 * Math.sin(now * 0.4);
+      const autoBreath = 0.18 + 0.06 * Math.sin(now * 0.4) * (1 - stillness * 0.7);
       // Tenderness expands the glow softly; silence quiets it; drops punch through.
       const tenderExpand = 1 + m.tenderness * 0.7;
       const silenceMute = 1 - m.silence * 0.6;
@@ -247,9 +291,11 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         Math.max(0, Math.min(1, warmth)),
       );
       // Soft radius inhale / release so the halo flocks with the wisps.
-      glowMat.uniforms.uRadius!.value = 1 - gather * 0.12 + burst * 0.08;
+      // Stillness tucks the halo in slightly while listening.
+      glowMat.uniforms.uRadius!.value =
+        1 - gather * 0.12 + burst * 0.08 - stillness * 0.1;
       if (glowMesh) {
-        const s = 1 - gather * 0.06 + burst * 0.05;
+        const s = 1 - gather * 0.06 + burst * 0.05 - stillness * 0.04;
         glowMesh.scale.setScalar(s);
       }
     }
