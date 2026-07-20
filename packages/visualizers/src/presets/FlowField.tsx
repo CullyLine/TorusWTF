@@ -26,6 +26,10 @@ import {
  * the hit releases them; in gaps after a phrase, `echo` replays the recorded
  * rhythm as radial ripples — the visual answering the music.
  *
+ * Alive cohesion:
+ *  - `tenderness` calms turbulence and trail jitter (gentle vocal passages)
+ *  - `convergence` power-locks bandSpread so choruses read as one river
+ *
  * Homages to the original FlowField Saga (2019-2021):
  *  - wandering magnet wells that capture and fling particles (Magnet build)
  *  - pointer stirring — the cursor directs the field (mouse lookAt build)
@@ -254,6 +258,19 @@ void main() {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** EMA toward target with separate rise/fall time constants. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
+  return current + (target - current) * a;
+}
+
 /** Deterministic PRNG so exports reproduce the same swarm. */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -304,6 +321,10 @@ export function FlowFieldScene({
   const timeRef = useRef(0);
   const seedRef = useRef(0);
   const prevDropRef = useRef(0);
+
+  // Tenderness / convergence envelopes — fluid calm and lock-in.
+  const tenderSmooth = useRef(0);
+  const lockSmooth = useRef(0);
 
   // Magnet wells: positions hop on bar boundaries, eased between.
   const wellsRef = useRef({
@@ -584,6 +605,24 @@ export function FlowFieldScene({
     fp.time = timeRef.current;
     fp.seed = seedRef.current;
 
+    // Tenderness calm + convergence lock (alive cohesion). Soft rise/fall so
+    // the river eases into hush / lock instead of stepping.
+    tenderSmooth.current = smoothToward(tenderSmooth.current, m.tenderness, dt, 0.12, 0.22);
+    lockSmooth.current = smoothToward(
+      lockSmooth.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)),
+      dt,
+      0.1,
+      0.18,
+    );
+    const tender = tenderSmooth.current;
+    const lock = lockSmooth.current;
+    // Gentle vocal passages soften fine curl detail (the storm hushes).
+    fp.turbulence *= 1 - tender * 0.72;
+    // Power curve: breakdowns stay fractured; choruses collapse to one river.
+    // Stronger than the linear map in flowParamsFromMetrics so lock reads.
+    fp.bandSpread = Math.pow(1 - lock, 2.25) * 1.05;
+
     // Magnet wells hop on bar boundaries (when the grid is known).
     const wells = wellsRef.current;
     if (m.barPhase < wells.prevBarPhase - 0.5) {
@@ -648,8 +687,12 @@ export function FlowFieldScene({
     ru.uTurbulence.value = fp.turbulence;
     ru.uSwirl.value = fp.swirl;
     ru.uBandSpread.value = fp.bandSpread;
+    // Trail jitter calms with tenderness — shorter, less swell-wagged strokes.
+    const trailCalm = 1 - tender * 0.5;
     ru.uTrailLen.value =
-      0.04 + trailNow * 0.07 * (1 + m.swell * 0.55 + m.impact * 0.2 + m.afterglow * 0.15);
+      (0.04 +
+        trailNow * 0.07 * (1 + m.swell * 0.55 * trailCalm + m.impact * 0.2 + m.afterglow * 0.15)) *
+      (0.72 + 0.28 * trailCalm);
     ru.uDensity.value = Math.max(0.02, Math.min(1, densityNow));
     // Additive overdraw normalization: a quarter-million translucent lines
     // saturate to white unless per-line alpha shrinks with the swarm size.
