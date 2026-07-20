@@ -43,7 +43,14 @@ const SAFE_MIN_CAMERA_DISTANCE = 1.5;
  * long enough that mode switches and cinematic cuts glide instead of teleport.
  */
 const CAMERA_SPRING_SMOOTH = 0.16;
+/** Default look SmoothDamp — snappy enough for orbit/drift gaze. */
 const LOOK_SPRING_SMOOTH = 0.14;
+/**
+ * Cinematic shot cuts jump look-at discontinuously; a longer SmoothDamp
+ * (~0.28s) lets framing glide into each cut without a pop, while position
+ * springs (CAMERA_SPRING_SMOOTH) still handle the body.
+ */
+const CINEMATIC_LOOK_SPRING_SMOOTH = 0.28;
 
 /** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
 const FOV_SPRING_SMOOTH = 0.09;
@@ -136,6 +143,36 @@ function springTo(
   springAxis(state, 'y', ty, 'vy', dt, smoothTime);
   springAxis(state, 'z', tz, 'vz', dt, smoothTime);
   state.initialized = true;
+}
+
+/**
+ * Snap a near-rest spring exactly onto its target so look stays still
+ * between cinematic cuts (no micro-crawl from residual velocity).
+ */
+function settleSpring3(
+  state: Spring3,
+  tx: number,
+  ty: number,
+  tz: number,
+  posEps = 2e-4,
+  velEps = 2e-4,
+): void {
+  if (!state.initialized) return;
+  if (
+    Math.abs(state.x - tx) < posEps &&
+    Math.abs(state.y - ty) < posEps &&
+    Math.abs(state.z - tz) < posEps &&
+    Math.abs(state.vx) < velEps &&
+    Math.abs(state.vy) < velEps &&
+    Math.abs(state.vz) < velEps
+  ) {
+    state.x = tx;
+    state.y = ty;
+    state.z = tz;
+    state.vx = 0;
+    state.vy = 0;
+    state.vz = 0;
+  }
 }
 
 interface SceneRigProps {
@@ -242,6 +279,8 @@ export function SceneRig({
   const camSpringRef = useRef<Spring3>(createSpring3());
   const lookSpringRef = useRef<Spring3>(createSpring3());
   const prevCameraModeRef = useRef<CameraMode>(cameraMode);
+  /** Tracks cinematic shot index so look velocity resets on each cut. */
+  const prevCinematicShotRef = useRef(-1);
 
   useFrame((state, delta) => {
     const m = metricsRef.current;
@@ -264,6 +303,9 @@ export function SceneRig({
       lookSpringRef.current.vy = 0;
       lookSpringRef.current.vz = 0;
       prevCameraModeRef.current = cameraMode;
+      // Re-arm shot tracking when entering cinematic so the first shot
+      // doesn't count as a cut.
+      prevCinematicShotRef.current = -1;
     }
 
     // Consume one-shot trigger impulses, then decay their envelopes.
@@ -386,6 +428,16 @@ export function SceneRig({
         lookTargetX = cine.look.x;
         lookTargetY = cine.look.y;
         lookTargetZ = cine.look.z;
+        // Shot cuts jump look discontinuously — zero look velocity so the
+        // longer cinematic SmoothDamp eases framing in cleanly (~0.28s).
+        if (prevCinematicShotRef.current !== cine.shotIndex) {
+          if (prevCinematicShotRef.current >= 0) {
+            lookSpringRef.current.vx = 0;
+            lookSpringRef.current.vy = 0;
+            lookSpringRef.current.vz = 0;
+          }
+          prevCinematicShotRef.current = cine.shotIndex;
+        }
         break;
       }
       case 'flow': {
@@ -500,15 +552,19 @@ export function SceneRig({
       }
     }
 
-    // Look-at also springs — cinematic shot cuts glide instead of snapping.
+    // Look-at SmoothDamp: cinematic cuts use a longer smooth-time so
+    // framing glides (~0.28s); other modes keep the snappier default.
+    const lookSmooth =
+      cameraMode === 'cinematic' ? CINEMATIC_LOOK_SPRING_SMOOTH : LOOK_SPRING_SMOOTH;
     springTo(
       lookSpringRef.current,
       lookTargetX,
       lookTargetY,
       lookTargetZ,
       dtCam,
-      LOOK_SPRING_SMOOTH,
+      lookSmooth,
     );
+    settleSpring3(lookSpringRef.current, lookTargetX, lookTargetY, lookTargetZ);
     const look = lookSpringRef.current;
     state.camera.lookAt(look.x + lookYaw, look.y + lookPitch, look.z);
 
