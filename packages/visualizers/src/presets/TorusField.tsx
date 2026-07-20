@@ -16,6 +16,27 @@ import {
 
 import { getDotTexture } from '../dotTexture';
 
+/** EMA toward target with separate rise/fall time constants. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
+  return current + (target - current) * a;
+}
+
+/**
+ * Torus Field — brand torus with kit accents + phrase-echo reverse.
+ *  - gather → shell inhale (existing breath)
+ *  - kick → tube pulse (wire + particle tube radius)
+ *  - snare → lateral flash / X crack on the point cloud
+ *  - hat → outer point-cloud size ticks
+ *  - echo → one reverse of flow drift in post-phrase gaps
+ */
 export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const torusRef = useRef<THREE.Mesh>(null);
@@ -32,7 +53,19 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
 
+  // Kit envelopes + one-shot phrase-echo reverse drift.
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+
   const particleCount = tier === 'high' ? 6000 : tier === 'mid' ? 2500 : 800;
+  // Low tier keeps gestures readable without strobing sparse points.
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const sprite = useMemo(() => getDotTexture(), []);
 
   const { positions, baseTheta, basePhi } = useMemo(() => {
@@ -72,18 +105,70 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     const m = metricsRef.current;
     const spd = mods.current.speed ?? speed;
+    const dtClamped = Math.min(delta, 0.05);
+
+    // Smooth kit envelopes so punches feel fluid, not gated snaps.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dtClamped,
+      0.018,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dtClamped,
+      0.016,
+      0.11,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dtClamped,
+      0.012,
+      0.055,
+    );
+
+    // One reverse drift per echo impulse — arm on quiet, fire on rise.
+    echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dtClamped, 0.05, 0.3);
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm ?? 120;
+      echoTravel.current = Math.min(1, echoTravel.current + dtClamped * (0.85 + bpm / 180));
+    }
+    const traveling = echoTravel.current < 1;
+    // Fades from full reverse (−1) back to forward (1) over the travel.
+    const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
+    const flowSign = 1 - reverseAmt * 2;
+
     // Section pacing: the field turns with the song's arc — near-still in
     // valleys, flying at peaks. Tenderness (vocal-led soft passages) eases
     // the pace further so intimate moments feel held, not spun.
     const sectionPace = (0.65 + m.sectionLevel * 0.55) * (1 - m.tenderness * 0.25);
-    const flowSpeed = delta * spd * (0.35 + m.mid * 3 + m.impact * 2) * sectionPace;
+    const flowSpeed =
+      delta * spd * (0.35 + m.mid * 3 + m.impact * 2) * sectionPace * flowSign;
     const activeRatio = 0.45 + m.flow * 0.55;
 
     // Gather: the pre-beat inhale pulls the shell in a breath before each
     // predicted hit, so downbeats read as exhale-release.
-    torus.scale.setScalar(1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05);
+    // Kick: tube pulse — shell thickens/blooms on the kick envelope.
+    const kickTube = kickSmooth.current * 0.12;
+    torus.scale.set(
+      1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 + kickTube * 0.35,
+      1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 + kickTube,
+      1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 + kickTube * 0.35,
+    );
     torus.rotation.y += flowSpeed * 0.4;
     torus.rotation.x += delta * spd * (0.03 + m.high * 0.2);
+    // Snare: brief lateral roll on the wire shell.
+    torus.rotation.z = snareSmooth.current * 0.09 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
 
     // Downbeat flash: peaks at the start of each 4/4 bar then decays in <0.5 beats.
     const barFlash = m.barPhase > 0 ? Math.pow(1 - m.barPhase, 8) : 0;
@@ -96,18 +181,31 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     if (torusMat && !Array.isArray(torusMat) && 'emissiveIntensity' in torusMat) {
       const sm = torusMat as THREE.MeshStandardMaterial;
       // Afterglow holds the shell warm for seconds after a peak — the room
-      // still ringing after the chorus ends.
+      // still ringing after the chorus ends. Kick blooms the tube; snare
+      // flashes mid laterally via a short emissive kick.
       sm.emissiveIntensity =
-        (0.35 + m.swell * 0.7 + m.impact * 0.5 + barFlash * 0.6 + dropPunch + m.afterglow * 0.4) *
+        (0.35 +
+          m.swell * 0.7 +
+          m.impact * 0.5 +
+          barFlash * 0.6 +
+          dropPunch +
+          m.afterglow * 0.4 +
+          kickSmooth.current * 0.55 +
+          snareSmooth.current * 0.4) *
         silenceMute;
       // Follow the living palette so the shell breathes color too.
       sm.color.set(palette.mid);
       sm.emissive.set(palette.mid);
-      sm.opacity = 0.2 + m.swell * 0.2 + m.afterglow * 0.06;
+      sm.opacity = 0.2 + m.swell * 0.2 + m.afterglow * 0.06 + kickSmooth.current * 0.06;
     }
 
-    pointsMat.size = 0.05 + m.swell * 0.05 + m.impact * 0.04;
-    pointsMat.opacity = 0.75 + m.swell * 0.25;
+    // Hat ticks: sharp size glitter on the outer point cloud.
+    pointsMat.size =
+      0.05 + m.swell * 0.05 + m.impact * 0.04 + hatSmooth.current * 0.055;
+    pointsMat.opacity = Math.min(
+      1,
+      0.75 + m.swell * 0.25 + hatSmooth.current * 0.18,
+    );
 
     // Re-tint particle bands from the living palette (mutates in place, so
     // the mount-time buffer would otherwise stay frozen forever).
@@ -116,13 +214,17 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const bassC = scratchBass.current.set(palette.bass);
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
+    const bassGain = 1 + m.impact * 0.2 + kickSmooth.current * 0.35;
+    const midGain = 1 + m.mid * 0.2 + snareSmooth.current * 0.4;
+    const highGain = 1 + m.shimmer * 0.35 + hatSmooth.current * 0.55;
     for (let i = 0; i < particleCount; i++) {
       const t = (i / particleCount) % 1;
       const color = t < 0.33 ? bassC : t < 0.66 ? midC : highC;
+      const gain = t < 0.33 ? bassGain : t < 0.66 ? midGain : highGain;
       const i3 = i * 3;
-      cArr[i3] = color.r;
-      cArr[i3 + 1] = color.g;
-      cArr[i3 + 2] = color.b;
+      cArr[i3] = Math.min(1, color.r * gain);
+      cArr[i3 + 1] = Math.min(1, color.g * gain);
+      cArr[i3 + 2] = Math.min(1, color.b * gain);
     }
     cAttr.needsUpdate = true;
 
@@ -131,25 +233,36 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     // Shared flow current: off-surface drift that grows with the music and
     // vanishes at rest, so the sacred geometry stays clean when calm.
-    flowTimeRef.current += Math.min(delta, 0.05) * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+    // Echo reverses the curl once in post-phrase gaps, then resumes.
+    flowTimeRef.current +=
+      dtClamped * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4) * flowSign;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    const flowLift = 0.05 + m.swell * 0.22 + m.dropEvent * 0.45 + m.afterglow * 0.06;
+    const flowLift =
+      (0.05 + m.swell * 0.22 + m.dropEvent * 0.45 + m.afterglow * 0.06) * flowSign;
     const fv = flowScratch.current;
+
+    // Snare lateral crack amplitude (phase-split L/R across the cloud).
+    const snareX = snareSmooth.current * 0.14;
+    // Kick expands the particle tube radius — the ring thickens with the hit.
+    const kickTubeR = kickSmooth.current * 0.18;
 
     for (let i = 0; i < particleCount; i++) {
       if (i / particleCount > activeRatio) continue;
       basePhi[i] = (basePhi[i]! + flowSpeed) % (Math.PI * 2);
       baseTheta[i] =
-        (baseTheta[i]! + delta * spd * (0.15 + m.high * 1.2 + m.impact)) % (Math.PI * 2);
+        (baseTheta[i]! + delta * spd * (0.15 + m.high * 1.2 + m.impact) * flowSign) %
+        (Math.PI * 2);
       const radius = 1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08;
-      const tube = 0.5 + m.breath * 0.15;
+      const tube = 0.5 + m.breath * 0.15 + kickTubeR;
       const i3 = i * 3;
       setTorusPoint(arr, i3, baseTheta[i]!, basePhi[i]!, radius, tube);
       sampleFlow(fv, arr[i3]!, arr[i3 + 1]!, arr[i3 + 2]!, i % 3, fp);
       arr[i3] = arr[i3]! + fv.x * flowLift;
       arr[i3 + 1] = arr[i3 + 1]! + fv.y * flowLift;
       arr[i3 + 2] = arr[i3 + 2]! + fv.z * flowLift;
+      // Snare: lateral X crack — alternate sign by particle index.
+      arr[i3] = arr[i3]! + snareX * (i % 2 === 0 ? 1 : -1);
     }
     posAttr.needsUpdate = true;
 
