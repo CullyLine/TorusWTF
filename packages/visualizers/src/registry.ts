@@ -12,6 +12,8 @@ import { OutrunGridScene } from './presets/OutrunGrid';
 import { LiquidChromeScene } from './presets/LiquidChrome';
 import { LiquidBlobScene } from './presets/LiquidBlob';
 import { MandelbrotZoomScene } from './presets/MandelbrotZoom';
+import { SilkWakeScene } from './presets/SilkWake';
+import { TideVeilScene } from './presets/TideVeil';
 import { AnimaScene } from './presets/Anima';
 import { FlowFieldScene } from './presets/FlowField';
 import { HaloRainScene } from './presets/HaloRain';
@@ -28,6 +30,8 @@ export type VisualizerId =
   | 'outrun_grid'
   | 'liquid_chrome'
   | 'liquid_blob'
+  | 'silk_wake'
+  | 'tide_veil'
   | 'halo_rain'
   | 'mandelbrot_zoom';
 
@@ -368,6 +372,46 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 0.55,
       cameraDistance: 1,
       lightLevel: 1,
+    },
+  },
+  silk_wake: {
+    id: 'silk_wake',
+    label: 'Silk Wake',
+    hint: 'Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow.',
+    Scene: SilkWakeScene,
+    // Fullscreen braid owns the frame via its own clip-space quad; still
+    // camera keeps the sheet stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.3,
+      cameraMode: 'still',
+      bloomIntensity: 0.85,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  tide_veil: {
+    id: 'tide_veil',
+    label: 'Tide Veil',
+    hint: 'Soft caustic light-sheet — rolls with swell, folds before the beat, holds warm afterglow.',
+    Scene: TideVeilScene,
+    // Fullscreen veil owns the frame via its own clip-space quad; still
+    // camera keeps the sheet stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.6,
+      aura: 0.25,
+      cameraMode: 'still',
+      bloomIntensity: 0.75,
+      cameraDistance: 1,
+      lightLevel: 1.05,
     },
   },
   halo_rain: {
