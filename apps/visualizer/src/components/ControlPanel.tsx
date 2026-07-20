@@ -63,6 +63,7 @@ const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
 const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'liquid_blob',
   'silk_wake',
+  'tide_veil',
   'anima',
 ]);
 

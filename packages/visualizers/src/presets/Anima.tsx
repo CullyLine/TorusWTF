@@ -21,7 +21,28 @@ import { useModulation } from '../modulation';
  *  - holdBreath: all motion eases (the listener)
  *  - tenderness: aurora curtains glow warmer + softer
  *  - moodValence: shifts dominant palette stop
+ *
+ * Kit soul accents (on top of choreography):
+ *  - kick: core brightness / size punch
+ *  - snare: mid-radius ring crack
+ *  - hat: outer halo glitter ticks
  */
+
+/**
+ * Smooth toward a target with asymmetric rise/fall (seconds).
+ * Keeps kit accents fluid — no linear snaps on kick/snare/hat envelopes.
+ */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+) {
+  const tau = target > current ? riseTau : fallTau;
+  const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
+  return current + (target - current) * a;
+}
 
 const fragmentShader = /* glsl */ `
 precision highp float;
@@ -46,6 +67,10 @@ uniform float uTension;
 uniform float uVocal;
 uniform float uSection;
 uniform float uAfterglow;
+// Drum-kit soul accents (smoothed envelopes).
+uniform float uKick;
+uniform float uSnare;
+uniform float uHat;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -78,9 +103,11 @@ void main() {
   // ===== SOUL CORE =====
   // A central glow that breathes; bass + barFlash punch it. Section level
   // grows the core through choruses; afterglow keeps it warm after them.
+  // Kick: brief brightness/size punch — drums the creature without a
+  // fullscreen strobe (gain is local to the core falloff).
   float r = length(uv);
-  float coreSize = 0.18 + uBass * 0.12 + uRelease * 0.25 + uSection * 0.06 + uAfterglow * 0.04;
-  float core = exp(-pow(r / coreSize, 2.2)) * (1.0 + uBeat * 0.6);
+  float coreSize = 0.18 + uBass * 0.12 + uRelease * 0.25 + uSection * 0.06 + uAfterglow * 0.04 + uKick * 0.07;
+  float core = exp(-pow(r / coreSize, 2.2)) * (1.0 + uBeat * 0.6 + uKick * 0.85);
 
   // ===== AURORA CURTAINS =====
   // Three drifting wave ribbons stacked vertically; phase walks with time.
@@ -116,6 +143,19 @@ void main() {
     wisp += exp(-d * d * 220.0) * (0.5 + 0.5 * sin(liveTime * 2.0 + fk));
   }
 
+  // ===== SNARE MID RING =====
+  // Annular crack at mid radius — distinct from core kick punch.
+  float snareBand = abs(r - (0.32 + uSnare * 0.04));
+  float snareRing = exp(-pow(snareBand / (0.028 + uSnare * 0.012), 2.0)) * uSnare;
+
+  // ===== HAT OUTER HALO =====
+  // Sparse angular glitter on the outer rim — ticks, doesn't wash the frame.
+  float haloR = smoothstep(0.48, 0.72, r) * (1.0 - smoothstep(0.95, 1.35, r));
+  float hatSparkle =
+    haloR *
+    uHat *
+    (0.55 + 0.45 * noise(vec2(atan(uv.y, uv.x) * 4.5 + liveTime * 9.0, r * 6.0)));
+
   // ===== COLOR ASSEMBLY =====
   // Warm/cool tilt from moodValence + tenderness.
   float warmth = 0.5 + uMoodValence * 0.35 + uTenderness * 0.25;
@@ -123,11 +163,15 @@ void main() {
   vec3 wispCol = uColorHigh;
 
   vec3 col = vec3(0.0);
-  col += coreCol * core * (1.0 + uRelease * 1.6 + uAfterglow * 0.35);
+  col += coreCol * core * (1.0 + uRelease * 1.6 + uAfterglow * 0.35 + uKick * 0.45);
   // Vocals literally light the curtains: when a voice is present the aurora
   // breathes brighter, so singing passages read differently from drops.
   col += auroraColor * aurora * (0.7 + uTenderness * 0.6 + uVocal * 0.55);
   col += wispCol * wisp * (0.8 + uHigh * 1.2 + uVocal * 0.5);
+  // Snare: mid-ring flash toward mid/high palette (crack, not wash).
+  col += mix(uColorMid, uColorHigh, 0.35) * snareRing * 1.35;
+  // Hats: outer halo sparkle toward high color.
+  col += mix(coreCol, uColorHigh, 0.7) * hatSparkle * 1.1;
 
   // ===== EFFECTS =====
   // Drop punch — momentary fullscreen wash.
@@ -137,6 +181,8 @@ void main() {
   // Tension halo — outer rim warmth so the creature looks worried.
   float rim = smoothstep(0.55, 1.2, r);
   col += mix(vec3(0.0), uColorBass, rim) * uTension * 0.35;
+  // Hat also ticks the existing tension rim slightly so the halo reads.
+  col += mix(vec3(0.0), uColorHigh, rim) * uHat * 0.22;
 
   // Soft vignette so the core feels enclosed.
   float vignette = 1.0 - smoothstep(0.7, 1.3, r);
@@ -152,13 +198,26 @@ void main() {
 }
 `;
 
-export function AnimaScene({ analyser, palette, speed = 1, backdrop = false }: VisualizerSceneProps) {
+export function AnimaScene({
+  analyser,
+  palette,
+  tier,
+  speed = 1,
+  backdrop = false,
+}: VisualizerSceneProps) {
   const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const { size } = useThree();
   const timeRef = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
+
+  // Low tier: slightly softer kit so the fullscreen shader doesn't strobe;
+  // mid/high keep full readable accents.
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -181,6 +240,9 @@ export function AnimaScene({ analyser, palette, speed = 1, backdrop = false }: V
       uVocal: { value: 0 },
       uSection: { value: 0 },
       uAfterglow: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
+      uHat: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -192,8 +254,9 @@ export function AnimaScene({ analyser, palette, speed = 1, backdrop = false }: V
     const mat = matRef.current;
     if (!mat) return;
     const m = metricsRef.current;
+    const dt = Math.min(delta, 0.05);
 
-    timeRef.current += Math.min(delta, 0.1) * (mods.current.speed ?? speed);
+    timeRef.current += dt * (mods.current.speed ?? speed);
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass;
@@ -216,6 +279,33 @@ export function AnimaScene({ analyser, palette, speed = 1, backdrop = false }: V
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
+
+    // Kit soul accents: kick punches the core (fast rise, slightly longer
+    // ring); snare cracks a mid ring; hats glitter the outer halo.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.032,
+      0.13,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.028,
+      0.1,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.025,
+      0.085,
+    );
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
+    mat.uniforms.uHat!.value = hatSmooth.current;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
