@@ -13,7 +13,7 @@ const ARMS = 3;
 
 /**
  * Smooth toward a target with asymmetric rise/fall (seconds).
- * Keeps gather inhale and snare streaks fluid — no linear snaps.
+ * Keeps kit accents fluid — no linear snaps on hat/kick envelopes.
  */
 function smoothToward(
   current: number,
@@ -43,6 +43,8 @@ uniform float uEnergy;
 uniform float uFlowTime;
 uniform float uFlowAmt;
 uniform float uBandSpread;
+uniform float uHat;
+uniform float uKick;
 uniform float uGather;
 uniform float uSnare;
 uniform vec3 uColorBass;
@@ -82,14 +84,29 @@ void main() {
   pos.x += pos.x * snareAmt * 0.045;
   pos.z += pos.z * snareAmt * 0.045;
 
+  // Soft high-band twinkle (sustained shimmer) — slow sine wash.
   float twinkle = sin(uTime * (3.0 + aPhase * 5.0) + aPhase * 40.0) * 0.5 + 0.5;
   twinkle *= 0.35 + uHigh * 0.65;
 
-  float burst = step(0.97, fract(aPhase * 17.0 + uTime * (0.5 + uMid)));
-  float sizeBoost =
-    1.0 + uBass * 0.4 + uBeat * 0.35 + burst * uMid * 1.8 + snareAmt * 0.75;
+  // Hat kit sparkle: sparse, sharp ticks — distinct from the soft twinkle.
+  // Only a subset of stars fire per hat so the field glitter-ticks instead
+  // of strobing the whole disc.
+  float hatSelect = step(0.68, fract(aPhase * 47.13 + aArm * 0.17));
+  float hatTick = hatSelect * uHat * (0.75 + fract(aPhase * 13.7) * 0.45);
 
+  float burst = step(0.97, fract(aPhase * 17.0 + uTime * (0.5 + uMid)));
+  // Kick punches the dense core hard; hats add tiny rim size ticks.
   float core = 1.0 - smoothstep(0.0, 2.5, aRadius);
+  float kickCore = core * uKick;
+  float sizeBoost =
+    1.0 +
+    uBass * 0.4 +
+    uBeat * 0.35 +
+    burst * uMid * 1.8 +
+    kickCore * 1.15 +
+    hatTick * 0.55 +
+    snareAmt * 0.75;
+
   float rim = smoothstep(1.5, 5.0, aRadius);
   // Galaxy body follows the user's palette: hot bright core (high color),
   // mid-tone arms, and bass-colored outer rim — with a whisper of the
@@ -101,9 +118,11 @@ void main() {
   // Per-star brightness also falls toward the packed center — the summed
   // additive light keeps the core glowing without clipping to white.
   float lumDamp = mix(0.62, 1.0, smoothstep(0.2, 2.6, aRadius));
-  // Snare: selected arm stars flash mid→high along the streak.
+  // Kick: core blooms warm; hat: selected stars flash toward high color;
+  // snare: mid-arm streak flash; gather: soft arm inhale lift.
   vec3 lit =
-    body * (1.0 + twinkle * 0.35 + core * uBass * 0.2 + uGather * armWeight * 0.08) +
+    body * (1.0 + twinkle * 0.35 + core * uBass * 0.2 + kickCore * 0.55 + uGather * armWeight * 0.08) +
+    mix(body, uColorHigh, 0.65) * hatTick * 0.85 +
     mix(uColorMid, uColorHigh, 0.45) * snareAmt * 0.95;
   vColor = lit * lumDamp;
   // Alpha eases DOWN toward the dense center — tens of thousands of additive
@@ -113,7 +132,8 @@ void main() {
   float dense = 1.0 - smoothstep(0.0, 3.2, aRadius);
   float coreDamp = 1.0 - dense * 0.6;
   vAlpha =
-    (0.34 + twinkle * 0.3 + uEnergy * 0.08 + snareAmt * 0.38) * coreDamp +
+    (0.34 + twinkle * 0.3 + uEnergy * 0.08 + hatTick * 0.4 + kickCore * 0.12 + snareAmt * 0.38) *
+      coreDamp +
     core * 0.04;
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
@@ -154,12 +174,16 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
   const beatZoomRef = useRef(0);
   const { camera } = useThree();
 
-  // Gather inhale + snare streak envelopes (smoothed for fluid motion).
+  // Kit envelopes (smoothed) + continuous spin accumulator for bar-lock.
+  const hatSmooth = useRef(0);
+  const kickSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const snareSmooth = useRef(0);
+  // Seed with the JSX Y twist so absolute assignment doesn't flatten the disc.
+  const spinAccum = useRef(Math.PI / 10);
 
   const count = tier === 'high' ? 50_000 : tier === 'mid' ? 24_000 : 8_000;
-  // Low tier: slightly softer accents so sparse stars don't strobe.
+  // Low tier: slightly softer kit so sparse stars don't strobe; mid/high full.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const { positions, phases, radii, arms } = useMemo(() => {
@@ -197,6 +221,8 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
       uFlowTime: { value: 0 },
       uFlowAmt: { value: 0 },
       uBandSpread: { value: 0.9 },
+      uHat: { value: 0 },
+      uKick: { value: 0 },
       uGather: { value: 0 },
       uSnare: { value: 0 },
       uColorBass: { value: new THREE.Color('#FF2E93') },
@@ -229,22 +255,39 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
 
-    // Gather rises with the pre-beat breath; snare cracks fast and clears
-    // before the next mid hit so streaks stay distinct from soft twinkle.
+    // Kit sparkle: hat ticks rise fast / fall fast; kick core punches rise
+    // fast and ring a touch longer so the nucleus blooms without strobing.
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.028,
+      0.09,
+    );
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.035,
+      0.14,
+    );
+    // Gather rises with the pre-beat breath; snare cracks fast and clears.
     gatherSmooth.current = smoothToward(
       gatherSmooth.current,
       Math.min(1, m.gather) * kitAmp,
       dt,
-      0.045,
+      0.05,
       0.14,
     );
     snareSmooth.current = smoothToward(
       snareSmooth.current,
       Math.min(1.2, m.snare) * kitAmp,
       dt,
-      0.03,
-      0.11,
+      0.025,
+      0.1,
     );
+    mat.uniforms.uHat!.value = hatSmooth.current;
+    mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
 
@@ -252,7 +295,7 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
     mat.uniforms.uFlowTime!.value = flowTimeRef.current;
     // Calm at rest, swirling on energy, surging on drops — and still
     // stirring for a while after a peak (afterglow). Gather softens the
-    // curl so the inhale reads as held breath, not more turbulence.
+    // swirl so the inhale reads as a held breath.
     mat.uniforms.uFlowAmt!.value =
       (0.04 + m.swell * 0.18 + m.dropEvent * 0.4 + m.afterglow * 0.1) *
       (1 - gatherSmooth.current * 0.35);
@@ -262,16 +305,23 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
     if (m.impact > 0.35) beatZoomRef.current = 1;
 
     const sway = m.energy * 0.08;
-    points.rotation.y += delta * spd * (0.03 + m.mid * 0.06) * sectionPace;
+    // Continuous arm drift — mid energy still drives the swirl.
+    spinAccum.current += delta * spd * (0.03 + m.mid * 0.06) * sectionPace;
+    // Bar-lock: a subtle sin phase once per bar. sin(0)=sin(2π)=0 so the
+    // wrap is seamless — arms feel timed without stuttering.
+    const barLock =
+      m.barPhase > 0 ? Math.sin(m.barPhase * Math.PI * 2) * 0.045 : 0;
+    points.rotation.y = spinAccum.current + barLock;
     // Sway AROUND the base tilt — assigning the raw sway here used to stomp
     // the JSX rotation and flatten the disc edge-on (white-hot smear).
     points.rotation.x = Math.PI / 3 + Math.sin(state.clock.elapsedTime * 0.12) * 0.08 + sway;
 
     const baseZ = zoomRef?.current ?? 4;
+    // Kick also nudges the camera in slightly — core punch reads in depth.
     camera.position.set(
       Math.sin(state.clock.elapsedTime * 0.08) * sway * 2,
       Math.cos(state.clock.elapsedTime * 0.11) * sway,
-      baseZ - beatZoomRef.current * 0.35,
+      baseZ - beatZoomRef.current * 0.35 - kickSmooth.current * 0.12,
     );
     camera.lookAt(0, 0, 0);
 

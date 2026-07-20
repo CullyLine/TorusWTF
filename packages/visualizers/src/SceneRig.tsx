@@ -8,7 +8,7 @@ import type { PerspectiveCamera, PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useModulation } from './modulation';
 import type { VisualImpulses } from './impulse';
-import { useCameraZoomDistanceRef } from './cameraZoom';
+import { useAdvanceCameraZoom, useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
 import { AuraLayer } from './AuraLayer';
@@ -48,21 +48,39 @@ const LOOK_SPRING_SMOOTH = 0.14;
 /** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
 const FOV_SPRING_SMOOTH = 0.09;
 
-interface FovSpring {
+/**
+ * Short SmoothDamp for impact/bass shake amplitude — tracks kicks without
+ * stair-stepping on raw envelope/FFT frames.
+ */
+const SHAKE_AMP_SPRING_SMOOTH = 0.08;
+
+/**
+ * Even shorter SmoothDamp for bass-rumble XYZ offsets applied after the pose
+ * spring — keeps rumble fluid while still landing on the hit.
+ */
+const SHAKE_OFFSET_SPRING_SMOOTH = 0.055;
+
+interface ScalarSpring {
   value: number;
   velocity: number;
   initialized: boolean;
 }
 
+function createScalarSpring(): ScalarSpring {
+  return { value: 0, velocity: 0, initialized: false };
+}
+
 /**
- * Unity-style SmoothDamp (critically damped) for FOV. Mutates spring state.
- * First call snaps to the target so the lens doesn't fly in on mount.
+ * Unity-style SmoothDamp (critically damped) for a scalar. Mutates spring
+ * state. First call snaps to the target so values don't fly in on mount.
+ * Near-zero targets settle fully still (no micro-crawl).
  */
-function smoothDampFov(
-  state: FovSpring,
+function smoothDampScalar(
+  state: ScalarSpring,
   target: number,
   dt: number,
   smoothTime: number,
+  settleEpsilon = 1e-5,
 ): number {
   if (!state.initialized) {
     state.value = target;
@@ -78,6 +96,14 @@ function smoothDampFov(
   const temp = (state.velocity + omega * change) * dt;
   state.velocity = (state.velocity - omega * temp) * exp;
   state.value = target + (change + temp) * exp;
+  if (
+    Math.abs(target) < settleEpsilon &&
+    Math.abs(state.value) < settleEpsilon &&
+    Math.abs(state.velocity) < settleEpsilon
+  ) {
+    state.value = 0;
+    state.velocity = 0;
+  }
   return state.value;
 }
 
@@ -196,7 +222,13 @@ export function SceneRig({
   const resolvedBloomRef = useRef(1);
   const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
-  const fovSpringRef = useRef<FovSpring>({ value: 0, velocity: 0, initialized: false });
+  const fovSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  // Impact/bass shake amp + post-pose rumble offsets — SmoothDamp so kick
+  // rumble rides the sprung camera without envelope stair-steps.
+  const shakeAmpSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  const modeShakeOffsetSpringRef = useRef<Spring3>(createSpring3());
+  const bassShakeAmpSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  const bassShakeOffsetSpringRef = useRef<Spring3>(createSpring3());
   // Trigger-impulse envelopes: consumed from `impulses` on the frame they
   // fire, then rung down here (same struck-bell shape as the audio pulses).
   const camPunchEnvRef = useRef(0);
@@ -224,6 +256,7 @@ export function SceneRig({
   );
   useEffect(() => () => bloomEffect.dispose(), [bloomEffect]);
   const zoomDistanceRef = useCameraZoomDistanceRef();
+  const advanceZoom = useAdvanceCameraZoom();
   const fallbackZ = embedded ? 2.8 : 3.1;
   const animaState = useRef<AnimaState>({ ...NEUTRAL_ANIMA });
   const cinematicState = useRef<CinematicState>(createCinematicState());
@@ -251,6 +284,9 @@ export function SceneRig({
     const dist = Math.max(0.3, mv.cameraDistance ?? cameraDistance);
     const bassShakeNow = mv.bassShake ?? bassShake;
     const lightLevelNow = Math.max(0, mv.lightLevel ?? lightLevel);
+    // Wheel/pinch write a zoom *target*; SmoothDamp eases distanceRef so
+    // framing pulls feel fluid (no stair-steps) and settle cleanly at rest.
+    if (advanceZoom) advanceZoom(delta);
     const baseZ = (zoomDistanceRef?.current ?? fallbackZ) * dist;
     const dtImp = Math.min(delta, 0.1);
 
@@ -337,17 +373,30 @@ export function SceneRig({
       highLight.current.color.set(palette.high);
     }
 
-    const shake = m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015;
     const dtCam = Math.min(Math.max(delta, 0), 0.05);
+    // Mode shake amp (dive/drift): SmoothDamp the envelope so kicks rumble
+    // without frame-to-frame chatter on raw impact/bass.
+    const shakeTarget = m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015;
+    const shake = smoothDampScalar(
+      shakeAmpSpringRef.current,
+      shakeTarget,
+      dtCam,
+      SHAKE_AMP_SPRING_SMOOTH,
+    );
 
     // Desired pose for this frame. Modes write here; the spring below eases
     // the real camera toward it so nothing teleports on mode changes.
+    // Mode impact/bass shake XY(Z) offsets are SmoothDamp'd separately so
+    // envelope chatter never writes desired pose raw.
     let desiredX = 0;
     let desiredY = 0;
     let desiredZ = baseZ;
     let lookTargetX = 0;
     let lookTargetY = 0;
     let lookTargetZ = 0;
+    let shakeOxTarget = 0;
+    let shakeOyTarget = 0;
+    let shakeOzTarget = 0;
 
     switch (cameraMode) {
       case 'still':
@@ -363,8 +412,8 @@ export function SceneRig({
         break;
       }
       case 'dive':
-        desiredX = Math.sin(t * 12.1) * shake * 0.5;
-        desiredY = Math.cos(t * 9.7) * shake * 0.35;
+        shakeOxTarget = Math.sin(t * 12.1) * shake * 0.5;
+        shakeOyTarget = Math.cos(t * 9.7) * shake * 0.35;
         // The bass push-in eases toward the safe minimum instead of
         // subtracting linearly — heavy sustained bass (or AGC-boosted
         // quiet audio) can no longer park the camera at the origin.
@@ -421,17 +470,45 @@ export function SceneRig({
         // Drift amplitude follows the song's section level so quiet
         // valleys hold nearly still — the camera lingers with the music.
         const driftAmp = 0.55 + m.sectionLevel * 0.45;
-        desiredX = Math.sin(t * 0.21) * 0.3 * driftAmp + Math.sin(t * 18.7) * shake;
-        desiredY =
-          Math.cos(t * 0.17) * 0.2 * driftAmp + Math.cos(t * 14.3) * shake * 0.7;
-        desiredZ =
-          baseZ * (1 - m.swell * 0.06) +
-          Math.sin(t * 0.13) * 0.22 * driftAmp +
-          Math.sin(t * 11.1) * shake * 0.4;
+        desiredX = Math.sin(t * 0.21) * 0.3 * driftAmp;
+        desiredY = Math.cos(t * 0.17) * 0.2 * driftAmp;
+        desiredZ = baseZ * (1 - m.swell * 0.06) + Math.sin(t * 0.13) * 0.22 * driftAmp;
+        shakeOxTarget = Math.sin(t * 18.7) * shake;
+        shakeOyTarget = Math.cos(t * 14.3) * shake * 0.7;
+        shakeOzTarget = Math.sin(t * 11.1) * shake * 0.4;
         break;
       }
     }
     prevFrameTime.current = t;
+
+    {
+      const modeOff = modeShakeOffsetSpringRef.current;
+      springTo(
+        modeOff,
+        shakeOxTarget,
+        shakeOyTarget,
+        shakeOzTarget,
+        dtCam,
+        SHAKE_OFFSET_SPRING_SMOOTH,
+      );
+      if (
+        shake === 0 &&
+        Math.abs(modeOff.x) < 1e-5 &&
+        Math.abs(modeOff.y) < 1e-5 &&
+        Math.abs(modeOff.z) < 1e-5
+      ) {
+        modeOff.x = 0;
+        modeOff.y = 0;
+        modeOff.z = 0;
+        modeOff.vx = 0;
+        modeOff.vy = 0;
+        modeOff.vz = 0;
+      } else {
+        desiredX += modeOff.x;
+        desiredY += modeOff.y;
+        desiredZ += modeOff.z;
+      }
+    }
 
     // Choreography — creature emotional motion. Independent of audio reactivity.
     // leanIn dollies camera inward; release dollies outward (the exhale);
@@ -477,15 +554,43 @@ export function SceneRig({
     state.camera.position.set(sprung.x, sprung.y, sprung.z);
 
     // Subwoofer rumble rides ON TOP of the sprung base so kick hits still
-    // land; the impact envelope already settles amp smoothly after each hit.
-    if (bassShakeNow > 0) {
+    // land. Amp and XYZ offsets both SmoothDamp — envelope stair-steps never
+    // write the camera directly; quiet settles fully still.
+    {
       const bassPunch = m.bass * 0.5 + m.impact * 1.3;
-      const amp = bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07);
+      const ampTarget =
+        bassShakeNow > 0 ? bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07) : 0;
+      const amp = smoothDampScalar(
+        bassShakeAmpSpringRef.current,
+        ampTarget,
+        dtCam,
+        SHAKE_AMP_SPRING_SMOOTH,
+      );
       // Two slightly desynced sines so it doesn't feel like a clean wave;
       // y dominates because real subs you feel in your chest vertically.
-      state.camera.position.y += Math.sin(t * 87.3) * amp;
-      state.camera.position.x += Math.sin(t * 63.1 + 1.7) * amp * 0.45;
-      state.camera.position.z += Math.sin(t * 52.7 + 0.9) * amp * 0.3;
+      const oxTarget = Math.sin(t * 63.1 + 1.7) * amp * 0.45;
+      const oyTarget = Math.sin(t * 87.3) * amp;
+      const ozTarget = Math.sin(t * 52.7 + 0.9) * amp * 0.3;
+      const off = bassShakeOffsetSpringRef.current;
+      springTo(off, oxTarget, oyTarget, ozTarget, dtCam, SHAKE_OFFSET_SPRING_SMOOTH);
+      // Settle snap — once amp and offsets are near rest, kill residual crawl.
+      if (
+        amp === 0 &&
+        Math.abs(off.x) < 1e-5 &&
+        Math.abs(off.y) < 1e-5 &&
+        Math.abs(off.z) < 1e-5
+      ) {
+        off.x = 0;
+        off.y = 0;
+        off.z = 0;
+        off.vx = 0;
+        off.vy = 0;
+        off.vz = 0;
+      } else {
+        state.camera.position.x += off.x;
+        state.camera.position.y += off.y;
+        state.camera.position.z += off.z;
+      }
     }
 
     // Final safe-zone after bass shake (anima heartbeat is already in desired).
@@ -524,7 +629,12 @@ export function SceneRig({
       );
       const targetFov = baseFovRef.current - punchIn + m.afterglow * 1.3;
       const dtFov = Math.min(Math.max(delta, 0), 0.05);
-      const nextFov = smoothDampFov(fovSpringRef.current, targetFov, dtFov, FOV_SPRING_SMOOTH);
+      const nextFov = smoothDampScalar(
+        fovSpringRef.current,
+        targetFov,
+        dtFov,
+        FOV_SPRING_SMOOTH,
+      );
       if (Math.abs(cam.fov - nextFov) > 0.005) {
         cam.fov = nextFov;
         cam.updateProjectionMatrix();

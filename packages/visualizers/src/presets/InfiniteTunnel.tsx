@@ -13,6 +13,9 @@
  *  - echo  → glowing rings replay the phrase memory down the tunnel
  *  - gather→ pre-beat inward squeeze (the tunnel inhales)
  *  - drop  → warp surge: speed spike + white flash
+ *  - kick  → radial wall punch (distinct from sustained bass explode)
+ *  - snare → lateral X warp / shear
+ *  - hat   → corner-rail sparkle ticks
  *
  * Plus ~3k "existential particles" advected by the shared curl-noise flow
  * field while the conveyor sweeps them past the camera.
@@ -31,6 +34,22 @@ import {
   type FlowParams,
   type Vec3Like,
 } from '../dsp/flowfield';
+
+/**
+ * Smooth toward a target with asymmetric rise/fall (seconds).
+ * Keeps kit accents fluid — no linear snaps on kick/snare/hat envelopes.
+ */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+) {
+  const tau = target > current ? riseTau : fallTau;
+  const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
+  return current + (target - current) * a;
+}
 
 // Tunnel dimensions (scene units; camera sits at z≈4 inside the mouth).
 const HALF = 2.2; // half width/height of the square bore
@@ -53,23 +72,32 @@ attribute float aKind;
 uniform float uExplode;
 uniform float uTeeth;
 uniform float uGather;
+uniform float uKick;
+uniform float uSnare;
 
 varying float vKind;
 varying float vViewZ;
 varying vec2 vWallDir;
 varying float vApex;
+varying float vKick;
 
 void main() {
   vec3 pos = position;
   // Bass explosion pushes walls outward; gather squeezes them inward
-  // just before the beat lands (the inhale).
-  pos.xy += aWallDir * (uExplode - uGather * 0.35);
+  // just before the beat lands (the inhale). Kick adds a sharper radial
+  // punch on the same axis so drums answer without washing the bore.
+  pos.xy += aWallDir * (uExplode - uGather * 0.35 + uKick * 0.28);
   // Mid teeth: pyramid apexes extend further into the bore.
   pos.xy -= aWallDir * aApex * uTeeth;
+  // Snare: lateral X shear — floor/ceiling slide, side walls skew with depth.
+  // Distinct axis from the kick's radial wall punch.
+  float depthWave = sin(pos.z * 1.15);
+  pos.x += uSnare * (aWallDir.y * 0.22 + aWallDir.x * depthWave * 0.12);
 
   vKind = aKind;
   vWallDir = aWallDir;
   vApex = aApex;
+  vKick = uKick;
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   vViewZ = -mv.z;
@@ -84,11 +112,13 @@ uniform vec3 uAccentColor;
 uniform float uHigh;
 uniform float uFlash;
 uniform float uFar;
+uniform float uSnare;
 
 varying float vKind;
 varying float vViewZ;
 varying vec2 vWallDir;
 varying float vApex;
+varying float vKick;
 
 void main() {
   vec3 col = mix(uWallColor, uPyrColor, vKind);
@@ -98,6 +128,11 @@ void main() {
 
   // High band makes the pyramid faces glint toward the accent color.
   col += uAccentColor * (uHigh * uHigh) * vKind * 0.5;
+
+  // Kick wall punch: brief brightness on the walls (not a full-frame strobe).
+  col += uWallColor * vKick * (1.0 - vKind) * 0.35;
+  // Snare: thin lateral crack glint on pyramids toward accent.
+  col += uAccentColor * uSnare * vKind * 0.4;
 
   // Drop warp: white flash, strongest deep in the tunnel so it reads as a
   // shockwave arriving from the far end.
@@ -127,6 +162,7 @@ attribute float aPhase;
 uniform float uTime;
 uniform float uHigh;
 uniform float uBeat;
+uniform float uHat;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -138,12 +174,15 @@ void main() {
   vec3 col = aBand < 0.5 ? uColorBass : (aBand < 1.5 ? uColorMid : uColorHigh);
   float twinkle = sin(uTime * (2.0 + aPhase * 6.0) + aPhase * 43.0) * 0.5 + 0.5;
   twinkle *= 0.3 + uHigh * 0.7;
-  vColor = col * (0.8 + twinkle * 0.6);
-  vAlpha = 0.35 + twinkle * 0.4;
+  // Hat ticks: sparse high-band particles glitter without washing the bore.
+  float hatSelect = step(0.62, fract(aPhase * 47.13));
+  float hatTick = hatSelect * uHat * (0.7 + fract(aPhase * 13.7) * 0.5);
+  vColor = col * (0.8 + twinkle * 0.6) + mix(col, uColorHigh, 0.7) * hatTick * 0.85;
+  vAlpha = 0.35 + twinkle * 0.4 + hatTick * 0.35;
 
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   float pz = max(0.9, -mv.z);
-  gl_PointSize = min((2.2 + uBeat * 2.0 + aPhase * 1.6) * (16.0 / pz), 22.0);
+  gl_PointSize = min((2.2 + uBeat * 2.0 + aPhase * 1.6 + hatTick * 1.4) * (16.0 / pz), 22.0);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -289,6 +328,11 @@ export function InfiniteTunnelScene({
   const teethRef = useRef(0);
   const flashRef = useRef(0);
   const prevEchoRef = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
+
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   // ---- Tunnel materials (even/odd alternating two-tone) ----
   const evenMaterial = useMemo(
@@ -301,6 +345,8 @@ export function InfiniteTunnelScene({
           uExplode: { value: 0 },
           uTeeth: { value: 0 },
           uGather: { value: 0 },
+          uKick: { value: 0 },
+          uSnare: { value: 0 },
           uHigh: { value: 0 },
           uFlash: { value: 0 },
           uFar: { value: tunnelLength * 0.9 },
@@ -401,6 +447,7 @@ export function InfiniteTunnelScene({
         uTime: { value: 0 },
         uHigh: { value: 0 },
         uBeat: { value: 0 },
+        uHat: { value: 0 },
         uColorBass: { value: new THREE.Color(palette.bass) },
         uColorMid: { value: new THREE.Color(palette.mid) },
         uColorHigh: { value: new THREE.Color(palette.high) },
@@ -450,6 +497,29 @@ export function InfiniteTunnelScene({
     const tunnelSpeed =
       ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) * silenceDamp + 0.12) * spd;
 
+    // ---- Kit accents: kick wall punch / snare lateral / hat rail sparkle ----
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.028,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.032,
+      0.16,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.022,
+      0.09,
+    );
+
     // ---- Segment conveyor + counter-roll ----
     const rollRate = (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt;
     for (let i = 0; i < tunnel.segments.length; i++) {
@@ -461,6 +531,9 @@ export function InfiniteTunnelScene({
       }
       // Alternating segments counter-rotate (optionRotate homage).
       seg.rotation.z += i % 2 === 0 ? rollRate : -rollRate;
+      // Snare: brief lateral offset (absolute, not accumulating) so the bore
+      // cracks sideways without tumbling the ride over time.
+      seg.position.x = (i % 2 === 0 ? 1 : -1) * snareSmooth.current * 0.07;
     }
 
     // ---- Band-driven uniforms ----
@@ -486,6 +559,8 @@ export function InfiniteTunnelScene({
       u.uExplode!.value = explodeRef.current;
       u.uTeeth!.value = teethRef.current;
       u.uGather!.value = m.gather * 0.5;
+      u.uKick!.value = kickSmooth.current;
+      u.uSnare!.value = snareSmooth.current;
       u.uHigh!.value = m.high;
       u.uFlash!.value = flashRef.current;
       u.uFar!.value = tunnelLength * 0.9;
@@ -500,9 +575,13 @@ export function InfiniteTunnelScene({
     (ou.uWallColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(0.045);
     (ou.uPyrColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(0.2);
 
-    // High band lights the corner rails.
+    // High band lights the corner rails; hats glitter them with sharp ticks
+    // distinct from the slower shimmer wash and from bass wall explode.
     railMaterial.color.copy(cs.high);
-    railMaterial.opacity = 0.1 + m.high * 0.55 + m.shimmer * 0.25;
+    railMaterial.opacity = Math.min(
+      1,
+      0.1 + m.high * 0.55 + m.shimmer * 0.25 + hatSmooth.current * 0.7,
+    );
 
     // ---- Echo rings: phrase memory rushing back up the tunnel ----
     if (m.echo > 0.45 && prevEchoRef.current <= 0.45) {
@@ -585,6 +664,7 @@ export function InfiniteTunnelScene({
     pu.uTime!.value = t;
     pu.uHigh!.value = m.high;
     pu.uBeat!.value = m.impact;
+    pu.uHat!.value = hatSmooth.current;
     (pu.uColorBass!.value as THREE.Color).copy(cs.bass);
     (pu.uColorMid!.value as THREE.Color).copy(cs.mid);
     (pu.uColorHigh!.value as THREE.Color).copy(cs.high);

@@ -13,6 +13,19 @@ import {
   type FlowParams,
 } from '../dsp/flowfield';
 
+/** EMA toward target with separate rise/fall time constants. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
+  return current + (target - current) * a;
+}
+
 /**
  * Flow Field — the flagship of the Flow Field Update.
  *
@@ -25,6 +38,11 @@ import {
  * Call and response: pre-beat `gather` pulls particles inward (the inhale),
  * the hit releases them; in gaps after a phrase, `echo` replays the recorded
  * rhythm as radial ripples — the visual answering the music.
+ *
+ * Kit currents (on top of gather/echo):
+ *  - kick → bass stream thrusts forward (toward camera / −Z)
+ *  - snare → mid stream shears laterally on X (phase-split L/R)
+ *  - hat → high particles briefly densify and sparkle
  *
  * Homages to the original FlowField Saga (2019-2021):
  *  - wandering magnet wells that capture and fling particles (Magnet build)
@@ -71,6 +89,9 @@ uniform float uGather;
 uniform float uEcho;
 uniform float uRelease;
 uniform float uDrop;
+uniform float uKick;
+uniform float uSnare;
+uniform float uHat;
 uniform vec4 uWellA;   // xyz center, w strength
 uniform vec4 uWellB;
 uniform vec4 uPointer; // xyz world point, w strength
@@ -102,6 +123,17 @@ void main() {
   v += dir * (uBeat * 0.5 + uRelease * 0.35 + uDrop * 1.4);
   float wave = sin(length(p) * 5.0 - uTime * 7.0);
   v += dir * wave * uEcho * 1.6;
+
+  // Kit currents: bass thrusts forward on kick, mid shears on snare.
+  // Hats only sparkle/densify in the render pass — motion stays axis-split.
+  float bassMask = 1.0 - smoothstep(0.4, 0.6, band);
+  float midMask = smoothstep(0.4, 0.6, band) * (1.0 - smoothstep(1.4, 1.6, band));
+  // Forward = toward camera (−Z) so kicks read as the bass river lunging
+  // into the frame rather than escaping behind it.
+  v.z -= uKick * bassMask * 2.8;
+  // Phase-split L/R so the mid swarm cracks open instead of translating.
+  float lateral = pSeed > 0.5 ? 1.0 : -1.0;
+  v.x += uSnare * midMask * 2.6 * lateral;
 
   // Mood buoyancy (warm rises, cold sinks).
   v.y += uBuoyancy;
@@ -143,6 +175,7 @@ uniform float uSwirl;
 uniform float uBandSpread;
 uniform float uTrailLen;
 uniform float uDensity;
+uniform float uHat;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -173,12 +206,17 @@ void main() {
   }
 
   vec3 bandColor = band < 0.5 ? uColorBass : (band < 1.5 ? uColorMid : uColorHigh);
-  vColor = mix(bandColor, uColorBass, aOffset * 0.32);
+  // Hats briefly brighten high-band trails so the glitter reads as trails too.
+  float hatBoost = band > 1.5 ? 1.0 + uHat * 0.85 : 1.0;
+  vColor = mix(bandColor, uColorBass, aOffset * 0.32) * hatBoost;
   vFade = 1.0 - aOffset * 0.42;
 
   // Density culling: kill the whole trail by collapsing it to a point
-  // behind the camera.
-  if (pSeed > uDensity) {
+  // behind the camera. Hats briefly densify high particles (raise the
+  // cull threshold so more high-band seeds survive).
+  float dens = uDensity;
+  if (band > 1.5) dens = min(1.0, dens + uHat * 0.35);
+  if (pSeed > dens) {
     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
     vFade = 0.0;
     return;
@@ -208,6 +246,7 @@ uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
 uniform float uHigh;
+uniform float uHat;
 
 attribute vec2 aUv;
 
@@ -221,11 +260,13 @@ void main() {
   float idx = floor(aUv.x * uTexSize) + floor(aUv.y * uTexSize) * uTexSize;
   float band = mod(idx, 3.0);
   vec3 bandColor = band < 0.5 ? uColorBass : (band < 1.5 ? uColorMid : uColorHigh);
-  // Highs make the high-band heads sparkle hotter.
-  float boost = band > 1.5 ? 1.0 + uHigh * 0.9 : 1.0;
+  // Highs make the high-band heads sparkle hotter; hats tick sharper still.
+  float boost = band > 1.5 ? 1.0 + uHigh * 0.9 + uHat * 1.1 : 1.0;
   vColor = bandColor * boost;
 
-  if (pSeed > uDensity) {
+  float dens = uDensity;
+  if (band > 1.5) dens = min(1.0, dens + uHat * 0.35);
+  if (pSeed > dens) {
     gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
     gl_PointSize = 0.0;
     return;
@@ -233,7 +274,8 @@ void main() {
 
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = uHeadSize * (0.7 + pSeed * 0.6) / max(1.0, -mv.z * 0.25);
+  float hatSize = band > 1.5 ? 1.0 + uHat * 0.9 : 1.0;
+  gl_PointSize = uHeadSize * (0.7 + pSeed * 0.6) * hatSize / max(1.0, -mv.z * 0.25);
 }
 `;
 
@@ -305,6 +347,12 @@ export function FlowFieldScene({
   const seedRef = useRef(0);
   const prevDropRef = useRef(0);
 
+  // Kit current envelopes — asymmetric rise/fall so punches feel fluid.
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+
   // Magnet wells: positions hop on bar boundaries, eased between.
   const wellsRef = useRef({
     a: new THREE.Vector3(1.2, 0.5, 0),
@@ -375,6 +423,9 @@ export function FlowFieldScene({
         uEcho: { value: 0 },
         uRelease: { value: 0 },
         uDrop: { value: 0 },
+        uKick: { value: 0 },
+        uSnare: { value: 0 },
+        uHat: { value: 0 },
         uWellA: { value: new THREE.Vector4(1.2, 0.5, 0, 0) },
         uWellB: { value: new THREE.Vector4(-1.2, -0.5, 0.3, 0) },
         uPointer: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -448,6 +499,7 @@ export function FlowFieldScene({
       uBandSpread: { value: 0.9 },
       uTrailLen: { value: 0.16 },
       uDensity: { value: 1 },
+      uHat: { value: 0 },
       uOpacity: { value: 0.55 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
@@ -479,6 +531,7 @@ export function FlowFieldScene({
       uHeadSize: { value: tier === 'low' ? 9 : 6 },
       uOpacity: { value: 0.85 },
       uHigh: { value: 0 },
+      uHat: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -607,6 +660,29 @@ export function FlowFieldScene({
     const ptrTarget = Math.min(1, ptr.movement) * 0.8 * stirNow;
     ptr.strength += (ptrTarget - ptr.strength) * Math.min(1, dt * 8);
 
+    // Smooth kit envelopes so punches feel fluid, not gated snaps.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.018,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.016,
+      0.11,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.012,
+      0.055,
+    );
+
     // ---- Sim pass (ping-pong) ----
     const su = gpu.simMaterial.uniforms;
     const readTarget = gpu.swapped ? gpu.targetB : gpu.targetA;
@@ -629,6 +705,9 @@ export function FlowFieldScene({
     su.uEcho!.value = m.echo;
     su.uRelease!.value = m.release;
     su.uDrop!.value = m.dropEvent;
+    su.uKick!.value = kickSmooth.current;
+    su.uSnare!.value = snareSmooth.current;
+    su.uHat!.value = hatSmooth.current;
     (su.uWellA!.value as THREE.Vector4).set(wells.a.x, wells.a.y, wells.a.z, wellStrength);
     (su.uWellB!.value as THREE.Vector4).set(wells.b.x, wells.b.y, wells.b.z, wellStrength * 0.8);
     (su.uPointer!.value as THREE.Vector4).set(ptr.world.x, ptr.world.y, ptr.world.z, ptr.strength);
@@ -651,6 +730,7 @@ export function FlowFieldScene({
     ru.uTrailLen.value =
       0.04 + trailNow * 0.07 * (1 + m.swell * 0.55 + m.impact * 0.2 + m.afterglow * 0.15);
     ru.uDensity.value = Math.max(0.02, Math.min(1, densityNow));
+    ru.uHat.value = hatSmooth.current;
     // Additive overdraw normalization: a quarter-million translucent lines
     // saturate to white unless per-line alpha shrinks with the swarm size.
     // Brightness breathes with the swell and lands with impacts.
@@ -666,8 +746,9 @@ export function FlowFieldScene({
     const hu = headUniforms;
     hu.uPositions.value = writeTarget.texture;
     hu.uDensity.value = Math.max(0.02, Math.min(1, densityNow));
+    hu.uHat.value = hatSmooth.current;
     hu.uOpacity.value =
-      (0.52 + m.swell * 0.32 + m.impact * 0.12) *
+      (0.52 + m.swell * 0.32 + m.impact * 0.12 + hatSmooth.current * 0.1) *
       (1 - m.silence * 0.45) *
       Math.min(1, Math.max(0.15, 60000 / count));
     // Sparkle rides the shimmer envelope so hats leave glinting trails.

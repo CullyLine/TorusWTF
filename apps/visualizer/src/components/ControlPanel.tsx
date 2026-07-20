@@ -62,6 +62,9 @@ const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
 // composites additively instead of replacing the scene.
 const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'liquid_blob',
+  'silk_wake',
+  'tide_veil',
+  'halo_rain',
   'anima',
 ]);
 
