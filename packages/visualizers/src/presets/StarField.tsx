@@ -45,6 +45,8 @@ uniform float uFlowAmt;
 uniform float uBandSpread;
 uniform float uHat;
 uniform float uKick;
+uniform float uGather;
+uniform float uSnare;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -60,6 +62,27 @@ void main() {
   // they ride separate currents until the music converges.
   vec3 fv = ffFlow(pos, aArm, uFlowTime, 0.6, 0.5, 1.0, uBandSpread, 0.0);
   pos += fv * uFlowAmt * (0.4 + aPhase * 0.6);
+
+  // Gather inhale: spiral arms contract toward the nucleus — outer arms
+  // pull harder so the pre-beat breath reads as depth, not a flat scale.
+  float armWeight = smoothstep(0.35, 2.6, aRadius);
+  float gatherPull = 1.0 - uGather * armWeight * 0.18;
+  pos.x *= gatherPull;
+  pos.z *= gatherPull;
+  pos.y *= 1.0 - uGather * 0.1;
+
+  // Snare lateral streak: tangential whip on mid-arm stars (not the core,
+  // not a sparse hat glitter). Distinct axes from kick-core / hat-tick work.
+  float armBand =
+    smoothstep(0.7, 1.9, aRadius) * (1.0 - smoothstep(3.4, 5.1, aRadius));
+  float snareSelect = step(0.38, fract(aPhase * 31.7 + aArm * 0.29));
+  float snareAmt = snareSelect * armBand * uSnare;
+  vec2 tangential = normalize(vec2(-pos.z, pos.x) + 1e-5);
+  pos.x += tangential.x * snareAmt * 0.58;
+  pos.z += tangential.y * snareAmt * 0.58;
+  // Tiny radial flare so the streak reads as a flash, not pure rotation.
+  pos.x += pos.x * snareAmt * 0.045;
+  pos.z += pos.z * snareAmt * 0.045;
 
   // Soft high-band twinkle (sustained shimmer) — slow sine wash.
   float twinkle = sin(uTime * (3.0 + aPhase * 5.0) + aPhase * 40.0) * 0.5 + 0.5;
@@ -81,7 +104,8 @@ void main() {
     uBeat * 0.35 +
     burst * uMid * 1.8 +
     kickCore * 1.15 +
-    hatTick * 0.55;
+    hatTick * 0.55 +
+    snareAmt * 0.75;
 
   float rim = smoothstep(1.5, 5.0, aRadius);
   // Galaxy body follows the user's palette: hot bright core (high color),
@@ -94,10 +118,12 @@ void main() {
   // Per-star brightness also falls toward the packed center — the summed
   // additive light keeps the core glowing without clipping to white.
   float lumDamp = mix(0.62, 1.0, smoothstep(0.2, 2.6, aRadius));
-  // Kick: core blooms warm; hat: selected stars flash toward high color.
+  // Kick: core blooms warm; hat: selected stars flash toward high color;
+  // snare: mid-arm streak flash; gather: soft arm inhale lift.
   vec3 lit =
-    body * (1.0 + twinkle * 0.35 + core * uBass * 0.2 + kickCore * 0.55) +
-    mix(body, uColorHigh, 0.65) * hatTick * 0.85;
+    body * (1.0 + twinkle * 0.35 + core * uBass * 0.2 + kickCore * 0.55 + uGather * armWeight * 0.08) +
+    mix(body, uColorHigh, 0.65) * hatTick * 0.85 +
+    mix(uColorMid, uColorHigh, 0.45) * snareAmt * 0.95;
   vColor = lit * lumDamp;
   // Alpha eases DOWN toward the dense center — tens of thousands of additive
   // sprites overlap there, so per-star opacity must shrink or it whites out.
@@ -106,7 +132,7 @@ void main() {
   float dense = 1.0 - smoothstep(0.0, 3.2, aRadius);
   float coreDamp = 1.0 - dense * 0.6;
   vAlpha =
-    (0.34 + twinkle * 0.3 + uEnergy * 0.08 + hatTick * 0.4 + kickCore * 0.12) *
+    (0.34 + twinkle * 0.3 + uEnergy * 0.08 + hatTick * 0.4 + kickCore * 0.12 + snareAmt * 0.38) *
       coreDamp +
     core * 0.04;
 
@@ -151,6 +177,8 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
   // Kit envelopes (smoothed) + continuous spin accumulator for bar-lock.
   const hatSmooth = useRef(0);
   const kickSmooth = useRef(0);
+  const gatherSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   // Seed with the JSX Y twist so absolute assignment doesn't flatten the disc.
   const spinAccum = useRef(Math.PI / 10);
 
@@ -195,6 +223,8 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
       uBandSpread: { value: 0.9 },
       uHat: { value: 0 },
       uKick: { value: 0 },
+      uGather: { value: 0 },
+      uSnare: { value: 0 },
       uColorBass: { value: new THREE.Color('#FF2E93') },
       uColorMid: { value: new THREE.Color('#8A5CFF') },
       uColorHigh: { value: new THREE.Color('#33E5FF') },
@@ -241,14 +271,34 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
       0.035,
       0.14,
     );
+    // Gather rises with the pre-beat breath; snare cracks fast and clears.
+    gatherSmooth.current = smoothToward(
+      gatherSmooth.current,
+      Math.min(1, m.gather) * kitAmp,
+      dt,
+      0.05,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.025,
+      0.1,
+    );
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uGather!.value = gatherSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
 
     flowTimeRef.current += dt * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4);
     mat.uniforms.uFlowTime!.value = flowTimeRef.current;
     // Calm at rest, swirling on energy, surging on drops — and still
-    // stirring for a while after a peak (afterglow).
-    mat.uniforms.uFlowAmt!.value = 0.04 + m.swell * 0.18 + m.dropEvent * 0.4 + m.afterglow * 0.1;
+    // stirring for a while after a peak (afterglow). Gather softens the
+    // swirl so the inhale reads as a held breath.
+    mat.uniforms.uFlowAmt!.value =
+      (0.04 + m.swell * 0.18 + m.dropEvent * 0.4 + m.afterglow * 0.1) *
+      (1 - gatherSmooth.current * 0.35);
     mat.uniforms.uBandSpread!.value = (1 - m.convergence) * 0.9;
 
     beatZoomRef.current = Math.max(0, beatZoomRef.current - delta * 3.5);
