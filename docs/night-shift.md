@@ -91,7 +91,7 @@ Runs several times a day. Ships exactly one item per run.
 - [x] NS-20260720-07 (S) **Torus Field afterglow tube warmth** — After peaks, bias tube emissive toward a warmer palette mix while `afterglow` decays (intensity afterglow already exists; this adds residual color temperature on the brand torus). Beautiful. Area: `presets/TorusField.tsx`. Accept: after a drop the tubes stay warmer for a few seconds then cool; quiet verses do not warm-tint; kit/echo from #29 still work. — PR #58
 - [x] NS-20260720-08 (S) **Outrun Grid phrase-echo ghost road** — On `echo`, fire a one-shot ghost dash/lane shimmer that briefly reverses or after-images the road in phrase gaps (build/drop + kit already shipped). Alive synthwave call-response. Area: `presets/OutrunGrid.tsx`. Accept: gap after a phrase shows one ghost-road reply; while drums speak, no echo ghost; hat/kick/snare ticks from #41 stay distinct. — PR #59
 - [x] NS-20260720-09 (S) **Infinite Tunnel holdBreath stillness** — During `holdBreath` / deep `silence`, slow rush speed and ease wall punch so the tunnel listens instead of keep hurtling. Alive. Area: `presets/InfiniteTunnel.tsx`. Accept: quiet bar nearly freezes forward rush then resumes; kit accents + echo rings from #34 still fire when music returns. — PR #60
-- [~] building 2026-07-20T22:03:00Z NS-20260720-10 (S) **Aura leanIn approach** — On `leanIn`, wisps drift slightly toward the camera/center (anticipation flock) without overriding gather inhale or holdBreath huddle. Alive presence. Area: `AuraLayer.tsx`. Accept: pre-drop leanIn pulls wisps closer; gather flock (#32) and holdBreath stillness (#48) still read as different behaviors.
+- [x] NS-20260720-10 (S) **Aura leanIn approach** — On `leanIn`, wisps drift slightly toward the camera/center (anticipation flock) without overriding gather inhale or holdBreath huddle. Alive presence. Area: `AuraLayer.tsx`. Accept: pre-drop leanIn pulls wisps closer; gather flock (#32) and holdBreath stillness (#48) still read as different behaviors. — PR #61
 
 ## Built log
 
@@ -142,3 +142,4 @@ Runs several times a day. Ships exactly one item per run.
 - 2026-07-20 — NS-20260720-07 — PR #58 — Torus Field afterglow amber tube warmth linger.
 - 2026-07-20 — NS-20260720-08 — PR #59 — Outrun Grid phrase-echo: one-shot ghost dash/lane shimmer + brief road reverse.
 - 2026-07-20 — NS-20260720-09 — PR #60 — Infinite Tunnel holdBreath: nearly freeze rush + ease wall punch; thaw for kit/echo.
+- 2026-07-20 — NS-20260720-10 — PR #61 — Aura leanIn: mild camera/center approach; gather inhale + holdBreath huddle stay distinct.
