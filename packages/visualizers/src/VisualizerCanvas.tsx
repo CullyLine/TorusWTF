@@ -26,6 +26,10 @@ import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 import type { AnalyserHandle } from './audio';
 import type { CreaturePersonality } from './dsp/creature';
+import type { ScreenEffectId } from './effects/screenEffects';
+import { EmitterLayer } from './emitters/registry';
+import { DEFAULT_EMITTER_SETTINGS } from './emitters/settings';
+import type { EmitterSettings } from './emitters/types';
 
 /** Soft dissolve when switching presets — long enough to read, short enough to stay snappy. */
 const PRESET_CROSSFADE_MS = 350;
@@ -63,7 +67,7 @@ function CrossfadeCapture({
   return null;
 }
 
-interface VisualizerCanvasProps {
+export interface VisualizerCanvasProps {
   audioRef?: RefObject<HTMLAudioElement | null>;
   /** When set, overrides the analyser from audioRef (mic/tab sources). */
   analyserOverride?: AnalyserHandle | null;
@@ -125,6 +129,14 @@ interface VisualizerCanvasProps {
   cameraDistance?: number;
   /** Global light level. 1 = default; <1 dims the frame, >1 brightens. */
   lightLevel?: number;
+  /** Final hue-preserving highlight compression. Default on. */
+  highlightProtection?: boolean;
+  /** Whole-frame post-processing style. Default none. */
+  screenEffect?: ScreenEffectId;
+  /** Selected screen style wet/dry amount. 0 = original frame, 1 = full style. */
+  shaderMix?: number;
+  /** One global emitter layer, disabled by the factory `none` setting. */
+  emitterSettings?: EmitterSettings;
   /** Dynamic-range expansion. 0 = unchanged, 1 = peaks 3x their deviation. */
   energy?: number;
   /** Auto-gain (AGC). Default on; normalizes loudness so any song reacts well. */
@@ -216,6 +228,10 @@ export function VisualizerCanvas({
   cinematicSpeed = 1,
   cameraDistance = 1,
   lightLevel = 1,
+  highlightProtection = true,
+  screenEffect = 'none',
+  shaderMix = 1,
+  emitterSettings = DEFAULT_EMITTER_SETTINGS,
   energy,
   autoGain,
   inflate,
@@ -365,9 +381,18 @@ export function VisualizerCanvas({
     scale,
     bloomIntensity,
     lightLevel,
+    shaderMix,
     colorLife,
     cameraDistance,
     bassShake,
+    cinematicSpeed,
+    emitterRate: emitterSettings.rate,
+    emitterSize: emitterSettings.size,
+    emitterLifetime: emitterSettings.lifetime,
+    emitterLift: emitterSettings.lift,
+    emitterSpread: emitterSettings.spread,
+    emitterTurbulence: emitterSettings.turbulence,
+    emitterOpacity: emitterSettings.opacity,
     inflate,
     turbulence,
     trailLength,
@@ -416,6 +441,12 @@ export function VisualizerCanvas({
                   amount={colorLife}
                   impulses={impulses}
                 />
+                <EmitterLayer
+                  settings={emitterSettings}
+                  palette={livingPalette}
+                  tier={tier}
+                  impulses={impulses}
+                />
                 <SceneRig
                   palette={livingPalette}
                   tier={tier}
@@ -429,6 +460,9 @@ export function VisualizerCanvas({
                   cinematicSpeed={cinematicSpeed}
                   cameraDistance={cameraDistance}
                   lightLevel={lightLevel}
+                  highlightProtection={highlightProtection}
+                  screenEffect={screenEffect}
+                  shaderMix={shaderMix}
                   impulses={impulses}
                 />
                 {background !== 'none' ? (

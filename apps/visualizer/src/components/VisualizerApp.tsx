@@ -5,12 +5,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Logo } from '@torus/ui';
 import {
+  DEFAULT_EMITTER_SETTINGS,
+  DEFAULT_SCREEN_EFFECT_SETTINGS,
   createImpulses,
+  pickRandomScreenEffect,
   pickRandomVisualizerPreset,
+  sanitizeEmitterSettings,
+  sanitizeScreenEffectSettings,
   VISUALIZERS,
   type AudioMetrics,
   type Creature,
+  type EmitterSettings,
   type ModRouting,
+  type ScreenEffectSettings,
   type VisualizerId,
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
@@ -34,6 +41,7 @@ import { YouTubePanel } from '@/components/YouTubePanel';
 import { ShowFileControls } from '@/components/ShowFileControls';
 import { TriggerPanel } from '@/components/TriggerPanel';
 import { ModulationPanel } from '@/components/ModulationPanel';
+import { EffectsPanel } from '@/components/EffectsPanel';
 import { useAudioSource, type SourceKind } from '@/hooks/useAudioSource';
 import type { DesktopCaptureMode } from '@/hooks/useTabCapture';
 import { useExport } from '@/hooks/useExport';
@@ -58,6 +66,7 @@ import {
 import { loadModMatrix, persistModMatrix } from '@/lib/modMatrix';
 import { readAudioTags } from '@/lib/audioMetadata';
 import { extractPaletteFromBlob } from '@/lib/extractPalette';
+import { createFactoryLookState } from '@/lib/factoryReset';
 import { captureThumbnailDataUrl, downloadSnapshot, takeSnapshot } from '@/lib/snapshot';
 import {
   FREE_MAX_FPS,
@@ -85,6 +94,8 @@ import {
   DEFAULT_TITLE_OVERLAY,
   BACKGROUND_KEY,
   DEFAULT_BACKGROUND,
+  SCREEN_EFFECT_KEY,
+  EMITTER_KEY,
   WATERMARK_KEY,
   DEFAULT_WATERMARK_SETTINGS,
   THUMBNAIL_STORAGE_BUDGET_BYTES,
@@ -170,6 +181,20 @@ export function VisualizerApp() {
   const [background, setBackground] = usePersistedState<BackgroundSettings>(
     BACKGROUND_KEY,
     DEFAULT_BACKGROUND,
+  );
+  const [screenEffect, setScreenEffect] = usePersistedState<ScreenEffectSettings>(
+    SCREEN_EFFECT_KEY,
+    { ...DEFAULT_SCREEN_EFFECT_SETTINGS },
+    (value) =>
+      typeof value === 'object' && value !== null
+        ? sanitizeScreenEffectSettings(value)
+        : undefined,
+  );
+  const [emitter, setEmitter] = usePersistedState<EmitterSettings>(
+    EMITTER_KEY,
+    { ...DEFAULT_EMITTER_SETTINGS },
+    (value) =>
+      typeof value === 'object' && value !== null ? sanitizeEmitterSettings(value) : undefined,
   );
   const [watermark, setWatermark] = usePersistedState<WatermarkSettings>(
     WATERMARK_KEY,
@@ -414,6 +439,13 @@ export function VisualizerApp() {
     setPalette(pick.palette);
   }, [palette, setPalette]);
 
+  const handleRandomShader = useCallback(() => {
+    setScreenEffect((current) => ({
+      ...current,
+      id: pickRandomScreenEffect(current.id),
+    }));
+  }, [setScreenEffect]);
+
   // --- Triggers, MIDI, and the projector link ---
   // The canvas mirrors its freshest metrics into this ref every frame; the
   // trigger engine and projector bridge read it from outside the canvas.
@@ -442,9 +474,39 @@ export function VisualizerApp() {
     persistModMatrix(next);
   }, []);
 
+  const handleDefault = useCallback(() => {
+    const confirmed = window.confirm(
+      'Restore the factory visual look and clear all trigger and modulation rows? Saved presets and export settings will be kept.',
+    );
+    if (!confirmed) return;
+
+    const factory = createFactoryLookState();
+    setPreset(factory.preset);
+    setPalette(factory.palette);
+    setControls(factory.controls);
+    setBackground(factory.background);
+    setTitleOverlay(factory.titleOverlay);
+    setScreenEffect(factory.screenEffect);
+    setEmitter(factory.emitter);
+    setTriggerMappings(factory.triggerMappings);
+    setModMatrix(factory.modMatrix);
+    toast({ message: 'Factory visual look restored', variant: 'success' });
+  }, [
+    setPreset,
+    setPalette,
+    setControls,
+    setBackground,
+    setTitleOverlay,
+    setScreenEffect,
+    setEmitter,
+    setTriggerMappings,
+    setModMatrix,
+    toast,
+  ]);
+
   const projectorState = useMemo<ProjectorStatePayload>(
-    () => ({ preset, palette, controls, background, modMatrix }),
-    [preset, palette, controls, background, modMatrix],
+    () => ({ preset, palette, controls, background, screenEffect, emitter, modMatrix }),
+    [preset, palette, controls, background, screenEffect, emitter, modMatrix],
   );
   const projector = useProjectorBridge({ state: projectorState, metricsRef: metricsOutRef });
 
@@ -458,6 +520,7 @@ export function VisualizerApp() {
       prevPreset: () => stepPreset(-1),
       randomPreset: handleRandomPreset,
       randomPalette: handleRandomPalette,
+      randomShader: handleRandomShader,
     },
     onImpulse: projector.postImpulse,
   });
@@ -469,12 +532,24 @@ export function VisualizerApp() {
       palette,
       controls,
       background,
+      screenEffect,
+      emitter,
       titleOverlay,
       triggerMappings,
       modMatrix,
       savedPresets: loadSavedPresets(),
     }),
-    [preset, palette, controls, background, titleOverlay, triggerMappings, modMatrix],
+    [
+      preset,
+      palette,
+      controls,
+      background,
+      screenEffect,
+      emitter,
+      titleOverlay,
+      triggerMappings,
+      modMatrix,
+    ],
   );
 
   const handleImportShow = useCallback(
@@ -483,6 +558,8 @@ export function VisualizerApp() {
       setPalette(show.palette);
       setControls(show.controls);
       setBackground(show.background);
+      setScreenEffect(show.screenEffect);
+      setEmitter(show.emitter);
       setTitleOverlay(show.titleOverlay);
       setTriggerMappings(show.triggerMappings);
       setModMatrix(show.modMatrix);
@@ -504,6 +581,8 @@ export function VisualizerApp() {
       setPalette,
       setControls,
       setBackground,
+      setScreenEffect,
+      setEmitter,
       setTitleOverlay,
       setTriggerMappings,
       setModMatrix,
@@ -542,12 +621,16 @@ export function VisualizerApp() {
       interactStrength: saved.interactStrength ?? 1,
       cameraDistance: saved.cameraDistance ?? 1,
       lightLevel: saved.lightLevel ?? 1,
+      highlightProtection: saved.highlightProtection ?? true,
       autoGain: saved.autoGain ?? true,
       colorLife: saved.colorLife ?? 0.6,
+      linger: saved.linger ?? 0.3,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
     });
-  }, []);
+    setScreenEffect(sanitizeScreenEffectSettings(saved.screenEffect));
+    setEmitter(sanitizeEmitterSettings(saved.emitter));
+  }, [setEmitter, setScreenEffect]);
 
   const handleSavePreset = useCallback(async () => {
     if (!unlock.unlocked) return;
@@ -578,6 +661,8 @@ export function VisualizerApp() {
       presetId: preset,
       palette,
       ...controls,
+      screenEffect: { ...screenEffect },
+      emitter: { ...emitter },
     };
     try {
       persistSavedPresets([entry, ...saved]);
@@ -598,7 +683,7 @@ export function VisualizerApp() {
         toast({ message: 'Could not save preset', variant: 'error' });
       }
     }
-  }, [unlock.unlocked, preset, palette, controls, prompt, toast]);
+  }, [unlock.unlocked, preset, palette, controls, screenEffect, emitter, prompt, toast]);
 
   const startExport = useCallback(async () => {
     const canvas = glCanvasRef.current;
@@ -690,6 +775,9 @@ export function VisualizerApp() {
         preset,
         palette,
         controls,
+        screenEffect,
+        emitter,
+        modMatrix,
         creature: creature?.personality,
         width: dims.width,
         height: dims.height,
@@ -714,6 +802,9 @@ export function VisualizerApp() {
     audio,
     aspect,
     controls,
+    screenEffect,
+    emitter,
+    modMatrix,
     creature,
     fps,
     palette,
@@ -874,6 +965,16 @@ export function VisualizerApp() {
         background={background}
         onBackgroundChange={(patch) => setBackground((b) => ({ ...b, ...patch }))}
       />
+      <EffectsPanel
+        screenEffect={screenEffect}
+        onScreenEffectChange={setScreenEffect}
+        emitter={emitter}
+        onEmitterChange={setEmitter}
+        highlightProtection={controls.highlightProtection ?? true}
+        onHighlightProtectionChange={(highlightProtection) =>
+          setControls((current) => ({ ...current, highlightProtection }))
+        }
+      />
       <TriggerPanel mappings={triggerMappings} onChange={setTriggerMappings} midi={midi} />
       <ModulationPanel
         routings={modMatrix}
@@ -884,11 +985,20 @@ export function VisualizerApp() {
       <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-torus-fg-dim">Show</h2>
-          <ShowFileControls
-            buildState={buildShowState}
-            onImport={handleImportShow}
-            onError={(message) => toast({ message, variant: 'error' })}
-          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDefault}
+              className="text-[10px] text-torus-fg-dim hover:text-torus-mid hover:underline"
+            >
+              Default
+            </button>
+            <ShowFileControls
+              buildState={buildShowState}
+              onImport={handleImportShow}
+              onError={(message) => toast({ message, variant: 'error' })}
+            />
+          </div>
         </div>
         <button
           type="button"
@@ -985,6 +1095,10 @@ export function VisualizerApp() {
                 cinematicSpeed={controls.cinematicSpeed ?? 1}
                 cameraDistance={controls.cameraDistance ?? 1}
                 lightLevel={controls.lightLevel ?? 1}
+                highlightProtection={controls.highlightProtection ?? true}
+                screenEffect={screenEffect.id}
+                shaderMix={screenEffect.mix}
+                emitterSettings={emitter}
                 energy={controls.energy ?? 0}
                 autoGain={controls.autoGain ?? true}
                 colorLife={controls.colorLife ?? 0.6}

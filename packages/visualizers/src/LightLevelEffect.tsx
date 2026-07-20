@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useMemo } from 'react';
+import { forwardRef, useEffect, useMemo } from 'react';
 import { Effect } from 'postprocessing';
 import { Uniform } from 'three';
 
@@ -36,6 +36,7 @@ export const LightLevel = forwardRef<LightLevelEffectImpl, { level?: number }>(
   function LightLevel({ level = 1 }, ref) {
     const effect = useMemo(() => new LightLevelEffectImpl(level), []);
     effect.level = level;
+    useEffect(() => () => effect.dispose(), [effect]);
     return <primitive ref={ref} object={effect} dispose={null} />;
   },
 );

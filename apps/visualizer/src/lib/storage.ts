@@ -1,4 +1,10 @@
-import type { BackgroundMode, CameraMode, VisualizerId } from '@torus/visualizers';
+import type {
+  BackgroundMode,
+  CameraMode,
+  EmitterSettings,
+  ScreenEffectSettings,
+  VisualizerId,
+} from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 
 export const LICENSE_STORAGE_KEY = 'torus-visualizer-license';
@@ -20,6 +26,8 @@ export const VOLUME_KEY = 'torus-visualizer-volume';
 export const TITLE_OVERLAY_KEY = 'torus-visualizer-title-overlay';
 export const WATERMARK_KEY = 'torus-visualizer-watermark';
 export const BACKGROUND_KEY = 'torus-visualizer-background';
+export const SCREEN_EFFECT_KEY = 'torus-visualizer-screen-effect';
+export const EMITTER_KEY = 'torus-visualizer-emitter';
 export const HERO_SEEN_KEY = 'torus-visualizer-hero-seen';
 
 /** Reactive backdrop behind the preset. `none` = current behavior. */
@@ -114,12 +122,17 @@ export interface SavedPreset {
   interactStrength?: number;
   cameraDistance?: number;
   lightLevel?: number;
+  highlightProtection?: boolean;
   /** Auto-gain on/off. Absent for legacy presets → treated as on. */
   autoGain?: boolean;
   /** Living-color amount. Absent for legacy presets → default life. */
   colorLife?: number;
   /** Linger amount. Absent for legacy presets → default echo. */
   linger?: number;
+  /** Whole-frame style. Absent for legacy presets → no style. */
+  screenEffect?: ScreenEffectSettings;
+  /** Global emitter layer. Absent for legacy presets → disabled. */
+  emitter?: EmitterSettings;
 }
 
 export interface VisualizerControls {
@@ -184,6 +197,8 @@ export interface VisualizerControls {
    * brightens. Useful for presets that stay too bright even at 0 bloom.
    */
   lightLevel?: number;
+  /** Hue-preserving final-frame highlight compression. */
+  highlightProtection?: boolean;
   /**
    * Auto-gain (AGC). When on (default), loudness is normalized automatically
    * so any song reacts well without cranking Gain; Gain then trims on top.
@@ -241,6 +256,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   interactStrength: 1,
   cameraDistance: 1,
   lightLevel: 1,
+  highlightProtection: true,
   autoGain: true,
   colorLife: 0.6,
   linger: 0.3,
