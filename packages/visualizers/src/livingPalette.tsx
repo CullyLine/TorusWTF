@@ -23,6 +23,9 @@ import type { VisualImpulses } from './impulse';
  *    saturation/light down a notch — color inhales before the hit
  *  - hit warm bloom: `impact`/`kick` push amber + sat/light up so the
  *    downbeat answers the gather cool (on top of mood warmth, not instead)
+ *  - holdBreath hush: during a held quiet bar, cool mood warmth toward cyan
+ *    and nearly freeze the hue crawl (beyond silence desat) so the shared
+ *    palette listens with the creature; thaw restores warmth crawl promptly
  *  - saturation and brightness swell with loudness and land with beat
  *    impacts — choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
@@ -64,6 +67,19 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+/** Asymmetric EMA — rise/fall taus so hush freezes attentively and thaws promptly. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  const k = 1 - Math.exp(-dt / Math.max(tau, 1e-4));
+  return current + (target - current) * k;
+}
+
 export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: LivingPaletteDriverProps) {
   const metricsRef = useMetricsRef();
   const mods = useModulation();
@@ -77,6 +93,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
   const gatherCoolRef = useRef(0);
   /** Smoothed impact+kick warmth — amber bloom that answers the gather. */
   const hitWarmRef = useRef(0);
+  /** Smoothed holdBreath hush — cools warmth + slows hue crawl while listening. */
+  const hushSmooth = useRef(0);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
@@ -95,6 +113,7 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       moodWarmthRef.current *= Math.exp(-dt / 0.6);
       gatherCoolRef.current *= Math.exp(-dt / 0.18);
       hitWarmRef.current *= Math.exp(-dt / 0.22);
+      hushSmooth.current *= Math.exp(-dt / 0.2);
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
       if (out.high !== base.high) out.high = base.high;
@@ -103,13 +122,25 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
 
     const m = metricsRef.current;
 
+    // Hold-breath hush: rise a touch slower than fall so the cool/crawl-freeze
+    // feels attentive, not gated; thaw resumes promptly when music returns.
+    const hushTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.88) + Math.min(m.holdBreath, m.silence) * 0.12,
+    );
+    hushSmooth.current = smoothToward(hushSmooth.current, hushTarget, dt, 0.14, 0.08);
+    const hush = hushSmooth.current;
+
     // Hue orbit advances with the music's presence — faster in loud
     // passages, near-still in silence. One full lap takes minutes.
     // Section level gates the pace so color moods linger through valleys
-    // and evolve during peaks.
+    // and evolve during peaks. Hush nearly freezes the crawl so the palette
+    // listens with the creature (a whisper remains — never frozen-dead).
     const sectionPace = 0.6 + m.sectionLevel * 0.55;
+    const crawlMul = 1 - hush * 0.9;
     huePhaseRef.current = wrap01(
-      huePhaseRef.current + dt * (0.006 + m.swell * 0.016 + m.impact * 0.004) * sectionPace,
+      huePhaseRef.current +
+        dt * (0.006 + m.swell * 0.016 + m.impact * 0.004) * sectionPace * crawlMul,
     );
 
     // Drop → kick the wheel, alternating direction so back-to-back drops
@@ -124,13 +155,16 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     // Mood warmth: long-EMA valence (confidence-gated) + tenderness, with a
     // gentle vocal lift so ballads amber-drift while cold techno cyan-drifts.
     // ~1.1s time constant keeps the cast continuous — never a hue pop.
+    // Hush biases the target cool so a held quiet bar cools toward cyan
+    // beyond silence desat alone; gather/hit phrase accents stay independent.
     const confidence = clamp(m.moodConfidence, 0, 1);
     const moodTarget = clamp(
       m.moodValence * (0.45 + 0.4 * confidence) +
         m.tenderness * 0.55 +
         m.vocalActivity * m.tenderness * 0.25 -
         // Cool instrumental valleys: low vocals + low tenderness + cool valence
-        (1 - m.vocalActivity) * (1 - m.tenderness) * Math.max(0, -m.moodValence) * 0.2,
+        (1 - m.vocalActivity) * (1 - m.tenderness) * Math.max(0, -m.moodValence) * 0.2 -
+        hush * 0.55,
       -1,
       1,
     );
@@ -156,9 +190,11 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
 
     // Signed hue cast: + → amber (~+14°), − → cyan (~−14°). Independent of
     // the slow orbit and additive with drop kicks so drops still punch.
-    const moodHue = life * warmth * 0.038;
+    // Extra hush cyan lean (~−8°) so quiet bars cool even when mood was warm.
+    const moodHue = life * (warmth * 0.038 - hush * 0.022);
     // Warm passages bloom saturation; cool valleys lean a touch leaner.
-    const moodSat = life * (warmth * 0.14 + m.tenderness * 0.06);
+    // Hush softens tenderness sat so the hush reads as cooler, not just dimmer.
+    const moodSat = life * (warmth * 0.14 + m.tenderness * 0.06 * (1 - hush * 0.7));
 
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
     const hueShift = life * drift + hueKickRef.current + moodHue + phraseHue;
