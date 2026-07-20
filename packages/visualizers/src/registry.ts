@@ -16,6 +16,7 @@ import { SilkWakeScene } from './presets/SilkWake';
 import { TideVeilScene } from './presets/TideVeil';
 import { AnimaScene } from './presets/Anima';
 import { FlowFieldScene } from './presets/FlowField';
+import { HaloRainScene } from './presets/HaloRain';
 
 export type VisualizerId =
   | 'anima'
@@ -31,6 +32,7 @@ export type VisualizerId =
   | 'liquid_blob'
   | 'silk_wake'
   | 'tide_veil'
+  | 'halo_rain'
   | 'mandelbrot_zoom';
 
 /**
@@ -408,6 +410,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       aura: 0.25,
       cameraMode: 'still',
       bloomIntensity: 0.75,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  halo_rain: {
+    id: 'halo_rain',
+    label: 'Halo Rain',
+    hint: 'Concentric luminous rings drifting like celestial rain — inhale before the beat, flare on impact, tick on hats.',
+    Scene: HaloRainScene,
+    // Fullscreen sheet owns the frame via clip-space quad; still camera
+    // keeps the rain stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.3,
+      cameraMode: 'still',
+      bloomIntensity: 0.8,
       cameraDistance: 1,
       lightLevel: 1.05,
     },

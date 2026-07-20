@@ -26,7 +26,9 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `star_field` | Star Field | Face-on spiral galaxy with twinkles and beat-driven camera punches |
 | `outrun_grid` | Outrun Grid | Real 3D wireframe terrain receding to a banded synthwave sun |
 | `liquid_chrome` | Liquid Chrome | GPU-shader chrome blob with fresnel + procedural env reflection |
+| `silk_wake` | Silk Wake | Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow |
 | `tide_veil` | Tide Veil | Soft caustic light-sheet — rolls with swell, folds before the beat, warm afterglow |
+| `halo_rain` | Halo Rain | Concentric luminous rings drifting like celestial rain — gather inhale, impact flare, hat ticks |
 | `mandelbrot_zoom` | Mandelbrot Zoom | Smooth looped fractal zoom, palette-locked colors, audio-reactive speed |
 
 ### UI features
@@ -46,7 +48,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 | Feature | Free | Full ($10 one-time) |
 | --- | --- | --- |
-| All 11 presets + live preview | Yes | Yes |
+| All 12 presets + live preview | Yes | Yes |
 | Export length | Unlimited | Unlimited |
 | Export resolution | 720p | Up to 4K |
 | Export FPS | 30 | Up to 240 |
