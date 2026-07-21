@@ -7,6 +7,8 @@
  *  - gather → UV folds inward (pre-beat crease) before the hit
  *  - impact → caustic ridges flash bright
  *  - afterglow → warm residual light holds after peaks
+ *  - holdBreath / deep silence → nearly still the caustic roll + ease ridge contrast
+ *  - tenderness → soften caustic sharpness so gentle vocals read as a softer sheet
  */
 
 import { useMemo, useRef } from 'react';
@@ -37,6 +39,8 @@ uniform float uShimmer;
 uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
+uniform float uStillness;
+uniform float uTenderness;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -71,10 +75,14 @@ float fbm(vec2 p) {
 }
 
 // Classic water-caustic interference: bright ridges where wave phases align.
-float causticField(vec2 uv, float t) {
+// soft (0-1 from tenderness) widens ridge falloff so gentle vocals hush the bite.
+float causticField(vec2 uv, float t, float soft) {
   float c = 0.0;
   float amp = 1.0;
   float freq = 1.0;
+  // Sharper pow = harder caustic focus; tender passages ease toward a softer sheet.
+  float ridgePow = mix(2.4, 1.35, soft);
+  float ridgeWidth = mix(1.35, 1.75, soft);
   for (int i = 0; i < CAUSTIC_OCTAVES; i++) {
     vec2 q = uv * (2.4 + float(i) * 0.85) * freq;
     // Domain warp so the veil feels liquid, not grid-locked.
@@ -86,7 +94,7 @@ float causticField(vec2 uv, float t) {
     float b = sin(q.x * 1.4 - q.y + t * 0.4) + cos(q.y * 1.1 + t * 0.62);
     float cell = abs(a * b);
     // Ridges = light focus; soft falloff keeps mid/low tiers from strobing.
-    c += amp * pow(1.0 - smoothstep(0.0, 1.35, cell), 2.4);
+    c += amp * pow(1.0 - smoothstep(0.0, ridgeWidth, cell), ridgePow);
     amp *= 0.62;
     freq *= 1.35;
   }
@@ -118,6 +126,7 @@ void main() {
   uv = vec2(cos(ang), sin(ang)) * rr;
 
   // Swell rolls the veil: scroll + wave amplitude.
+  // holdBreath gates uTime advance in JS so the roll nearly freezes while listening.
   float roll = 0.35 + uSwell * 1.15 + uBass * 0.35;
   float t = uTime * (0.22 + uSwell * 0.35 + uEnergy * 0.12);
   vec2 flow = uv * (1.15 + uSwell * 0.35);
@@ -125,10 +134,12 @@ void main() {
   flow.y += sin(uv.x * 2.4 + t * 0.7) * (0.08 + uSwell * 0.14);
   flow += (fbm(flow * 1.6 + t * 0.15) - 0.5) * (0.22 + uSwell * 0.28);
 
-  float caust = causticField(flow, t);
+  float caust = causticField(flow, t, uTenderness);
   // Impact flashes the ridges; shimmer adds fine glitter on hats.
   float flash = uImpact * 1.15 + uShimmer * 0.35;
   caust *= 0.55 + uSwell * 0.55 + flash * 0.85 + uMid * 0.25;
+  // Quiet hush eases ridge contrast without killing gather fold / impact flash paths.
+  caust *= mix(1.0, 0.58, uStillness);
 
   // Soft body veil under the caustics.
   vec3 body = veilBackground(uv);
@@ -196,6 +207,8 @@ export function TideVeilScene({
   const swellSmooth = useRef(0.15);
   const impactSmooth = useRef(0);
   const afterglowSmooth = useRef(0);
+  const stillnessSmooth = useRef(0);
+  const tenderSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -222,6 +235,8 @@ export function TideVeilScene({
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
+      uStillness: { value: 0 },
+      uTenderness: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -239,9 +254,39 @@ export function TideVeilScene({
     const calm = reducedMotion ? 0.35 : 1;
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
 
-    timeRef.current +=
-      dt * pace * sectionPace * calm * (0.55 + m.swell * 0.7 + m.impact * 0.25);
+    // Hold-breath stillness: the veil listens instead of rolling through quiet.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze the caustic clock; a whisper remains so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
 
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.22,
+    );
+
+    timeRef.current +=
+      dt *
+      pace *
+      sectionPace *
+      calm *
+      motionMul *
+      (0.55 + m.swell * 0.7 + m.impact * 0.25);
+
+    // Gather / impact / afterglow stay on full dt so kit replies still fire on thaw.
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
     impactSmooth.current = smoothToward(
@@ -272,6 +317,8 @@ export function TideVeilScene({
     mat.uniforms.uEnergy!.value = m.energy + afterglowSmooth.current * 0.25;
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
+    mat.uniforms.uStillness!.value = stillness;
+    mat.uniforms.uTenderness!.value = tenderSmooth.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
