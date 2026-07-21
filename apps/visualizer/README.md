@@ -12,7 +12,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 
-### Presets (12)
+### Presets (15)
 
 | ID | Name | Vibe |
 |---|---|---|
@@ -26,6 +26,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `star_field` | Star Field | Face-on spiral galaxy with twinkles and beat-driven camera punches |
 | `outrun_grid` | Outrun Grid | Real 3D wireframe terrain receding to a banded synthwave sun |
 | `liquid_chrome` | Liquid Chrome | GPU-shader chrome blob with fresnel + procedural env reflection |
+| `ember_drift` | Ember Drift | Rising warm ashfield — swell lift, gather inhale, impact flare, hat ticks |
 | `silk_wake` | Silk Wake | Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow |
 | `tide_veil` | Tide Veil | Soft caustic light-sheet — rolls with swell, folds before the beat, warm afterglow |
 | `halo_rain` | Halo Rain | Concentric luminous rings drifting like celestial rain — gather inhale, impact flare, hat ticks |
