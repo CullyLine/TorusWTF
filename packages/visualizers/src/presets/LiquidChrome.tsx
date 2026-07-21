@@ -4,6 +4,8 @@
  * Liquid Chrome — glossy displaced icosahedron. Call-and-response layer:
  *  - gather → surface inhales (scale + displacement squeeze) before the beat
  *  - impact → release punch expands the metal
+ *  - kick → floor bulge (Y-axis thump on the lower hemisphere)
+ *  - snare → lateral surface crack (X shear / crease)
  *  - hat / shimmer → fresnel rim sparkles
  *  - echo → faint delayed ripples travel across the chrome in phrase gaps
  */
@@ -23,12 +25,15 @@ uniform float uEnergy;
 uniform float uBeat;
 uniform float uGather;
 uniform float uEcho;
+uniform float uKick;
+uniform float uSnare;
 
 varying vec3 vNormal;
 varying vec3 vViewDir;
 varying float vNoise;
 varying float vRimSeed;
 varying float vEchoWave;
+varying float vSnareCrack;
 
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -105,6 +110,22 @@ void main() {
   vNoise = noise;
   pos += n * noise * disp;
 
+  // Kick: floor bulge — lower hemisphere thumps down/out on the kick,
+  // distinct from the whole-body impact punch.
+  float floorMask = smoothstep(0.35, -0.85, position.y);
+  float kickBulge = uKick * (0.1 + floorMask * 0.22);
+  pos.y -= kickBulge * 0.55;
+  pos += n * kickBulge * 0.75;
+
+  // Snare: lateral surface crack — phase-split X crease so L/R halves
+  // shear apart briefly (not a rotation, not a rim glitter).
+  float crackSeed = sin(position.y * 9.0 + position.z * 6.2);
+  float snareCrack = uSnare * (0.55 + 0.45 * crackSeed);
+  float side = position.x >= 0.0 ? 1.0 : -1.0;
+  pos.x += snareCrack * 0.16 * side;
+  pos += n * abs(snareCrack) * 0.04;
+  vSnareCrack = snareCrack;
+
   // Echo: a traveling radial ripple across the shell — phrase memory.
   float radial = length(pos.xy) * 4.2 + pos.z * 1.6;
   float echoWave = sin(radial - t * 5.5) * uEcho;
@@ -135,6 +156,8 @@ uniform float uEnergy;
 uniform float uBeat;
 uniform float uSparkle;
 uniform float uEcho;
+uniform float uKick;
+uniform float uSnare;
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform vec3 uEmissive;
@@ -144,6 +167,7 @@ varying vec3 vViewDir;
 varying float vNoise;
 varying float vRimSeed;
 varying float vEchoWave;
+varying float vSnareCrack;
 
 vec3 envColor(vec3 dir) {
   float t = dir.y * 0.5 + 0.5;
@@ -167,13 +191,16 @@ void main() {
   // to white.
   vec3 tintedEnv = mix(env, base, 0.45);
   vec3 chrome = mix(base * 0.4, tintedEnv, 0.5 + fresnel * 0.4);
-  chrome += uEmissive * (0.08 + uEnergy * 0.2 + uBeat * 0.22);
+  chrome += uEmissive * (0.08 + uEnergy * 0.2 + uBeat * 0.22 + uKick * 0.12);
   chrome += mix(uColorB, vec3(1.0), 0.4) * fresnel * 0.3;
 
   // Hat / shimmer: sharp rim sparkles — glitter, not a soft wash.
   float twinkle = step(0.72, fract(vRimSeed * 17.0 + uTime * 11.0));
   float sparkGate = smoothstep(0.12, 0.55, uSparkle);
   chrome += vec3(1.0) * fresnel * twinkle * sparkGate * (0.35 + uSparkle * 0.65);
+
+  // Snare crease catches a brief mid highlight along the crack (not rim glitter).
+  chrome += mix(uColorA, vec3(1.0), 0.35) * abs(vSnareCrack) * uSnare * 0.28;
 
   // Echo ripple leaves a faint bright crest on the metal.
   chrome += mix(uColorB, vec3(1.0), 0.5) * max(vEchoWave, 0.0) * uEcho * 0.22;
@@ -198,13 +225,17 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
   const gatherSmooth = useRef(0);
   const echoSmooth = useRef(0);
   const sparkleSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const scaleSmooth = useRef(1);
+  const scaleYSmooth = useRef(1);
 
   const detail = tier === 'high' ? 6 : tier === 'mid' ? 5 : 4;
   // Low tier still gets call-and-response (cheap uniforms); mid/high just
   // have denser geometry so ripples and rim glitter read sharper.
   const echoAmp = tier === 'low' ? 0.75 : 1;
   const sparkleAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const geometry = useMemo(() => new THREE.IcosahedronGeometry(1.1, detail), [detail]);
 
@@ -218,6 +249,8 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
       uGather: { value: 0 },
       uEcho: { value: 0 },
       uSparkle: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
       uColorA: { value: new THREE.Color(palette.mid) },
       uColorB: { value: new THREE.Color(palette.high) },
       uEmissive: { value: new THREE.Color(palette.high) },
@@ -251,21 +284,44 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.28);
     const sparkleTarget = Math.min(1.2, m.hat * 0.85 + m.shimmer * 0.55) * sparkleAmp;
     sparkleSmooth.current = smoothToward(sparkleSmooth.current, sparkleTarget, dt, 0.03, 0.12);
+    // Kit axes: fast attack so four-on-the-floor reads punchy, slower fall
+    // so the metal doesn't chatter between hits.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.028,
+      0.11,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.025,
+      0.1,
+    );
 
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uEcho!.value = echoSmooth.current;
     mat.uniforms.uSparkle!.value = sparkleSmooth.current;
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
 
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (mat.uniforms.uEmissive!.value as THREE.Color).set(palette.high);
 
     // Mesh-scale inhale / hit-release on top of vertex squeeze.
+    // Kick adds a brief Y stretch so the floor thump also reads in silhouette.
     const scaleTarget =
       1 - gatherSmooth.current * 0.08 + m.impact * 0.055 + m.release * 0.02;
     scaleSmooth.current = smoothToward(scaleSmooth.current, scaleTarget, dt, 0.04, 0.11);
-    mesh.scale.setScalar(scaleSmooth.current);
+    const scaleYTarget = scaleSmooth.current * (1 + kickSmooth.current * 0.1);
+    scaleYSmooth.current = smoothToward(scaleYSmooth.current, scaleYTarget, dt, 0.03, 0.1);
+    mesh.scale.set(scaleSmooth.current, scaleYSmooth.current, scaleSmooth.current);
 
+    // Snare: absolute Z roll (never accumulate) — a lateral flash of the shell.
+    mesh.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
     mesh.rotation.y += delta * spd * (0.15 + m.mid * 0.4) * (0.72 + m.sectionLevel * 0.5);
     mesh.rotation.x = Math.sin(state.clock.elapsedTime * 0.35) * 0.12 + m.high * 0.08;
 
