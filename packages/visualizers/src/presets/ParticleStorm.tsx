@@ -29,12 +29,22 @@ function smoothToward(
 }
 
 /**
+ * Soft rose-warm voice tint — gentle vocal passages bias the swarm warm
+ * vs harsh instrumental, without washing out band identity.
+ */
+const VOCAL_WARM = new THREE.Color(1.0, 0.72, 0.58);
+/** Peak lerp toward VOCAL_WARM when vocal + tenderness are both high. */
+const VOCAL_WARMTH_MIX = 0.34;
+
+/**
  * Particle Storm — curl-advected swarm with kit whip + phrase echo.
  *  - gather → contracts toward center (existing inhale)
  *  - kick → floor punch along Y
  *  - snare → lateral crack along X
  *  - hat → sparkle size-ticks
  *  - echo → one reverse swirl in post-phrase gaps
+ *  - tenderness → calms swirl/jitter (gentle vocal hush)
+ *  - vocalActivity → soft-warms particle tint (alive cohesion)
  */
 export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
@@ -50,6 +60,7 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
+  const scratchWarm = useRef(new THREE.Color());
   const sprite = useMemo(() => getDotTexture(), []);
 
   // Kit whip envelopes + one-shot phrase-echo reverse swirl.
@@ -61,9 +72,15 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
 
+  // Tenderness calm + vocal warmth envelopes — fluid hush, not gated snaps.
+  const tenderSmooth = useRef(0);
+  const vocalSmooth = useRef(0);
+
   // Low tier keeps the gestures readable without strobing sparse points.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Vocal tint softens on lower tiers so sparse points don't bloom muddy.
+  const vocalAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const { positions, velocities, phases, bands } = useMemo(() => {
     const p = new Float32Array(baseCount * 3);
@@ -106,16 +123,42 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
 
     const m = metricsRef.current;
     const spd = mods.current.speed ?? speed;
+    const dtClamped = Math.min(delta, 0.05);
+
+    // Tenderness calm + vocal warmth (alive cohesion). Soft rise/fall so
+    // the swarm eases into hush / warm tint instead of stepping.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dtClamped,
+      0.12,
+      0.22,
+    );
+    vocalSmooth.current = smoothToward(
+      vocalSmooth.current,
+      Math.min(1, m.vocalActivity) * vocalAmp,
+      dtClamped,
+      0.1,
+      0.28,
+    );
+    const tender = tenderSmooth.current;
+    const vocal = vocalSmooth.current;
+    // Gentle vocal passages hush swirl/jitter; kit punches stay on their own
+    // envelopes so kick/snare/hat whip remain readable when drums speak.
+    const calm = 1 - tender * 0.58;
+
     // The storm's rage follows the song's arc: valleys drift, peaks tear.
     // Live drums whip the wind beyond what raw band energy reports.
-    const sectionPace = 0.7 + m.sectionLevel * 0.5;
+    // Tenderness eases section pace so intimate moments feel held, not torn.
+    const sectionPace = (0.7 + m.sectionLevel * 0.5) * (1 - tender * 0.32);
     const drive =
-      delta * spd * (0.15 + m.energy * 2.4 + m.impact * 3 + m.drumActivity * 0.8) * sectionPace;
+      delta *
+      spd *
+      (0.15 + m.energy * 2.4 + m.impact * 3 + m.drumActivity * 0.8) *
+      sectionPace *
+      calm;
     const pulse = 1 + m.bass * 0.8 + m.impact * 0.55;
     const activeRatio = 0.35 + m.flow * 0.65;
-
-    // Shared flow current — same math as the Flow Field flagship.
-    const dtClamped = Math.min(delta, 0.05);
 
     // Smooth kit envelopes so punches feel fluid, not gated snaps.
     kickSmooth.current = smoothToward(
@@ -164,10 +207,15 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
     const flowSign = 1 - reverseAmt * 2;
 
+    // Shared flow current — same math as the Flow Field flagship.
     flowTimeRef.current += dtClamped * spd * (0.5 + Math.min(m.energy, 1.5) * 0.4) * flowSign;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    const flowAmount = dtClamped * (0.45 + m.swell * 0.7 + m.dropEvent * 1.2) * flowSign;
+    // Tenderness softens fine curl detail + swirl (the storm hushes).
+    fp.turbulence *= 1 - tender * 0.72;
+    fp.swirl *= 1 - tender * 0.48;
+    const flowAmount =
+      dtClamped * (0.45 + m.swell * 0.7 + m.dropEvent * 1.2) * flowSign * (0.72 + 0.28 * calm);
     // Pre-beat gather: the swarm contracts toward center in the breath
     // before each predicted beat, then the hit flings it back out.
     const gatherPull = 1 - m.gather * dtClamped * 1.6;
@@ -188,6 +236,15 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     const bassC = scratchBass.current.set(palette.bass);
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
+    // Vocal-warm bias: voice presence warms tint; tenderness deepens the mix
+    // so gentle vocal verses read softer/warmer than harsh instrumental.
+    const warmMix = Math.min(1, vocal * (0.28 + tender * 0.55)) * VOCAL_WARMTH_MIX;
+    if (warmMix > 0.001) {
+      const warm = scratchWarm.current.copy(VOCAL_WARM);
+      bassC.lerp(warm, warmMix);
+      midC.lerp(warm, warmMix);
+      highC.lerp(warm, warmMix);
+    }
     const bassGain = 1 + m.impact * 0.35 + kickSmooth.current * 0.25;
     const midGain = 1 + m.mid * 0.25 + snareSmooth.current * 0.3;
     const highGain = 1 + m.shimmer * 0.45 + hatSmooth.current * 0.55;
@@ -233,7 +290,8 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
     // Echo reverse also flips the whole-cloud spin so the reverse swirl reads.
-    points.rotation.y += drive * (0.5 + m.mid) * flowSign;
+    // Tenderness already hushes via `drive * calm`; mid spin softens further.
+    points.rotation.y += drive * (0.5 + m.mid * (1 - tender * 0.4)) * flowSign;
     points.rotation.x += m.impact * 0.05 + m.dropEvent * 0.02 + kickSmooth.current * 0.012;
     // Snare briefly tilts the storm on Z so the lateral crack owns the frame.
     points.rotation.z += snareSmooth.current * 0.018 * (snareSmooth.current > 0.15 ? 1 : 0);
