@@ -16,6 +16,8 @@
  *  - kick  → radial wall punch (distinct from sustained bass explode)
  *  - snare → lateral X warp / shear
  *  - hat   → corner-rail sparkle ticks
+ *  - holdBreath / deep silence → nearly freeze rush + ease wall punch
+ *    so the tunnel listens, then resumes when the music returns
  *
  * Plus ~3k "existential particles" advected by the shared curl-noise flow
  * field while the conveyor sweeps them past the camera.
@@ -37,7 +39,7 @@ import {
 
 /**
  * Smooth toward a target with asymmetric rise/fall (seconds).
- * Keeps kit accents fluid — no linear snaps on kick/snare/hat envelopes.
+ * Keeps kit accents and holdBreath stillness fluid — no linear snaps.
  */
 function smoothToward(
   current: number,
@@ -331,6 +333,8 @@ export function InfiniteTunnelScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
 
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
@@ -492,15 +496,39 @@ export function InfiniteTunnelScene({
     const densityNow = mv.density ?? density;
     const vortexNow = mv.vortexAmount ?? vortexAmount;
 
+    // ---- Hold-breath stillness: the tunnel listens instead of hurtling ----
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so kit accents + echo rings still fire.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze forward rush; leave a whisper so the bore never dies.
+    const rushMul = 1 - stillness * 0.94;
+    // Ease sustained wall punch / kick punch while listening.
+    const punchMul = 1 - stillness * 0.88;
+
     // ---- The throttle: audio drives the conveyor (the original's soul) ----
     const silenceDamp = 1 - m.silence * 0.88;
     const tunnelSpeed =
-      ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) * silenceDamp + 0.12) * spd;
+      ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) * silenceDamp * rushMul +
+        0.12 * (1 - stillness * 0.9)) *
+      spd;
 
     // ---- Kit accents: kick wall punch / snare lateral / hat rail sparkle ----
+    // punchMul softens kick during listen; targets stay zero in quiet so
+    // thaw + kit rise still read as distinct accents when drums return.
     kickSmooth.current = smoothToward(
       kickSmooth.current,
-      Math.min(1.2, m.kick) * kitAmp,
+      Math.min(1.2, m.kick) * kitAmp * punchMul,
       dt,
       0.028,
       0.14,
@@ -521,7 +549,7 @@ export function InfiniteTunnelScene({
     );
 
     // ---- Segment conveyor + counter-roll ----
-    const rollRate = (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt;
+    const rollRate = (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt * (1 - stillness * 0.7);
     for (let i = 0; i < tunnel.segments.length; i++) {
       const seg = tunnel.segments[i]!;
       seg.position.z += tunnelSpeed * dt;
@@ -539,7 +567,9 @@ export function InfiniteTunnelScene({
     // ---- Band-driven uniforms ----
     // Transient-driven so the bore stays intact between hits — sustained
     // bass only swells it slightly; beats and drops blow it open.
-    const explodeTarget = Math.min(1.3, m.bass * 0.18 + m.impact * 0.55 + m.dropEvent * 0.9);
+    // punchMul eases the bore open during holdBreath so walls listen too.
+    const explodeTarget =
+      Math.min(1.3, m.bass * 0.18 + m.impact * 0.55 + m.dropEvent * 0.9) * punchMul;
     explodeRef.current += (explodeTarget - explodeRef.current) * Math.min(1, dt * 10);
     // Teeth bite hardest when the drum section is actually playing — the
     // heuristic drum-activity signal, not just any mid-band energy.

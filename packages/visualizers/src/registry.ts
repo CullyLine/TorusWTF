@@ -16,6 +16,7 @@ import { SilkWakeScene } from './presets/SilkWake';
 import { TideVeilScene } from './presets/TideVeil';
 import { AnimaScene } from './presets/Anima';
 import { FlowFieldScene } from './presets/FlowField';
+import { EmberDriftScene } from './presets/EmberDrift';
 import { HaloRainScene } from './presets/HaloRain';
 import { MistSpiralScene } from './presets/MistSpiral';
 
@@ -31,6 +32,7 @@ export type VisualizerId =
   | 'outrun_grid'
   | 'liquid_chrome'
   | 'liquid_blob'
+  | 'ember_drift'
   | 'silk_wake'
   | 'tide_veil'
   | 'halo_rain'
@@ -374,6 +376,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 0.55,
       cameraDistance: 1,
       lightLevel: 1,
+    },
+  },
+  ember_drift: {
+    id: 'ember_drift',
+    label: 'Ember Drift',
+    hint: 'Rising warm ashfield — lifts on swell, inhales on gather, flares on impact, ticks on hats.',
+    Scene: EmberDriftScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.65,
+      scale: 1.05,
+      bassShake: 0.45,
+      anima: 0.6,
+      aura: 0.35,
+      cameraMode: 'drift',
+      bloomIntensity: 0.95,
+      cameraDistance: 1,
+      lightLevel: 1.05,
     },
   },
   silk_wake: {
