@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import type { AudioMetrics } from './metrics';
 import { useMetricsRef } from './metrics';
 import { CONTROL_DEFS_BY_KEY, type ControlKey } from './controlSchema';
+import { EMITTER_CONTROL_KEYS } from './emitters/settings';
 import { VISUALIZERS, type VisualizerId } from './registry';
 
 /**
@@ -139,9 +140,12 @@ export const MOD_GLOBAL_TARGETS: ControlKey[] = [
   'scale',
   'bloomIntensity',
   'lightLevel',
+  'shaderMix',
   'colorLife',
   'cameraDistance',
   'bassShake',
+  'cinematicSpeed',
+  ...EMITTER_CONTROL_KEYS,
 ];
 
 /** Integer-stepped preset controls that would pop rather than glide. */
