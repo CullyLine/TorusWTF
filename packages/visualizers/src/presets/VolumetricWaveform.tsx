@@ -21,6 +21,16 @@ function smoothToward(
   return current + (target - current) * k;
 }
 
+/**
+ * Volumetric Waveform — living ribbon with gather pinch, kit accents, echo ghost.
+ *
+ * Alive listen:
+ *  - holdBreath / deep silence → nearly freeze crest travel, pinch motion,
+ *    spin, and height jitter so the form listens, then thaws when music returns
+ *  - tenderness → soften ridge sharpness and height jitter on gentle vocals
+ *
+ * Gather pinch + kick/snare/hat + phrase-echo ghost stay on their own envelopes.
+ */
 export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const groupRef = useRef<THREE.Group>(null);
@@ -44,6 +54,12 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
+  // Tenderness hush — softens ridges on gentle vocal passages.
+  const tenderSmooth = useRef(0);
+  // Local phase so height jitter can freeze during holdBreath (clock never stops).
+  const phaseRef = useRef(0);
   // Captured crest shape (per-sample |amp|) replayed as a faded traveling ghost.
   const crestShape = useRef<Float32Array | null>(null);
   const crestTravel = useRef(1); // 0..1 along the ribbon; >=1 means idle
@@ -102,10 +118,45 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     const dt = Math.min(delta, 0.1);
     const spd = mods.current.speed ?? speed;
 
-    gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.13);
+    // Hold-breath stillness: the ribbon listens instead of traveling.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so kit accents + echo ghost still fire.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous motion; leave a whisper so the form never dies.
+    const motionMul = 1 - stillness * 0.92;
+
+    // Tenderness hush — soft rise/fall so ridges ease into softness.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmooth.current;
+    // Soften ridge sharpness / crease punch on gentle vocals.
+    const ridgeSoft = 1 - tender * 0.62;
+    // Soften height jitter (z wobble) on tender passages.
+    const jitterSoft = 1 - tender * 0.7;
+
+    // Freeze pinch envelope motion while listening; thaw promptly for gather.
+    const pinchDt = dt * Math.max(motionMul, 0.06);
+    gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, pinchDt, 0.04, 0.13);
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.32);
     const bloomTarget = Math.min(1.2, m.impact * 0.85 + m.release * 0.25);
     bloomSmooth.current = smoothToward(bloomSmooth.current, bloomTarget, dt, 0.035, 0.16);
+    // Kit targets stay live so thaw + drums still read as distinct accents.
     kickSmooth.current = smoothToward(
       kickSmooth.current,
       Math.min(1.2, m.kick) * kitAmp,
@@ -128,18 +179,28 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       0.1,
     );
 
-    group.rotation.y += delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2);
+    group.rotation.y += delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2) * motionMul;
     // Snare briefly rolls the ribbon on Z so the crease reads in depth, not only X.
     group.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
     // Gather pinches the whole form toward the axis; impact/afterglow bloom out.
+    // During holdBreath, nearly freeze scale settling so pinch motion stills.
     const scaleTarget =
       1 -
       gatherSmooth.current * pinchAmt * 0.35 +
       bloomSmooth.current * 0.08 +
       m.swell * 0.1 +
       m.afterglow * 0.04;
-    scaleSmooth.current = smoothToward(scaleSmooth.current, scaleTarget, dt, 0.045, 0.12);
+    scaleSmooth.current = smoothToward(
+      scaleSmooth.current,
+      scaleTarget,
+      pinchDt,
+      0.045,
+      0.12,
+    );
     group.scale.setScalar(scaleSmooth.current);
+
+    // Advance local phase only while awake so height jitter can freeze.
+    phaseRef.current += dt * spd * motionMul;
 
     // The line itself brightens when a lead/vocal carries the moment —
     // the waveform IS the melody's voice, so give it presence.
@@ -178,8 +239,12 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
 
     if (crestTravel.current < 1) {
       // One slow sweep across the ribbon (~0.9–1.2s depending on speed).
+      // Nearly freeze travel during holdBreath so the ghost listens with the form.
       const bpm = m.bpm ?? 120;
-      crestTravel.current = Math.min(1, crestTravel.current + dt * spd * (0.85 + bpm / 180));
+      crestTravel.current = Math.min(
+        1,
+        crestTravel.current + dt * spd * (0.85 + bpm / 180) * motionMul,
+      );
     }
 
     if (analyser) {
@@ -190,6 +255,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
         // and intimate, the song's biggest sections fill the frame.
         // Gather pinches amp toward the axis; impact blooms it open.
         // Kick punches vertical reach (floor thump) without washing the whole frame.
+        // Tenderness softens peakiness so ridges feel held, not jagged.
         const pinch = 1 - gatherSmooth.current * pinchAmt;
         const bloom = 1 + bloomSmooth.current * 0.55;
         const kickPunch = 1 + kickSmooth.current * 0.45;
@@ -198,11 +264,16 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
           (0.75 + m.sectionLevel * 0.45) *
           pinch *
           bloom *
-          kickPunch;
+          kickPunch *
+          (1 - tender * 0.18);
         // Downward floor bias so kicks read as thumps, not just louder swings.
         const kickFloor = kickSmooth.current * 0.28;
         // Snare lateral crease: phase-split L/R with a mid-ribbon peak.
-        const snareCrease = snareSmooth.current * 0.32;
+        // Tenderness softens the crease so ridges read rounder on gentle vocals.
+        const snareCrease = snareSmooth.current * 0.32 * ridgeSoft;
+        // Height jitter hushes during holdBreath and softens on tenderness.
+        const jitterAmp = m.mid * 0.2 * (1 - stillness * 0.88) * jitterSoft;
+        const phase = phaseRef.current;
 
         if (!crestShape.current || crestShape.current.length !== samples) {
           crestShape.current = new Float32Array(samples);
@@ -211,13 +282,19 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
 
         for (let i = 0; i < samples; i++) {
           const src = Math.floor((i / samples) * bins);
-          const v = (timeBuf.current[src]! / 128 - 1) * amp;
+          let v = (timeBuf.current[src]! / 128 - 1) * amp;
+          // Soften ridge sharpness: compress peaks so crests round instead of spike.
+          if (tender > 0.01) {
+            const sign = v < 0 ? -1 : 1;
+            const mag = Math.abs(v);
+            v = sign * (mag / (1 + tender * 0.95 * mag));
+          }
           const t = i / samples;
           const lateral = i % 2 === 0 ? 1 : -1;
           const crease = snareCrease * Math.sin(t * Math.PI) * lateral;
           const x = t * 6 - 3 + crease;
           const y = v - kickFloor;
-          const z = Math.sin(i * 0.1 + _state.clock.elapsedTime) * m.mid * 0.2;
+          const z = Math.sin(i * 0.1 + phase) * jitterAmp;
           const baseIdx = i * 6;
           arr[baseIdx] = x;
           arr[baseIdx + 1] = y;
@@ -262,7 +339,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
         const base = shape ? (shape[i] ?? 0) : 0;
         // Ghost is a faded, slightly softened copy of the captured crest.
         const v = base * 0.72 * envelope * Math.max(ghostStrength, 0);
-        const z = Math.sin(i * 0.1 + _state.clock.elapsedTime * 0.6) * 0.05;
+        const z = Math.sin(i * 0.1 + phaseRef.current * 0.6) * 0.05;
         const baseIdx = i * 6;
         gArr[baseIdx] = x;
         gArr[baseIdx + 1] = v;
@@ -297,7 +374,10 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       const posAttr = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
       const arr = posAttr.array as Float32Array;
       const drive =
-        delta * spd * (0.5 + m.energy * 3.5 + m.impact * 3 + hatSmooth.current * 2.2);
+        delta *
+        spd *
+        (0.5 + m.energy * 3.5 + m.impact * 3 + hatSmooth.current * 2.2) *
+        motionMul;
       const active = Math.min(1, 0.2 + m.flow * 0.8 + hatSmooth.current * 0.25);
       // Dust also inhales slightly on gather so the field feels of-a-piece.
       const dustPinch = 1 - gatherSmooth.current * 0.015;
