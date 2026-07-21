@@ -91,7 +91,7 @@ Runs several times a day. Ships exactly one item per run.
 - [x] NS-20260721-07 (S) **Silk Wake kit accents** — Braided ribbons currently answer gather/impact/afterglow only; wire kick thrust along braid, snare lateral shear flash, and hat mote ticks so drums speak through the silk. Alive. Area: `presets/SilkWake.tsx`. Accept: kick/snare/hat each produce a distinct ribbon accent; gather fold + impact flare + afterglow trails from #36 stay intact. — PR #68
 - [x] NS-20260721-08 (S) **Liquid Blob holdBreath surface stillness** — During `holdBreath` / deep `silence`, ease deformation speed and satellite chatter so the organism holds still and listens (gather inhale + kit axes unchanged). Alive. Area: `presets/LiquidBlob.tsx`. Accept: quiet bar nearly freezes surface motion then thaws; kick Y / snare X / gather / echo from #27/#47 still fire when music returns. — PR #69
 - [x] NS-20260721-09 (S) **Halo Rain phrase-echo reverse rain** — On `echo`, fire a one-shot upward rain reverse / ring after-image in phrase gaps so the halos answer when the music opens space. Alive call-response. Area: `presets/HaloRain.tsx`. Accept: gap after a phrase shows one reverse-rain reply; while drums speak, no echo reply; gather inhale + impact flare + hat ticks from #44 stay distinct. — PR #70
-- [~] building 2026-07-21T22:03:20Z NS-20260721-10 (S) **Tide Veil holdBreath hush + tenderness soften** — During `holdBreath`, slow caustic roll and ease ridge contrast; on `tenderness` soften caustic sharpness so the veil listens on gentle vocals. Alive. Area: `presets/TideVeil.tsx`. Accept: quiet bar nearly stills the sheet then resumes; tender passage softens ridges vs aggressive drop; gather fold + impact flash + afterglow from #30 unchanged.
+- [x] NS-20260721-10 (S) **Tide Veil holdBreath hush + tenderness soften** — During `holdBreath`, slow caustic roll and ease ridge contrast; on `tenderness` soften caustic sharpness so the veil listens on gentle vocals. Alive. Area: `presets/TideVeil.tsx`. Accept: quiet bar nearly stills the sheet then resumes; tender passage softens ridges vs aggressive drop; gather fold + impact flash + afterglow from #30 unchanged. — PR #71
 
 ## Built log
 
@@ -152,3 +152,4 @@ Runs several times a day. Ships exactly one item per run.
 - 2026-07-21 — NS-20260721-07 — PR #68 — Silk Wake kit accents: kick braid thrust, snare shear flash, hat mote ticks.
 - 2026-07-21 — NS-20260721-08 — PR #69 — Liquid Blob holdBreath: freeze deformation + satellite chatter; gather/kit/echo stay.
 - 2026-07-21 — NS-20260721-09 — PR #70 — Halo Rain phrase-echo: one-shot upward reverse rain + cooler ring after-image.
+- 2026-07-21 — NS-20260721-10 — PR #71 — Tide Veil holdBreath hush + tenderness soften; gather/impact/afterglow stay.
