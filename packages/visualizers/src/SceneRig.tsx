@@ -117,6 +117,18 @@ function smoothDampScalar(
   return state.value;
 }
 
+/** Asymmetric EMA — rise/fall taus so hush dims attentively and thaws promptly. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  return current + (target - current) * (1 - Math.exp(-dt / Math.max(tau, 1e-4)));
+}
+
 interface Spring3 {
   x: number;
   y: number;
@@ -318,6 +330,8 @@ export function SceneRig({
   const bloomBreathRef = useRef(0.55);
   // Soft hit ring-down for bloom — faster than swell, slower than raw impact.
   const bloomHitRef = useRef(0);
+  // Hold-breath hush: eases bloom breath down a notch while the creature listens.
+  const bloomHushRef = useRef(0);
 
   // Constructed directly (not via the <Bloom> wrapper) so the frame loop
   // can pulse `intensity` with the music. The wrapper memoizes with
@@ -733,7 +747,16 @@ export function SceneRig({
       // Bloom musical breath: choruses glow via swell, peaks linger on
       // afterglow, gather lifts just before the downbeat, and hits flash
       // through a soft ring-down so kicks punch without strobing.
-      const breathTarget = 0.5 + swellSignal * 0.82 + afterglowSignal * 0.5;
+      // HoldBreath / deep silence: ease breath target down a notch so the
+      // shared glow listens with the creature — gather lift + hit flash stay.
+      const hushTarget = Math.min(
+        1,
+        Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+      );
+      bloomHushRef.current = smoothToward(bloomHushRef.current, hushTarget, dtImp, 0.14, 0.08);
+      const hush = bloomHushRef.current;
+      const breathTarget =
+        0.5 + swellSignal * 0.82 + afterglowSignal * 0.5 - hush * 0.22;
       // Rise through builds a touch faster than the verse exhale.
       const breathTau = breathTarget > bloomBreathRef.current ? 0.2 : 0.55;
       bloomBreathRef.current +=
