@@ -59,6 +59,12 @@ const LOOK_SPRING_SMOOTH = 0.14;
 const FOV_SPRING_SMOOTH = 0.09;
 
 /**
+ * Gentle SmoothDamp for Light-level musical breath — chorus lift and
+ * afterglow linger, slower than FOV so exposure never flashes with kicks.
+ */
+const LIGHT_BREATH_SPRING_SMOOTH = 0.28;
+
+/**
  * Short SmoothDamp for impact/bass shake amplitude — tracks kicks without
  * stair-stepping on raw envelope/FFT frames.
  */
@@ -302,6 +308,9 @@ export function SceneRig({
   const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
   const fovSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  // Light-level musical breath: swell/afterglow multiplier eases via SmoothDamp
+  // on top of the user Light level baseline (baseline stays the floor).
+  const lightBreathSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // Impact/bass shake amp + post-pose rumble offsets — SmoothDamp so kick
   // rumble rides the sprung camera without envelope stair-steps.
   const shakeAmpSpringRef = useRef<ScalarSpring>(createScalarSpring());
@@ -407,6 +416,21 @@ export function SceneRig({
     flashEnvRef.current *= Math.exp(-dtImp / 0.16);
     const flash = flashEnvRef.current;
 
+    // Light-level musical breath: choruses gently lift exposure via swell,
+    // peaks linger on afterglow. SmoothDamp keeps the lift fluid — never a
+    // kick strobe. Multiplier sits on the user Light level so the slider
+    // still sets the floor (quiet ≈ 1×, loud lifts a notch).
+    // LightLevel runs on every tier (including low), so the breath writes
+    // the exposure pass directly — no need to bake into scene lights.
+    const lightBreathTarget = 1 + m.swell * 0.14 + m.afterglow * 0.1;
+    const lightBreath = smoothDampScalar(
+      lightBreathSpringRef.current,
+      lightBreathTarget,
+      dtImp,
+      LIGHT_BREATH_SPRING_SMOOTH,
+    );
+    const effectiveLightLevel = lightLevelNow * lightBreath;
+
     // Lights ride the pulse envelopes (impact rings down like a struck
     // bell, shimmer melts) so illumination lands with hits and glides to
     // rest instead of strobing on raw FFT flux. Colors are re-read every
@@ -416,7 +440,7 @@ export function SceneRig({
     // laterally, hat ticks the high light — discrete drum answers on top of
     // the continuous swell/impact/shimmer ride. Envelopes already ring down,
     // so accents land as soft hits rather than strobing the whole stage.
-    if (lightLevelRef.current) lightLevelRef.current.level = lightLevelNow;
+    if (lightLevelRef.current) lightLevelRef.current.level = effectiveLightLevel;
     const bassSignal = clampLightSignal(m.bass);
     const midSignal = clampLightSignal(m.mid);
     const highSignal = clampLightSignal(m.high);
