@@ -12,7 +12,11 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 
+<<<<<<< HEAD
+### Presets (16)
+=======
 ### Presets (15)
+>>>>>>> origin/main
 
 | ID | Name | Vibe |
 |---|---|---|
@@ -30,7 +34,9 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `silk_wake` | Silk Wake | Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow |
 | `tide_veil` | Tide Veil | Soft caustic light-sheet — rolls with swell, folds before the beat, warm afterglow |
 | `halo_rain` | Halo Rain | Concentric luminous rings drifting like celestial rain — gather inhale, impact flare, hat ticks |
+| `mist_spiral` | Mist Spiral | Rising mist coils — gather inhale, impact flare, hat mote glitter |
 | `mandelbrot_zoom` | Mandelbrot Zoom | Smooth looped fractal zoom, palette-locked colors, audio-reactive speed |
+| `flow_field` | Flow Field | Quarter-million particles riding living currents — stir with the cursor |
 
 ### UI features
 
@@ -49,7 +55,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 | Feature | Free | Full ($10 one-time) |
 | --- | --- | --- |
-| All 12 presets + live preview | Yes | Yes |
+| All 16 presets + live preview | Yes | Yes |
 | Export length | Unlimited | Unlimited |
 | Export resolution | 720p | Up to 4K |
 | Export FPS | 30 | Up to 240 |

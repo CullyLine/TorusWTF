@@ -26,6 +26,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   silk_wake: '#F9A8D4',
   tide_veil: '#5EEAD4',
   halo_rain: '#A5B4FC',
+  mist_spiral: '#8EB4C8',
   mandelbrot_zoom: '#34D399',
 };
 

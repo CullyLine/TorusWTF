@@ -18,6 +18,7 @@ import { AnimaScene } from './presets/Anima';
 import { FlowFieldScene } from './presets/FlowField';
 import { EmberDriftScene } from './presets/EmberDrift';
 import { HaloRainScene } from './presets/HaloRain';
+import { MistSpiralScene } from './presets/MistSpiral';
 
 export type VisualizerId =
   | 'anima'
@@ -35,6 +36,7 @@ export type VisualizerId =
   | 'silk_wake'
   | 'tide_veil'
   | 'halo_rain'
+  | 'mist_spiral'
   | 'mandelbrot_zoom';
 
 /**
@@ -441,6 +443,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     Scene: HaloRainScene,
     // Fullscreen sheet owns the frame via clip-space quad; still camera
     // keeps the rain stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.3,
+      cameraMode: 'still',
+      bloomIntensity: 0.8,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  mist_spiral: {
+    id: 'mist_spiral',
+    label: 'Mist Spiral',
+    hint: 'Rising mist coils around a vertical axis — inhale on gather, flare on impact, mote glitter on hats.',
+    Scene: MistSpiralScene,
+    // Fullscreen mist sheet owns the frame via clip-space quad; still
+    // camera keeps the column stable while the shader does the motion.
     defaults: {
       speed: 1,
       smoothness: 0.7,
