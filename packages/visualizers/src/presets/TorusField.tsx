@@ -30,12 +30,34 @@ function smoothToward(
 }
 
 /**
+ * Amber residue mixed into tube colors while afterglow decays.
+ * Max mix at afterglow=1 — residual warmth, not a full wash.
+ */
+const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.58, 0.28);
+const AFTERGLOW_WARMTH_MIX = 0.38;
+/** Ease tau for color-temperature linger (fluid, not stair-stepped). */
+const AFTERGLOW_WARMTH_TAU = 0.35;
+
+/** Bias a tube color toward amber by eased afterglow; quiet (0) is a no-op. */
+function applyAfterglowWarmth(
+  color: THREE.Color,
+  warmthLinger: number,
+  scratchAmber: THREE.Color,
+  mix = AFTERGLOW_WARMTH_MIX,
+): void {
+  const t = Math.max(0, Math.min(1, warmthLinger)) * mix;
+  if (t < 0.001) return;
+  color.lerp(scratchAmber.copy(AFTERGLOW_AMBER), t);
+}
+
+/**
  * Torus Field — brand torus with kit accents + phrase-echo reverse.
  *  - gather → shell inhale (existing breath)
  *  - kick → tube pulse (wire + particle tube radius)
  *  - snare → lateral flash / X crack on the point cloud
  *  - hat → outer point-cloud size ticks
  *  - echo → one reverse of flow drift in post-phrase gaps
+ *  - afterglow → residual amber color temperature on tube emissive
  */
 export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
@@ -52,6 +74,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
+  const scratchAmber = useRef(new THREE.Color());
+  // Color-temperature linger tracks afterglow (intensity path unchanged).
+  const warmthLingerRef = useRef(0);
 
   // Kit envelopes + one-shot phrase-echo reverse drift.
   const kickSmooth = useRef(0);
@@ -66,6 +91,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   // Low tier keeps gestures readable without strobing sparse points.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Soften amber mix on sparse low tier so bloom doesn’t blow out.
+  const warmthMix =
+    (tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1) * AFTERGLOW_WARMTH_MIX;
   const sprite = useMemo(() => getDotTexture(), []);
 
   const { positions, baseTheta, basePhi } = useMemo(() => {
@@ -148,6 +176,10 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
     const flowSign = 1 - reverseAmt * 2;
 
+    // Color-temperature linger tracks afterglow — quiet verses leave tubes untinted.
+    warmthLingerRef.current +=
+      (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dtClamped / AFTERGLOW_WARMTH_TAU));
+
     // Section pacing: the field turns with the song's arc — near-still in
     // valleys, flying at peaks. Tenderness (vocal-led soft passages) eases
     // the pace further so intimate moments feel held, not spun.
@@ -194,8 +226,12 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
           snareSmooth.current * 0.4) *
         silenceMute;
       // Follow the living palette so the shell breathes color too.
+      // After peaks: bias toward amber while afterglow decays (intensity
+      // afterglow above stays; this is residual color temperature).
       sm.color.set(palette.mid);
       sm.emissive.set(palette.mid);
+      applyAfterglowWarmth(sm.color, warmthLingerRef.current, scratchAmber.current, warmthMix);
+      applyAfterglowWarmth(sm.emissive, warmthLingerRef.current, scratchAmber.current, warmthMix);
       sm.opacity = 0.2 + m.swell * 0.2 + m.afterglow * 0.06 + kickSmooth.current * 0.06;
     }
 
@@ -214,6 +250,10 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const bassC = scratchBass.current.set(palette.bass);
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
+    // Particle tube shares the amber linger so the whole field cools together.
+    applyAfterglowWarmth(bassC, warmthLingerRef.current, scratchAmber.current, warmthMix);
+    applyAfterglowWarmth(midC, warmthLingerRef.current, scratchAmber.current, warmthMix);
+    applyAfterglowWarmth(highC, warmthLingerRef.current, scratchAmber.current, warmthMix);
     const bassGain = 1 + m.impact * 0.2 + kickSmooth.current * 0.35;
     const midGain = 1 + m.mid * 0.2 + snareSmooth.current * 0.4;
     const highGain = 1 + m.shimmer * 0.35 + hatSmooth.current * 0.55;
