@@ -18,6 +18,19 @@ import { getDotTexture } from '../dotTexture';
 
 const FOLDS = 8;
 
+/** EMA toward target with separate rise/fall time constants. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  const a = 1 - Math.exp(-dt / Math.max(1e-4, tau));
+  return current + (target - current) * a;
+}
+
 export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const groupRef = useRef<THREE.Group>(null);
@@ -27,11 +40,15 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const pulseRef = useRef(0);
+  const vocalSmooth = useRef(0);
+  const tenderSmooth = useRef(0);
   const scratchColor = useRef(new THREE.Color());
   const sprite = useMemo(() => getDotTexture(), []);
 
   const layerCount = tier === 'high' ? 7 : tier === 'mid' ? 5 : 3;
   const shimmerCount = tier === 'high' ? 900 : tier === 'mid' ? 420 : 180;
+  // Vocal rim amp softens on lower tiers so mid/low stay readable without bloom blowout.
+  const vocalAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   // Flow Field Update: the shimmer halo is advected through the shared curl
   // current with a spring back to its home ring — fluid swirl, stable form.
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
@@ -63,8 +80,30 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
 
     const m = metricsRef.current;
     const spd = mods.current.speed ?? speed;
+    const dt = Math.min(delta, 0.05);
     pulseRef.current = Math.max(0, pulseRef.current - delta * 2.5);
     if (m.impact > 0.55) pulseRef.current = 1;
+
+    // Vocal rim: voice presence deepens the outer sacred ring; tenderness
+    // softens that rim-vs-core contrast so quiet verses glow gently.
+    vocalSmooth.current = smoothToward(
+      vocalSmooth.current,
+      Math.min(1, m.vocalActivity) * vocalAmp,
+      dt,
+      0.1,
+      0.28,
+    );
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.3,
+    );
+    const vocal = vocalSmooth.current;
+    const tender = tenderSmooth.current;
+    // Tenderness softens rim contrast (vocal punch + outer/inner lift).
+    const rimSoft = 1 - tender * 0.62;
 
     // Tenderness slows the wheel and softens the breath — vocal-led quiet
     // passages read as meditation, not machinery. Section level paces the
@@ -94,6 +133,9 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
       const innerness = 1 - outerness;
       const kickPulse = Math.min(1.2, m.kick) * innerness;
       const snareCrack = Math.min(1.2, m.snare) * outerness;
+      // Squared outerness biases vocal deepen/thicken to the outer rim + halo.
+      const rimWeight = outerness * outerness;
+      const vocalRim = vocal * rimWeight;
       // Per-ring spin: was 0.12 + i*0.04 + m.mid*0.5. That made the inner
       // rings barely turn unless gain was huge. Tripled the music-driven
       // term and added high + impact so each ring flies on energy.
@@ -111,7 +153,10 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
         Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12) +
         snareCrack * 0.08;
       // Kick: inner rings bloom outward; snare: outer rings briefly flare.
-      child.scale.setScalar(1 + kickPulse * 0.2 + snareCrack * 0.14);
+      // Vocal: outer rim thickens slightly — sacred geometry answering the voice.
+      child.scale.setScalar(
+        1 + kickPulse * 0.2 + snareCrack * 0.14 + vocalRim * 0.18 * rimSoft,
+      );
       const hex = i % 3 === 0 ? palette.bass : i % 3 === 1 ? palette.mid : palette.high;
       c.set(hex);
       for (const grand of child.children) {
@@ -120,13 +165,18 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
           const sm = mat as THREE.MeshStandardMaterial;
           // Afterglow holds the rings lit after the peak passes — the
           // mandala remembers the moment for a few seconds.
+          // Vocal deepens outer-rim emissive; tenderness compresses the
+          // outer-vs-inner rim contrast so tender verses glow evenly.
+          const rimContrast = (outerness - 0.5) * 0.22 * rimSoft;
           sm.emissiveIntensity =
             0.25 +
             m.swell * 0.5 +
             m.afterglow * 0.35 +
             (i === layerCount - 1 ? m.impact * 0.35 : 0) +
             kickPulse * 0.55 +
-            snareCrack * 0.7;
+            snareCrack * 0.7 +
+            vocalRim * 0.95 * rimSoft +
+            rimContrast;
           sm.color.copy(c);
           sm.emissive.copy(c);
         }
@@ -136,12 +186,22 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     if (shimmer && shimmerMat) {
       // Hat ticks: sharp, short twinkles on the halo — distinct from the
       // slower shimmer envelope and the impact pulse.
+      // Vocal: halo deepens with the voice (size + opacity), softened by tenderness.
       shimmerMat.size =
-        0.035 + m.shimmer * 0.05 + pulseRef.current * 0.03 + m.hat * 0.07;
+        0.035 +
+        m.shimmer * 0.05 +
+        pulseRef.current * 0.03 +
+        m.hat * 0.07 +
+        vocal * 0.045 * rimSoft;
       // Lead lines make the halo glitter — melody gets its own voice here.
       shimmerMat.opacity = Math.min(
         1,
-        0.45 + m.high * 0.45 + m.afterglow * 0.15 + m.leadActivity * 0.2 + m.hat * 0.35,
+        0.45 +
+          m.high * 0.45 +
+          m.afterglow * 0.15 +
+          m.leadActivity * 0.2 +
+          m.hat * 0.35 +
+          vocal * 0.32 * rimSoft,
       );
       shimmerMat.color.set(palette.high);
       // Phrase echo briefly reverses shimmer drift in post-phrase gaps —
