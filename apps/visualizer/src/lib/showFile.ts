@@ -1,11 +1,17 @@
 import type { WaveformPalette } from '@torus/shared';
 import {
   BACKGROUND_MODES,
+  DEFAULT_EMITTER_SETTINGS,
+  DEFAULT_SCREEN_EFFECT_SETTINGS,
   VISUALIZERS,
+  sanitizeEmitterSettings,
   sanitizeModRoutings,
+  sanitizeScreenEffectSettings,
   type BackgroundMode,
   type CameraMode,
+  type EmitterSettings,
   type ModRouting,
+  type ScreenEffectSettings,
   type VisualizerId,
 } from '@torus/visualizers';
 import {
@@ -32,6 +38,8 @@ export interface TorusShowFile {
   palette: WaveformPalette;
   controls: VisualizerControls;
   background: BackgroundSettings;
+  screenEffect: ScreenEffectSettings;
+  emitter: EmitterSettings;
   titleOverlay: TitleOverlay;
   triggerMappings: TriggerMapping[];
   /** Modulation-matrix routings. Absent in pre-matrix show files → []. */
@@ -44,6 +52,8 @@ export interface ShowFileState {
   palette: WaveformPalette;
   controls: VisualizerControls;
   background: BackgroundSettings;
+  screenEffect: ScreenEffectSettings;
+  emitter: EmitterSettings;
   titleOverlay: TitleOverlay;
   triggerMappings: TriggerMapping[];
   modMatrix: ModRouting[];
@@ -72,6 +82,8 @@ export function buildShowFile(state: ShowFileState): TorusShowFile {
     palette: state.palette,
     controls: state.controls,
     background: state.background,
+    screenEffect: state.screenEffect,
+    emitter: state.emitter,
     titleOverlay: state.titleOverlay,
     triggerMappings: state.triggerMappings,
     modMatrix: state.modMatrix,
@@ -125,6 +137,12 @@ export function parseShowFile(text: string): ParseShowResult {
 
   const controls = sanitizeControls(raw.controls);
   const background = sanitizeBackground(raw.background);
+  const screenEffect =
+    raw.screenEffect === undefined
+      ? { ...DEFAULT_SCREEN_EFFECT_SETTINGS }
+      : sanitizeScreenEffectSettings(raw.screenEffect);
+  const emitter =
+    raw.emitter === undefined ? { ...DEFAULT_EMITTER_SETTINGS } : sanitizeEmitterSettings(raw.emitter);
   const titleOverlay = sanitizeTitleOverlay(raw.titleOverlay);
   const triggerMappings = sanitizeTriggerMappings(raw.triggerMappings);
   const modMatrix = sanitizeModRoutings(raw.modMatrix);
@@ -145,6 +163,8 @@ export function parseShowFile(text: string): ParseShowResult {
       palette,
       controls,
       background,
+      screenEffect,
+      emitter,
       titleOverlay,
       triggerMappings,
       modMatrix,
@@ -220,9 +240,9 @@ function sanitizeControls(value: unknown): VisualizerControls {
       }
       continue;
     }
-    if (key === 'autoGain') {
+    if (key === 'autoGain' || key === 'highlightProtection') {
       if (typeof val === 'boolean') {
-        result.autoGain = val;
+        result[key] = val;
       }
       continue;
     }
@@ -307,5 +327,14 @@ function isValidSavedPreset(value: unknown): value is SavedPreset {
 function sanitizeSavedPresets(value: unknown): SavedPreset[] {
   if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) return [];
-  return value.filter(isValidSavedPreset);
+  return value.filter(isValidSavedPreset).map((preset) => {
+    const sanitized = { ...preset };
+    if ('screenEffect' in preset) {
+      sanitized.screenEffect = sanitizeScreenEffectSettings(preset.screenEffect);
+    }
+    if ('emitter' in preset) {
+      sanitized.emitter = sanitizeEmitterSettings(preset.emitter);
+    }
+    return sanitized;
+  });
 }

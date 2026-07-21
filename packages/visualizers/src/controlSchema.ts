@@ -13,6 +13,9 @@
  * continuous-control model.
  */
 
+import { EMITTER_CONTROLS } from './emitters/settings';
+import type { EmitterControlKey } from './emitters/types';
+
 export type ControlKey =
   | 'reactivity'
   | 'energy'
@@ -24,6 +27,7 @@ export type ControlKey =
   | 'bloomIntensity'
   | 'lightLevel'
   | 'aura'
+  | 'shaderMix'
   | 'scale'
   | 'cameraDistance'
   | 'bassShake'
@@ -38,9 +42,10 @@ export type ControlKey =
   | 'trailLength'
   | 'density'
   | 'vortexAmount'
-  | 'interactStrength';
+  | 'interactStrength'
+  | EmitterControlKey;
 
-export type ControlGroup = 'feel' | 'color' | 'framing' | 'bands' | 'preset';
+export type ControlGroup = 'feel' | 'color' | 'effects' | 'framing' | 'bands' | 'preset';
 
 export interface ControlDef {
   key: ControlKey;
@@ -60,6 +65,33 @@ export interface ControlDef {
   /** Only meaningful when this camera mode is active. */
   requiresCameraMode?: string;
 }
+
+export type ToggleControlKey = 'highlightProtection';
+
+export interface ToggleControlDef {
+  key: ToggleControlKey;
+  label: string;
+  /** Value assumed when persisted settings predate this key. */
+  fallback: boolean;
+  hint?: string;
+  group: ControlGroup;
+}
+
+export const TOGGLE_CONTROL_SCHEMA: readonly ToggleControlDef[] = [
+  {
+    key: 'highlightProtection',
+    label: 'Highlight protection',
+    fallback: true,
+    hint: 'Preserves color and detail when bright effects would otherwise clip to white',
+    group: 'effects',
+  },
+];
+
+export const TOGGLE_CONTROL_DEFS_BY_KEY: Readonly<Record<ToggleControlKey, ToggleControlDef>> =
+  Object.fromEntries(TOGGLE_CONTROL_SCHEMA.map((def) => [def.key, def])) as Record<
+    ToggleControlKey,
+    ToggleControlDef
+  >;
 
 export const CONTROL_SCHEMA: ControlDef[] = [
   // ---- Feel ----
@@ -167,6 +199,24 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     hint: 'Ambient wisp field around the scene',
     group: 'color',
   },
+
+  // ---- Whole-frame effects ----
+  {
+    key: 'shaderMix',
+    label: 'Shader wet',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    fallback: 1,
+    hint: '0 keeps the original frame; 1 applies the selected screen style fully',
+    group: 'effects',
+  },
+  ...EMITTER_CONTROLS.map(
+    (control): ControlDef => ({
+      ...control,
+      group: 'effects',
+    }),
+  ),
 
   // ---- Framing & camera ----
   {

@@ -19,6 +19,10 @@ import type { VisualImpulses } from './impulse';
  *    vocal passages drift amber and bloom in saturation; cool instrumental
  *    valleys drift cyan and lean leaner — color feels emotional, not only
  *    loudness-driven
+ *  - gather cool: pre-beat `gather` eases hue toward cyan and leans
+ *    saturation/light down a notch — color inhales before the hit
+ *  - hit warm bloom: `impact`/`kick` push amber + sat/light up so the
+ *    downbeat answers the gather cool (on top of mood warmth, not instead)
  *  - saturation and brightness swell with loudness and land with beat
  *    impacts — choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
@@ -69,6 +73,10 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
   const prevDropRef = useRef(0);
   /** EMA of mood warmth (−1 cool … +1 warm) so hue never jumps with noisy valence. */
   const moodWarmthRef = useRef(0);
+  /** Smoothed pre-beat gather — cool/desat inhale before the downbeat. */
+  const gatherCoolRef = useRef(0);
+  /** Smoothed impact+kick warmth — amber bloom that answers the gather. */
+  const hitWarmRef = useRef(0);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
@@ -85,6 +93,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
 
     if (life <= 0.001 && Math.abs(hueKickRef.current) < 0.002) {
       moodWarmthRef.current *= Math.exp(-dt / 0.6);
+      gatherCoolRef.current *= Math.exp(-dt / 0.18);
+      hitWarmRef.current *= Math.exp(-dt / 0.22);
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
       if (out.high !== base.high) out.high = base.high;
@@ -128,6 +138,22 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     moodWarmthRef.current += (moodTarget - moodWarmthRef.current) * moodAlpha;
     const warmth = moodWarmthRef.current;
 
+    // Pre-beat gather cool + hit warm bloom. Quiet passages stay still:
+    // gather is near-zero without BPM anticipation, and hit only rises on
+    // real impact/kick — smoothed so micro-flux never flickers the cast.
+    const gatherAlpha = 1 - Math.exp(-dt / 0.1);
+    gatherCoolRef.current += (m.gather - gatherCoolRef.current) * gatherAlpha;
+    const hitTarget = clamp(Math.max(m.impact * 0.85, m.kick * 0.95), 0, 1.2);
+    const hitTau = hitTarget > hitWarmRef.current ? 0.045 : 0.16;
+    hitWarmRef.current += (hitTarget - hitWarmRef.current) * (1 - Math.exp(-dt / hitTau));
+    const gather = gatherCoolRef.current;
+    const hit = hitWarmRef.current;
+    // Gather → cyan (~−10°) + lean sat/light; hit → amber (~+11°) + bloom.
+    // Hit deliberately overpowers residual gather so the downbeat reads warm.
+    const phraseHue = life * (-gather * 0.028 + hit * 0.032);
+    const phraseSat = life * (-gather * 0.11 + hit * 0.14);
+    const phraseLight = life * (-gather * 0.07 + hit * 0.12);
+
     // Signed hue cast: + → amber (~+14°), − → cyan (~−14°). Independent of
     // the slow orbit and additive with drop kicks so drops still punch.
     const moodHue = life * warmth * 0.038;
@@ -135,13 +161,14 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     const moodSat = life * (warmth * 0.14 + m.tenderness * 0.06);
 
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
-    const hueShift = life * drift + hueKickRef.current + moodHue;
+    const hueShift = life * drift + hueKickRef.current + moodHue + phraseHue;
     // Afterglow holds saturation and light elevated for seconds after a
     // peak — the color equivalent of a room still ringing.
     const satBoost =
       1 +
       life * (m.swell * 0.22 + m.impact * 0.1 + m.afterglow * 0.16 - m.silence * 0.4) +
-      moodSat;
+      moodSat +
+      phraseSat;
     const lightBoost =
       1 +
       life *
@@ -151,7 +178,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
           m.afterglow * 0.08 -
           m.silence * 0.22 +
           // Soft warm lift — amber passages feel lit, not just tinted.
-          Math.max(0, warmth) * 0.05);
+          Math.max(0, warmth) * 0.05) +
+      phraseLight;
 
     applyLife(out, 'bass', base.bass, hueShift, satBoost, lightBoost * 0.96);
     applyLife(out, 'mid', base.mid, hueShift + life * 0.006, satBoost, lightBoost);

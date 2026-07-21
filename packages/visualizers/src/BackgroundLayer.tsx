@@ -19,8 +19,11 @@ import { getDotTexture } from './dotTexture';
  * `dropEvent`, `afterglow`, `tension`) so the background drifts and
  * swells rather than strobing. Pre-beat `gather` eases the sky inward /
  * dim (musical inhale); `shimmer`/`hat` add a faint glitter distinct
- * from bass swell. Honors `prefers-reduced-motion` by freezing the
- * drift. Contrast-capped so it never competes with the foreground preset.
+ * from bass swell. While `afterglow` decays, nebula/aurora/glow bias
+ * toward a warmer amber mix — intensity afterglow stays; this is the
+ * color-temperature residue of a big moment. Honors
+ * `prefers-reduced-motion` by freezing the drift. Contrast-capped so it
+ * never competes with the foreground preset.
  */
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
@@ -50,8 +53,28 @@ const AURORA_CAP = 0.5;
 const GLOW_CAP = 0.42;
 const STAR_OPACITY_CAP = 0.68;
 
+/**
+ * Amber residue mixed into sky colors while afterglow decays.
+ * Max mix at afterglow=1 — visible warmth, not a full wash.
+ */
+const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.58, 0.28);
+const AFTERGLOW_WARMTH_MIX = 0.42;
+/** Ease tau for color-temperature linger (fluid, not stair-stepped). */
+const AFTERGLOW_WARMTH_TAU = 0.35;
+
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
 const SKY_RADIUS = 50;
+
+/** Bias a sky color toward amber by eased afterglow; quiet (0) is a no-op. */
+function applyAfterglowWarmth(
+  color: THREE.Color,
+  warmthLinger: number,
+  scratchAmber: THREE.Color,
+): void {
+  const t = Math.max(0, Math.min(1, warmthLinger)) * AFTERGLOW_WARMTH_MIX;
+  if (t < 0.001) return;
+  color.lerp(scratchAmber.copy(AFTERGLOW_AMBER), t);
+}
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
@@ -196,6 +219,7 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   const metricsRef = useMetricsRef();
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
+  const scratchAmber = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -210,6 +234,7 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   const timeRef = useRef(0);
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
+  const warmthLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
@@ -233,17 +258,25 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    // Color-temperature linger tracks afterglow (intensity path unchanged).
+    warmthLingerRef.current +=
+      (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value = glitterRef.current;
     // Live palette: both fog colors track the (mutating) palette per frame.
-    (mat.uniforms.uColorA!.value as THREE.Color).set(palette.bass);
+    const colorA = mat.uniforms.uColorA!.value as THREE.Color;
+    colorA.set(palette.bass);
     // Warm/cool drift toward the high color on positive valence.
     const warmth = Math.max(0, Math.min(1, 0.5 + m.moodValence * 0.4));
-    (mat.uniforms.uColorB!.value as THREE.Color).lerpColors(
+    const colorB = mat.uniforms.uColorB!.value as THREE.Color;
+    colorB.lerpColors(
       scratchMid.current.set(palette.mid),
       scratchHigh.current.set(palette.high),
       warmth * 0.6,
     );
+    // Big-moment amber residue — quiet afterglow leaves palette untinted.
+    applyAfterglowWarmth(colorA, warmthLingerRef.current, scratchAmber.current);
+    applyAfterglowWarmth(colorB, warmthLingerRef.current, scratchAmber.current);
   });
 
   return <SkySphere matRef={matRef} fragment={NEBULA_FRAGMENT} uniforms={uniforms} />;
@@ -410,6 +443,7 @@ const AURORA_FRAGMENT = /* glsl */ `
 function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
+  const scratchAmber = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -425,6 +459,7 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   const levelRef = useRef(0);
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
+  const warmthLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
@@ -445,6 +480,8 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.2;
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    warmthLingerRef.current +=
+      (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
     const mat = matRef.current;
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
@@ -452,8 +489,12 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value = glitterRef.current;
     // Live palette: curtain colors track the (mutating) palette per frame.
-    (mat.uniforms.uColorA!.value as THREE.Color).set(palette.bass);
-    (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
+    const colorA = mat.uniforms.uColorA!.value as THREE.Color;
+    const colorB = mat.uniforms.uColorB!.value as THREE.Color;
+    colorA.set(palette.bass);
+    colorB.set(palette.high);
+    applyAfterglowWarmth(colorA, warmthLingerRef.current, scratchAmber.current);
+    applyAfterglowWarmth(colorB, warmthLingerRef.current, scratchAmber.current);
   });
 
   return <SkySphere matRef={matRef} fragment={AURORA_FRAGMENT} uniforms={uniforms} />;
@@ -489,6 +530,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const metricsRef = useMetricsRef();
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
+  const scratchAmber = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(palette.mid) },
@@ -502,6 +544,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const tRef = useRef(0);
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
+  const warmthLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
@@ -531,16 +574,20 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    warmthLingerRef.current +=
+      (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
     mat.uniforms.uIntensity!.value = Math.min(GLOW_CAP, swell * silenceMute * intensity * GLOW_CAP);
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value = glitterRef.current;
     // Warm vs cool target color follows mood valence.
     const warmth = Math.max(0, Math.min(1, 0.5 + m.moodValence * 0.4));
-    (mat.uniforms.uColor!.value as THREE.Color).lerpColors(
+    const color = mat.uniforms.uColor!.value as THREE.Color;
+    color.lerpColors(
       scratchBass.current.set(palette.bass),
       scratchMid.current.set(palette.mid),
       warmth,
     );
+    applyAfterglowWarmth(color, warmthLingerRef.current, scratchAmber.current);
   });
 
   return <SkySphere matRef={matRef} fragment={GLOW_FRAGMENT} uniforms={uniforms} />;

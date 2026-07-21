@@ -21,6 +21,10 @@ import { useModulation } from '../modulation';
  * Musical anatomy:
  *  - `swell` grows the fractal power (6 → ~9.5): choruses literally grow
  *    more ornate geometry, verses relax back to smoother lobes
+ *  - `tension` nudges power further through builds so the bulb grows
+ *    ornate before the drop without hitching mid-tier
+ *  - `gather` eases the domain slightly outward (anticipation), then
+ *    `impact`/`kick` dive harder into the bulb — inhale before plunge
  *  - drops kick the power an extra step — a visible "the world just
  *    changed shape" morph
  *  - `snare` shears the fractal domain laterally (X←Y) — a brief sideways
@@ -220,7 +224,7 @@ void main() {
 }
 `;
 
-export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: VisualizerSceneProps) {
+export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const meshRef = useRef<THREE.Mesh>(null);
@@ -234,6 +238,9 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  const gatherSmooth = useRef(0);
+  const diveSmooth = useRef(0);
+  const tensionSmooth = useRef(0);
   const worldScale = useRef(new THREE.Vector3());
 
   const reducedMotion = useMemo(() => {
@@ -241,10 +248,12 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
 
-  // Low tier still gets the crack + reverse; mid/high just read deeper.
+  // Low tier still gets the crack + reverse and inhale/dive; mid/high read deeper.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
-
+  const gatherAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const diveAmp = tier === 'low' ? 0.8 : tier === 'mid' ? 0.92 : 1;
+  const tensionAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.85 : 1;
   const [marchSteps, deIters] =
     tier === 'high' ? [96, 9] : tier === 'mid' ? [72, 8] : [48, 7];
   const fragmentShader = useMemo(
@@ -317,14 +326,37 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
       dt * spd * pace * (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04) * orbitDir;
     pitchRef.current += dt * spd * pace * 0.017;
 
-    // Power morph: an autonomous slow wander + the musical swell. The
-    // bulb grows more ornate as the music opens up; drops kick an extra
-    // step of complexity that eases back with the envelope.
+    // Pre-beat gather + hit dive, smoothed so the zoom never stairs.
+    gatherSmooth.current = smoothToward(
+      gatherSmooth.current,
+      m.gather * gatherAmp,
+      dt,
+      0.04,
+      0.14,
+    );
+    diveSmooth.current = smoothToward(
+      diveSmooth.current,
+      Math.min(1.25, m.impact * 0.85 + m.kick * 0.55) * diveAmp,
+      dt,
+      0.03,
+      0.18,
+    );
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      m.tension * tensionAmp,
+      dt,
+      0.12,
+      0.4,
+    );
+
+    // Power morph: autonomous wander + swell + tension through builds.
+    // Tension ornate-ness eases in so mid-tier DE iters never hitch.
     powerWanderRef.current += dt * spd * pace * 0.11;
     const power =
       7.0 +
       Math.sin(powerWanderRef.current) * 0.8 +
       m.swell * 1.6 +
+      tensionSmooth.current * 1.15 +
       m.dropEvent * 0.7;
 
     // Vocals gently accelerate the color ramp — sung passages iridesce.
@@ -334,10 +366,15 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     // The fractal domain tracks the proxy mesh's real world scale, so both
     // the user Scale slider AND the modulation matrix (via the modulated
     // scale group upstream) resize the bulb and its bounds together.
+    // Gather pulls slightly outward (anticipation); impact/kick dive in.
     const s = Math.max(0.2, mesh.getWorldScale(worldScale.current).x);
+    const zoomMul = Math.max(
+      0.82,
+      1 - gatherSmooth.current * 0.07 + diveSmooth.current * 0.11,
+    );
     (mat.uniforms.uProj!.value as THREE.Matrix4).copy(state.camera.projectionMatrix);
     mat.uniforms.uPower!.value = power;
-    mat.uniforms.uScale!.value = s;
+    mat.uniforms.uScale!.value = s * zoomMul;
     mat.uniforms.uYaw!.value = yawRef.current;
     mat.uniforms.uPitch!.value = 0.35 + Math.sin(pitchRef.current) * 0.25;
     mat.uniforms.uPaletteShift!.value = paletteShiftRef.current;

@@ -8,10 +8,13 @@ import { useMetricsRef } from '../metrics';
 import { useModulation } from '../modulation';
 
 /**
- * Outrun Grid — synthwave drive with build-and-drop cinema:
+ * Outrun Grid — synthwave drive with build-and-drop cinema + kit road ticks:
  *  - tension → sun swells + stretches (charges the horizon)
  *  - gather → horizon dips (pre-drop inhale)
  *  - drop / afterglow → grid heat wash that eases back
+ *  - hat → sparse dash-line ticks on the road grid
+ *  - kick → sun-core punch (local, not a sky wash)
+ *  - snare → roadside shoulder flash (left/right of the valley)
  */
 
 const terrainVertex = /* glsl */ `
@@ -74,6 +77,8 @@ uniform vec3 uColorB;
 uniform float uBloom;
 uniform float uHeat;
 uniform vec3 uHeatColor;
+uniform float uHat;
+uniform float uSnare;
 
 varying vec2 vUv;
 varying float vHeight;
@@ -92,12 +97,30 @@ void main() {
   // then ease back — cinema after the drop, not a permanent tint.
   float heat = clamp(uHeat, 0.0, 1.4);
   gridCol = mix(gridCol, uHeatColor, heat * 0.72);
+
+  // Hat dash ticks: short segments on the depth-axis grid lines only —
+  // sparse so hats glitter the road dashes instead of flooding the floor.
+  float dashCell = fract(vUv.y * 22.0 + uTime * 0.35);
+  float dashMask = step(0.52, dashCell) * step(dashCell, 0.78);
+  float depthLine = smoothstep(0.12, 0.0, grid.x);
+  float hatTick = dashMask * depthLine * clamp(uHat, 0.0, 1.2);
+  line += hatTick * 0.85;
+
   vec3 col = gridCol * line * glow * (0.4 + uMid * 0.5 + vHeight * 0.3);
   col *= 1.0 + uBloom * 0.4 + heat * 0.55;
   // Soft traveling crest so the wash feels like a wave over the floor.
   float crest = sin(vUv.y * 18.0 - uTime * 2.4 + heat * 4.0) * 0.5 + 0.5;
   col += uHeatColor * crest * heat * 0.35 * line * glow;
-  gl_FragColor = vec4(col, min(1.0, line) * glow);
+  col += mix(uColorB, vec3(1.0, 0.95, 0.85), 0.4) * hatTick * 1.15 * glow;
+
+  // Snare roadside flash: valley shoulders (not the sky, not the whole grid).
+  float roadL = exp(-pow((vUv.x - 0.27) * 16.0, 2.0));
+  float roadR = exp(-pow((vUv.x - 0.73) * 16.0, 2.0));
+  float roadside = max(roadL, roadR) * smoothstep(0.05, 0.55, vUv.y);
+  float snareFlash = roadside * clamp(uSnare, 0.0, 1.2);
+  col += mix(uColorA, uHeatColor, 0.45) * snareFlash * 1.05 * glow;
+
+  gl_FragColor = vec4(col, min(1.0, line + snareFlash * 0.35) * glow);
 }
 `;
 
@@ -117,6 +140,8 @@ uniform float uBeat;
 uniform float uTension;
 uniform float uGather;
 uniform float uDropWash;
+uniform float uKick;
+uniform float uSnare;
 uniform vec3 uSunColor;
 uniform vec3 uSkyColor;
 
@@ -128,7 +153,9 @@ void main() {
   float horizonDip = uGather * 0.085;
   float sunY = 0.62 - horizonDip;
   // Tension charges: sun swells outward and stretches vertically.
-  float sunRadius = 0.14 + uBass * 0.05 + uTension * 0.11;
+  // Kick adds a short core punch — radius + brightness stay local to the disc.
+  float kick = clamp(uKick, 0.0, 1.2);
+  float sunRadius = 0.14 + uBass * 0.05 + uTension * 0.11 + kick * 0.05;
   float stretchY = 1.0 + uTension * 0.55;
   float stretchX = 1.0 - uTension * 0.12;
 
@@ -143,9 +170,13 @@ void main() {
 
   vec2 sunCenter = vec2(0.5 + sin(uTime * 0.15) * 0.02, sunY);
   vec2 sunUv = (uv - sunCenter) * vec2(stretchX, stretchY);
-  float sun = smoothstep(sunRadius, 0.0, length(sunUv));
+  float sunDist = length(sunUv);
+  float sun = smoothstep(sunRadius, 0.0, sunDist);
   vec3 sunCol = mix(uSunColor, vec3(1.0, 0.9, 0.7), 0.25 + uBass * 0.3 + uTension * 0.2) * sun;
-  sunCol *= 1.0 + uTension * 0.65;
+  sunCol *= 1.0 + uTension * 0.65 + kick * 0.75;
+  // Hotter inner core on kick — reads as a punch, not a fullscreen strobe.
+  float sunCore = smoothstep(sunRadius * 0.42, 0.0, sunDist);
+  sunCol += mix(uSunColor, vec3(1.0, 0.95, 0.82), 0.55) * sunCore * kick * 0.95;
 
   float bandMask = smoothstep(0.02, 0.0, abs(fract((uv.y - sunY) * 28.0 + uTime * 0.5) - 0.5));
   sunCol *= 0.6 + bandMask * 0.8;
@@ -158,6 +189,14 @@ void main() {
   // Faint horizon glow line that dips with gather.
   float horizonLine = exp(-abs(uv.y - (0.28 - horizonDip)) * 48.0);
   col += uSunColor * horizonLine * (0.12 + uTension * 0.35 + uGather * 0.25);
+
+  // Snare: thin roadside sky winks at the horizon flanks — never a full wash.
+  float snare = clamp(uSnare, 0.0, 1.2);
+  float flankL = exp(-pow((uv.x - 0.12) * 14.0, 2.0));
+  float flankR = exp(-pow((uv.x - 0.88) * 14.0, 2.0));
+  float flankY = exp(-pow((uv.y - (0.30 - horizonDip)) * 22.0, 2.0));
+  col += uSunColor * max(flankL, flankR) * flankY * snare * 0.55;
+
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -186,6 +225,9 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const gatherSmooth = useRef(0);
   const heatSmooth = useRef(0);
   const dropWashSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
   const heatColorScratch = useRef(new THREE.Color());
   const heatHighScratch = useRef(new THREE.Color());
   const { camera } = useThree();
@@ -194,6 +236,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const bloom = tier === 'high' ? 1 : tier === 'mid' ? 0.65 : 0.35;
   // Mid/low keep the same cinema language at slightly softer amplitude.
   const cinemaAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.65;
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const terrainUniforms = useMemo(
     () => ({
@@ -207,6 +250,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uBloom: { value: bloom },
       uHeat: { value: 0 },
       uHeatColor: { value: new THREE.Color(palette.bass) },
+      uHat: { value: 0 },
+      uSnare: { value: 0 },
     }),
     [palette.mid, palette.high, palette.bass, bloom],
   );
@@ -222,6 +267,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uTension: { value: 0 },
       uGather: { value: 0 },
       uDropWash: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
       uSunColor: { value: new THREE.Color(palette.bass) },
       uSkyColor: { value: new THREE.Color(palette.bass) },
     }),
@@ -273,6 +320,29 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       0.04,
       0.7,
     );
+    // Kit accents: kick punches rise fast / fall medium; snare cracks fast;
+    // hats tick with a very short fall so dash glitter stays crisp.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.03,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.025,
+      0.11,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.02,
+      0.07,
+    );
 
     terrainMat.uniforms.uTime!.value = state.clock.elapsedTime;
     terrainMat.uniforms.uScroll!.value = scrollRef.current;
@@ -280,6 +350,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     terrainMat.uniforms.uMid!.value = m.mid + m.afterglow * 0.2;
     terrainMat.uniforms.uEnergy!.value = m.energy;
     terrainMat.uniforms.uHeat!.value = heatSmooth.current;
+    terrainMat.uniforms.uHat!.value = hatSmooth.current;
+    terrainMat.uniforms.uSnare!.value = snareSmooth.current;
     (terrainMat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (terrainMat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (terrainMat.uniforms.uHeatColor!.value as THREE.Color)
@@ -293,6 +365,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     skyMat.uniforms.uTension!.value = tensionSmooth.current;
     skyMat.uniforms.uGather!.value = gatherSmooth.current;
     skyMat.uniforms.uDropWash!.value = dropWashSmooth.current;
+    skyMat.uniforms.uKick!.value = kickSmooth.current;
+    skyMat.uniforms.uSnare!.value = snareSmooth.current;
     (skyMat.uniforms.uSunColor!.value as THREE.Color).set(palette.bass);
     (skyMat.uniforms.uSkyColor!.value as THREE.Color).set(palette.bass);
 
