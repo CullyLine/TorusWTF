@@ -290,7 +290,8 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
     // Echo reverse also flips the whole-cloud spin so the reverse swirl reads.
-    points.rotation.y += drive * (0.5 + m.mid) * flowSign;
+    // Tenderness already hushes via `drive * calm`; mid spin softens further.
+    points.rotation.y += drive * (0.5 + m.mid * (1 - tender * 0.4)) * flowSign;
     points.rotation.x += m.impact * 0.05 + m.dropEvent * 0.02 + kickSmooth.current * 0.012;
     // Snare briefly tilts the storm on Z so the lateral crack owns the frame.
     points.rotation.z += snareSmooth.current * 0.018 * (snareSmooth.current > 0.15 ? 1 : 0);
