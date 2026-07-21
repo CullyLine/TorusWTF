@@ -2,17 +2,27 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useFBO } from '@react-three/drei';
 import { EffectComposer, Vignette } from '@react-three/postprocessing';
 import { BloomEffect } from 'postprocessing';
 import type { PerspectiveCamera, PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useModulation } from './modulation';
-import type { VisualImpulses } from './impulse';
+import { consumeCinematicCut, type VisualImpulses } from './impulse';
 import { useAdvanceCameraZoom, useCameraZoomDistanceRef } from './cameraZoom';
 import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
 import { AuraLayer } from './AuraLayer';
 import { LightLevel, type LightLevelEffectImpl } from './LightLevelEffect';
+import { HighlightGuard } from './effects/HighlightGuardEffect';
+import {
+  calculateBoundedBloomIntensity,
+  calculateFlashLightBoost,
+  clampLightSignal,
+  clampReactiveLightIntensity,
+} from './effects/brightness';
+import { ScreenStyleEffect } from './effects/ScreenStyleEffect';
+import type { ScreenEffectId } from './effects/screenEffects';
 import {
   createCinematicState,
   updateCinematicCamera,
@@ -43,10 +53,23 @@ const SAFE_MIN_CAMERA_DISTANCE = 1.5;
  * long enough that mode switches and cinematic cuts glide instead of teleport.
  */
 const CAMERA_SPRING_SMOOTH = 0.16;
+/** Default look SmoothDamp — snappy enough for orbit/drift gaze. */
 const LOOK_SPRING_SMOOTH = 0.14;
+/**
+ * Cinematic shot cuts jump look-at discontinuously; a longer SmoothDamp
+ * (~0.28s) lets framing glide into each cut without a pop, while position
+ * springs (CAMERA_SPRING_SMOOTH) still handle the body.
+ */
+const CINEMATIC_LOOK_SPRING_SMOOTH = 0.28;
 
 /** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
 const FOV_SPRING_SMOOTH = 0.09;
+
+/**
+ * Gentle SmoothDamp for Light-level musical breath — chorus lift and
+ * afterglow linger, slower than FOV so exposure never flashes with kicks.
+ */
+const LIGHT_BREATH_SPRING_SMOOTH = 0.28;
 
 /**
  * Short SmoothDamp for impact/bass shake amplitude — tracks kicks without
@@ -164,6 +187,96 @@ function springTo(
   state.initialized = true;
 }
 
+/**
+ * Snap a near-rest spring exactly onto its target so look stays still
+ * between cinematic cuts (no micro-crawl from residual velocity).
+ */
+function settleSpring3(
+  state: Spring3,
+  tx: number,
+  ty: number,
+  tz: number,
+  posEps = 2e-4,
+  velEps = 2e-4,
+): void {
+  if (!state.initialized) return;
+  if (
+    Math.abs(state.x - tx) < posEps &&
+    Math.abs(state.y - ty) < posEps &&
+    Math.abs(state.z - tz) < posEps &&
+    Math.abs(state.vx) < velEps &&
+    Math.abs(state.vy) < velEps &&
+    Math.abs(state.vz) < velEps
+  ) {
+    state.x = tx;
+    state.y = ty;
+    state.z = tz;
+    state.vx = 0;
+    state.vy = 0;
+    state.vz = 0;
+  }
+}
+
+const SCREEN_DEPTH_TEXTURE_SIZE = 384;
+
+function ScreenStylePass({
+  screenEffect,
+  shaderMix,
+}: {
+  screenEffect: Exclude<ScreenEffectId, 'none'>;
+  shaderMix: number;
+}) {
+  const mods = useModulation();
+  const depthTarget = useFBO(SCREEN_DEPTH_TEXTURE_SIZE, SCREEN_DEPTH_TEXTURE_SIZE, {
+    depth: true,
+    samples: 0,
+  });
+  const effect = useMemo(
+    () =>
+      new ScreenStyleEffect(
+        'none',
+        0,
+        depthTarget.depthTexture,
+        0.1,
+        1000,
+        SCREEN_DEPTH_TEXTURE_SIZE,
+      ),
+    [depthTarget.depthTexture],
+  );
+  const renderDepthRef = useRef(false);
+
+  useEffect(() => () => effect.dispose(), [effect]);
+
+  // Update first so the following depth prepass can skip all creative work
+  // whenever the effective wet amount is zero.
+  useFrame((state) => {
+    const wet = mods.current.shaderMix ?? shaderMix;
+    effect.style = screenEffect;
+    effect.mix = wet;
+    effect.time = state.clock.elapsedTime;
+
+    const camera = state.camera as PerspectiveCamera;
+    effect.setCameraRange(camera.near, camera.far);
+    renderDepthRef.current =
+      wet > 0.001 &&
+      screenEffect !== 'pixel8' &&
+      !state.gl.getContext().isContextLost();
+  });
+
+  // A small fixed-size prepass supplies depth discontinuities without asking
+  // postprocessing to blit multisampled depth (invalid on some WebGL2 drivers).
+  useFrame((state) => {
+    if (!renderDepthRef.current) return;
+    const previousTarget = state.gl.getRenderTarget();
+    state.gl.setRenderTarget(depthTarget);
+    state.gl.clear();
+    state.gl.render(state.scene, state.camera);
+    state.gl.setRenderTarget(previousTarget);
+  });
+
+  return <primitive object={effect} dispose={null} />;
+}
+
 interface SceneRigProps {
   palette: { bass: string; mid: string; high: string };
   tier: 'high' | 'mid' | 'low';
@@ -192,6 +305,12 @@ interface SceneRigProps {
    * works for shader presets too (which bypass scene lights entirely).
    */
   lightLevel?: number;
+  /** Hue-preserving final-frame highlight compression. Default on. */
+  highlightProtection?: boolean;
+  /** Mutually-exclusive whole-frame post-processing style. */
+  screenEffect?: ScreenEffectId;
+  /** Screen style wet/dry amount, also available as a modulation target. */
+  shaderMix?: number;
   /** One-shot commands from trigger mappings / MIDI (camPunch, bloomPulse, flash). */
   impulses?: VisualImpulses;
 }
@@ -212,6 +331,9 @@ export function SceneRig({
   cinematicSpeed = 1,
   cameraDistance = 1,
   lightLevel = 1,
+  highlightProtection = true,
+  screenEffect = 'none',
+  shaderMix = 1,
   impulses,
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
@@ -223,6 +345,9 @@ export function SceneRig({
   const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
   const fovSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  // Light-level musical breath: swell/afterglow multiplier eases via SmoothDamp
+  // on top of the user Light level baseline (baseline stays the floor).
+  const lightBreathSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // Impact/bass shake amp + post-pose rumble offsets — SmoothDamp so kick
   // rumble rides the sprung camera without envelope stair-steps.
   const shakeAmpSpringRef = useRef<ScalarSpring>(createScalarSpring());
@@ -246,15 +371,17 @@ export function SceneRig({
   // on object props.
   const bloomEffect = useMemo(
     () =>
-      new BloomEffect({
-        intensity: 1,
-        luminanceThreshold: 0.1,
-        luminanceSmoothing: 0.9,
-        mipmapBlur: true,
-      }),
-    [],
+      tier === 'low'
+        ? null
+        : new BloomEffect({
+            intensity: 1,
+            luminanceThreshold: 0.35,
+            luminanceSmoothing: 0.55,
+            mipmapBlur: true,
+          }),
+    [tier],
   );
-  useEffect(() => () => bloomEffect.dispose(), [bloomEffect]);
+  useEffect(() => () => bloomEffect?.dispose(), [bloomEffect]);
   const zoomDistanceRef = useCameraZoomDistanceRef();
   const advanceZoom = useAdvanceCameraZoom();
   const fallbackZ = embedded ? 2.8 : 3.1;
@@ -275,6 +402,8 @@ export function SceneRig({
   const camSpringRef = useRef<Spring3>(createSpring3());
   const lookSpringRef = useRef<Spring3>(createSpring3());
   const prevCameraModeRef = useRef<CameraMode>(cameraMode);
+  /** Tracks cinematic shot index so look velocity resets on each cut. */
+  const prevCinematicShotRef = useRef(-1);
 
   useFrame((state, delta) => {
     const m = metricsRef.current;
@@ -283,7 +412,7 @@ export function SceneRig({
     const t = state.clock.elapsedTime;
     const dist = Math.max(0.3, mv.cameraDistance ?? cameraDistance);
     const bassShakeNow = mv.bassShake ?? bassShake;
-    const lightLevelNow = Math.max(0, mv.lightLevel ?? lightLevel);
+    const lightLevelNow = Math.min(2, Math.max(0, mv.lightLevel ?? lightLevel));
     // Wheel/pinch write a zoom *target*; SmoothDamp eases distanceRef so
     // framing pulls feel fluid (no stair-steps) and settle cleanly at rest.
     if (advanceZoom) advanceZoom(delta);
@@ -300,6 +429,9 @@ export function SceneRig({
       lookSpringRef.current.vy = 0;
       lookSpringRef.current.vz = 0;
       prevCameraModeRef.current = cameraMode;
+      // Re-arm shot tracking when entering cinematic so the first shot
+      // doesn't count as a cut.
+      prevCinematicShotRef.current = -1;
     }
 
     // Consume one-shot trigger impulses, then decay their envelopes.
@@ -311,22 +443,36 @@ export function SceneRig({
       if (impulses.bloomPulse > 0.001) {
         bloomPulseEnvRef.current = Math.max(
           bloomPulseEnvRef.current,
-          Math.min(1.5, impulses.bloomPulse),
+          Math.min(1, impulses.bloomPulse),
         );
         impulses.bloomPulse = 0;
       }
       if (impulses.flash > 0.001) {
-        flashEnvRef.current = Math.max(flashEnvRef.current, Math.min(1.5, impulses.flash));
+        flashEnvRef.current = Math.max(flashEnvRef.current, Math.min(1, impulses.flash));
         impulses.flash = 0;
       }
+      consumeCinematicCut(impulses, cameraMode === 'cinematic', cinematicState.current);
     }
     camPunchEnvRef.current *= Math.exp(-dtImp / 0.22);
     bloomPulseEnvRef.current *= Math.exp(-dtImp / 0.35);
     flashEnvRef.current *= Math.exp(-dtImp / 0.16);
     const flash = flashEnvRef.current;
 
-    // Low tier has no post-processing exposure pass, so the light level is
-    // baked into the light intensities instead (see render section below).
+    // Light-level musical breath: choruses gently lift exposure via swell,
+    // peaks linger on afterglow. SmoothDamp keeps the lift fluid — never a
+    // kick strobe. Multiplier sits on the user Light level so the slider
+    // still sets the floor (quiet ≈ 1×, loud lifts a notch).
+    // LightLevel runs on every tier (including low), so the breath writes
+    // the exposure pass directly — no need to bake into scene lights.
+    const lightBreathTarget = 1 + m.swell * 0.14 + m.afterglow * 0.1;
+    const lightBreath = smoothDampScalar(
+      lightBreathSpringRef.current,
+      lightBreathTarget,
+      dtImp,
+      LIGHT_BREATH_SPRING_SMOOTH,
+    );
+    const effectiveLightLevel = lightLevelNow * lightBreath;
+
     // Lights ride the pulse envelopes (impact rings down like a struck
     // bell, shimmer melts) so illumination lands with hits and glides to
     // rest instead of strobing on raw FFT flux. Colors are re-read every
@@ -336,40 +482,48 @@ export function SceneRig({
     // laterally, hat ticks the high light — discrete drum answers on top of
     // the continuous swell/impact/shimmer ride. Envelopes already ring down,
     // so accents land as soft hits rather than strobing the whole stage.
-    const frameLightScale = tier === 'low' ? lightLevelNow : 1;
-    if (lightLevelRef.current) lightLevelRef.current.level = lightLevelNow;
-    const kickPunch = Math.min(1.2, m.kick);
-    const snareCrack = Math.min(1.2, m.snare);
-    const hatTick = Math.min(1.2, m.hat);
+    if (lightLevelRef.current) lightLevelRef.current.level = effectiveLightLevel;
+    const bassSignal = clampLightSignal(m.bass);
+    const midSignal = clampLightSignal(m.mid);
+    const highSignal = clampLightSignal(m.high);
+    const impactSignal = clampLightSignal(m.impact);
+    const swellSignal = clampLightSignal(m.swell);
+    const shimmerSignal = clampLightSignal(m.shimmer);
+    const afterglowSignal = clampLightSignal(m.afterglow);
+    const kickPunch = Math.min(1.2, clampLightSignal(m.kick));
+    const snareCrack = Math.min(1.2, clampLightSignal(m.snare));
+    const hatTick = Math.min(1.2, clampLightSignal(m.hat));
+    const flashLightBoost = calculateFlashLightBoost(flash);
     if (bassLight.current) {
-      bassLight.current.intensity =
-        (0.55 +
-          m.bass * 2.4 +
-          m.impact * 2.2 +
+      bassLight.current.intensity = clampReactiveLightIntensity(
+        0.55 +
+          bassSignal * 2.4 +
+          impactSignal * 2.2 +
           kickPunch * 1.6 +
-          m.afterglow * 0.7 +
-          flash * 3) *
-        frameLightScale;
-      bassLight.current.distance = 12 + m.breath * 6 + kickPunch * 2.5;
+          afterglowSignal * 0.7 +
+          flashLightBoost,
+      );
+      bassLight.current.distance = 12 + clampLightSignal(m.breath) * 6 + kickPunch * 2.5;
       bassLight.current.color.set(palette.bass);
     }
     if (midLight.current) {
-      midLight.current.intensity =
-        (0.45 +
-          m.mid * 2.0 +
-          m.swell * 0.8 +
+      midLight.current.intensity = clampReactiveLightIntensity(
+        0.45 +
+          midSignal * 2.0 +
+          swellSignal * 0.8 +
           snareCrack * 1.8 +
-          m.afterglow * 0.4 +
-          flash * 3) *
-        frameLightScale;
+          afterglowSignal * 0.4 +
+          flashLightBoost,
+      );
       // Lateral crack: snare snaps the mid light outward on its home axis
       // then the envelope eases it home — a sideways flash, not a strobe.
       midLight.current.position.set(2 + snareCrack * 0.85, 1 + snareCrack * 0.15, 1);
       midLight.current.color.set(palette.mid);
     }
     if (highLight.current) {
-      highLight.current.intensity =
-        (0.3 + m.high * 1.6 + m.shimmer * 1.9 + hatTick * 1.4 + flash * 3) * frameLightScale;
+      highLight.current.intensity = clampReactiveLightIntensity(
+        0.3 + highSignal * 1.6 + shimmerSignal * 1.9 + hatTick * 1.4 + flashLightBoost,
+      );
       highLight.current.color.set(palette.high);
     }
 
@@ -427,7 +581,7 @@ export function SceneRig({
         // Section-aware pacing: shots hold longer through quiet valleys
         // and cut faster at peaks. Integrated per-frame, so the varying
         // rate stays perfectly smooth.
-        const pacing = cinematicSpeed * (0.55 + m.sectionLevel * 0.6);
+        const pacing = (mv.cinematicSpeed ?? cinematicSpeed) * (0.55 + m.sectionLevel * 0.6);
         const cine = updateCinematicCamera(cinematicState.current, t, m.bpm, pacing);
         desiredX = cine.pos.x * dist;
         desiredY = cine.pos.y * dist;
@@ -435,6 +589,16 @@ export function SceneRig({
         lookTargetX = cine.look.x;
         lookTargetY = cine.look.y;
         lookTargetZ = cine.look.z;
+        // Shot cuts jump look discontinuously — zero look velocity so the
+        // longer cinematic SmoothDamp eases framing in cleanly (~0.28s).
+        if (prevCinematicShotRef.current !== cine.shotIndex) {
+          if (prevCinematicShotRef.current >= 0) {
+            lookSpringRef.current.vx = 0;
+            lookSpringRef.current.vy = 0;
+            lookSpringRef.current.vz = 0;
+          }
+          prevCinematicShotRef.current = cine.shotIndex;
+        }
         break;
       }
       case 'flow': {
@@ -605,15 +769,19 @@ export function SceneRig({
       }
     }
 
-    // Look-at also springs — cinematic shot cuts glide instead of snapping.
+    // Look-at SmoothDamp: cinematic cuts use a longer smooth-time so
+    // framing glides (~0.28s); other modes keep the snappier default.
+    const lookSmooth =
+      cameraMode === 'cinematic' ? CINEMATIC_LOOK_SPRING_SMOOTH : LOOK_SPRING_SMOOTH;
     springTo(
       lookSpringRef.current,
       lookTargetX,
       lookTargetY,
       lookTargetZ,
       dtCam,
-      LOOK_SPRING_SMOOTH,
+      lookSmooth,
     );
+    settleSpring3(lookSpringRef.current, lookTargetX, lookTargetY, lookTargetZ);
     const look = lookSpringRef.current;
     state.camera.lookAt(look.x + lookYaw, look.y + lookPitch, look.z);
 
@@ -641,28 +809,31 @@ export function SceneRig({
       }
     }
 
-    // Bloom musical breath: choruses glow via swell, peaks linger on
-    // afterglow, gather lifts just before the downbeat, and hits flash
-    // through a soft ring-down so kicks punch without strobing.
-    const breathTarget = 0.5 + m.swell * 0.82 + m.afterglow * 0.5;
-    // Rise through builds a touch faster than the verse exhale.
-    const breathTau = breathTarget > bloomBreathRef.current ? 0.2 : 0.55;
-    bloomBreathRef.current +=
-      (breathTarget - bloomBreathRef.current) * (1 - Math.exp(-dtImp / breathTau));
+    if (bloomEffect) {
+      // Bloom musical breath: choruses glow via swell, peaks linger on
+      // afterglow, gather lifts just before the downbeat, and hits flash
+      // through a soft ring-down so kicks punch without strobing.
+      const breathTarget = 0.5 + swellSignal * 0.82 + afterglowSignal * 0.5;
+      // Rise through builds a touch faster than the verse exhale.
+      const breathTau = breathTarget > bloomBreathRef.current ? 0.2 : 0.55;
+      bloomBreathRef.current +=
+        (breathTarget - bloomBreathRef.current) * (1 - Math.exp(-dtImp / breathTau));
 
-    if (m.impact > bloomHitRef.current) {
-      bloomHitRef.current = m.impact;
-    } else {
-      bloomHitRef.current *= Math.exp(-dtImp / 0.3);
+      if (impactSignal > bloomHitRef.current) {
+        bloomHitRef.current = impactSignal;
+      } else {
+        bloomHitRef.current *= Math.exp(-dtImp / 0.3);
+      }
+
+      bloomEffect.intensity = calculateBoundedBloomIntensity({
+        baseIntensity: mv.bloomIntensity ?? resolvedBloomRef.current,
+        breath: bloomBreathRef.current,
+        gather: m.gather,
+        hit: bloomHitRef.current,
+        bloomPulse: bloomPulseEnvRef.current,
+        flash,
+      });
     }
-
-    bloomEffect.intensity =
-      (mv.bloomIntensity ?? resolvedBloomRef.current) *
-      (bloomBreathRef.current +
-        m.gather * 0.28 +
-        bloomHitRef.current * 0.16 +
-        bloomPulseEnvRef.current * 1.1 +
-        flash * 0.6);
   });
 
   const tierBloom = tier === 'low' ? 0.8 : 1.1;
@@ -670,51 +841,63 @@ export function SceneRig({
   // Ref-mirror so the frame loop reads the latest slider value without
   // re-creating the closure.
   resolvedBloomRef.current = resolvedBloom;
-  const level = Math.max(0, lightLevel);
-  // High/mid tiers get the exact multiplicative exposure pass below. The
-  // low tier has no composer, so approximate by scaling the scene lights —
-  // shader presets won't dim there, but they won't bloom-blow-out either.
-  const lowTierLightScale = tier === 'low' ? level : 1;
+  const level = Math.min(2, Math.max(0, lightLevel));
 
   return (
     <>
-      <ambientLight intensity={0.28 * lowTierLightScale} />
+      <ambientLight intensity={0.28} />
       <pointLight
         ref={bassLight}
         position={[0, -1.5, 2]}
         color={palette.bass}
-        intensity={1 * lowTierLightScale}
+        intensity={1}
       />
       <pointLight
         ref={midLight}
         position={[2, 1, 1]}
         color={palette.mid}
-        intensity={0.8 * lowTierLightScale}
+        intensity={0.8}
       />
       <pointLight
         ref={highLight}
         position={[-2, 0.5, -1]}
         color={palette.high}
-        intensity={0.6 * lowTierLightScale}
+        intensity={0.6}
       />
       <spotLight
         position={[0, 4, 0]}
         angle={0.45}
         penumbra={0.8}
-        intensity={0.4 * lowTierLightScale}
+        intensity={0.4}
         color={palette.mid}
         distance={14}
       />
 
       <AuraLayer palette={palette} amount={aura} tier={tier} />
 
-      {tier !== 'low' ? (
-        <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
-          <primitive object={bloomEffect} dispose={null} />
-          <LightLevel ref={lightLevelRef} level={level} />
-          <Vignette eskil={false} offset={0.16} darkness={0.38} />
+      {tier === 'low' ? (
+        <EffectComposer multisampling={0}>
+          <>
+            <LightLevel ref={lightLevelRef} level={level} />
+            {screenEffect !== 'none' ? (
+              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+            ) : null}
+            <HighlightGuard enabled={highlightProtection} />
+          </>
         </EffectComposer>
-      ) : null}
+      ) : (
+        <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
+          <>
+            {bloomEffect ? <primitive object={bloomEffect} dispose={null} /> : null}
+            <LightLevel ref={lightLevelRef} level={level} />
+            <Vignette eskil={false} offset={0.16} darkness={0.38} />
+            {screenEffect !== 'none' ? (
+              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+            ) : null}
+            <HighlightGuard enabled={highlightProtection} />
+          </>
+        </EffectComposer>
+      )}
     </>
   );
 }

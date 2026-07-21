@@ -143,6 +143,45 @@ export function createCinematicState(): CinematicState {
   };
 }
 
+/**
+ * Jump to the exact start of the next authored shot.
+ *
+ * A cursor exactly on a shot boundary is already in the shot that starts
+ * there, so it advances to the following boundary. Advancing from anywhere
+ * in the final shot wraps to beat zero. Only beatsElapsed is mutated and no
+ * per-call objects are allocated.
+ */
+export function advanceToNextCinematicShot(state: CinematicState): void {
+  let cycleBeats = 0;
+  for (let i = 0; i < CINEMATIC_SHOTS.length; i += 1) {
+    cycleBeats += CINEMATIC_SHOTS[i]!.beats;
+  }
+
+  if (
+    !Number.isFinite(state.beatsElapsed) ||
+    !Number.isFinite(cycleBeats) ||
+    cycleBeats <= 0
+  ) {
+    state.beatsElapsed = 0;
+    return;
+  }
+
+  let cursor = state.beatsElapsed % cycleBeats;
+  if (cursor < 0) cursor += cycleBeats;
+
+  let nextStart = 0;
+  for (let i = 0; i < CINEMATIC_SHOTS.length; i += 1) {
+    nextStart += CINEMATIC_SHOTS[i]!.beats;
+    if (cursor < nextStart) {
+      state.beatsElapsed = nextStart < cycleBeats ? nextStart : 0;
+      return;
+    }
+  }
+
+  // Defensive fallback if the authored sequence is changed incompatibly.
+  state.beatsElapsed = 0;
+}
+
 const FALLBACK_BPM = 120;
 
 /**
@@ -156,7 +195,7 @@ export function updateCinematicCamera(
   nowSec: number,
   bpm: number | null,
   speed: number,
-): { pos: THREE.Vector3; look: THREE.Vector3 } {
+): { pos: THREE.Vector3; look: THREE.Vector3; shotIndex: number } {
   // First frame after construction: just snapshot the timestamp.
   if (state.lastTimeSec === 0) {
     state.lastTimeSec = nowSec;
@@ -180,10 +219,13 @@ export function updateCinematicCamera(
   let acc = 0;
   let activeShot = CINEMATIC_SHOTS[0]!;
   let localT = 0;
-  for (const shot of CINEMATIC_SHOTS) {
+  let shotIndex = 0;
+  for (let i = 0; i < CINEMATIC_SHOTS.length; i++) {
+    const shot = CINEMATIC_SHOTS[i]!;
     if (cursor < acc + shot.beats) {
       activeShot = shot;
       localT = (cursor - acc) / shot.beats;
+      shotIndex = i;
       break;
     }
     acc += shot.beats;
@@ -208,5 +250,5 @@ export function updateCinematicCamera(
     fl[2] + (tl[2] - fl[2]) * eased,
   );
 
-  return { pos: state.outPos, look: state.outLook };
+  return { pos: state.outPos, look: state.outLook, shotIndex };
 }

@@ -8,6 +8,8 @@
  * mapping UI in `TriggerPanel`, and the MIDI adapter in `lib/midi.ts`.
  */
 
+import type { VisualImpulses } from '@torus/visualizers';
+
 /** Where a trigger comes from. */
 export type TriggerSourceKind =
   | 'beat' // every detected beat onset
@@ -31,10 +33,13 @@ export type TriggerActionKind =
   | 'prevPreset'
   | 'randomPreset'
   | 'randomPalette'
+  | 'randomShader'
   | 'hueKick' // living-palette hue jolt (same feel as a drop kick)
   | 'camPunch' // one-shot camera FOV punch-in
   | 'bloomPulse' // one-shot bloom surge
-  | 'flash'; // brief full-scene light flash
+  | 'flash' // brief full-scene light flash
+  | 'emitParticles' // bounded burst from the active emitter
+  | 'nextCinematicCut'; // next authored shot, only while cinematic
 
 export interface TriggerMapping {
   id: string;
@@ -70,11 +75,47 @@ export const TRIGGER_ACTION_LABELS: Record<TriggerActionKind, string> = {
   prevPreset: 'Previous preset',
   randomPreset: 'Random preset',
   randomPalette: 'Random palette',
+  randomShader: 'Random screen shader',
   hueKick: 'Color kick',
   camPunch: 'Camera punch',
   bloomPulse: 'Glow pulse',
   flash: 'Flash',
+  emitParticles: 'Emitter burst',
+  nextCinematicCut: 'Next cinematic cut',
 };
+
+export const TRIGGER_IMPULSE_FIELDS = {
+  hueKick: 'hueKick',
+  camPunch: 'camPunch',
+  bloomPulse: 'bloomPulse',
+  flash: 'flash',
+  emitParticles: 'emitterBurst',
+  nextCinematicCut: 'cinematicCut',
+} as const satisfies Partial<Record<TriggerActionKind, keyof VisualImpulses>>;
+
+export function triggerImpulseField(action: TriggerActionKind): keyof VisualImpulses | null {
+  return TRIGGER_IMPULSE_FIELDS[action as keyof typeof TRIGGER_IMPULSE_FIELDS] ?? null;
+}
+
+export interface TriggerImpulseResult {
+  field: keyof VisualImpulses;
+  strength: number;
+}
+
+/** Mutate the shared impulse object using the same bounded rules as the engine. */
+export function applyTriggerImpulse(
+  impulses: VisualImpulses,
+  action: TriggerActionKind,
+  strength: number,
+): TriggerImpulseResult | null {
+  const field = triggerImpulseField(action);
+  if (!field) return null;
+  const nonNegative = Number.isFinite(strength) ? Math.max(0, strength) : 0;
+  const safeStrength = field === 'emitterBurst' ? Math.min(1, nonNegative) : nonNegative;
+  const current = Number.isFinite(impulses[field]) ? Math.max(0, impulses[field]) : 0;
+  impulses[field] = Math.max(current, safeStrength);
+  return { field, strength: safeStrength };
+}
 
 export const TRIGGER_SOURCES: TriggerSourceKind[] = Object.keys(
   TRIGGER_SOURCE_LABELS,
