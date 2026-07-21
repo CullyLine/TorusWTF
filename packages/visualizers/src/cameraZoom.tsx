@@ -22,11 +22,64 @@ const LIMITS = {
 
 const WHEEL_SENSITIVITY = 0.0045;
 
+/**
+ * Short SmoothDamp time for wheel/pinch framing pulls — fluid ease with no
+ * stair-steps, settles cleanly so quiet idle holds still.
+ */
+const ZOOM_SPRING_SMOOTH = 0.11;
+
+/** Snap threshold so critically-damped ease doesn't micro-crawl forever. */
+const ZOOM_SETTLE_EPS = 1e-4;
+
+interface ZoomSpring {
+  value: number;
+  velocity: number;
+  initialized: boolean;
+}
+
+/**
+ * Unity-style SmoothDamp (critically damped) for camera distance.
+ * First call snaps to the target so mount doesn't ease in from zero.
+ * Near-zero error + velocity snaps so idle framing holds still.
+ */
+function smoothDampZoom(
+  state: ZoomSpring,
+  target: number,
+  dt: number,
+  smoothTime: number,
+): number {
+  if (!state.initialized) {
+    state.value = target;
+    state.velocity = 0;
+    state.initialized = true;
+    return target;
+  }
+  const change = state.value - target;
+  if (Math.abs(change) < ZOOM_SETTLE_EPS && Math.abs(state.velocity) < ZOOM_SETTLE_EPS) {
+    state.value = target;
+    state.velocity = 0;
+    return target;
+  }
+  const st = Math.max(1e-4, smoothTime);
+  const omega = 2 / st;
+  const x = omega * dt;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const temp = (state.velocity + omega * change) * dt;
+  state.velocity = (state.velocity - omega * temp) * exp;
+  state.value = target + (change + temp) * exp;
+  return state.value;
+}
+
 interface CameraZoomContextValue {
+  /** Smoothed distance — SceneRig / presets read this each frame. */
   distanceRef: RefObject<number>;
+  /** Gesture target — wheel/pinch write here; SmoothDamp eases toward it. */
+  targetDistanceRef: RefObject<number>;
   setDistance: (distance: number) => void;
   nudge: (delta: number) => void;
   reset: () => void;
+  /** Advance SmoothDamp toward the target (call once per render frame). */
+  advance: (dt: number) => void;
 }
 
 const CameraZoomContext = createContext<CameraZoomContextValue | null>(null);
@@ -47,33 +100,69 @@ export function CameraZoomProvider({
   embedded: boolean;
   children: ReactNode;
 }) {
-  const distanceRef = useRef<number>(defaultDistance(embedded));
+  const initial = defaultDistance(embedded);
+  const distanceRef = useRef<number>(initial);
+  const targetDistanceRef = useRef<number>(initial);
+  const springRef = useRef<ZoomSpring>({
+    value: initial,
+    velocity: 0,
+    initialized: true,
+  });
+
+  const snapTo = useCallback(
+    (distance: number) => {
+      const clamped = clampDistance(distance, embedded);
+      targetDistanceRef.current = clamped;
+      distanceRef.current = clamped;
+      springRef.current.value = clamped;
+      springRef.current.velocity = 0;
+      springRef.current.initialized = true;
+    },
+    [embedded],
+  );
 
   const setDistance = useCallback(
     (distance: number) => {
-      distanceRef.current = clampDistance(distance, embedded);
+      targetDistanceRef.current = clampDistance(distance, embedded);
     },
     [embedded],
   );
 
   const nudge = useCallback(
     (delta: number) => {
-      distanceRef.current = clampDistance(distanceRef.current + delta, embedded);
+      targetDistanceRef.current = clampDistance(targetDistanceRef.current + delta, embedded);
     },
     [embedded],
   );
 
   const reset = useCallback(() => {
-    distanceRef.current = defaultDistance(embedded);
-  }, [embedded]);
+    snapTo(defaultDistance(embedded));
+  }, [embedded, snapTo]);
+
+  const advance = useCallback((dt: number) => {
+    const next = smoothDampZoom(
+      springRef.current,
+      targetDistanceRef.current,
+      Math.min(dt, 0.1),
+      ZOOM_SPRING_SMOOTH,
+    );
+    distanceRef.current = next;
+  }, []);
 
   useEffect(() => {
-    distanceRef.current = defaultDistance(embedded);
-  }, [embedded]);
+    snapTo(defaultDistance(embedded));
+  }, [embedded, snapTo]);
 
   const value = useMemo(
-    () => ({ distanceRef, setDistance, nudge, reset }),
-    [setDistance, nudge, reset],
+    () => ({
+      distanceRef,
+      targetDistanceRef,
+      setDistance,
+      nudge,
+      reset,
+      advance,
+    }),
+    [setDistance, nudge, reset, advance],
   );
 
   return <CameraZoomContext.Provider value={value}>{children}</CameraZoomContext.Provider>;
@@ -85,9 +174,14 @@ export function useCameraZoom() {
   return ctx;
 }
 
-/** Read zoom distance inside R3F useFrame (no React re-render). */
+/** Read smoothed zoom distance inside R3F useFrame (no React re-render). */
 export function useCameraZoomDistanceRef() {
   return useContext(CameraZoomContext)?.distanceRef ?? null;
+}
+
+/** Advance zoom SmoothDamp once per frame (no-op outside CameraZoomProvider). */
+export function useAdvanceCameraZoom(): ((dt: number) => void) | null {
+  return useContext(CameraZoomContext)?.advance ?? null;
 }
 
 function touchSpan(touches: TouchList) {
@@ -106,9 +200,10 @@ interface VisualizerZoomSurfaceProps {
 /**
  * Captures wheel + pinch on the visualizer viewport and adjusts camera distance.
  * Uses non-passive listeners so wheel does not scroll the page.
+ * Gestures update the zoom *target*; SmoothDamp eases the live distance.
  */
 export function VisualizerZoomSurface({ children, onInteract }: VisualizerZoomSurfaceProps) {
-  const { distanceRef, setDistance, nudge } = useCameraZoom();
+  const { targetDistanceRef, setDistance, nudge } = useCameraZoom();
   const rootRef = useRef<HTMLDivElement>(null);
   const pinchRef = useRef<{ lastSpan: number } | null>(null);
 
@@ -137,7 +232,9 @@ export function VisualizerZoomSurface({ children, onInteract }: VisualizerZoomSu
       if (span <= 0) return;
       const scale = span / pinchRef.current.lastSpan;
       if (Math.abs(scale - 1) > 0.002) {
-        setDistance(distanceRef.current / scale);
+        // Scale from the gesture target so pinch tracks continuously while
+        // the smoothed distance eases — never compound off the lagging value.
+        setDistance(targetDistanceRef.current / scale);
         pinchRef.current.lastSpan = span;
       }
     };
@@ -159,7 +256,7 @@ export function VisualizerZoomSurface({ children, onInteract }: VisualizerZoomSu
       el.removeEventListener('touchend', endPinch);
       el.removeEventListener('touchcancel', endPinch);
     };
-  }, [distanceRef, nudge, setDistance, onInteract]);
+  }, [targetDistanceRef, nudge, setDistance, onInteract]);
 
   return (
     <div ref={rootRef} style={{ width: '100%', height: '100%', touchAction: 'none' }}>

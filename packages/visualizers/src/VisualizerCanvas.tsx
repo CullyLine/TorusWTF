@@ -1,7 +1,16 @@
 'use client';
 
-import { useMemo, useRef, type MutableRefObject, type ReactNode, type RefObject } from 'react';
-import { Canvas, useFrame, type RootState } from '@react-three/fiber';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import { Canvas, useFrame, useThree, type RootState } from '@react-three/fiber';
 import type { Group } from 'three';
 
 export type { RootState } from '@react-three/fiber';
@@ -17,8 +26,48 @@ import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 import type { AnalyserHandle } from './audio';
 import type { CreaturePersonality } from './dsp/creature';
+import type { ScreenEffectId } from './effects/screenEffects';
+import { EmitterLayer } from './emitters/registry';
+import { DEFAULT_EMITTER_SETTINGS } from './emitters/settings';
+import type { EmitterSettings } from './emitters/types';
 
-interface VisualizerCanvasProps {
+/** Soft dissolve when switching presets — long enough to read, short enough to stay snappy. */
+const PRESET_CROSSFADE_MS = 350;
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setReduced(mq.matches);
+    update();
+    mq.addEventListener?.('change', update);
+    return () => mq.removeEventListener?.('change', update);
+  }, []);
+  return reduced;
+}
+
+/**
+ * After the WebGL scene paints, copy the canvas into a 2D ghost overlay so
+ * the outgoing frame can dissolve over the newly mounted preset.
+ */
+function CrossfadeCapture({
+  armRef,
+  onCaptured,
+}: {
+  armRef: MutableRefObject<boolean>;
+  onCaptured: (source: HTMLCanvasElement) => void;
+}) {
+  const glCanvas = useThree((s) => s.gl.domElement);
+  useFrame(() => {
+    if (!armRef.current) return;
+    armRef.current = false;
+    onCaptured(glCanvas);
+  }, -1);
+  return null;
+}
+
+export interface VisualizerCanvasProps {
   audioRef?: RefObject<HTMLAudioElement | null>;
   /** When set, overrides the analyser from audioRef (mic/tab sources). */
   analyserOverride?: AnalyserHandle | null;
@@ -80,6 +129,14 @@ interface VisualizerCanvasProps {
   cameraDistance?: number;
   /** Global light level. 1 = default; <1 dims the frame, >1 brightens. */
   lightLevel?: number;
+  /** Final hue-preserving highlight compression. Default on. */
+  highlightProtection?: boolean;
+  /** Whole-frame post-processing style. Default none. */
+  screenEffect?: ScreenEffectId;
+  /** Selected screen style wet/dry amount. 0 = original frame, 1 = full style. */
+  shaderMix?: number;
+  /** One global emitter layer, disabled by the factory `none` setting. */
+  emitterSettings?: EmitterSettings;
   /** Dynamic-range expansion. 0 = unchanged, 1 = peaks 3x their deviation. */
   energy?: number;
   /** Auto-gain (AGC). Default on; normalizes loudness so any song reacts well. */
@@ -171,6 +228,10 @@ export function VisualizerCanvas({
   cinematicSpeed = 1,
   cameraDistance = 1,
   lightLevel = 1,
+  highlightProtection = true,
+  screenEffect = 'none',
+  shaderMix = 1,
+  emitterSettings = DEFAULT_EMITTER_SETTINGS,
   energy,
   autoGain,
   inflate,
@@ -197,8 +258,91 @@ export function VisualizerCanvas({
   const fftSize = tier === 'low' ? 256 : 1024;
   const audioAnalyser = useAudioAnalyser(audioRef?.current ?? null, fftSize);
   const analyser = analyserOverride ?? audioAnalyser;
-  const def = VISUALIZERS[preset] ?? VISUALIZERS.torus_field;
   const defaultZ = embedded ? 2.8 : 3.1;
+  const reducedMotion = usePrefersReducedMotion();
+
+  // Mounted preset lags the prop by one painted frame so we can freeze the
+  // outgoing look into a ghost overlay, then dissolve it over the new scene.
+  const [activePreset, setActivePreset] = useState(preset);
+  const activePresetRef = useRef(preset);
+  const pendingPresetRef = useRef<VisualizerId | null>(null);
+  const captureArmRef = useRef(false);
+  const ghostCanvasRef = useRef<HTMLCanvasElement>(null);
+  const fadeRafRef = useRef<number | null>(null);
+  const [ghostOpacity, setGhostOpacity] = useState(0);
+
+  const def = VISUALIZERS[activePreset] ?? VISUALIZERS.torus_field;
+
+  const cancelGhostFade = useCallback(() => {
+    if (fadeRafRef.current != null) {
+      cancelAnimationFrame(fadeRafRef.current);
+      fadeRafRef.current = null;
+    }
+  }, []);
+
+  const handleCaptured = useCallback(
+    (source: HTMLCanvasElement) => {
+      const next = pendingPresetRef.current;
+      if (!next) return;
+      pendingPresetRef.current = null;
+
+      const ghost = ghostCanvasRef.current;
+      if (ghost) {
+        ghost.width = source.width;
+        ghost.height = source.height;
+        const ctx = ghost.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, ghost.width, ghost.height);
+          ctx.drawImage(source, 0, 0);
+        }
+      }
+
+      activePresetRef.current = next;
+      setActivePreset(next);
+      setGhostOpacity(1);
+
+      cancelGhostFade();
+      const start = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - start) / PRESET_CROSSFADE_MS);
+        // Ease-out cubic — quick handoff, soft landing.
+        const eased = 1 - (1 - t) ** 3;
+        setGhostOpacity(1 - eased);
+        if (t < 1) {
+          fadeRafRef.current = requestAnimationFrame(tick);
+        } else {
+          fadeRafRef.current = null;
+          setGhostOpacity(0);
+          const g = ghostCanvasRef.current;
+          const gctx = g?.getContext('2d');
+          if (g && gctx) gctx.clearRect(0, 0, g.width, g.height);
+        }
+      };
+      fadeRafRef.current = requestAnimationFrame(tick);
+    },
+    [cancelGhostFade],
+  );
+
+  useEffect(() => {
+    if (preset === activePresetRef.current && pendingPresetRef.current == null) return;
+
+    if (reducedMotion || frameloop === 'never') {
+      cancelGhostFade();
+      pendingPresetRef.current = null;
+      captureArmRef.current = false;
+      activePresetRef.current = preset;
+      setActivePreset(preset);
+      setGhostOpacity(0);
+      return;
+    }
+
+    if (preset === activePresetRef.current) return;
+
+    pendingPresetRef.current = preset;
+    captureArmRef.current = true;
+  }, [preset, reducedMotion, frameloop, cancelGhostFade]);
+
+  useEffect(() => () => cancelGhostFade(), [cancelGhostFade]);
 
   // Stable identity, mutated per-frame by LivingPaletteDriver (which reads
   // the base palette fresh each frame). Everything inside the canvas reads
@@ -237,9 +381,18 @@ export function VisualizerCanvas({
     scale,
     bloomIntensity,
     lightLevel,
+    shaderMix,
     colorLife,
     cameraDistance,
     bassShake,
+    cinematicSpeed,
+    emitterRate: emitterSettings.rate,
+    emitterSize: emitterSettings.size,
+    emitterLifetime: emitterSettings.lifetime,
+    emitterLift: emitterSettings.lift,
+    emitterSpread: emitterSettings.spread,
+    emitterTurbulence: emitterSettings.turbulence,
+    emitterOpacity: emitterSettings.opacity,
     inflate,
     turbulence,
     trailLength,
@@ -249,8 +402,12 @@ export function VisualizerCanvas({
   };
 
   const containerStyle = exportSize
-    ? { width: exportSize.width, height: exportSize.height }
-    : { width: '100%', height: '100%' };
+    ? {
+        position: 'relative' as const,
+        width: exportSize.width,
+        height: exportSize.height,
+      }
+    : { position: 'relative' as const, width: '100%', height: '100%' };
 
   return (
     <CameraZoomProvider embedded={embedded}>
@@ -263,6 +420,8 @@ export function VisualizerCanvas({
               antialias: tier !== 'low',
               powerPreference: 'high-performance',
               alpha: true,
+              // Needed so the post-render ghost capture can read pixels.
+              preserveDrawingBuffer: true,
               ...(glOverrides ?? {}),
             }}
             frameloop={frameloop}
@@ -273,12 +432,19 @@ export function VisualizerCanvas({
             }}
           >
             <color attach="background" args={['#0a0b1e']} />
+            <CrossfadeCapture armRef={captureArmRef} onCaptured={handleCaptured} />
             <AudioMetricsProvider analyser={analyser} {...metricsScales}>
               <ModulationProvider routings={modMatrix} base={modBase}>
                 <LivingPaletteDriver
                   base={palette}
                   out={livingPalette}
                   amount={colorLife}
+                  impulses={impulses}
+                />
+                <EmitterLayer
+                  settings={emitterSettings}
+                  palette={livingPalette}
+                  tier={tier}
                   impulses={impulses}
                 />
                 <SceneRig
@@ -294,6 +460,9 @@ export function VisualizerCanvas({
                   cinematicSpeed={cinematicSpeed}
                   cameraDistance={cameraDistance}
                   lightLevel={lightLevel}
+                  highlightProtection={highlightProtection}
+                  screenEffect={screenEffect}
+                  shaderMix={shaderMix}
                   impulses={impulses}
                 />
                 {background !== 'none' ? (
@@ -325,6 +494,19 @@ export function VisualizerCanvas({
               </ModulationProvider>
             </AudioMetricsProvider>
           </Canvas>
+          <canvas
+            ref={ghostCanvasRef}
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'none',
+              opacity: ghostOpacity,
+              visibility: ghostOpacity > 0.001 ? 'visible' : 'hidden',
+            }}
+          />
         </div>
       </VisualizerZoomSurface>
     </CameraZoomProvider>
