@@ -18,12 +18,14 @@ import { getDotTexture } from './dotTexture';
  * Driven mostly by SLOW signals (`breath`, `flow`, `moodValence`,
  * `dropEvent`, `afterglow`, `tension`) so the background drifts and
  * swells rather than strobing. Pre-beat `gather` eases the sky inward /
- * dim (musical inhale); `shimmer`/`hat` add a faint glitter distinct
- * from bass swell. While `afterglow` decays, nebula/aurora/glow bias
- * toward a warmer amber mix — intensity afterglow stays; this is the
- * color-temperature residue of a big moment. Honors
- * `prefers-reduced-motion` by freezing the drift. Contrast-capped so it
- * never competes with the foreground preset.
+ * dim (musical inhale); `leanIn` pulls the shell slightly toward the
+ * camera (anticipation, distinct from gather). `shimmer`/`hat` add a
+ * faint glitter distinct from bass swell. `vocalActivity` soft-warms
+ * sky tint on voice-led passages; while `afterglow` decays,
+ * nebula/aurora/glow bias toward a warmer amber mix on top — intensity
+ * afterglow stays; this is the color-temperature residue of a big
+ * moment. Honors `prefers-reduced-motion` by freezing the drift.
+ * Contrast-capped so it never competes with the foreground preset.
  */
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
@@ -62,8 +64,35 @@ const AFTERGLOW_WARMTH_MIX = 0.42;
 /** Ease tau for color-temperature linger (fluid, not stair-stepped). */
 const AFTERGLOW_WARMTH_TAU = 0.35;
 
+/**
+ * Softer rose-warm voice tint — sits under afterglow amber so peaks still
+ * read as the big-moment residue, while vocal verses warm vs instrumental.
+ */
+const VOCAL_WARM = new THREE.Color(1.0, 0.7, 0.55);
+const VOCAL_WARMTH_MIX = 0.24;
+const VOCAL_WARMTH_TAU = 0.22;
+
+/** Lean-in: eager rise, slower settle so anticipation lingers into the drop. */
+const LEAN_RISE_TAU = 0.08;
+const LEAN_FALL_TAU = 0.2;
+/** Max sky-shell scale reduction — pulls nebula/aurora/glow toward camera. */
+const LEAN_SKY_PULL = 0.06;
+/** Star shell pull — slightly stronger so the approach reads on points. */
+const LEAN_STAR_PULL = 0.08;
+
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
 const SKY_RADIUS = 50;
+
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  return current + (target - current) * (1 - Math.exp(-dt / tau));
+}
 
 /** Bias a sky color toward amber by eased afterglow; quiet (0) is a no-op. */
 function applyAfterglowWarmth(
@@ -74,6 +103,17 @@ function applyAfterglowWarmth(
   const t = Math.max(0, Math.min(1, warmthLinger)) * AFTERGLOW_WARMTH_MIX;
   if (t < 0.001) return;
   color.lerp(scratchAmber.copy(AFTERGLOW_AMBER), t);
+}
+
+/** Soft voice-warm tint; apply before afterglow so amber linger still wins. */
+function applyVocalWarmth(
+  color: THREE.Color,
+  vocalLinger: number,
+  scratchWarm: THREE.Color,
+): void {
+  const t = Math.max(0, Math.min(1, vocalLinger)) * VOCAL_WARMTH_MIX;
+  if (t < 0.001) return;
+  color.lerp(scratchWarm.copy(VOCAL_WARM), t);
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -191,12 +231,15 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform float uIntensity;
   uniform float uInhale;
   uniform float uGlitter;
+  uniform float uLean;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
     vec3 d = normalize(vDir);
-    float n1 = fbmDir(d, 2.6, vec2(uTime * 0.020, uTime * 0.015));
-    float n2 = fbmDir(d, 4.4, vec2(-uTime * 0.012, uTime * 0.008));
+    // Lean zooms features (sky approaches) — distinct from gather's density inhale.
+    float zoom = 1.0 - uLean * 0.28;
+    float n1 = fbmDir(d, 2.6 * zoom, vec2(uTime * 0.020, uTime * 0.015));
+    float n2 = fbmDir(d, 4.4 * zoom, vec2(-uTime * 0.012, uTime * 0.008));
     // Gather raises the density floor so fog thins / pulls toward denser
     // pockets — a pre-beat inhale instead of a flat dim.
     float lo = 0.28 + uInhale * 0.16;
@@ -209,17 +252,20 @@ const NEBULA_FRAGMENT = /* glsl */ `
     // Hat/shimmer glitter: brief high-frequency sparkle, not bass swell.
     float sparkle = noise(d.xy * 38.0 + vec2(uTime * 9.0, uTime * 6.5));
     float glitter = 1.0 + uGlitter * (0.25 + 0.75 * sparkle);
-    float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * glitter;
+    // Lean slightly brightens (anticipation), gather dims (inhale).
+    float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * (1.0 + uLean * 0.08) * glitter;
     gl_FragColor = vec4(col, a);
   }
 `;
 
 function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
+  const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
   const scratchAmber = useRef(new THREE.Color());
+  const scratchVocal = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -228,13 +274,16 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       uIntensity: { value: 0 },
       uInhale: { value: 0 },
       uGlitter: { value: 0 },
+      uLean: { value: 0 },
     }),
     [palette.bass, palette.mid],
   );
   const timeRef = useRef(0);
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
+  const leanRef = useRef(0);
   const warmthLingerRef = useRef(0);
+  const vocalLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
@@ -258,11 +307,19 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     // Color-temperature linger tracks afterglow (intensity path unchanged).
     warmthLingerRef.current +=
       (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
+    vocalLingerRef.current +=
+      (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
+      (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value = glitterRef.current;
+    mat.uniforms.uLean!.value = leanRef.current;
+    if (groupRef.current) {
+      groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
+    }
     // Live palette: both fog colors track the (mutating) palette per frame.
     const colorA = mat.uniforms.uColorA!.value as THREE.Color;
     colorA.set(palette.bass);
@@ -274,12 +331,18 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       scratchHigh.current.set(palette.high),
       warmth * 0.6,
     );
-    // Big-moment amber residue — quiet afterglow leaves palette untinted.
+    // Voice warmth first; afterglow amber linger still owns big-moment peaks.
+    applyVocalWarmth(colorA, vocalLingerRef.current, scratchVocal.current);
+    applyVocalWarmth(colorB, vocalLingerRef.current, scratchVocal.current);
     applyAfterglowWarmth(colorA, warmthLingerRef.current, scratchAmber.current);
     applyAfterglowWarmth(colorB, warmthLingerRef.current, scratchAmber.current);
   });
 
-  return <SkySphere matRef={matRef} fragment={NEBULA_FRAGMENT} uniforms={uniforms} />;
+  return (
+    <group ref={groupRef}>
+      <SkySphere matRef={matRef} fragment={NEBULA_FRAGMENT} uniforms={uniforms} />
+    </group>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -296,8 +359,11 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const metricsRef = useMetricsRef();
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
+  const scratchVocal = useRef(new THREE.Color());
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
+  const leanRef = useRef(0);
+  const vocalLingerRef = useRef(0);
   const sprite = useMemo(() => getDotTexture(), []);
   const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
 
@@ -334,10 +400,18 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
     const g = groupRef.current;
+    leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
+    vocalLingerRef.current +=
+      (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
+      (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     if (g && !reducedMotion) {
       // Very slow whole-sky rotation — deep-space drift.
       g.rotation.y += delta * 0.004;
       g.rotation.z += delta * 0.002;
+    }
+    if (g) {
+      // Lean pulls the star shell toward the camera (anticipation).
+      g.scale.setScalar(1 - leanRef.current * LEAN_STAR_PULL);
     }
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
     const glitterTarget = Math.min(1, m.shimmer * 0.95 + m.hat * 0.6);
@@ -370,6 +444,13 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       const cArr = cAttr.array as Float32Array;
       const midC = scratchMid.current.set(palette.mid);
       const highC = scratchHigh.current.set(palette.high);
+      const vocalT =
+        Math.max(0, Math.min(1, vocalLingerRef.current)) * VOCAL_WARMTH_MIX;
+      if (vocalT >= 0.001) {
+        const warm = scratchVocal.current.copy(VOCAL_WARM);
+        midC.lerp(warm, vocalT);
+        highC.lerp(warm, vocalT);
+      }
       for (let i = 0; i < count; i++) {
         const c = starBand[i] === 1 ? highC : midC;
         const v = starVariance[i]!;
@@ -414,6 +495,7 @@ const AURORA_FRAGMENT = /* glsl */ `
   uniform float uIntensity;
   uniform float uInhale;
   uniform float uGlitter;
+  uniform float uLean;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
@@ -421,29 +503,32 @@ const AURORA_FRAGMENT = /* glsl */ `
     // Horizontal domain (seam-free): the direction's x/z components,
     // ignoring elevation — curtains wrap 360° around the viewer.
     vec3 flat3 = normalize(vec3(d.x, 0.0, d.z) + 1e-4);
-    // Wavy top edge of the curtain, different at every compass heading.
-    float wave = fbmDir(flat3, 2.4, vec2(uTime * 0.05, 0.0));
+    // Lean zooms curtain detail (approach); gather drops the top edge.
+    float leanZoom = 1.0 - uLean * 0.22;
+    float wave = fbmDir(flat3, 2.4 * leanZoom, vec2(uTime * 0.05, 0.0));
     // Gather drops the curtain edge toward the horizon (inward inhale).
     float topEdge = 0.16 + 0.34 * wave - uInhale * 0.14;
     // Curtain: bright ribbon below its wavy top edge, fading out toward
     // the nadir so it hugs the horizon like the real thing.
     float curtain = smoothstep(topEdge, topEdge - 0.55, d.y) * smoothstep(-0.75, -0.25, d.y);
     // Vertical shimmer striations that scroll around the horizon.
-    float shimmer = 0.55 + 0.45 * fbmDir(d, 7.0, vec2(uTime * 0.18, uTime * 0.06));
+    float shimmer = 0.55 + 0.45 * fbmDir(d, 7.0 * leanZoom, vec2(uTime * 0.18, uTime * 0.06));
     // Hat glitter: sharp sparkle ticks on the curtain, not bass billow.
     float sparkle = noise(d.xz * 52.0 + vec2(uTime * 11.0, -uTime * 7.0));
     shimmer += uGlitter * (0.35 + 0.65 * sparkle);
     float hueBand = clamp(d.y * 1.3 + 0.55, 0.0, 1.0);
     vec3 col = mix(uColorA, uColorB, hueBand + 0.2 * wave);
-    float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38);
+    float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38) * (1.0 + uLean * 0.07);
     gl_FragColor = vec4(col, a);
   }
 `;
 
 function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
+  const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
   const scratchAmber = useRef(new THREE.Color());
+  const scratchVocal = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -452,6 +537,7 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
       uIntensity: { value: 0 },
       uInhale: { value: 0 },
       uGlitter: { value: 0 },
+      uLean: { value: 0 },
     }),
     [palette.bass, palette.high],
   );
@@ -459,7 +545,9 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   const levelRef = useRef(0);
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
+  const leanRef = useRef(0);
   const warmthLingerRef = useRef(0);
+  const vocalLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
@@ -480,24 +568,38 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.2;
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     warmthLingerRef.current +=
       (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
+    vocalLingerRef.current +=
+      (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
+      (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     const mat = matRef.current;
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uIntensity!.value = Math.min(AURORA_CAP, levelRef.current * intensity * AURORA_CAP);
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value = glitterRef.current;
+    mat.uniforms.uLean!.value = leanRef.current;
+    if (groupRef.current) {
+      groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
+    }
     // Live palette: curtain colors track the (mutating) palette per frame.
     const colorA = mat.uniforms.uColorA!.value as THREE.Color;
     const colorB = mat.uniforms.uColorB!.value as THREE.Color;
     colorA.set(palette.bass);
     colorB.set(palette.high);
+    applyVocalWarmth(colorA, vocalLingerRef.current, scratchVocal.current);
+    applyVocalWarmth(colorB, vocalLingerRef.current, scratchVocal.current);
     applyAfterglowWarmth(colorA, warmthLingerRef.current, scratchAmber.current);
     applyAfterglowWarmth(colorB, warmthLingerRef.current, scratchAmber.current);
   });
 
-  return <SkySphere matRef={matRef} fragment={AURORA_FRAGMENT} uniforms={uniforms} />;
+  return (
+    <group ref={groupRef}>
+      <SkySphere matRef={matRef} fragment={AURORA_FRAGMENT} uniforms={uniforms} />
+    </group>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -510,27 +612,30 @@ const GLOW_FRAGMENT = /* glsl */ `
   uniform float uIntensity;
   uniform float uInhale;
   uniform float uGlitter;
+  uniform float uLean;
   varying vec3 vDir;
   void main() {
     vec3 d = normalize(vDir);
     // Wide soft halo around the drifting energy source...
-    // Gather tightens the core (inward inhale) instead of only dimming.
-    float core = pow(max(dot(d, uSunDir), 0.0), 3.0 + uInhale * 2.2);
+    // Gather tightens the core (inward inhale); lean gently focuses it.
+    float core = pow(max(dot(d, uSunDir), 0.0), 3.0 + uInhale * 2.2 + uLean * 0.9);
     // ...plus a faint horizon glow so the rest of the sky isn't dead.
     float horizon = (1.0 - abs(d.y)) * 0.18 * (1.0 - uInhale * 0.35);
     float sparkle = fract(sin(dot(d.xy, vec2(12.9898, 78.233))) * 43758.5453);
     float glitter = 1.0 + uGlitter * (0.2 + 0.8 * sparkle);
-    float a = (core + horizon) * uIntensity * (1.0 - uInhale * 0.3) * glitter;
+    float a = (core + horizon) * uIntensity * (1.0 - uInhale * 0.3) * (1.0 + uLean * 0.06) * glitter;
     gl_FragColor = vec4(uColor, a);
   }
 `;
 
 function Glow({ intensity, palette, reducedMotion }: ModeProps) {
+  const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
   const scratchAmber = useRef(new THREE.Color());
+  const scratchVocal = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(palette.mid) },
@@ -538,13 +643,16 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
       uIntensity: { value: 0 },
       uInhale: { value: 0 },
       uGlitter: { value: 0 },
+      uLean: { value: 0 },
     }),
     [palette.mid],
   );
   const tRef = useRef(0);
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
+  const leanRef = useRef(0);
   const warmthLingerRef = useRef(0);
+  const vocalLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
@@ -574,11 +682,19 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     warmthLingerRef.current +=
       (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
+    vocalLingerRef.current +=
+      (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
+      (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     mat.uniforms.uIntensity!.value = Math.min(GLOW_CAP, swell * silenceMute * intensity * GLOW_CAP);
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value = glitterRef.current;
+    mat.uniforms.uLean!.value = leanRef.current;
+    if (groupRef.current) {
+      groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
+    }
     // Warm vs cool target color follows mood valence.
     const warmth = Math.max(0, Math.min(1, 0.5 + m.moodValence * 0.4));
     const color = mat.uniforms.uColor!.value as THREE.Color;
@@ -587,8 +703,13 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
       scratchMid.current.set(palette.mid),
       warmth,
     );
+    applyVocalWarmth(color, vocalLingerRef.current, scratchVocal.current);
     applyAfterglowWarmth(color, warmthLingerRef.current, scratchAmber.current);
   });
 
-  return <SkySphere matRef={matRef} fragment={GLOW_FRAGMENT} uniforms={uniforms} />;
+  return (
+    <group ref={groupRef}>
+      <SkySphere matRef={matRef} fragment={GLOW_FRAGMENT} uniforms={uniforms} />
+    </group>
+  );
 }

@@ -7,6 +7,9 @@
  *  - impact / release → flare and unfurl outward
  *  - afterglow → warm residual trails linger after peaks
  *  - swell → braid amplitude and flow pace grow through choruses
+ *  - kick → thrust along the braid (flow surge + core punch)
+ *  - snare → lateral shear flash (phase-split L/R crack)
+ *  - hat → sparse mote ticks on braid edges (distinct from shimmer)
  */
 
 import { useMemo, useRef } from 'react';
@@ -30,6 +33,9 @@ uniform float uSwell;
 uniform float uGather;
 uniform float uImpact;
 uniform float uAfterglow;
+uniform float uKick;
+uniform float uSnare;
+uniform float uHat;
 uniform float uBass;
 uniform float uMid;
 uniform float uHigh;
@@ -54,14 +60,22 @@ float ribbonDist(vec2 uv, float id, float t, float fold, float flare) {
   float weave = 0.18 + uSwell * 0.22 + uMid * 0.12;
   // Gather pulls strands toward the horizontal mid-line; impact unfurls.
   float braidAmp = weave * (1.0 - fold * 0.72) * (1.0 + flare * 0.85);
-  float flow = t * (0.35 + seed * 0.25 + uBass * 0.15) + phase;
+  // Kick thrusts flow along the braid (local surge, not a fullscreen wash).
+  float kick = clamp(uKick, 0.0, 1.2);
+  float flow = t * (0.35 + seed * 0.25 + uBass * 0.15 + kick * 0.55) + phase
+    + kick * (0.55 + seed * 0.35);
   float pathY = y0 * (1.0 - fold * 0.85)
     + sin(uv.x * (2.1 + seed * 1.4) + flow) * braidAmp
     + sin(uv.x * (4.6 + seed * 2.0) - flow * 1.35 + phase) * braidAmp * 0.42;
   // Soft lateral sway so the braid feels alive, not a flat curtain.
   pathY += cos(uv.x * 1.1 + t * 0.55 + phase) * (0.04 + uHigh * 0.06) * (1.0 - fold * 0.5);
+  // Snare lateral shear: phase-split L/R crack across the braid.
+  float snare = clamp(uSnare, 0.0, 1.2);
+  float lateral = sign(sin(phase * 6.2831853 + seed * 12.0));
+  if (abs(lateral) < 0.01) lateral = 1.0;
+  pathY += snare * lateral * (0.055 + seed * 0.03) * (1.0 - fold * 0.35);
 
-  float halfW = (0.028 + uEnergy * 0.012 + flare * 0.035)
+  float halfW = (0.028 + uEnergy * 0.012 + flare * 0.035 + kick * 0.022)
     * (1.0 + fold * 0.55) // thicker when gathered (silk bunching)
     * (1.0 - flare * 0.15);
   float d = abs(uv.y - pathY) / max(halfW, 1e-4);
@@ -84,9 +98,13 @@ void main() {
 
   float fold = uGather;
   float flare = uImpact;
+  float kick = clamp(uKick, 0.0, 1.2);
+  float snare = clamp(uSnare, 0.0, 1.2);
+  float hat = clamp(uHat, 0.0, 1.2);
 
   // Gather folds the frame inward; impact stretches it back open.
-  float zoom = 1.0 - fold * 0.28 + flare * 0.18;
+  // Kick adds a brief along-braid zoom punch (local, not a sky wash).
+  float zoom = 1.0 - fold * 0.28 + flare * 0.18 + kick * 0.06;
   uv *= zoom;
 
   // Mild radial squeeze on gather so ribbons braid into a silk knot.
@@ -94,13 +112,16 @@ void main() {
   float ang = atan(uv.y, uv.x);
   ang += sin(ang * 2.0 + uTime * 0.5) * fold * 0.18;
   uv = vec2(cos(ang), sin(ang)) * r0 * (1.0 - fold * 0.12 * smoothstep(0.1, 1.0, r0));
+  // Snare shears the whole braid sheet laterally before distance sampling.
+  uv.x += snare * 0.045 * sign(uv.x + 1e-4);
 
-  float t = uTime * (0.55 + uSwell * 0.55 + uEnergy * 0.2);
+  float t = uTime * (0.55 + uSwell * 0.55 + uEnergy * 0.2 + kick * 0.35);
   vec3 body = silkBackdrop(uv);
   body *= 0.5 + uEnergy * 0.22 + uAfterglow * 0.4;
 
   float glow = 0.0;
   float trail = 0.0;
+  float mote = 0.0;
   vec3 ribbonCol = vec3(0.0);
 
   for (int i = 0; i < RIBBON_COUNT; i++) {
@@ -115,6 +136,12 @@ void main() {
     float wake = exp(-d * d * 0.12) * uAfterglow * (0.35 + 0.25 * sin(uv.x * 3.0 + t + id));
     trail += wake;
 
+    // Hat mote ticks: sparse edge sparkles (every ~3rd ribbon), not continuous shimmer.
+    float seed = hash11(id + 0.37);
+    float tickSelect = step(0.58, fract(seed * 5.17 + id * 0.31));
+    float edge = exp(-pow(abs(d - 1.15), 2.0) * 6.0);
+    mote += edge * tickSelect * strand;
+
     float mixT = fract(id * 0.27 + uMid * 0.15 + uBarPhase * 0.08);
     vec3 c = mix(uColorBass, uColorMid, smoothstep(0.0, 0.55, mixT));
     c = mix(c, uColorHigh, smoothstep(0.45, 1.0, mixT));
@@ -122,6 +149,9 @@ void main() {
     vec3 warm = mix(uColorBass, vec3(1.0, 0.78, 0.48), 0.55);
     c = mix(c, vec3(1.0), flare * 0.35 * core);
     c = mix(c, warm, uAfterglow * 0.45);
+    // Kick punches bass-warm core; snare cracks toward mid/white flash.
+    c = mix(c, mix(uColorBass, vec3(1.0, 0.85, 0.7), 0.35), kick * 0.4 * core);
+    c = mix(c, mix(uColorMid, vec3(1.0), 0.55), snare * 0.45 * core);
 
     ribbonCol += c * strand;
     glow += strand;
@@ -132,16 +162,22 @@ void main() {
   ribbonCol /= norm;
   glow /= norm;
   trail /= norm;
+  mote /= norm;
 
-  // Shimmer / hats tick fine glitter along the braid edges.
+  // Shimmer melts fine glitter along the braid edges (sustained sparkle).
   float glitter = pow(max(glow, 0.0), 3.0) * uShimmer * 0.85;
   ribbonCol += mix(uColorHigh, vec3(1.0), 0.4) * glitter;
+  // Hat motes: crisp tick-tick on selected ribbon edges.
+  ribbonCol += mix(uColorHigh, vec3(1.0), 0.35) * mote * hat * 1.25;
 
   vec3 col = body;
-  col += ribbonCol * (0.95 + flare * 0.85);
+  col += ribbonCol * (0.95 + flare * 0.85 + kick * 0.2);
   col += mix(uColorBass, vec3(1.0, 0.72, 0.4), 0.5) * trail * 1.15;
   // Soft residual sheet warmth after peaks.
   col += mix(uColorMid, vec3(1.0, 0.7, 0.42), 0.4) * uAfterglow * (0.1 + glow * 0.2);
+  // Snare roadside-style flash along the braid flanks (outside the cores).
+  float flank = smoothstep(0.35, 0.95, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.2, abs(uv.y)));
+  col += mix(uColorMid, vec3(1.0, 0.92, 0.85), 0.4) * flank * snare * 0.55;
 
   float barFlash = pow(1.0 - uBarPhase, 8.0) * (0.06 + flare * 0.1);
   col += uColorHigh * barFlash;
@@ -191,6 +227,9 @@ export function SilkWakeScene({
   const swellSmooth = useRef(0.15);
   const impactSmooth = useRef(0);
   const afterglowSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -199,6 +238,7 @@ export function SilkWakeScene({
 
   const ribbonCount = tier === 'high' ? RIBBONS_HIGH : tier === 'mid' ? RIBBONS_MID : RIBBONS_LOW;
   const flashAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(ribbonCount), [ribbonCount]);
 
   const uniforms = useMemo(
@@ -209,6 +249,9 @@ export function SilkWakeScene({
       uGather: { value: 0 },
       uImpact: { value: 0 },
       uAfterglow: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
+      uHat: { value: 0 },
       uBass: { value: 0 },
       uMid: { value: 0 },
       uHigh: { value: 0 },
@@ -252,6 +295,29 @@ export function SilkWakeScene({
       0.18,
       0.85,
     );
+    // Kit accents: kick thrusts rise fast / fall medium; snare cracks fast;
+    // hats tick with a very short fall so mote glitter stays crisp.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.025,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.015,
+      0.08,
+    );
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = timeRef.current;
@@ -259,6 +325,9 @@ export function SilkWakeScene({
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uImpact!.value = impactSmooth.current;
     mat.uniforms.uAfterglow!.value = afterglowSmooth.current;
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
+    mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
