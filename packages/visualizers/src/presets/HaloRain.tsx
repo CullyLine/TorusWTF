@@ -7,6 +7,7 @@
  *  - gather → reverse-inhale: drift flips upward and radii tighten to center
  *  - impact → rings flare bright (soft flash, not a strobe)
  *  - hat → sparse ring brightness ticks (distinct from impact flare)
+ *  - echo → one-shot upward rain reverse + ring after-image in phrase gaps
  */
 
 import { useMemo, useRef } from 'react';
@@ -38,6 +39,8 @@ uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -79,14 +82,21 @@ void main() {
   float oval = 1.0 + sin(ang * 2.0 + uTime * 0.35) * (0.03 + uMid * 0.04);
   r *= oval;
 
+  // Phrase-echo reply envelope: peaks early, fades as the ghost travels.
+  float echoPulse = uEcho * (1.0 - uEchoTravel * 0.85);
+
   // Downward rain = positive drift; gather flips sign and slows the fall.
+  // Echo reverse is applied in JS to uDrift itself (brief upward reply).
   float rain = uDrift * (1.0 - uGather * 1.35);
   float spacing = 0.115 + uSwell * 0.018;
   float width = 0.012 + uBass * 0.006 + uImpact * 0.01;
 
   float rings = 0.0;
   float hatTick = 0.0;
+  float ghostRings = 0.0;
   float phase = rain;
+  // Ghost field scrolls opposite the live rain — after-image, not a second gather.
+  float ghostPhase = -uEchoTravel * 1.55;
 
   for (int i = 0; i < RING_COUNT; i++) {
     float fi = float(i);
@@ -101,10 +111,19 @@ void main() {
     // Hat ticks sparse rings (every ~3rd) — sparkle without washing the flare.
     float tickSelect = step(0.62, fract(seed * 5.17 + fi * 0.31));
     hatTick += line * tickSelect * weight;
+
+    // Ghost rings: cooler after-image field, offset reverse of live rain.
+    float ghostTarget = fract(fi * spacing + ghostPhase * 0.55 + seed * 0.11) * 1.45;
+    float ghostLine = ringLine(r, ghostTarget, width * (1.05 + seed * 0.35));
+    ghostRings += ghostLine * weight;
   }
 
   rings = clamp(rings, 0.0, 2.2);
   hatTick = clamp(hatTick, 0.0, 1.6);
+  ghostRings = clamp(ghostRings, 0.0, 2.0);
+  // Soft crest rides core→rim so the reply reads as a traveling after-image.
+  float crestR = mix(0.1, 1.32, clamp(uEchoTravel, 0.0, 1.0));
+  float ghostCrest = exp(-pow((r - crestR) * 6.5, 2.0));
 
   // Impact flare: brighten + slight radial bloom of the ring field.
   float flare = uImpact * (0.85 + rings * 0.55);
@@ -126,6 +145,11 @@ void main() {
   // Hat ticks: cool high-band glitter on selected rings.
   col += mix(uColorHigh, vec3(1.0), 0.25) * hatTick * uHat * 1.15;
   col += warm * uAfterglow * (0.1 + rings * 0.12);
+
+  // Ghost reply: cooler ring after-image + traveling crest — distinct from
+  // gather inhale (fold), impact flare, and hat ticks.
+  vec3 ghostCol = mix(uColorHigh, vec3(0.82, 0.9, 1.0), 0.55);
+  col += ghostCol * (ghostRings * 0.5 + ghostCrest * 0.75) * echoPulse;
 
   // Soft downbeat wink — never a hard strobe.
   float barFlash = pow(1.0 - uBarPhase, 9.0) * (0.06 + uImpact * 0.1);
@@ -184,6 +208,10 @@ export function HaloRainScene({
   const hatSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const afterglowSmooth = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -192,6 +220,7 @@ export function HaloRainScene({
 
   const ringCount = tier === 'high' ? RINGS_HIGH : tier === 'mid' ? RINGS_MID : RINGS_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(ringCount), [ringCount]);
 
   const uniforms = useMemo(
@@ -210,6 +239,8 @@ export function HaloRainScene({
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -248,13 +279,47 @@ export function HaloRainScene({
     );
     afterglowSmooth.current = smoothToward(afterglowSmooth.current, m.afterglow, dt, 0.18, 0.8);
 
-    // Rain velocity: steady fall, bass thickens the pace, gather reverses.
+    // Phrase-echo reverse rain: arm on quiet, fire one travel per echo rise
+    // so the halos answer once in a gap — not while the drums keep speaking.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      m.echo * echoAmp,
+      dt,
+      0.05,
+      0.3,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+
+    if (echoTravel.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    // Brief upward reverse while the ghost travels — call-response, not a scrub.
+    const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
+    const scrollDir = 1 - reverseAmt * 2;
+
+    // Rain velocity: steady fall, bass thickens the pace, gather reverses in
+    // the shader; echo briefly flips accumulation for the upward reply.
     const fallSpeed =
       (0.55 + swellSmooth.current * 0.85 + m.bass * 0.35 + m.energy * 0.2) *
       pace *
       sectionPace *
       calm;
-    driftRef.current += dt * fallSpeed;
+    driftRef.current += dt * fallSpeed * scrollDir;
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = timeRef.current;
@@ -270,6 +335,8 @@ export function HaloRainScene({
     mat.uniforms.uEnergy!.value = m.energy + afterglowSmooth.current * 0.25;
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
