@@ -16,6 +16,7 @@ import { useMetricsRef } from './metrics';
  *  - gather → wisps drift inward (the inhale before the kick)
  *  - impact / release → burst outward
  *  - shimmer / hat → glitter ticks on size + opacity
+ *  - leanIn → mild approach toward camera/center (anticipation, pre-drop)
  *
  * Stillness (holdBreath / deep silence):
  *  - Perlin drift nearly freezes
@@ -65,6 +66,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const gatherSmooth = useRef(0);
   const burstSmooth = useRef(0);
   const glitterSmooth = useRef(0);
+  // Smoothed lean-in so anticipation eases toward the viewer, not snaps.
+  const leanSmooth = useRef(0);
   // Smoothed stillness so freeze/thaw never pops.
   const stillnessSmooth = useRef(0);
 
@@ -150,6 +153,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     burstSmooth.current = smoothToward(burstSmooth.current, burstTarget, dt, 0.03, 0.14);
     const glitterTarget = Math.min(1.3, m.hat * 0.95 + m.shimmer * 0.55);
     glitterSmooth.current = smoothToward(glitterSmooth.current, glitterTarget, dt, 0.025, 0.11);
+    // Lean-in rises with tension (eager anticipation); settles slower so the
+    // approach lingers into the drop rather than snapping back.
+    leanSmooth.current = smoothToward(leanSmooth.current, m.leanIn, dt, 0.06, 0.18);
 
     // Hold-breath + deep silence → presence listens. Rise a touch slower than
     // fall so the freeze feels attentive, not gated; thaw resumes promptly.
@@ -168,11 +174,15 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const gather = gatherSmooth.current;
     const burst = burstSmooth.current;
     const glitter = glitterSmooth.current;
+    const lean = leanSmooth.current;
     const stillness = stillnessSmooth.current;
     // Drift nearly stops at full stillness; a whisper remains so the cloud
     // never looks frozen-dead. Flock gather/burst still owns the radial axis.
     const driftMul = 1 - stillness * 0.92;
     const huddle = stillness * 1.35;
+    // Lean approach keeps moving through hush — anticipation ≠ listening freeze.
+    // Soften only a little so lean still reads under partial stillness.
+    const leanMul = 1 - stillness * 0.35;
 
     // Update wisp positions (gentle Perlin-style drift + musical flock + stillness).
     const points = pointsRef.current;
@@ -182,11 +192,17 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       const arr = posAttr.array as Float32Array;
       // Radial flock speed (units/sec). Gather pulls harder than burst so
       // the inhale reads clearly; burst rides impact without exploding.
-      const flockIn = gather * 2.4;
+      // Lean-in is a milder approach (~0.9 vs gather 2.4) so pre-drop
+      // anticipation never masquerades as the gather inhale.
+      const flockIn = gather * 2.4 + lean * 0.9 * leanMul;
       const flockOut = burst * 3.2;
       // Soften idle wander during the inhale so the cloud coheres; stillness
-      // scales the leftover wander further.
-      const wanderScale = (1 - gather * 0.55) * driftMul;
+      // scales the leftover wander further. Lean trims wander lightly so the
+      // cloud coheres toward the viewer without freezing like holdBreath.
+      const wanderScale = (1 - gather * 0.55 - lean * 0.22 * leanMul) * driftMul;
+      // Camera is +Z-facing; lean drifts wisps toward the viewer separately
+      // from the radial gather inhale.
+      const approachZ = lean * 0.85 * leanMul;
       for (let i = 0; i < wispCount; i++) {
         const fx = seeds[i * 4]!;
         const fy = seeds[i * 4 + 1]!;
@@ -215,7 +231,15 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         y += dy * invR * radial;
         z += dz * invR * radial;
 
+        // Lean approach: bias toward the camera (+Z) with per-wisp phase so
+        // anticipation feels like a flock leaning forward, not a Z snap.
+        if (approachZ > 0.01) {
+          const leanPhase = 0.8 + 0.4 * Math.sin(seeds[i * 4 + 3]! * 1.6 + i * 0.11);
+          z += approachZ * leanPhase * dt;
+        }
+
         // Huddle: gentle pull toward center while listening — attentive, not a collapse.
+        // Unchanged by leanIn — listening freeze stays a different behavior.
         if (huddle > 0.01) {
           const huddlePhase = 0.75 + 0.35 * Math.sin(seeds[i * 4 + 3]! * 2.1 + i * 0.07);
           const pull = huddle * huddlePhase * dt * Math.min(1, r * 0.35);
@@ -242,20 +266,23 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
 
       // Wisp brightness: high-band wash + sharp hat/shimmer glitter ticks.
       // Stillness softens the live pulse so listening feels quieter.
+      // Lean slightly brightens — presence leans closer into the light.
       const livePulse = 1 - stillness * 0.55;
       const phaseTwinkle =
         glitter > 0.08 ? 0.5 + 0.5 * Math.sin(now * 28 + glitter * 9) : 0;
       mat.size =
         (0.04 +
           m.high * 0.1 * livePulse +
-          glitter * 0.09 * (0.55 + phaseTwinkle * 0.9)) *
+          glitter * 0.09 * (0.55 + phaseTwinkle * 0.9) +
+          lean * 0.025 * leanMul) *
         (0.7 + amount * 0.3);
       mat.opacity = Math.min(
         1,
         (0.25 +
           (m.high * 0.4 + m.flow * 0.12) * livePulse +
           glitter * 0.45 +
-          gather * 0.08) *
+          gather * 0.08 +
+          lean * 0.06 * leanMul) *
           amount,
       );
     }
@@ -270,13 +297,15 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       const tenderExpand = 1 + m.tenderness * 0.7;
       const silenceMute = 1 - m.silence * 0.6;
       // Inhale dims slightly; burst + glitter lift intensity with the flock.
+      // Lean adds a soft presence lift (anticipation), weaker than burst.
       glowMat.uniforms.uIntensity!.value =
         (autoBreath +
           m.bass * 0.5 +
           m.beat * 0.3 +
           m.release * 0.5 +
           burst * 0.22 +
-          glitter * 0.18 -
+          glitter * 0.18 +
+          lean * 0.1 * leanMul -
           gather * 0.12) *
         amount *
         silenceMute *
@@ -292,10 +321,12 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       );
       // Soft radius inhale / release so the halo flocks with the wisps.
       // Stillness tucks the halo in slightly while listening.
+      // Lean gently enlarges toward the viewer — presence approaches.
       glowMat.uniforms.uRadius!.value =
-        1 - gather * 0.12 + burst * 0.08 - stillness * 0.1;
+        1 - gather * 0.12 + burst * 0.08 - stillness * 0.1 + lean * 0.05 * leanMul;
       if (glowMesh) {
-        const s = 1 - gather * 0.06 + burst * 0.05 - stillness * 0.04;
+        const s =
+          1 - gather * 0.06 + burst * 0.05 - stillness * 0.04 + lean * 0.035 * leanMul;
         glowMesh.scale.setScalar(s);
       }
     }

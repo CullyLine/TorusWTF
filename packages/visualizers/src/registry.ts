@@ -16,7 +16,9 @@ import { SilkWakeScene } from './presets/SilkWake';
 import { TideVeilScene } from './presets/TideVeil';
 import { AnimaScene } from './presets/Anima';
 import { FlowFieldScene } from './presets/FlowField';
+import { EmberDriftScene } from './presets/EmberDrift';
 import { HaloRainScene } from './presets/HaloRain';
+import { MistSpiralScene } from './presets/MistSpiral';
 
 export type VisualizerId =
   | 'anima'
@@ -30,9 +32,11 @@ export type VisualizerId =
   | 'outrun_grid'
   | 'liquid_chrome'
   | 'liquid_blob'
+  | 'ember_drift'
   | 'silk_wake'
   | 'tide_veil'
   | 'halo_rain'
+  | 'mist_spiral'
   | 'mandelbrot_zoom';
 
 /**
@@ -374,6 +378,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       lightLevel: 1,
     },
   },
+  ember_drift: {
+    id: 'ember_drift',
+    label: 'Ember Drift',
+    hint: 'Rising warm ashfield — lifts on swell, inhales on gather, flares on impact, ticks on hats.',
+    Scene: EmberDriftScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.65,
+      scale: 1.05,
+      bassShake: 0.45,
+      anima: 0.6,
+      aura: 0.35,
+      cameraMode: 'drift',
+      bloomIntensity: 0.95,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
   silk_wake: {
     id: 'silk_wake',
     label: 'Silk Wake',
@@ -421,6 +443,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
     Scene: HaloRainScene,
     // Fullscreen sheet owns the frame via clip-space quad; still camera
     // keeps the rain stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.3,
+      cameraMode: 'still',
+      bloomIntensity: 0.8,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  mist_spiral: {
+    id: 'mist_spiral',
+    label: 'Mist Spiral',
+    hint: 'Rising mist coils around a vertical axis — inhale on gather, flare on impact, mote glitter on hats.',
+    Scene: MistSpiralScene,
+    // Fullscreen mist sheet owns the frame via clip-space quad; still
+    // camera keeps the column stable while the shader does the motion.
     defaults: {
       speed: 1,
       smoothness: 0.7,
