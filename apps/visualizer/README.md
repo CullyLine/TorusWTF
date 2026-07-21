@@ -12,11 +12,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 
-<<<<<<< HEAD
-### Presets (16)
-=======
-### Presets (15)
->>>>>>> origin/main
+### Presets (17)
 
 | ID | Name | Vibe |
 |---|---|---|
