@@ -21,13 +21,34 @@ import { useModulation } from '../modulation';
  * Musical anatomy:
  *  - `swell` grows the fractal power (6 → ~9.5): choruses literally grow
  *    more ornate geometry, verses relax back to smoother lobes
+ *  - `tension` nudges power further through builds so the bulb grows
+ *    ornate before the drop without hitching mid-tier
+ *  - `gather` eases the domain slightly outward (anticipation), then
+ *    `impact`/`kick` dive harder into the bulb — inhale before plunge
  *  - drops kick the power an extra step — a visible "the world just
  *    changed shape" morph
+ *  - `snare` shears the fractal domain laterally (X←Y) — a brief sideways
+ *    crack distinct from any radial kick/impact dive
+ *  - `echo` fires a one-shot ghost orbit reverse in phrase gaps, then
+ *    tumble resumes forward
  *  - orbit-trap coloring rides the living palette; mids scroll the ramp
  *  - `impact` flashes the surface glow, `shimmer` lights the rim
  *  - `afterglow` holds a warm emissive floor for seconds after a peak
  *  - the whole domain slowly tumbles so even a still camera sees it evolve
  */
+
+/** Ease a value toward a target with asymmetric rise/fall time constants. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+) {
+  const tau = target > current ? riseTau : fallTau;
+  const k = 1 - Math.exp(-dt / Math.max(tau, 1e-4));
+  return current + (target - current) * k;
+}
 
 /** DE-space radius that encloses the bulb at any power ≥ 2. */
 const BULB_BOUND = 1.35;
@@ -46,6 +67,7 @@ uniform float uPaletteShift;
 uniform float uGlow;       // impact-driven surface flash
 uniform float uRim;        // shimmer-driven fresnel rim
 uniform float uAfterglow;  // lingering emissive floor
+uniform float uSnareShear; // snare lateral domain crack (X sheared by Y)
 uniform vec3 uBassColor;
 uniform vec3 uMidColor;
 uniform vec3 uHighColor;
@@ -93,8 +115,11 @@ float mandelbulbDE(vec3 pos, out float trap) {
 }
 
 // World-space scene distance: rotate + scale the domain, evaluate the bulb.
+// Snare shear is applied in fractal space after rotation so the crack reads
+// as a sideways split rather than a camera tilt or radial zoom.
 float sceneDE(vec3 p, out float trap) {
   vec3 q = rotX(uPitch) * rotY(uYaw) * (p / uScale);
+  q.x += q.y * uSnareShear;
   return mandelbulbDE(q, trap) * uScale;
 }
 
@@ -199,7 +224,7 @@ void main() {
 }
 `;
 
-export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: VisualizerSceneProps) {
+export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const meshRef = useRef<THREE.Mesh>(null);
@@ -208,6 +233,14 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
   const pitchRef = useRef(0);
   const powerWanderRef = useRef(0);
   const paletteShiftRef = useRef(0);
+  const snareSmooth = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  const gatherSmooth = useRef(0);
+  const diveSmooth = useRef(0);
+  const tensionSmooth = useRef(0);
   const worldScale = useRef(new THREE.Vector3());
 
   const reducedMotion = useMemo(() => {
@@ -215,6 +248,12 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }, []);
 
+  // Low tier still gets the crack + reverse and inhale/dive; mid/high read deeper.
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const gatherAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const diveAmp = tier === 'low' ? 0.8 : tier === 'mid' ? 0.92 : 1;
+  const tensionAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.85 : 1;
   const [marchSteps, deIters] =
     tier === 'high' ? [96, 9] : tier === 'mid' ? [72, 8] : [48, 7];
   const fragmentShader = useMemo(
@@ -233,6 +272,7 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
       uGlow: { value: 0 },
       uRim: { value: 0.3 },
       uAfterglow: { value: 0 },
+      uSnareShear: { value: 0 },
       uBassColor: { value: new THREE.Color(palette.bass) },
       uMidColor: { value: new THREE.Color(palette.mid) },
       uHighColor: { value: new THREE.Color(palette.high) },
@@ -251,19 +291,72 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     const pace = reducedMotion ? 0.25 : 1;
     const spd = mods.current.speed ?? speed;
 
+    // Snare: fast attack, short fall — a crack, not a sustained warp.
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.028,
+      0.14,
+    );
+
+    // Phrase-echo: arm on quiet, fire once on the rise so the orbit
+    // answers a gap instead of strobing through sustained silence.
+    echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.3);
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm ?? 120;
+      echoTravel.current = Math.min(1, echoTravel.current + dt * (0.85 + bpm / 180));
+    }
+    const reverseAmt =
+      echoTravel.current < 1 ? echoSmooth.current * (1 - echoTravel.current) : 0;
+    // Full reverse at peak travel envelope, then ease back to forward tumble.
+    const orbitDir = 1 - reverseAmt * 2;
+
     // Slow tumble so the fractal evolves even under a still camera;
     // energy leans into the spin, quiet valleys nearly freeze it.
-    yawRef.current += dt * spd * pace * (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04);
+    // Phrase-echo briefly flips yaw so the bulb ghosts backward once.
+    yawRef.current +=
+      dt * spd * pace * (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04) * orbitDir;
     pitchRef.current += dt * spd * pace * 0.017;
 
-    // Power morph: an autonomous slow wander + the musical swell. The
-    // bulb grows more ornate as the music opens up; drops kick an extra
-    // step of complexity that eases back with the envelope.
+    // Pre-beat gather + hit dive, smoothed so the zoom never stairs.
+    gatherSmooth.current = smoothToward(
+      gatherSmooth.current,
+      m.gather * gatherAmp,
+      dt,
+      0.04,
+      0.14,
+    );
+    diveSmooth.current = smoothToward(
+      diveSmooth.current,
+      Math.min(1.25, m.impact * 0.85 + m.kick * 0.55) * diveAmp,
+      dt,
+      0.03,
+      0.18,
+    );
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      m.tension * tensionAmp,
+      dt,
+      0.12,
+      0.4,
+    );
+
+    // Power morph: autonomous wander + swell + tension through builds.
+    // Tension ornate-ness eases in so mid-tier DE iters never hitch.
     powerWanderRef.current += dt * spd * pace * 0.11;
     const power =
       7.0 +
       Math.sin(powerWanderRef.current) * 0.8 +
       m.swell * 1.6 +
+      tensionSmooth.current * 1.15 +
       m.dropEvent * 0.7;
 
     // Vocals gently accelerate the color ramp — sung passages iridesce.
@@ -273,16 +366,23 @@ export function MandelbrotZoomScene({ palette, tier, scale = 1, speed = 1 }: Vis
     // The fractal domain tracks the proxy mesh's real world scale, so both
     // the user Scale slider AND the modulation matrix (via the modulated
     // scale group upstream) resize the bulb and its bounds together.
+    // Gather pulls slightly outward (anticipation); impact/kick dive in.
     const s = Math.max(0.2, mesh.getWorldScale(worldScale.current).x);
+    const zoomMul = Math.max(
+      0.82,
+      1 - gatherSmooth.current * 0.07 + diveSmooth.current * 0.11,
+    );
     (mat.uniforms.uProj!.value as THREE.Matrix4).copy(state.camera.projectionMatrix);
     mat.uniforms.uPower!.value = power;
-    mat.uniforms.uScale!.value = s;
+    mat.uniforms.uScale!.value = s * zoomMul;
     mat.uniforms.uYaw!.value = yawRef.current;
     mat.uniforms.uPitch!.value = 0.35 + Math.sin(pitchRef.current) * 0.25;
     mat.uniforms.uPaletteShift!.value = paletteShiftRef.current;
     mat.uniforms.uGlow!.value = Math.min(1.2, m.impact * 0.7 + m.kick * 0.35) * (1 - m.silence * 0.6);
     mat.uniforms.uRim!.value = 0.25 + m.shimmer * 0.9 + m.hat * 0.25;
     mat.uniforms.uAfterglow!.value = m.afterglow;
+    // Peak shear ~0.28 — readable crack without collapsing the DE.
+    mat.uniforms.uSnareShear!.value = snareSmooth.current * 0.28 * pace;
     (mat.uniforms.uBassColor!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uMidColor!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uHighColor!.value as THREE.Color).set(palette.high);

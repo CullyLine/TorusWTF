@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import type { AudioMetrics } from './metrics';
 import { useMetricsRef } from './metrics';
 import { CONTROL_DEFS_BY_KEY, type ControlKey } from './controlSchema';
+import { EMITTER_CONTROL_KEYS } from './emitters/settings';
 import { VISUALIZERS, type VisualizerId } from './registry';
 
 /**
@@ -13,11 +14,11 @@ import { VISUALIZERS, type VisualizerId } from './registry';
  *
  * A routing says: take SOURCE (a metric the analysis engine already
  * computes — vocals, kick envelope, song-peak level, afterglow…), shape it
- * through a CURVE, smooth it with a fast-attack/slow-release envelope
- * (GLIDE), scale it by AMOUNT, and add it to the base value of TARGET (any
- * control from the schema — glow, size, speed, turbulence…). The result is
- * clamped to the control's own min/max so no routing can push a value into
- * broken territory.
+ * through a CURVE, smooth it with a fast-attack / SmoothDamp-release
+ * envelope (GLIDE), scale it by AMOUNT, and add it to the base value of
+ * TARGET (any control from the schema — glow, size, speed, turbulence…).
+ * The result is clamped to the control's own min/max so no routing can
+ * push a value into broken territory.
  *
  * Runtime model: `ModulationDriver` runs one `useFrame` pass per frame,
  * writing final absolute values into a mutable ref shared through
@@ -122,8 +123,9 @@ export interface ModRouting {
   amount: number;
   curve: ModCurve;
   /**
-   * Release time in seconds. Attack is always fast (~30ms) so hits land;
-   * glide only slows the way back down — the per-routing "linger".
+   * Release SmoothDamp time in seconds. Attack is always fast (~30ms) so
+   * hits land; glide only stretches the critically-damped settle back down
+   * — the per-routing "linger" with inertia, not a linear lag.
    */
   glide: number;
 }
@@ -138,9 +140,12 @@ export const MOD_GLOBAL_TARGETS: ControlKey[] = [
   'scale',
   'bloomIntensity',
   'lightLevel',
+  'shaderMix',
   'colorLife',
   'cameraDistance',
   'bassShake',
+  'cinematicSpeed',
+  ...EMITTER_CONTROL_KEYS,
 ];
 
 /** Integer-stepped preset controls that would pop rather than glide. */
@@ -166,6 +171,41 @@ export function shapeModValue(value: number, curve: ModCurve): number {
     default:
       return v;
   }
+}
+
+/** Fast attack so kicks / hits land before the release spring takes over. */
+const ATTACK_TAU = 0.03;
+
+interface ModEnvelope {
+  value: number;
+  velocity: number;
+}
+
+/**
+ * Unity-style SmoothDamp (critically damped). Mutates `state` in place.
+ * No overshoot when velocity starts near zero — release settles with inertia
+ * instead of a single-tau exponential lag.
+ */
+function smoothDampEnvelope(
+  state: ModEnvelope,
+  target: number,
+  dt: number,
+  smoothTime: number,
+): number {
+  const st = Math.max(1e-4, smoothTime);
+  const omega = 2 / st;
+  const x = omega * dt;
+  const exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = state.value - target;
+  const temp = (state.velocity + omega * change) * dt;
+  state.velocity = (state.velocity - omega * temp) * exp;
+  state.value = target + (change + temp) * exp;
+  // Envelope is a unipolar gate — never dip below 0 from residual velocity.
+  if (state.value < 0) {
+    state.value = 0;
+    state.velocity = 0;
+  }
+  return state.value;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,8 +245,8 @@ export function ModulationProvider({ routings, base, children }: ModulationProvi
   routingsRef.current = routings;
   const baseRef = useRef(base);
   baseRef.current = base;
-  // Per-routing envelope state (keyed by routing id). Pruned lazily.
-  const envRef = useRef<Map<string, number>>(new Map());
+  // Per-routing envelope spring (keyed by routing id). Pruned lazily.
+  const envRef = useRef<Map<string, ModEnvelope>>(new Map());
   // Scratch offsets per target, reused across frames.
   const offsetsRef = useRef<Partial<Record<ControlKey, number>>>({});
 
@@ -232,14 +272,22 @@ export function ModulationProvider({ routings, base, children }: ModulationProvi
       if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
 
       const shaped = shapeModValue(raw, r.curve);
-      // Fast attack so hits land; glide stretches only the way back down.
-      let env = envs.get(r.id) ?? 0;
-      const tau = shaped >= env ? 0.03 : Math.max(0.03, r.glide);
-      env += (shaped - env) * (1 - Math.exp(-dt / tau));
-      envs.set(r.id, env);
+      let env = envs.get(r.id);
+      if (!env) {
+        env = { value: 0, velocity: 0 };
+        envs.set(r.id, env);
+      }
+      // Fast attack so hits land; SmoothDamp release settles with inertia.
+      if (shaped >= env.value) {
+        env.value += (shaped - env.value) * (1 - Math.exp(-dt / ATTACK_TAU));
+        // Kill residual spring velocity so release never rubber-bands past zero.
+        env.velocity = 0;
+      } else {
+        smoothDampEnvelope(env, shaped, dt, Math.max(ATTACK_TAU, r.glide));
+      }
 
       const range = def.max - def.min;
-      offsets[r.target] = (offsets[r.target] ?? 0) + env * r.amount * range;
+      offsets[r.target] = (offsets[r.target] ?? 0) + env.value * r.amount * range;
     }
 
     // Prune envelope state for deleted routings (cheap: only when counts drift).

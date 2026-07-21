@@ -3,7 +3,14 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import { VisualizerCanvas } from '@torus/visualizers';
-import type { VisualizerId, CreaturePersonality, RootState } from '@torus/visualizers';
+import type {
+  CreaturePersonality,
+  EmitterSettings,
+  ModRouting,
+  RootState,
+  ScreenEffectSettings,
+  VisualizerId,
+} from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import type { SyntheticAnalyser } from '@/lib/prerender/syntheticAnalyser';
 import type { BackgroundSettings, VisualizerControls } from '@/lib/storage';
@@ -32,6 +39,9 @@ interface PrerenderRootProps {
   preset: VisualizerId;
   palette: WaveformPalette;
   controls: VisualizerControls;
+  screenEffect: ScreenEffectSettings;
+  emitter: EmitterSettings;
+  modMatrix: ModRouting[];
   creature?: CreaturePersonality;
   syntheticAnalyser: SyntheticAnalyser;
   bpmRef: MutableRefObject<number | null>;
@@ -49,6 +59,9 @@ export function PrerenderRoot({
   preset,
   palette,
   controls,
+  screenEffect,
+  emitter,
+  modMatrix,
   creature,
   syntheticAnalyser,
   bpmRef,
@@ -93,6 +106,7 @@ export function PrerenderRoot({
         highMix={controls.highMix}
         speed={controls.speed}
         smoothness={controls.smoothness}
+        linger={controls.linger ?? 0.3}
         scale={controls.scale}
         bassShake={controls.bassShake ?? 0}
         bassMaxHz={controls.bassMaxHz ?? 250}
@@ -102,6 +116,10 @@ export function PrerenderRoot({
         cinematicSpeed={controls.cinematicSpeed ?? 1}
         cameraDistance={controls.cameraDistance ?? 1}
         lightLevel={controls.lightLevel ?? 1}
+        highlightProtection={controls.highlightProtection ?? true}
+        screenEffect={screenEffect.id}
+        shaderMix={screenEffect.mix}
+        emitterSettings={emitter}
         energy={controls.energy ?? 0}
         autoGain={controls.autoGain ?? true}
         colorLife={controls.colorLife ?? 0.6}
@@ -117,6 +135,7 @@ export function PrerenderRoot({
         interactStrength={controls.interactStrength ?? 1}
         bloomIntensity={controls.bloomIntensity}
         cameraMode={controls.cameraMode}
+        modMatrix={modMatrix}
         creature={creature}
         bpmRef={bpmRef}
         lastOnsetRef={lastOnsetRef}

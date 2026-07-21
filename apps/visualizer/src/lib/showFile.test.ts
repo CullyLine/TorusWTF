@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import {
+  DEFAULT_BUBBLE_EMITTER_SETTINGS,
+  DEFAULT_EMITTER_SETTINGS,
+  DEFAULT_SCREEN_EFFECT_SETTINGS,
+} from '@torus/visualizers';
 import { DEFAULT_BACKGROUND, DEFAULT_CONTROLS } from './storage';
 import {
   buildShowFile,
@@ -12,6 +17,8 @@ const baseState: ShowFileState = {
   palette: { bass: '#112233', mid: '#445566', high: '#778899' },
   controls: { ...DEFAULT_CONTROLS, reactivity: 1.5, bloomIntensity: 0.4 },
   background: { mode: 'nebula', intensity: 0.8 },
+  screenEffect: { id: 'cartoon', mix: 0.65 },
+  emitter: { ...DEFAULT_BUBBLE_EMITTER_SETTINGS, rate: 24 },
   titleOverlay: {
     enabled: true,
     title: 'Demo',
@@ -44,6 +51,8 @@ const baseState: ShowFileState = {
       cameraMode: 'flow',
       bloomIntensity: 0.9,
       speed: 1,
+      screenEffect: { id: 'matrix', mix: 0.3 },
+      emitter: { ...DEFAULT_BUBBLE_EMITTER_SETTINGS, rate: 18 },
     },
   ],
 };
@@ -62,9 +71,13 @@ describe('showFile', () => {
     expect(result.show.controls.reactivity).toBe(1.5);
     expect(result.show.controls.bloomIntensity).toBe(0.4);
     expect(result.show.background).toEqual(baseState.background);
+    expect(result.show.screenEffect).toEqual(baseState.screenEffect);
+    expect(result.show.emitter).toEqual(baseState.emitter);
     expect(result.show.titleOverlay.title).toBe('Demo');
     expect(result.show.triggerMappings).toHaveLength(1);
     expect(result.show.savedPresets).toHaveLength(1);
+    expect(result.show.savedPresets[0]?.screenEffect).toEqual({ id: 'matrix', mix: 0.3 });
+    expect(result.show.savedPresets[0]?.emitter?.kind).toBe('bubbles');
   });
 
   it('rejects non-JSON text', () => {
@@ -195,5 +208,57 @@ describe('showFile', () => {
     if (!result.ok) return;
     expect(result.show.background.mode).toBe(DEFAULT_BACKGROUND.mode);
     expect(result.show.background.intensity).toBe(1);
+  });
+
+  it('sanitizes effects and defaults old v1 shows to disabled layers', () => {
+    const show = buildShowFile(baseState);
+    const invalid = parseShowFile(
+      JSON.stringify({
+        ...show,
+        screenEffect: { id: 'unknown', mix: 4 },
+        emitter: { kind: 'unknown', rate: -20, opacity: 5 },
+      }),
+    );
+    expect(invalid.ok).toBe(true);
+    if (!invalid.ok) return;
+    expect(invalid.show.screenEffect).toEqual(DEFAULT_SCREEN_EFFECT_SETTINGS);
+    expect(invalid.show.emitter.kind).toBe('none');
+    expect(invalid.show.emitter.rate).toBe(0);
+    expect(invalid.show.emitter.opacity).toBe(1);
+
+    const { screenEffect: _screenEffect, emitter: _emitter, ...legacy } = show;
+    const oldV1 = parseShowFile(JSON.stringify(legacy));
+    expect(oldV1.ok).toBe(true);
+    if (!oldV1.ok) return;
+    expect(oldV1.show.screenEffect).toEqual(DEFAULT_SCREEN_EFFECT_SETTINGS);
+    expect(oldV1.show.emitter).toEqual(DEFAULT_EMITTER_SETTINGS);
+  });
+
+  it('sanitizes nested effect settings without breaking legacy saved presets', () => {
+    const show = buildShowFile(baseState);
+    const saved = show.savedPresets[0]!;
+    const { screenEffect: _screenEffect, emitter: _emitter, ...legacySaved } = saved;
+    const result = parseShowFile(
+      JSON.stringify({
+        ...show,
+        savedPresets: [
+          {
+            ...saved,
+            screenEffect: { id: 'invalid', mix: Number.POSITIVE_INFINITY },
+            emitter: { kind: 'invalid', particleBudget: -5, opacity: Number.NaN },
+          },
+          legacySaved,
+        ],
+      }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.show.savedPresets[0]?.screenEffect).toEqual(DEFAULT_SCREEN_EFFECT_SETTINGS);
+    expect(result.show.savedPresets[0]?.emitter).toEqual(
+      expect.objectContaining({ kind: 'none', particleBudget: 1 }),
+    );
+    expect(result.show.savedPresets[1]?.screenEffect).toBeUndefined();
+    expect(result.show.savedPresets[1]?.emitter).toBeUndefined();
   });
 });

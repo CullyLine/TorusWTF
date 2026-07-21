@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createImpulses, type AudioMetrics } from '@torus/visualizers';
 import { Logo } from '@torus/ui';
 import {
+  applyProjectorImpulse,
   PROJECTOR_CHANNEL,
   type ProjectorMessage,
   type ProjectorStatePayload,
@@ -44,7 +45,7 @@ export default function ProjectorPage() {
         externalMetricsRef.current = msg.metrics;
         lastMetricsAtRef.current = performance.now();
       } else if (msg.type === 'impulse') {
-        impulses[msg.field] = Math.max(impulses[msg.field], msg.strength);
+        applyProjectorImpulse(impulses, msg.field, msg.strength);
       }
     };
     const bye = () => channel.postMessage({ type: 'bye' } satisfies ProjectorMessage);
@@ -120,6 +121,10 @@ export default function ProjectorPage() {
           cinematicSpeed={controls.cinematicSpeed ?? 1}
           cameraDistance={controls.cameraDistance ?? 1}
           lightLevel={controls.lightLevel ?? 1}
+          highlightProtection={controls.highlightProtection ?? true}
+          screenEffect={look.screenEffect?.id ?? 'none'}
+          shaderMix={look.screenEffect?.mix ?? 1}
+          emitterSettings={look.emitter}
           energy={controls.energy ?? 0}
           autoGain={controls.autoGain ?? true}
           colorLife={controls.colorLife ?? 0.6}
