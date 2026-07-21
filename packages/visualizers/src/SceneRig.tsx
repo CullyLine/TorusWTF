@@ -70,6 +70,13 @@ const SHAKE_AMP_SPRING_SMOOTH = 0.08;
  */
 const SHAKE_OFFSET_SPRING_SMOOTH = 0.055;
 
+/**
+ * Choreography leanIn / release Z dollies — longer than pose spring so
+ * anticipation and drop exhales glide instead of stair-stepping desiredZ
+ * through raw metric envelopes each frame. Quiet settles fully still.
+ */
+const CHOREO_Z_SPRING_SMOOTH = 0.22;
+
 interface ScalarSpring {
   value: number;
   velocity: number;
@@ -308,6 +315,10 @@ export function SceneRig({
   const modeShakeOffsetSpringRef = useRef<Spring3>(createSpring3());
   const bassShakeAmpSpringRef = useRef<ScalarSpring>(createScalarSpring());
   const bassShakeOffsetSpringRef = useRef<Spring3>(createSpring3());
+  // leanIn / release Z choreography — SmoothDamp so build anticipation and
+  // drop exhales glide; pose spring + shake SmoothDamp stay independent.
+  const leanZSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  const releaseZSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // Trigger-impulse envelopes: consumed from `impulses` on the frame they
   // fire, then rung down here (same struck-bell shape as the audio pulses).
   const camPunchEnvRef = useRef(0);
@@ -600,10 +611,22 @@ export function SceneRig({
 
     // Choreography — creature emotional motion. Independent of audio reactivity.
     // leanIn dollies camera inward; release dollies outward (the exhale);
-    // holdBreath dampens motion (the listener's stillness).
-    const leanZ = -m.leanIn * 0.35;
-    const releaseZ = m.release * 0.5;
+    // holdBreath dampens motion (the listener's stillness). Targets are
+    // SmoothDamp'd so envelope stair-steps never write desiredZ raw —
+    // anticipation dollies and drop exhales glide; quiet settles still.
     const stillness = 1 - m.holdBreath * 0.85;
+    const leanZ = smoothDampScalar(
+      leanZSpringRef.current,
+      -m.leanIn * 0.35,
+      dtCam,
+      CHOREO_Z_SPRING_SMOOTH,
+    );
+    const releaseZ = smoothDampScalar(
+      releaseZSpringRef.current,
+      m.release * 0.5,
+      dtCam,
+      CHOREO_Z_SPRING_SMOOTH,
+    );
     desiredZ += leanZ + releaseZ;
 
     // Anima heartbeat folds into the desired pose so breathing eases with
