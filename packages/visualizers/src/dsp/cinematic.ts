@@ -195,7 +195,7 @@ export function updateCinematicCamera(
   nowSec: number,
   bpm: number | null,
   speed: number,
-): { pos: THREE.Vector3; look: THREE.Vector3 } {
+): { pos: THREE.Vector3; look: THREE.Vector3; shotIndex: number } {
   // First frame after construction: just snapshot the timestamp.
   if (state.lastTimeSec === 0) {
     state.lastTimeSec = nowSec;
@@ -219,10 +219,13 @@ export function updateCinematicCamera(
   let acc = 0;
   let activeShot = CINEMATIC_SHOTS[0]!;
   let localT = 0;
-  for (const shot of CINEMATIC_SHOTS) {
+  let shotIndex = 0;
+  for (let i = 0; i < CINEMATIC_SHOTS.length; i++) {
+    const shot = CINEMATIC_SHOTS[i]!;
     if (cursor < acc + shot.beats) {
       activeShot = shot;
       localT = (cursor - acc) / shot.beats;
+      shotIndex = i;
       break;
     }
     acc += shot.beats;
@@ -247,5 +250,5 @@ export function updateCinematicCamera(
     fl[2] + (tl[2] - fl[2]) * eased,
   );
 
-  return { pos: state.outPos, look: state.outLook };
+  return { pos: state.outPos, look: state.outLook, shotIndex };
 }
