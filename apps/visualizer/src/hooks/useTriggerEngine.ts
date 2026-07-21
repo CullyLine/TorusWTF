@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import type { AudioMetrics, VisualImpulses } from '@torus/visualizers';
 import type { MidiNoteEvent } from '@/lib/midi';
+import { applyTriggerImpulse } from '@/lib/triggerActions';
 import type { TriggerActionKind, TriggerMapping } from '@/lib/triggerActions';
 
 export interface TriggerEngineActions {
@@ -11,6 +12,7 @@ export interface TriggerEngineActions {
   prevPreset: () => void;
   randomPreset: () => void;
   randomPalette: () => void;
+  randomShader: () => void;
 }
 
 interface UseTriggerEngineOptions {
@@ -71,6 +73,12 @@ export function useTriggerEngine({
   const fireActionRef = useRef((action: TriggerActionKind, strength: number) => {
     const imp = impulsesRef.current;
     const a = actionsRef.current;
+    const impulse = applyTriggerImpulse(imp, action, strength);
+    if (impulse) {
+      onImpulseRef.current?.(impulse.field, impulse.strength);
+      return;
+    }
+
     switch (action) {
       case 'nextPreset':
         a.nextPreset();
@@ -84,21 +92,8 @@ export function useTriggerEngine({
       case 'randomPalette':
         a.randomPalette();
         break;
-      case 'hueKick':
-        imp.hueKick = Math.max(imp.hueKick, strength);
-        onImpulseRef.current?.('hueKick', strength);
-        break;
-      case 'camPunch':
-        imp.camPunch = Math.max(imp.camPunch, strength);
-        onImpulseRef.current?.('camPunch', strength);
-        break;
-      case 'bloomPulse':
-        imp.bloomPulse = Math.max(imp.bloomPulse, strength);
-        onImpulseRef.current?.('bloomPulse', strength);
-        break;
-      case 'flash':
-        imp.flash = Math.max(imp.flash, strength);
-        onImpulseRef.current?.('flash', strength);
+      case 'randomShader':
+        a.randomShader();
         break;
     }
   });
@@ -111,7 +106,8 @@ export function useTriggerEngine({
       action === 'nextPreset' ||
       action === 'prevPreset' ||
       action === 'randomPreset' ||
-      action === 'randomPalette'
+      action === 'randomPalette' ||
+      action === 'randomShader'
         ? 0.35
         : 0.12;
 

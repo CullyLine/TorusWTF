@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import type { CreaturePersonality, RootState, VisualizerId } from '@torus/visualizers';
+import type {
+  CreaturePersonality,
+  EmitterSettings,
+  ModRouting,
+  RootState,
+  ScreenEffectSettings,
+  VisualizerId,
+} from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 import { precomputeFftFrames } from '@/lib/prerender/fftPipeline';
 import { prescanBpm } from '@/lib/prerender/bpmPrescan';
@@ -35,6 +42,9 @@ export interface PrerenderStartOptions {
   preset: VisualizerId;
   palette: WaveformPalette;
   controls: VisualizerControls;
+  screenEffect: ScreenEffectSettings;
+  emitter: EmitterSettings;
+  modMatrix: ModRouting[];
   creature?: CreaturePersonality;
   width: number;
   height: number;
@@ -58,6 +68,9 @@ export interface PrerenderRootMount {
   preset: VisualizerId;
   palette: WaveformPalette;
   controls: VisualizerControls;
+  screenEffect: ScreenEffectSettings;
+  emitter: EmitterSettings;
+  modMatrix: ModRouting[];
   creature?: CreaturePersonality;
   syntheticAnalyser: SyntheticAnalyser;
   bpmRef: MutableRefObject<number | null>;
@@ -193,6 +206,9 @@ export function usePrerender(): PrerenderHookResult {
             preset: options.preset,
             palette: options.palette,
             controls: options.controls,
+            screenEffect: options.screenEffect,
+            emitter: options.emitter,
+            modMatrix: options.modMatrix,
             creature: options.creature,
             syntheticAnalyser,
             bpmRef,
