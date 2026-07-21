@@ -26,11 +26,13 @@ import { useModulation } from '../modulation';
  *  - kick: core brightness / size punch
  *  - snare: mid-radius ring crack
  *  - hat: outer halo glitter ticks
+ *  - echo: one-shot soul reply — brief core brighten + aurora counter-sweep
+ *    in phrase gaps (answers when the music opens space)
  */
 
 /**
  * Smooth toward a target with asymmetric rise/fall (seconds).
- * Keeps kit accents fluid — no linear snaps on kick/snare/hat envelopes.
+ * Keeps kit accents and phrase-echo envelopes fluid — no linear snaps.
  */
 function smoothToward(
   current: number,
@@ -71,6 +73,9 @@ uniform float uAfterglow;
 uniform float uKick;
 uniform float uSnare;
 uniform float uHat;
+// Phrase-echo soul reply (one-shot envelope + travel 0..1; 1 = idle).
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -100,17 +105,24 @@ void main() {
   // ===== STILLNESS (holdBreath dampens all motion) =====
   float liveTime = uTime * (1.0 - uHoldBreath * 0.85);
 
+  // Phrase-echo reply envelope: peaks early, fades as the sweep travels.
+  float echoPulse = uEcho * (1.0 - uEchoTravel * 0.85);
+  // Counter-sweep: reverse aurora drift while the reply is active.
+  float echoFlip = 1.0 - clamp(uEcho, 0.0, 1.0) * 2.0;
+
   // ===== SOUL CORE =====
   // A central glow that breathes; bass + barFlash punch it. Section level
   // grows the core through choruses; afterglow keeps it warm after them.
   // Kick: brief brightness/size punch — drums the creature without a
   // fullscreen strobe (gain is local to the core falloff).
+  // Echo reply: brief local brighten/size — answers in gaps, not a wash.
   float r = length(uv);
-  float coreSize = 0.18 + uBass * 0.12 + uRelease * 0.25 + uSection * 0.06 + uAfterglow * 0.04 + uKick * 0.07;
-  float core = exp(-pow(r / coreSize, 2.2)) * (1.0 + uBeat * 0.6 + uKick * 0.85);
+  float coreSize = 0.18 + uBass * 0.12 + uRelease * 0.25 + uSection * 0.06 + uAfterglow * 0.04 + uKick * 0.07 + echoPulse * 0.06;
+  float core = exp(-pow(r / coreSize, 2.2)) * (1.0 + uBeat * 0.6 + uKick * 0.85 + echoPulse * 0.95);
 
   // ===== AURORA CURTAINS =====
   // Three drifting wave ribbons stacked vertically; phase walks with time.
+  // On echo, wave time flips so the curtains counter-sweep once per gap.
   float aurora = 0.0;
   vec3 auroraColor = vec3(0.0);
   for (int i = 0; i < 3; i++) {
@@ -118,11 +130,11 @@ void main() {
     float yBase = (fi - 1.0) * 0.45;
     // Each ribbon wobbles on a slightly different wavelength.
     float wave =
-      sin(uv.x * (1.5 + fi * 0.5) + liveTime * (0.25 + fi * 0.07)) * 0.22 +
-      sin(uv.x * (3.2 + fi * 0.3) - liveTime * 0.12) * 0.06;
+      sin(uv.x * (1.5 + fi * 0.5) + liveTime * (0.25 + fi * 0.07) * echoFlip) * 0.22 +
+      sin(uv.x * (3.2 + fi * 0.3) - liveTime * 0.12 * echoFlip) * 0.06;
     float dy = uv.y - yBase - wave;
     // Ribbon thickness pulses with mid + tension (creature wakes up).
-    float thickness = 0.06 + 0.04 * uTension + 0.02 * uMid;
+    float thickness = 0.06 + 0.04 * uTension + 0.02 * uMid + echoPulse * 0.015;
     float ribbon = exp(-pow(dy / thickness, 2.0));
     aurora += ribbon * (0.4 + 0.6 * noise(vec2(uv.x * 4.0 + fi, liveTime * 0.2)));
     // Per-ribbon color: low ribbon = bass, middle = mid, top = high.
@@ -130,6 +142,15 @@ void main() {
     auroraColor += ribCol * ribbon;
   }
   aurora *= 0.65;
+
+  // Traveling reply crest: a soft bright band sweeps across the aurora
+  // opposite the usual drift — one pass per phrase-echo fire.
+  float crestX = mix(-1.15, 1.15, clamp(uEchoTravel, 0.0, 1.0));
+  float crest =
+    exp(-pow((uv.x - crestX) / 0.14, 2.0)) *
+    uEcho *
+    (1.0 - uEchoTravel * 0.35) *
+    (0.55 + 0.45 * aurora);
 
   // ===== WISP ORBITS =====
   // Bar-phase locked orbits — wisps complete one orbit per bar.
@@ -163,11 +184,13 @@ void main() {
   vec3 wispCol = uColorHigh;
 
   vec3 col = vec3(0.0);
-  col += coreCol * core * (1.0 + uRelease * 1.6 + uAfterglow * 0.35 + uKick * 0.45);
+  col += coreCol * core * (1.0 + uRelease * 1.6 + uAfterglow * 0.35 + uKick * 0.45 + echoPulse * 0.55);
   // Vocals literally light the curtains: when a voice is present the aurora
   // breathes brighter, so singing passages read differently from drops.
-  col += auroraColor * aurora * (0.7 + uTenderness * 0.6 + uVocal * 0.55);
+  col += auroraColor * aurora * (0.7 + uTenderness * 0.6 + uVocal * 0.55 + echoPulse * 0.35);
   col += wispCol * wisp * (0.8 + uHigh * 1.2 + uVocal * 0.5);
+  // Echo crest rides mid→high so the reply reads as a soul answer, not a kit hit.
+  col += mix(uColorMid, uColorHigh, 0.45) * crest * 1.25;
   // Snare: mid-ring flash toward mid/high palette (crack, not wash).
   col += mix(uColorMid, uColorHigh, 0.35) * snareRing * 1.35;
   // Hats: outer halo sparkle toward high color.
@@ -214,10 +237,15 @@ export function AnimaScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1);
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
-  // Low tier: slightly softer kit so the fullscreen shader doesn't strobe;
-  // mid/high keep full readable accents.
+  // Low tier: slightly softer kit/reply so the fullscreen shader doesn't strobe;
+  // mid/high keep full readable accents and a readable counter-sweep.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -243,6 +271,8 @@ export function AnimaScene({
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uHat: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -306,6 +336,37 @@ export function AnimaScene({
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
+
+    // Phrase-echo soul reply: arm on quiet, fire one travel per echo rise
+    // so the creature answers once in the gap instead of strobing.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      m.echo * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+
+    if (echoTravel.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      const pace = 0.9 + (mods.current.speed ?? speed) * 0.15;
+      echoTravel.current = Math.min(1, echoTravel.current + dt * pace * (0.85 + bpm / 180));
+    }
+
+    const traveling = echoTravel.current < 1;
+    // Idle: nearly silent so speaking passages never show a sticky reply glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
