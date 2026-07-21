@@ -26,6 +26,11 @@ import { useModulation } from '../modulation';
  *  - kick → anchor inflates along Y (floor thump)
  *  - snare → satellites shear laterally on X (mid crack)
  *  - hat / shimmer → sub-sphere pops (unchanged)
+ *
+ * Hold-breath listen:
+ *  - holdBreath / deep silence → ease deformation speed + satellite
+ *    chatter so the organism nearly freezes and listens, then thaws.
+ *  - gather inhale + kick/snare/echo paths stay intact.
  */
 
 const RAY_STEPS_HIGH = 96;
@@ -468,6 +473,11 @@ export function LiquidBlobScene({
   const { size } = useThree();
   const phaseRef = useRef(0);
   const orbitPhaseRef = useRef(0);
+  // Local surface-wobble clock so holdBreath can freeze jelly jitter
+  // (wall-clock uTime would keep twitching through silence).
+  const wobblePhaseRef = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const echoSmooth = useRef(0);
   const echoTravel = useRef(1);
@@ -516,7 +526,7 @@ export function LiquidBlobScene({
     [palette.bass, palette.mid, palette.high],
   );
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     const mat = matRef.current;
     if (!mat) return;
     const m = metricsRef.current;
@@ -524,22 +534,47 @@ export function LiquidBlobScene({
     // Modulation-matrix values (fall back to slider props when unrouted).
     const mv = mods.current;
     const pace = Math.max(0.05, mv.speed ?? speed);
+
+    // Hold-breath stillness: the goo listens instead of writhing through quiet.
+    // Rise a touch slower than the thaw so freeze reads as settling, not a cut.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Deformation + satellite chatter nearly stop; a whisper remains so the
+    // SDF never looks frozen-solid / dead.
+    const motionMul = 1 - stillness * 0.92;
+
     // Forward-only motion phase. Rate modulates with energy but the phase
     // itself never decreases, which prevents satellites from oscillating
     // when energy fluctuates rapidly. Section level paces the whole organism:
-    // choruses writhe, verses breathe.
+    // choruses writhe, verses breathe. holdBreath gates the advance rate.
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
-    const phaseRate = (0.35 + Math.min(m.energy, 1.5) * 0.18) * pace * sectionPace;
+    const phaseRate =
+      (0.35 + Math.min(m.energy, 1.5) * 0.18) * pace * sectionPace * motionMul;
     phaseRef.current += dt * phaseRate;
 
     // Orbit phase: heavily mid/high-driven (impact envelope for the kick)
     // so the satellites visibly whip around the blob on busy passages.
-    // Floored so it never stalls.
+    // Floored so it never stalls — except during holdBreath, when chatter
+    // eases so limbs listen with the body.
     const orbitSpeed =
       (0.6 + Math.min(m.mid, 2) * 1.6 + Math.min(m.high, 2) * 0.9 + m.impact * 0.8) *
       pace *
-      sectionPace;
+      sectionPace *
+      motionMul;
     orbitPhaseRef.current += dt * orbitSpeed;
+
+    // Surface jelly wobble advances with the same listen gate (not wall clock).
+    wobblePhaseRef.current += dt * motionMul;
 
     // Kit axes: fast attack so four-on-the-floor reads punchy, slower fall
     // so the goo settles instead of gating off.
@@ -589,7 +624,7 @@ export function LiquidBlobScene({
       : echoSmooth.current * 0.08;
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
-    mat.uniforms.uTime!.value = state.clock.elapsedTime;
+    mat.uniforms.uTime!.value = wobblePhaseRef.current;
     mat.uniforms.uPhase!.value = phaseRef.current;
     mat.uniforms.uOrbitPhase!.value = orbitPhaseRef.current;
     mat.uniforms.uBass!.value = m.bass;
