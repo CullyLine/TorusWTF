@@ -40,6 +40,10 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
   const echoSmooth = useRef(0);
   const bloomSmooth = useRef(0);
   const scaleSmooth = useRef(1);
+  // Kit accents: kick floor thump (Y), snare lateral crease (X), hat dust ticks.
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
   // Captured crest shape (per-sample |amp|) replayed as a faded traveling ghost.
   const crestShape = useRef<Float32Array | null>(null);
   const crestTravel = useRef(1); // 0..1 along the ribbon; >=1 means idle
@@ -51,6 +55,8 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
   // Low tier still gets phrase echo; mid/high just read the crest cleaner.
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const pinchAmt = tier === 'low' ? 0.42 : 0.55;
+  // Kit accents soften on low/mid so mid-tier stays fluid without strobing.
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const positions = useMemo(() => new Float32Array(samples * 2 * 3), [samples]);
   const ghostPositions = useMemo(() => new Float32Array(samples * 2 * 3), [samples]);
@@ -100,8 +106,31 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.32);
     const bloomTarget = Math.min(1.2, m.impact * 0.85 + m.release * 0.25);
     bloomSmooth.current = smoothToward(bloomSmooth.current, bloomTarget, dt, 0.035, 0.16);
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.03,
+      0.12,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.03,
+      0.14,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.025,
+      0.1,
+    );
 
     group.rotation.y += delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2);
+    // Snare briefly rolls the ribbon on Z so the crease reads in depth, not only X.
+    group.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
     // Gather pinches the whole form toward the axis; impact/afterglow bloom out.
     const scaleTarget =
       1 -
@@ -160,10 +189,20 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
         // Section level scales the wave's reach: quiet valleys draw close
         // and intimate, the song's biggest sections fill the frame.
         // Gather pinches amp toward the axis; impact blooms it open.
+        // Kick punches vertical reach (floor thump) without washing the whole frame.
         const pinch = 1 - gatherSmooth.current * pinchAmt;
         const bloom = 1 + bloomSmooth.current * 0.55;
+        const kickPunch = 1 + kickSmooth.current * 0.45;
         const amp =
-          (1.2 + m.energy * 1.3) * (0.75 + m.sectionLevel * 0.45) * pinch * bloom;
+          (1.2 + m.energy * 1.3) *
+          (0.75 + m.sectionLevel * 0.45) *
+          pinch *
+          bloom *
+          kickPunch;
+        // Downward floor bias so kicks read as thumps, not just louder swings.
+        const kickFloor = kickSmooth.current * 0.28;
+        // Snare lateral crease: phase-split L/R with a mid-ribbon peak.
+        const snareCrease = snareSmooth.current * 0.32;
 
         if (!crestShape.current || crestShape.current.length !== samples) {
           crestShape.current = new Float32Array(samples);
@@ -173,14 +212,18 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
         for (let i = 0; i < samples; i++) {
           const src = Math.floor((i / samples) * bins);
           const v = (timeBuf.current[src]! / 128 - 1) * amp;
-          const x = (i / samples) * 6 - 3;
+          const t = i / samples;
+          const lateral = i % 2 === 0 ? 1 : -1;
+          const crease = snareCrease * Math.sin(t * Math.PI) * lateral;
+          const x = t * 6 - 3 + crease;
+          const y = v - kickFloor;
           const z = Math.sin(i * 0.1 + _state.clock.elapsedTime) * m.mid * 0.2;
           const baseIdx = i * 6;
           arr[baseIdx] = x;
-          arr[baseIdx + 1] = v;
+          arr[baseIdx + 1] = y;
           arr[baseIdx + 2] = z;
           arr[baseIdx + 3] = x;
-          arr[baseIdx + 4] = -v;
+          arr[baseIdx + 4] = -v - kickFloor;
           arr[baseIdx + 5] = -z;
 
           // Keep refreshing the crest capture while energy is present so the
@@ -243,13 +286,19 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
 
     if (dust) {
       const mat = dust.material as THREE.PointsMaterial;
-      mat.size = 0.035 + m.flow * 0.05;
-      mat.opacity = Math.min(1, 0.3 + m.swell * 0.55 + m.afterglow * 0.2);
-      mat.color.set(palette.mid);
+      // Hats glitter the dust field — size/opacity ticks distinct from bass thumps.
+      mat.size = 0.035 + m.flow * 0.05 + hatSmooth.current * 0.055;
+      mat.opacity = Math.min(
+        1,
+        0.3 + m.swell * 0.55 + m.afterglow * 0.2 + hatSmooth.current * 0.35,
+      );
+      // Lean toward high-band color on hats so ticks sparkle, not just brighten.
+      mat.color.set(palette.mid).lerp(scratchHigh.current.set(palette.high), hatSmooth.current * 0.65);
       const posAttr = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
       const arr = posAttr.array as Float32Array;
-      const drive = delta * spd * (0.5 + m.energy * 3.5 + m.impact * 3);
-      const active = 0.2 + m.flow * 0.8;
+      const drive =
+        delta * spd * (0.5 + m.energy * 3.5 + m.impact * 3 + hatSmooth.current * 2.2);
+      const active = Math.min(1, 0.2 + m.flow * 0.8 + hatSmooth.current * 0.25);
       // Dust also inhales slightly on gather so the field feels of-a-piece.
       const dustPinch = 1 - gatherSmooth.current * 0.015;
       for (let i = 0; i < dustCount; i++) {

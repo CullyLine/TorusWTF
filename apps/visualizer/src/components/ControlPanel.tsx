@@ -62,6 +62,9 @@ const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
 // composites additively instead of replacing the scene.
 const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'liquid_blob',
+  'silk_wake',
+  'tide_veil',
+  'halo_rain',
   'anima',
 ]);
 
@@ -99,7 +102,7 @@ export function ControlPanel({
     const { key, min, max, step } = def;
     const label = autoGain && def.labelAutoGain ? def.labelAutoGain : def.label;
     const hint = autoGain && def.hintAutoGain ? def.hintAutoGain : def.hint;
-    const value = controls[key] ?? def.fallback;
+    const value = (controls as unknown as Partial<Record<ControlKey, number>>)[key] ?? def.fallback;
     const outOfRange = value < min || value > max;
     const sliderValue = Math.max(min, Math.min(max, value));
     return (
