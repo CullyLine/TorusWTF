@@ -75,7 +75,7 @@ float fbm(vec2 p) {
 }
 
 // Classic water-caustic interference: bright ridges where wave phases align.
-// `soft` (0–1 from tenderness) widens ridge falloff so gentle vocals hush the bite.
+// soft (0-1 from tenderness) widens ridge falloff so gentle vocals hush the bite.
 float causticField(vec2 uv, float t, float soft) {
   float c = 0.0;
   float amp = 1.0;
