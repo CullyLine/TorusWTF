@@ -179,6 +179,13 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
   const kickSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const snareSmooth = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
+  // Tenderness hush — softens arm wind + particle jitter on gentle vocals.
+  const tenderSmooth = useRef(0);
+  // Local clocks so twinkle / tilt wobble freeze during holdBreath (wall clock never stops).
+  const timeRef = useRef(0);
+  const wobblePhaseRef = useRef(0);
   // Seed with the JSX Y twist so absolute assignment doesn't flatten the disc.
   const spinAccum = useRef(Math.PI / 10);
 
@@ -241,10 +248,45 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
     const m = metricsRef.current;
     const spd = mods.current.speed ?? speed;
     const dt = Math.min(delta, 0.05);
+
+    // Hold-breath stillness: the galaxy listens instead of spinning through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so gather/kit accents still fire.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous motion; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
+
+    // Tenderness hush — soft rise/fall so arms ease into softness.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmooth.current;
+    // Gentle vocals hush arm wind / particle jitter; kit punches stay on
+    // their own envelopes so kick/snare/hat remain readable when drums speak.
+    const windCalm = 1 - tender * 0.58;
+
     // The galaxy turns with the song's arc — slow drift in valleys, real
-    // rotation at peaks.
-    const sectionPace = 0.7 + m.sectionLevel * 0.55;
-    mat.uniforms.uTime!.value = state.clock.elapsedTime;
+    // rotation at peaks. Tenderness eases section pace so intimate moments
+    // feel held, not torn.
+    const sectionPace = (0.7 + m.sectionLevel * 0.55) * (1 - tender * 0.28);
+    // Twinkle clock freezes during holdBreath (shader sine rides uTime).
+    timeRef.current += dt * spd * motionMul;
+    mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
@@ -257,6 +299,7 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
 
     // Kit sparkle: hat ticks rise fast / fall fast; kick core punches rise
     // fast and ring a touch longer so the nucleus blooms without strobing.
+    // Full dt — accents must still fire on thaw (not gated by motionMul).
     hatSmooth.current = smoothToward(
       hatSmooth.current,
       Math.min(1.2, m.hat) * kitAmp,
@@ -291,30 +334,42 @@ export function StarFieldScene({ analyser, palette, tier, speed = 1 }: Visualize
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
 
-    flowTimeRef.current += dt * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4);
+    // Arm wind / particle jitter: hush on holdBreath + tenderness; gather
+    // still softens swirl so the inhale reads as a held breath.
+    flowTimeRef.current +=
+      dt * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4) * motionMul * windCalm;
     mat.uniforms.uFlowTime!.value = flowTimeRef.current;
     // Calm at rest, swirling on energy, surging on drops — and still
-    // stirring for a while after a peak (afterglow). Gather softens the
-    // swirl so the inhale reads as a held breath.
+    // stirring for a while after a peak (afterglow).
     mat.uniforms.uFlowAmt!.value =
       (0.04 + m.swell * 0.18 + m.dropEvent * 0.4 + m.afterglow * 0.1) *
-      (1 - gatherSmooth.current * 0.35);
+      (1 - gatherSmooth.current * 0.35) *
+      windCalm;
     mat.uniforms.uBandSpread!.value = (1 - m.convergence) * 0.9;
 
     beatZoomRef.current = Math.max(0, beatZoomRef.current - delta * 3.5);
     if (m.impact > 0.35) beatZoomRef.current = 1;
 
-    const sway = m.energy * 0.08;
-    // Continuous arm drift — mid energy still drives the swirl.
-    spinAccum.current += delta * spd * (0.03 + m.mid * 0.06) * sectionPace;
+    const sway = m.energy * 0.08 * (1 - tender * 0.3);
+    // Continuous arm drift — mid energy still drives the swirl; nearly
+    // freezes on holdBreath; mid drive softens on tenderness.
+    spinAccum.current +=
+      delta *
+      spd *
+      (0.03 + m.mid * 0.06 * (1 - tender * 0.48)) *
+      sectionPace *
+      motionMul;
     // Bar-lock: a subtle sin phase once per bar. sin(0)=sin(2π)=0 so the
     // wrap is seamless — arms feel timed without stuttering.
     const barLock =
-      m.barPhase > 0 ? Math.sin(m.barPhase * Math.PI * 2) * 0.045 : 0;
+      m.barPhase > 0 ? Math.sin(m.barPhase * Math.PI * 2) * 0.045 * motionMul : 0;
     points.rotation.y = spinAccum.current + barLock;
     // Sway AROUND the base tilt — assigning the raw sway here used to stomp
     // the JSX rotation and flatten the disc edge-on (white-hot smear).
-    points.rotation.x = Math.PI / 3 + Math.sin(state.clock.elapsedTime * 0.12) * 0.08 + sway;
+    // Local phase so tilt wobble freezes with the spiral during holdBreath.
+    wobblePhaseRef.current += dt * 0.12 * motionMul;
+    points.rotation.x =
+      Math.PI / 3 + Math.sin(wobblePhaseRef.current) * 0.08 * (1 - tender * 0.35) + sway;
 
     const baseZ = zoomRef?.current ?? 4;
     // Kick also nudges the camera in slightly — core punch reads in depth.
