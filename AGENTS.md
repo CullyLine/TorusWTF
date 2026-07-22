@@ -33,6 +33,13 @@
 - `pnpm build` — production Next.js build; succeeds.
 - `pnpm lint` — **currently fails on pre-existing issues in `packages/db`** (a `require()` in `src/native-libsql.cjs` flagged by `@typescript-eslint/no-require-imports`, plus an unused eslint-disable in `src/client.ts`). This is a pre-existing code/config issue, not an environment problem; other packages lint clean.
 
+### Chrome / hardware acceleration (Cloud VM)
+- The torus visualizer shows a dismissible banner when WebGL reports a software renderer (`swiftshader`, `llvmpipe`, etc.) — see `apps/visualizer/src/lib/hwAccel.ts`.
+- Cloud VM Chrome is initially configured with `--use-angle=swiftshader-webgl` and the VNC session sets `LIBGL_ALWAYS_SOFTWARE=1` / `GALLIUM_DRIVER=llvmpipe` because there is **no physical GPU** (`/dev/dri` absent).
+- To enable Chrome's hardware-acceleration path, `/usr/local/bin/google-chrome` (and `/usr/local/bin/chrome`) were updated to: unset those Mesa env vars, drop SwiftShader flags, and add `--enable-gpu --ignore-gpu-blocklist`. Chrome's **Settings → System → "Use graphics acceleration when available"** should be ON (it is by default).
+- **The banner may still appear** even after these changes: Chrome may report WebGL as "Hardware accelerated" on `chrome://gpu`, but the actual renderer string is still `ANGLE (Mesa, llvmpipe …)` — CPU software rendering. The torus banner is correct in this case. Visualizers still work; performance is limited. To fully clear the banner you need a machine with a real GPU, or dismiss it with the ✕ button (stored in `localStorage` under `torus-visualizer-hwaccel-banner-dismissed`).
+- After changing Chrome launch flags, kill all Chrome processes (`pkill -9 chrome`), remove `~/.config/google-chrome/Singleton{Lock,Socket,Cookie}`, and relaunch via `/usr/local/bin/google-chrome`.
+
 ### Notes
 - `CONTRIBUTING.md` says to run `cd infra && docker compose up -d` for Redis + MinIO, but **there is no `infra/` directory or compose file in the repo**, and `REDIS_URL`/`STORAGE_*` env vars are unused scaffolding. No Docker is needed for local dev.
 - `cp .env.example .env` — the defaults work as-is for local dev.
