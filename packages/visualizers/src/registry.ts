@@ -19,6 +19,7 @@ import { FlowFieldScene } from './presets/FlowField';
 import { EmberDriftScene } from './presets/EmberDrift';
 import { HaloRainScene } from './presets/HaloRain';
 import { MistSpiralScene } from './presets/MistSpiral';
+import { NightBloomScene } from './presets/NightBloom';
 
 export type VisualizerId =
   | 'anima'
@@ -37,6 +38,7 @@ export type VisualizerId =
   | 'tide_veil'
   | 'halo_rain'
   | 'mist_spiral'
+  | 'night_bloom'
   | 'mandelbrot_zoom';
 
 /**
@@ -472,6 +474,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       aura: 0.3,
       cameraMode: 'still',
       bloomIntensity: 0.8,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  night_bloom: {
+    id: 'night_bloom',
+    label: 'Night Bloom',
+    hint: 'Radial soft-light petals — open on swell, inhale on gather, flare on impact, mote glitter on hats.',
+    Scene: NightBloomScene,
+    // Fullscreen bloom owns the frame via clip-space quad; still camera
+    // keeps the flower stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.3,
+      cameraMode: 'still',
+      bloomIntensity: 0.85,
       cameraDistance: 1,
       lightLevel: 1.05,
     },
