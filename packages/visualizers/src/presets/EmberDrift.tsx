@@ -6,6 +6,8 @@
  *  - swell → embers lift faster / brighter through choruses
  *  - gather → inhale toward the vertical center before the beat
  *  - impact → soft flare (size + warmth), not a strobe
+ *  - kick → upward lift punch through the ash column
+ *  - snare → lateral ash shear (phase-split L/R)
  *  - hat → sparse tick sparkles on selected embers
  */
 
@@ -59,6 +61,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
   const gatherSmooth = useRef(0);
   const impactSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const afterglowSmooth = useRef(0);
@@ -134,6 +138,22 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       0.03,
       0.16,
     );
+    // Kit accents: kick lifts fast / falls medium; snare shears fast;
+    // hats tick with a short fall so mote glitter stays crisp.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.025,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
     hatSmooth.current = smoothToward(
       hatSmooth.current,
       Math.min(1.2, m.hat * 0.95 + m.shimmer * 0.22) * kitAmp,
@@ -145,6 +165,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     const gather = gatherSmooth.current;
     const impact = impactSmooth.current;
+    const kick = kickSmooth.current;
+    const snare = snareSmooth.current;
     const hat = hatSmooth.current;
     const swell = swellSmooth.current;
     const afterglow = afterglowSmooth.current;
@@ -158,8 +180,13 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       (0.55 + swell * 1.15 + m.energy * 0.35 + m.bass * 0.2) *
       (1 - gather * 0.72);
 
+    // Kick: brief upward punch — distinct from swell's sustained loft.
+    const kickLift = kick * dt * pace * calm * 2.8;
+    // Snare: lateral ash shear amplitude (phase-split L/R per ember).
+    const snareShear = snare * dt * pace * calm * 3.4;
+
     const flare = 1 + impact * 0.85 + afterglow * 0.2;
-    mat.size = (0.048 + swell * 0.028 + impact * 0.04) * (0.92 + kitAmp * 0.08);
+    mat.size = (0.048 + swell * 0.028 + impact * 0.04 + kick * 0.018) * (0.92 + kitAmp * 0.08);
     mat.opacity = Math.min(1, 0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12);
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -196,6 +223,14 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       y += rise * lift;
       z += driftZ * lift * 18;
 
+      // Kick upward lift punch — ash surges up the column on the kick.
+      y += rise * kickLift * (0.7 + sizeMul * 0.45);
+      // Snare lateral shear — phase-split L/R so the field cracks sideways.
+      const lateral = (i & 1) === 0 ? 1 : -1;
+      const shearSign = phase > 0.5 ? lateral : -lateral;
+      x += snareShear * shearSign * (0.85 + phase * 0.4);
+      z += snareShear * shearSign * 0.35 * (0.7 + phase * 0.5);
+
       // Soft radial inhale — ash folds toward the column, not a hard snap.
       x *= gatherPull;
       z *= gatherPull;
@@ -217,7 +252,7 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       arr[i3 + 2] = z;
 
       const baseCol = band === 0 ? bassC : band === 1 ? midC : highC;
-      const warmth = 0.42 + phase * 0.28 + afterglow * 0.35 + impact * 0.2;
+      const warmth = 0.42 + phase * 0.28 + afterglow * 0.35 + impact * 0.2 + kick * 0.12;
       mixC.copy(baseCol).lerp(warmC, Math.min(0.85, warmth));
 
       // Height gradient: cooler near the hearth, hotter as they rise.
@@ -225,7 +260,10 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       // Sparse hat ticks — only ~1/3 of embers sparkle so it reads as ticks.
       const tickSelect = hash01(phase * 17.13 + i * 0.31) > 0.62 ? 1 : 0;
       const sparkle = 1 + tickSelect * hat * (1.1 + m.shimmer * 0.4);
-      const gain = heightGlow * flare * sparkle * (0.85 + swell * 0.25);
+      // Kick warms bass embers; snare flashes mid — motion is the primary accent.
+      const kitGlow =
+        (band === 0 ? kick * 0.28 : kick * 0.08) + (band === 1 ? snare * 0.32 : snare * 0.1);
+      const gain = heightGlow * flare * sparkle * (0.85 + swell * 0.25) * (1 + kitGlow);
 
       colArr[i3] = Math.min(1, mixC.r * gain);
       colArr[i3 + 1] = Math.min(1, mixC.g * gain);
