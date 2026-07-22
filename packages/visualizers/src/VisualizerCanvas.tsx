@@ -109,6 +109,11 @@ export interface VisualizerCanvasProps {
   scale?: number;
   /** Subwoofer-style camera rumble keyed to bass. 0 = off, 1 = noticeable, 3 = car shaking. */
   bassShake?: number;
+  /**
+   * Focus blur that kicks with heavy bass. 0 = off; higher = stronger
+   * rack/bokeh thump on hits. Also a modulation target.
+   */
+  depthOfField?: number;
   /** Hidden per-browser personality vector that subtly biases reactivity. */
   creature?: CreaturePersonality;
   /** Upper edge of the bass band in Hz. */
@@ -218,6 +223,7 @@ export function VisualizerCanvas({
   cameraMode,
   scale = 1,
   bassShake = 0,
+  depthOfField = 0,
   creature,
   bassMaxHz,
   midMaxHz,
@@ -385,6 +391,7 @@ export function VisualizerCanvas({
     colorLife,
     cameraDistance,
     bassShake,
+    depthOfField,
     cinematicSpeed,
     emitterRate: emitterSettings.rate,
     emitterSize: emitterSettings.size,
@@ -454,6 +461,7 @@ export function VisualizerCanvas({
                   bloomIntensity={bloomIntensity}
                   cameraMode={cameraMode}
                   bassShake={bassShake}
+                  depthOfField={depthOfField}
                   anima={anima}
                   aura={aura}
                   creature={creature}

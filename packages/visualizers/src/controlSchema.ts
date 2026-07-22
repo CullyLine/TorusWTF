@@ -31,6 +31,7 @@ export type ControlKey =
   | 'scale'
   | 'cameraDistance'
   | 'bassShake'
+  | 'depthOfField'
   | 'cinematicSpeed'
   | 'bassMix'
   | 'midMix'
@@ -247,6 +248,16 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     step: 0.05,
     fallback: 0,
     hint: 'Subwoofer camera rumble on heavy bass',
+    group: 'framing',
+  },
+  {
+    key: 'depthOfField',
+    label: 'Depth of field',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 0,
+    hint: 'Focus blur that kicks with heavy bass — pairs with Shake',
     group: 'framing',
   },
   {

@@ -106,6 +106,7 @@ export interface SavedPreset {
   smoothness?: number;
   scale?: number;
   bassShake?: number;
+  depthOfField?: number;
   bassMaxHz?: number;
   midMaxHz?: number;
   anima?: number;
@@ -146,6 +147,11 @@ export interface VisualizerControls {
   scale?: number;
   /** Subwoofer-style camera rumble keyed to bass. 0 = off, 1 = noticeable, 3 = car shaking. */
   bassShake?: number;
+  /**
+   * Focus blur that kicks with heavy bass. 0 = off; higher = stronger
+   * rack/bokeh thump on hits. Also a modulation target.
+   */
+  depthOfField?: number;
   /** Upper edge of the bass band in Hz. */
   bassMaxHz?: number;
   /** Upper edge of the mid band in Hz. */
@@ -240,6 +246,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   smoothness: 0.6,
   scale: 0.55,
   bassShake: 0.5,
+  depthOfField: 0,
   bassMaxHz: 175,
   midMaxHz: 2500,
   anima: 1,

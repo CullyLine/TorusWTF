@@ -211,6 +211,7 @@ export function ControlPanel({
 
           {renderControl('cameraDistance')}
           {renderControl('bassShake')}
+          {renderControl('depthOfField')}
           {controls.cameraMode === 'cinematic' ? renderControl('cinematicSpeed') : null}
         </details>
 

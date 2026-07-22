@@ -109,6 +109,7 @@ export function PrerenderRoot({
         linger={controls.linger ?? 0.3}
         scale={controls.scale}
         bassShake={controls.bassShake ?? 0}
+        depthOfField={controls.depthOfField ?? 0}
         bassMaxHz={controls.bassMaxHz ?? 250}
         midMaxHz={controls.midMaxHz ?? 2000}
         anima={controls.anima ?? 0.5}

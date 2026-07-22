@@ -144,6 +144,7 @@ export const MOD_GLOBAL_TARGETS: ControlKey[] = [
   'colorLife',
   'cameraDistance',
   'bassShake',
+  'depthOfField',
   'cinematicSpeed',
   ...EMITTER_CONTROL_KEYS,
 ];
