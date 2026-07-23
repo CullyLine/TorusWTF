@@ -6,6 +6,8 @@
  *  - idle / swell → petals open outward, luminous field breathes
  *  - gather → inhale toward center before the beat
  *  - impact → soft flare (petal bloom + core glow), not a strobe
+ *  - kick → radial petal pulse (local outward surge + bass-warm core)
+ *  - snare → lateral petal shear + flank flash (backbeat crack)
  *  - hat → sparse mote glitter on petal tips
  */
 
@@ -34,6 +36,8 @@ uniform float uTime;
 uniform float uOpen;
 uniform float uGather;
 uniform float uImpact;
+uniform float uKick;
+uniform float uSnare;
 uniform float uHat;
 uniform float uBass;
 uniform float uMid;
@@ -91,20 +95,29 @@ void main() {
   vec2 res = max(uResolution, vec2(1.0));
   vec2 uv = (gl_FragCoord.xy - 0.5 * res) / min(res.x, res.y);
 
+  float kick = clamp(uKick, 0.0, 1.2);
+  float snare = clamp(uSnare, 0.0, 1.2);
+
   // Gather inhale: petals fold toward the bloom center.
   float fold = uGather * 0.62;
   float r0 = length(uv) + 1e-4;
-  uv *= 1.0 - fold * (0.48 + 0.52 * smoothstep(0.1, 1.2, r0));
+  // Kick: brief radial zoom punch (local petal surge, not a fullscreen wash).
+  uv *= 1.0 - fold * (0.48 + 0.52 * smoothstep(0.1, 1.2, r0)) + kick * 0.055;
+  // Snare: lateral petal shear before lobe sampling (backbeat crack).
+  uv.x += snare * 0.048 * sign(uv.x + 1e-4);
 
   float r = length(uv);
   float ang = atan(uv.y, uv.x);
+  // Snare also twists petal phase slightly so lobes crack sideways.
+  ang += snare * 0.12 * sign(sin(ang * float(PETAL_COUNT) * 0.5 + 0.4));
 
   // Living oval breathe — petals never sit on a perfect circle.
   float oval = 1.0 + sin(ang * 2.0 + uTime * 0.28) * (0.03 + uMid * 0.04);
   r *= oval;
 
   float openAmt = clamp(uOpen, 0.0, 1.35);
-  float width = 0.055 + uBass * 0.02 + uImpact * 0.035 + openAmt * 0.018;
+  // Kick widens petals briefly; impact width path stays separate.
+  float width = 0.055 + uBass * 0.02 + uImpact * 0.035 + openAmt * 0.018 + kick * 0.028;
   float spin = uTime * (0.12 + uSwell * 0.08) * (1.0 - uGather * 0.75);
 
   float petals = 0.0;
@@ -116,13 +129,15 @@ void main() {
     float seed = fract(sin(fi * 19.17 + 2.4) * 43758.5453);
     // Outer layers open more on swell; gather keeps them close.
     float layerOpen = openAmt * (0.72 + seed * 0.35) * (1.0 - uGather * 0.55);
-    float baseR = (0.22 + fi * 0.2) * (0.55 + layerOpen * 0.7);
-    float angShift = ang + spin * (0.55 + seed * 0.45) + fi * 0.22;
+    // Kick pushes petal targets outward (radial pulse along the flower).
+    float baseR = (0.22 + fi * 0.2) * (0.55 + layerOpen * 0.7) * (1.0 + kick * 0.14);
+    float angShift = ang + spin * (0.55 + seed * 0.45) + fi * 0.22
+      + snare * (seed - 0.5) * 0.22;
     float lobe = petalLobe(angShift, clamp(layerOpen, 0.0, 1.0));
     float target = baseR * (0.38 + 0.62 * lobe);
     float line = petalRibbon(r, target, width * (0.8 + seed * 0.4));
     // Soft radial falloff so the center owns the frame.
-    float radial = exp(-r * r * (1.05 - openAmt * 0.22));
+    float radial = exp(-r * r * (1.05 - openAmt * 0.22 - kick * 0.08));
     float weight = mix(1.15, 0.5, smoothstep(0.08, 1.2, r));
     petals += line * weight * radial;
 
@@ -131,8 +146,8 @@ void main() {
     float tickSelect = step(0.58, fract(seed * 5.17 + fi * 0.31));
     tipMotes += line * tipMask * tickSelect * weight;
 
-    // Soft inner glow per layer.
-    coreGlow += exp(-r * r * (4.5 - layerOpen * 1.2)) * (0.35 + fi * 0.08);
+    // Soft inner glow per layer; kick punches the core radially.
+    coreGlow += exp(-r * r * (4.5 - layerOpen * 1.2 - kick * 0.55)) * (0.35 + fi * 0.08);
   }
 
   // Soft vapor fill between petals — ash-like luminous field.
@@ -148,10 +163,10 @@ void main() {
 
   // Impact flare: petal bloom + soft core flash.
   float flare = uImpact * (0.9 + petals * 0.45);
-  petals *= 0.65 + openAmt * 0.5 + flare * 0.85 + uEnergy * 0.12;
+  petals *= 0.65 + openAmt * 0.5 + flare * 0.85 + uEnergy * 0.12 + kick * 0.18;
   petals += flare * 0.28 * exp(-r * r * 2.2);
   field *= 0.72 + openAmt * 0.38 + flare * 0.4;
-  coreGlow *= 0.8 + flare * 0.9 + uAfterglow * 0.25;
+  coreGlow *= 0.8 + flare * 0.9 + uAfterglow * 0.25 + kick * 0.35;
 
   vec3 body = bloomWash(r, openAmt);
   body *= 0.48 + uEnergy * 0.22 + uAfterglow * 0.3 + field * 0.4;
@@ -163,11 +178,17 @@ void main() {
   vec3 duskRose = mix(uColorMid, vec3(0.95, 0.62, 0.72), 0.5);
   vec3 tipGold = mix(uColorHigh, vec3(1.0, 0.88, 0.7), 0.45);
   petalCol = mix(petalCol, duskRose, 0.28 + uAfterglow * 0.22);
+  // Kick bass-warms petal body; snare cracks toward cooler mid/white.
+  petalCol = mix(petalCol, mix(uColorBass, vec3(1.0, 0.82, 0.68), 0.4), kick * 0.38);
+  petalCol = mix(petalCol, mix(uColorMid, vec3(1.0, 0.94, 0.9), 0.5), snare * 0.32);
 
   vec3 col = body;
-  col += petalCol * petals * (0.55 + flare * 0.5);
+  col += petalCol * petals * (0.55 + flare * 0.5 + kick * 0.22);
   col += tipGold * field * (0.2 + uAfterglow * 0.16);
-  col += duskRose * coreGlow * (0.18 + flare * 0.22);
+  col += duskRose * coreGlow * (0.18 + flare * 0.22 + kick * 0.2);
+  // Snare flank flash along the bloom sides (distinct from radial kick / tip hats).
+  float flank = smoothstep(0.28, 0.9, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.25, abs(uv.y)));
+  col += mix(uColorMid, vec3(1.0, 0.92, 0.88), 0.42) * flank * snare * 0.58;
   // Hat mote glitter — warm high-band sparkle on petal tips.
   col += mix(uColorHigh, tipGold, 0.45) * tipMotes * uHat * 1.25;
   col += tipGold * uAfterglow * (0.07 + petals * 0.09);
@@ -225,6 +246,8 @@ export function NightBloomScene({
   const openSmooth = useRef(0.2);
   const gatherSmooth = useRef(0);
   const impactSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const afterglowSmooth = useRef(0);
@@ -250,6 +273,8 @@ export function NightBloomScene({
       uOpen: { value: 0.2 },
       uGather: { value: 0 },
       uImpact: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
       uHat: { value: 0 },
       uBass: { value: 0 },
       uMid: { value: 0 },
@@ -288,6 +313,20 @@ export function NightBloomScene({
       0.03,
       0.16,
     );
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.025,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
     hatSmooth.current = smoothToward(
       hatSmooth.current,
       Math.min(1.2, m.hat * 0.95 + m.shimmer * 0.25) * kitAmp,
@@ -311,6 +350,8 @@ export function NightBloomScene({
     mat.uniforms.uOpen!.value = openSmooth.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uImpact!.value = impactSmooth.current;
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
