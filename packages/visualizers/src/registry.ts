@@ -19,6 +19,9 @@ import { FlowFieldScene } from './presets/FlowField';
 import { EmberDriftScene } from './presets/EmberDrift';
 import { HaloRainScene } from './presets/HaloRain';
 import { MistSpiralScene } from './presets/MistSpiral';
+import { RainforestReverieScene } from './presets/RainforestReverie';
+import { AlienPlanetScene } from './presets/AlienPlanet';
+import { TidalSanctuaryScene } from './presets/TidalSanctuary';
 
 export type VisualizerId =
   | 'anima'
@@ -37,6 +40,9 @@ export type VisualizerId =
   | 'tide_veil'
   | 'halo_rain'
   | 'mist_spiral'
+  | 'rainforest_reverie'
+  | 'alien_planet'
+  | 'tidal_sanctuary'
   | 'mandelbrot_zoom';
 
 /**
@@ -54,7 +60,7 @@ export interface VisualizerSceneProps {
   /**
    * Scene scale multiplier. Most mesh-based presets are auto-scaled by a
    * `<group scale>` wrapper in `VisualizerCanvas` and can ignore this prop.
-   * Fullscreen-shader presets (Liquid Blob) read it as a uniform because
+   * Fullscreen-shader presets (such as Lava Choir) read it as a uniform because
    * their vertex shaders bypass the model matrix.
    */
   scale?: number;
@@ -65,29 +71,27 @@ export interface VisualizerSceneProps {
    */
   speed?: number;
   /**
-   * Liquid-Blob-specific deformation control. 0 = pure stretch (taffy-pull
-   * along a wobble axis); 1 = pure inflate (uniform radial puff). Default
-   * 0.5. Other presets ignore this prop.
+   * Lava Choir (liquid_blob): orb puff + smooth-union fusion. 0 = distinct
+   * stretching voices; 1 = plush fused choir. Default ~0.55. Other presets
+   * ignore this prop.
    */
   inflate?: number;
   /**
-   * Liquid-Blob-specific: number of orbiting satellite spheres
-   * ("appendages") that fuse into the blob. Default 4, capped at 10 in
-   * the shader. Other presets ignore this prop.
+   * Lava Choir (liquid_blob): persistent harmonic voice / orb count.
+   * Default 5, capped at 10 in the shader. Other presets ignore this prop.
    */
   appendages?: number;
   /**
-   * Liquid-Blob-specific: maximum number of tight fast-orbit sub-spheres
-   * that pop on detected high-frequency transients (hi-hats / cymbals /
-   * sibilance) and melt back into the main blob between hits. Default 6,
-   * capped at 8 in the shader. Other presets ignore this prop.
+   * Lava Choir (liquid_blob): transient high-frequency voice / orb count
+   * (shimmer-gated). Default 5, capped at 8 in the shader. Other presets
+   * ignore this prop.
    */
   subSpheres?: number;
-  /** Flow Field: fine turbulent detail 0..2. Other presets ignore. */
+  /** Flow Field / Tunnel / Rainforest / Tidal: fine turbulent detail 0..2. Others ignore. */
   turbulence?: number;
   /** Flow Field: trail length 0..2. Other presets ignore. */
   trailLength?: number;
-  /** Flow Field: fraction of particles rendered 0..1. Other presets ignore. */
+  /** Flow Field / Tunnel / Rainforest / Tidal: coverage density 0..1. Others ignore. */
   density?: number;
   /** Flow Field: tornado vortex strength 0..1. Other presets ignore. */
   vortexAmount?: number;
@@ -304,8 +308,8 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   },
   star_field: {
     id: 'star_field',
-    label: 'Star Field',
-    hint: 'Galaxy spiral arms that tighten with the bass and twinkle on highs.',
+    label: 'Galaxy Garden',
+    hint: 'Dimensional spiral galaxy with a black-hole core — bass lensing, drop shockwaves, shimmer glints.',
     Scene: StarFieldScene,
     defaults: {
       speed: 1,
@@ -354,26 +358,25 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   },
   liquid_blob: {
     id: 'liquid_blob',
-    label: 'Liquid Blob',
-    hint: 'Amorphous raymarched metaballs that fuse and split. Pure goo, no edges.',
+    label: 'Lava Choir',
+    hint: 'Sculptural choir of breathing lava orbs — fused voices, hot harmonic rims.',
     Scene: LiquidBlobScene,
     presetControls: ['inflate', 'appendages', 'subSpheres'],
-    // The blob renders through its own in-shader camera, so framing comes
-    // entirely from `scale` — 0.6 puts the goo at ~"here in the room".
+    // Orthographic in-shader camera; framing is entirely from `scale`.
     // Camera mode is 'still' because the rig camera can't move this preset.
     defaults: {
-      speed: 1.1,
+      speed: 1.05,
       smoothness: 0.7,
-      scale: 0.72,
-      bassShake: 0.6,
+      scale: 0.85,
+      bassShake: 0.55,
       anima: 1,
       aura: 0,
       cameraMode: 'still',
       cinematicSpeed: 1,
-      inflate: 0.45,
-      appendages: 4,
-      subSpheres: 6,
-      bloomIntensity: 0.55,
+      inflate: 0.55,
+      appendages: 5,
+      subSpheres: 5,
+      bloomIntensity: 0.6,
       cameraDistance: 1,
       lightLevel: 1,
     },
@@ -474,6 +477,74 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 0.8,
       cameraDistance: 1,
       lightLevel: 1.05,
+    },
+  },
+  rainforest_reverie: {
+    id: 'rainforest_reverie',
+    label: 'Rainforest Reverie',
+    hint: "iq's Rainforest, ported with permission — fog breathes on bass, wind stirs the canopy, the sun bursts through the clouds on the drop.",
+    Scene: RainforestReverieScene,
+    presetControls: ['turbulence', 'density'],
+    // The port is already tone-mapped + vignetted — bloom and aura must stay
+    // near zero or they milk the painting over. Rig camera still (the shader
+    // owns the shot).
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.05,
+      cameraMode: 'still',
+      bloomIntensity: 0.12,
+      cameraDistance: 1,
+      lightLevel: 1,
+      turbulence: 1,
+      density: 1,
+    },
+  },
+  alien_planet: {
+    id: 'alien_planet',
+    label: 'Alien Planet',
+    hint: 'A raymarched valley of alien canopy — mist breathes on bass, light rings roll on kick, the sun bursts through on release.',
+    Scene: AlienPlanetScene,
+    presetControls: ['turbulence', 'density'],
+    // Clip-space canopy owns framing via scale; still camera keeps it stable.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.25,
+      cameraMode: 'still',
+      bloomIntensity: 0.65,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+      turbulence: 1,
+      density: 1,
+    },
+  },
+  tidal_sanctuary: {
+    id: 'tidal_sanctuary',
+    label: 'Tidal Sanctuary',
+    hint: 'A living ocean height-field — swells on bass, crest pulses on kick, foam on shimmer, glassy in silence.',
+    Scene: TidalSanctuaryScene,
+    presetControls: ['turbulence', 'density'],
+    // Clip-space ocean owns framing via scale; still camera keeps the sea stable.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.35,
+      anima: 0.55,
+      aura: 0.25,
+      cameraMode: 'still',
+      bloomIntensity: 0.65,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+      turbulence: 1,
+      density: 0.75,
     },
   },
   mandelbrot_zoom: {
