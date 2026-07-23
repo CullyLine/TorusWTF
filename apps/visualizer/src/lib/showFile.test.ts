@@ -98,6 +98,7 @@ describe('showFile', () => {
 
   it('round-trips new presets and preserves the legacy Liquid Blob and Star Field IDs', () => {
     for (const preset of [
+      'night_bloom',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',

@@ -66,6 +66,7 @@ const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'tide_veil',
   'halo_rain',
   'mist_spiral',
+  'night_bloom',
   'anima',
 ]);
 
