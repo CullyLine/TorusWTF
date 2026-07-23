@@ -21,7 +21,12 @@ import { BackgroundLayer, type BackgroundMode } from './BackgroundLayer';
 import { AudioMetricsProvider, type AudioMetrics, type MetricsScales } from './metrics';
 import type { VisualImpulses } from './impulse';
 import { LivingPaletteDriver, type LivingPaletteTarget } from './livingPalette';
-import { ModulationProvider, useModulation, type ModRouting, type ModulatedValues } from './modulation';
+import {
+  ModulationProvider,
+  useModulation,
+  type ModRouting,
+  type ModulatedValues,
+} from './modulation';
 import { SceneRig, type CameraMode } from './SceneRig';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 import type { AnalyserHandle } from './audio';
@@ -109,6 +114,11 @@ export interface VisualizerCanvasProps {
   scale?: number;
   /** Subwoofer-style camera rumble keyed to bass. 0 = off, 1 = noticeable, 3 = car shaking. */
   bassShake?: number;
+  /**
+   * Focus blur that kicks with heavy bass. 0 = off; higher = stronger
+   * rack/bokeh thump on hits. Also a modulation target.
+   */
+  depthOfField?: number;
   /** Hidden per-browser personality vector that subtly biases reactivity. */
   creature?: CreaturePersonality;
   /** Upper edge of the bass band in Hz. */
@@ -119,6 +129,8 @@ export interface VisualizerCanvasProps {
   bpmRef?: MutableRefObject<number | null>;
   /** Last onset timestamp ref from useBPM, anchors beat/bar phase. */
   lastOnsetRef?: MutableRefObject<number>;
+  /** Deterministic song time in seconds for offline prerendering. */
+  simulationTimeRef?: MutableRefObject<number>;
   /** Anima life amount. 0 = dead-reactive, 1 = full breathing. */
   anima?: number;
   /** Aura amount. 0 = no wisps/glow, 1 = full presence. */
@@ -141,11 +153,11 @@ export interface VisualizerCanvasProps {
   energy?: number;
   /** Auto-gain (AGC). Default on; normalizes loudness so any song reacts well. */
   autoGain?: boolean;
-  /** Liquid Blob: 0 = pure stretch, 1 = pure inflate. Other presets ignore. */
+  /** Lava Choir: 0 = distinct stretching voices, 1 = plush fused choir. */
   inflate?: number;
-  /** Liquid Blob: number of orbiting satellite spheres (0–10). */
+  /** Lava Choir: number of persistent harmonic voices (0–10). */
   appendages?: number;
-  /** Liquid Blob: max sub-spheres that pop on high-frequency transients (0–8). */
+  /** Lava Choir: transient high-frequency harmonic voices (0–8). */
   subSpheres?: number;
   /** Flow Field: fine turbulent detail 0..2. */
   turbulence?: number;
@@ -218,11 +230,13 @@ export function VisualizerCanvas({
   cameraMode,
   scale = 1,
   bassShake = 0,
+  depthOfField = 0,
   creature,
   bassMaxHz,
   midMaxHz,
   bpmRef,
   lastOnsetRef,
+  simulationTimeRef,
   anima,
   aura,
   cinematicSpeed = 1,
@@ -367,6 +381,7 @@ export function VisualizerCanvas({
     midMaxHz,
     bpmRef,
     lastOnsetRef,
+    simulationTimeRef,
     energy,
     autoGain,
     linger,
@@ -385,6 +400,7 @@ export function VisualizerCanvas({
     colorLife,
     cameraDistance,
     bassShake,
+    depthOfField,
     cinematicSpeed,
     emitterRate: emitterSettings.rate,
     emitterSize: emitterSettings.size,
@@ -454,6 +470,7 @@ export function VisualizerCanvas({
                   bloomIntensity={bloomIntensity}
                   cameraMode={cameraMode}
                   bassShake={bassShake}
+                  depthOfField={depthOfField}
                   anima={anima}
                   aura={aura}
                   creature={creature}

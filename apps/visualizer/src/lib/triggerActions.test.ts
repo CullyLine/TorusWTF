@@ -7,12 +7,18 @@ import {
 } from './triggerActions';
 
 describe('effect trigger actions', () => {
-  it('exposes random shader, emitter burst, and cinematic cut actions', () => {
+  it('exposes random shader, emitter burst, cinematic cut, and focus punch actions', () => {
     expect(TRIGGER_ACTIONS).toEqual(
-      expect.arrayContaining(['randomShader', 'emitParticles', 'nextCinematicCut']),
+      expect.arrayContaining([
+        'randomShader',
+        'emitParticles',
+        'nextCinematicCut',
+        'dofPunch',
+      ]),
     );
     expect(triggerImpulseField('emitParticles')).toBe('emitterBurst');
     expect(triggerImpulseField('nextCinematicCut')).toBe('cinematicCut');
+    expect(triggerImpulseField('dofPunch')).toBe('dofPunch');
     expect(triggerImpulseField('randomShader')).toBeNull();
   });
 

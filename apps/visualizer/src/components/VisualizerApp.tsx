@@ -605,6 +605,7 @@ export function VisualizerApp() {
       smoothness: saved.smoothness ?? 0,
       scale: saved.scale ?? 1,
       bassShake: saved.bassShake ?? 0,
+      depthOfField: saved.depthOfField ?? 0,
       bassMaxHz: saved.bassMaxHz ?? 250,
       midMaxHz: saved.midMaxHz ?? 2000,
       anima: saved.anima ?? 0.5,
@@ -1088,6 +1089,7 @@ export function VisualizerApp() {
                 linger={controls.linger ?? 0.3}
                 scale={controls.scale ?? 1}
                 bassShake={controls.bassShake ?? 0}
+                depthOfField={controls.depthOfField ?? 0}
                 bassMaxHz={controls.bassMaxHz ?? 250}
                 midMaxHz={controls.midMaxHz ?? 2000}
                 anima={controls.anima ?? 0.5}
