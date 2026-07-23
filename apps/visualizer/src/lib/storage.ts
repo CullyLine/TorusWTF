@@ -106,6 +106,7 @@ export interface SavedPreset {
   smoothness?: number;
   scale?: number;
   bassShake?: number;
+  depthOfField?: number;
   bassMaxHz?: number;
   midMaxHz?: number;
   anima?: number;
@@ -146,6 +147,11 @@ export interface VisualizerControls {
   scale?: number;
   /** Subwoofer-style camera rumble keyed to bass. 0 = off, 1 = noticeable, 3 = car shaking. */
   bassShake?: number;
+  /**
+   * Focus blur that kicks with heavy bass. 0 = off; higher = stronger
+   * rack/bokeh thump on hits. Also a modulation target.
+   */
+  depthOfField?: number;
   /** Upper edge of the bass band in Hz. */
   bassMaxHz?: number;
   /** Upper edge of the mid band in Hz. */
@@ -162,18 +168,15 @@ export interface VisualizerControls {
    */
   energy?: number;
   /**
-   * Liquid Blob deformation balance. 0 = pure stretch (taffy-pull),
-   * 1 = pure inflate (radial puff). Default 0.5. Only Liquid Blob uses it.
+   * Lava Choir fusion balance. 0 = distinct stretching voices,
+   * 1 = plush fused choir. Only the legacy `liquid_blob` preset ID uses it.
    */
   inflate?: number;
-  /**
-   * Liquid Blob: number of orbiting "appendage" spheres (0–10). Default 4.
-   */
+  /** Lava Choir: number of persistent harmonic voices (0–10). */
   appendages?: number;
   /**
-   * Liquid Blob: max number of tight fast-orbit sub-spheres that pop on
-   * high-frequency transients (hi-hats / sibilance) and melt back into
-   * the main blob between hits. 0 = disabled. Default 6.
+   * Lava Choir: max transient high-frequency voices that bloom on shimmer
+   * and hats, then melt back into the choir. 0 = disabled.
    */
   subSpheres?: number;
   /** Flow Field: fine turbulent detail 0..2. Default 1. */
@@ -240,6 +243,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   smoothness: 0.6,
   scale: 0.55,
   bassShake: 0.5,
+  depthOfField: 0,
   bassMaxHz: 175,
   midMaxHz: 2500,
   anima: 1,

@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useFBO } from '@react-three/drei';
 import { EffectComposer, Vignette } from '@react-three/postprocessing';
-import { BloomEffect } from 'postprocessing';
+import { BloomEffect, DepthOfFieldEffect } from 'postprocessing';
 import type { PerspectiveCamera, PointLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useModulation } from './modulation';
@@ -22,7 +22,7 @@ import {
   clampReactiveLightIntensity,
 } from './effects/brightness';
 import { ScreenStyleEffect } from './effects/ScreenStyleEffect';
-import type { ScreenEffectId } from './effects/screenEffects';
+import { SCREEN_EFFECT_REGISTRY, type ScreenEffectId } from './effects/screenEffects';
 import {
   createCinematicState,
   updateCinematicCamera,
@@ -50,17 +50,19 @@ const SAFE_MIN_CAMERA_DISTANCE = 1.5;
 /**
  * Critically-damped spring smooth-time (seconds) for camera pose.
  * Short enough that orbit/drift track their targets without visible lag,
- * long enough that mode switches and cinematic cuts glide instead of teleport.
+ * long enough that mode switches glide instead of teleport.
  */
 const CAMERA_SPRING_SMOOTH = 0.16;
 /** Default look SmoothDamp — snappy enough for orbit/drift gaze. */
 const LOOK_SPRING_SMOOTH = 0.14;
 /**
- * Cinematic shot cuts jump look-at discontinuously; a longer SmoothDamp
- * (~0.28s) lets framing glide into each cut without a pop, while position
- * springs (CAMERA_SPRING_SMOOTH) still handle the body.
+ * Cinematic shot cuts jump look-at and pose discontinuously; a longer
+ * SmoothDamp (~0.28s) lets framing and dollies glide into each cut without
+ * a whip. Mid-shot authored paths still track through the spring.
  */
 const CINEMATIC_LOOK_SPRING_SMOOTH = 0.28;
+/** Matches look horizon so cinematic body and gaze ease on the same cut. */
+const CINEMATIC_POSE_SPRING_SMOOTH = 0.28;
 
 /** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
 const FOV_SPRING_SMOOTH = 0.09;
@@ -241,27 +243,36 @@ const SCREEN_DEPTH_TEXTURE_SIZE = 384;
 function ScreenStylePass({
   screenEffect,
   shaderMix,
+  palette,
+  tier,
 }: {
   screenEffect: Exclude<ScreenEffectId, 'none'>;
   shaderMix: number;
+  palette: { bass: string; mid: string; high: string };
+  tier: 'high' | 'mid' | 'low';
 }) {
   const mods = useModulation();
+  const metricsRef = useMetricsRef();
   const depthTarget = useFBO(SCREEN_DEPTH_TEXTURE_SIZE, SCREEN_DEPTH_TEXTURE_SIZE, {
     depth: true,
     samples: 0,
   });
+  // Reconstruct only when style or tier changes so a single selected module
+  // is compiled; depth texture identity is stable for the FBO lifetime.
   const effect = useMemo(
     () =>
       new ScreenStyleEffect(
-        'none',
+        screenEffect,
         0,
+        tier,
         depthTarget.depthTexture,
         0.1,
         1000,
         SCREEN_DEPTH_TEXTURE_SIZE,
       ),
-    [depthTarget.depthTexture],
+    [screenEffect, tier, depthTarget.depthTexture],
   );
+  const usesDepth = SCREEN_EFFECT_REGISTRY[screenEffect].usesDepth;
   const renderDepthRef = useRef(false);
 
   useEffect(() => () => effect.dispose(), [effect]);
@@ -270,16 +281,18 @@ function ScreenStylePass({
   // whenever the effective wet amount is zero.
   useFrame((state) => {
     const wet = mods.current.shaderMix ?? shaderMix;
-    effect.style = screenEffect;
     effect.mix = wet;
-    effect.time = state.clock.elapsedTime;
 
     const camera = state.camera as PerspectiveCamera;
-    effect.setCameraRange(camera.near, camera.far);
+    effect.updateFrame({
+      time: state.clock.elapsedTime,
+      palette,
+      metrics: metricsRef.current,
+      cameraNear: camera.near,
+      cameraFar: camera.far,
+    });
     renderDepthRef.current =
-      wet > 0.001 &&
-      screenEffect !== 'pixel8' &&
-      !state.gl.getContext().isContextLost();
+      wet > 0.001 && usesDepth && !state.gl.getContext().isContextLost();
   });
 
   // A small fixed-size prepass supplies depth discontinuities without asking
@@ -304,6 +317,11 @@ interface SceneRigProps {
   cameraMode?: CameraMode;
   /** 0 = off, 1 = noticeable, 3 = subwoofer-in-a-car. */
   bassShake?: number;
+  /**
+   * Focus blur that kicks with heavy bass. 0 = off; higher = stronger
+   * rack/bokeh thump on hits. Also a modulation target.
+   */
+  depthOfField?: number;
   /** 0 = dead-reactive (no breathing); 1 = full Anima life. Default 0.5. */
   anima?: number;
   /** 0 = no aura, 1 = full wisp cloud + soul glow. Default 0.4. */
@@ -344,6 +362,7 @@ export function SceneRig({
   bloomIntensity,
   cameraMode = 'drift',
   bassShake = 0,
+  depthOfField = 0,
   anima = 0.5,
   aura = 0.4,
   creature,
@@ -357,6 +376,7 @@ export function SceneRig({
 }: SceneRigProps) {
   const metricsRef = useMetricsRef();
   const mods = useModulation();
+  const camera = useThree((s) => s.camera);
   const bassLight = useRef<PointLight>(null);
   const midLight = useRef<PointLight>(null);
   const highLight = useRef<PointLight>(null);
@@ -377,9 +397,13 @@ export function SceneRig({
   // drop exhales glide; pose spring + shake SmoothDamp stay independent.
   const leanZSpringRef = useRef<ScalarSpring>(createScalarSpring());
   const releaseZSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  // DoF kick spring — SmoothDamp so bass/trigger envelopes never write
+  // focusDistance / bokehScale as raw stair-steps.
+  const dofKickSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // Trigger-impulse envelopes: consumed from `impulses` on the frame they
   // fire, then rung down here (same struck-bell shape as the audio pulses).
   const camPunchEnvRef = useRef(0);
+  const dofPunchEnvRef = useRef(0);
   const bloomPulseEnvRef = useRef(0);
   const flashEnvRef = useRef(0);
   // Musical bloom breath: slow chorus/verse envelope (swell + afterglow).
@@ -407,6 +431,24 @@ export function SceneRig({
     [tier],
   );
   useEffect(() => () => bloomEffect?.dispose(), [bloomEffect]);
+
+  // Depth of field — constructed directly (like Bloom) so the frame loop
+  // can rack focusDistance / focusRange / bokehScale with the music.
+  // Skipped on low tier; wide rest-state focusRange keeps the frame sharp
+  // until a bass/trigger kick narrows it.
+  const dofEffect = useMemo(
+    () =>
+      tier === 'low'
+        ? null
+        : new DepthOfFieldEffect(camera, {
+            focusDistance: 3.0,
+            focusRange: 3.0,
+            bokehScale: 0,
+            resolutionScale: 0.5,
+          }),
+    [tier, camera],
+  );
+  useEffect(() => () => dofEffect?.dispose(), [dofEffect]);
   const zoomDistanceRef = useCameraZoomDistanceRef();
   const advanceZoom = useAdvanceCameraZoom();
   const fallbackZ = embedded ? 2.8 : 3.1;
@@ -427,7 +469,7 @@ export function SceneRig({
   const camSpringRef = useRef<Spring3>(createSpring3());
   const lookSpringRef = useRef<Spring3>(createSpring3());
   const prevCameraModeRef = useRef<CameraMode>(cameraMode);
-  /** Tracks cinematic shot index so look velocity resets on each cut. */
+  /** Tracks cinematic shot index so pose/look velocity reset on each cut. */
   const prevCinematicShotRef = useRef(-1);
 
   useFrame((state, delta) => {
@@ -437,6 +479,7 @@ export function SceneRig({
     const t = state.clock.elapsedTime;
     const dist = Math.max(0.3, mv.cameraDistance ?? cameraDistance);
     const bassShakeNow = mv.bassShake ?? bassShake;
+    const depthOfFieldNow = mv.depthOfField ?? depthOfField;
     const lightLevelNow = Math.min(2, Math.max(0, mv.lightLevel ?? lightLevel));
     // Wheel/pinch write a zoom *target*; SmoothDamp eases distanceRef so
     // framing pulls feel fluid (no stair-steps) and settle cleanly at rest.
@@ -465,6 +508,13 @@ export function SceneRig({
         camPunchEnvRef.current = Math.max(camPunchEnvRef.current, Math.min(1.5, impulses.camPunch));
         impulses.camPunch = 0;
       }
+      if (impulses.dofPunch > 0.001) {
+        dofPunchEnvRef.current = Math.max(
+          dofPunchEnvRef.current,
+          Math.min(1.5, impulses.dofPunch),
+        );
+        impulses.dofPunch = 0;
+      }
       if (impulses.bloomPulse > 0.001) {
         bloomPulseEnvRef.current = Math.max(
           bloomPulseEnvRef.current,
@@ -479,6 +529,7 @@ export function SceneRig({
       consumeCinematicCut(impulses, cameraMode === 'cinematic', cinematicState.current);
     }
     camPunchEnvRef.current *= Math.exp(-dtImp / 0.22);
+    dofPunchEnvRef.current *= Math.exp(-dtImp / 0.3);
     bloomPulseEnvRef.current *= Math.exp(-dtImp / 0.35);
     flashEnvRef.current *= Math.exp(-dtImp / 0.16);
     const flash = flashEnvRef.current;
@@ -614,10 +665,14 @@ export function SceneRig({
         lookTargetX = cine.look.x;
         lookTargetY = cine.look.y;
         lookTargetZ = cine.look.z;
-        // Shot cuts jump look discontinuously — zero look velocity so the
-        // longer cinematic SmoothDamp eases framing in cleanly (~0.28s).
+        // Shot cuts jump pose + look discontinuously — zero both velocities
+        // so the longer cinematic SmoothDamp eases dollies and framing in
+        // cleanly (~0.28s) without a whip from residual cut-in momentum.
         if (prevCinematicShotRef.current !== cine.shotIndex) {
           if (prevCinematicShotRef.current >= 0) {
+            camSpringRef.current.vx = 0;
+            camSpringRef.current.vy = 0;
+            camSpringRef.current.vz = 0;
             lookSpringRef.current.vx = 0;
             lookSpringRef.current.vy = 0;
             lookSpringRef.current.vz = 0;
@@ -750,7 +805,12 @@ export function SceneRig({
       }
     }
 
-    springTo(camSpringRef.current, desiredX, desiredY, desiredZ, dtCam, CAMERA_SPRING_SMOOTH);
+    // Pose SmoothDamp: cinematic cuts use a longer smooth-time so dollies
+    // glide (~0.28s); other modes keep the snappier default. Mid-shot the
+    // authored path still tracks through the spring.
+    const poseSmooth =
+      cameraMode === 'cinematic' ? CINEMATIC_POSE_SPRING_SMOOTH : CAMERA_SPRING_SMOOTH;
+    springTo(camSpringRef.current, desiredX, desiredY, desiredZ, dtCam, poseSmooth);
     const sprung = camSpringRef.current;
     state.camera.position.set(sprung.x, sprung.y, sprung.z);
 
@@ -846,6 +906,29 @@ export function SceneRig({
       }
     }
 
+    // Depth-of-field focus thump: slider/mod amount scales a bass+impact
+    // drive (same recipe as Shake); trigger dofPunch adds a one-shot kick.
+    // At rest (kick ≈ 0) focusRange stays wide and bokehScale is 0 so the
+    // frame stays sharp. Camera distance is final here (after pose spring,
+    // shake, and safe-zone), so focusDistance tracks the subject.
+    if (dofEffect) {
+      const dofDrive = m.bass * 0.5 + m.impact * 1.3;
+      const kickTarget = Math.min(
+        1.5,
+        depthOfFieldNow * dofDrive * 0.6 + dofPunchEnvRef.current,
+      );
+      const kick = smoothDampScalar(
+        dofKickSpringRef.current,
+        kickTarget,
+        dtCam,
+        FOV_SPRING_SMOOTH,
+      );
+      const camDist = state.camera.position.length();
+      dofEffect.cocMaterial.focusDistance = camDist * (1 - 0.25 * kick);
+      dofEffect.cocMaterial.focusRange = Math.max(0.4, 3.0 - 2.2 * kick);
+      dofEffect.bokehScale = Math.min(6, kick * 3.5);
+    }
+
     if (bloomEffect) {
       // Bloom musical breath: choruses glow via swell, peaks linger on
       // afterglow, gather lifts just before the downbeat, and hits flash
@@ -926,7 +1009,12 @@ export function SceneRig({
           <>
             <LightLevel ref={lightLevelRef} level={level} />
             {screenEffect !== 'none' ? (
-              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+              <ScreenStylePass
+                screenEffect={screenEffect}
+                shaderMix={shaderMix}
+                palette={palette}
+                tier={tier}
+              />
             ) : null}
             <HighlightGuard enabled={highlightProtection} />
           </>
@@ -934,11 +1022,17 @@ export function SceneRig({
       ) : (
         <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
           <>
+            {dofEffect ? <primitive object={dofEffect} dispose={null} /> : null}
             {bloomEffect ? <primitive object={bloomEffect} dispose={null} /> : null}
             <LightLevel ref={lightLevelRef} level={level} />
             <Vignette eskil={false} offset={0.16} darkness={0.38} />
             {screenEffect !== 'none' ? (
-              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+              <ScreenStylePass
+                screenEffect={screenEffect}
+                shaderMix={shaderMix}
+                palette={palette}
+                tier={tier}
+              />
             ) : null}
             <HighlightGuard enabled={highlightProtection} />
           </>

@@ -1,5 +1,17 @@
 /** Stable IDs for whole-frame post-processing styles. */
-export const SCREEN_EFFECT_IDS = ['none', 'matrix', 'pixel8', 'cartoon'] as const;
+export const SCREEN_EFFECT_IDS = [
+  'none',
+  'matrix',
+  'pixel8',
+  'cartoon',
+  'bubble_melt',
+  'octagram_bloom',
+  'pyramid_cathedral',
+  'creation_well',
+  'sea_glass',
+  'firefly_hug',
+  'velvet_aurora',
+] as const;
 
 export type ScreenEffectId = (typeof SCREEN_EFFECT_IDS)[number];
 
@@ -8,6 +20,8 @@ export interface ScreenEffectDefinition {
   label: string;
   description: string;
   defaultMix: number;
+  /** When true, SceneRig runs the 384px depth prepass for this style. */
+  usesDepth: boolean;
 }
 
 export const SCREEN_EFFECT_REGISTRY = {
@@ -16,24 +30,77 @@ export const SCREEN_EFFECT_REGISTRY = {
     label: 'None',
     description: 'Unstyled frame',
     defaultMix: 1,
+    usesDepth: false,
   },
   matrix: {
     id: 'matrix',
     label: 'Matrix',
     description: 'Green scan-grid wireframe remap',
     defaultMix: 1,
+    usesDepth: true,
   },
   pixel8: {
     id: 'pixel8',
     label: 'Pixel 8',
     description: 'Block pixels, reduced colors, and ordered dithering',
     defaultMix: 1,
+    usesDepth: false,
   },
   cartoon: {
     id: 'cartoon',
     label: 'Cartoon',
     description: 'Posterized color with scene outlines',
     defaultMix: 1,
+    usesDepth: true,
+  },
+  bubble_melt: {
+    id: 'bubble_melt',
+    label: 'Bubble Melt',
+    description: 'Glossy fused bubble-cell reconstruction with iridescent rims',
+    defaultMix: 1,
+    usesDepth: true,
+  },
+  octagram_bloom: {
+    id: 'octagram_bloom',
+    label: 'Octagram Bloom',
+    description: 'Mirrored eightfold flower geometry with sparkling petal edges',
+    defaultMix: 1,
+    usesDepth: false,
+  },
+  pyramid_cathedral: {
+    id: 'pyramid_cathedral',
+    label: 'Pyramid Cathedral',
+    description: 'Recursive triangular chambers and warm luminous facets',
+    defaultMix: 1,
+    usesDepth: false,
+  },
+  creation_well: {
+    id: 'creation_well',
+    label: 'Creation Well',
+    description: 'Radial energy well with impact rings and palette channel phases',
+    defaultMix: 1,
+    usesDepth: false,
+  },
+  sea_glass: {
+    id: 'sea_glass',
+    label: 'Sea Glass',
+    description: 'Refractive water-sheet distortion with caustic crests',
+    defaultMix: 1,
+    usesDepth: false,
+  },
+  firefly_hug: {
+    id: 'firefly_hug',
+    label: 'Firefly Hug',
+    description: 'Edge-guided motes that gather around subjects, then release',
+    defaultMix: 1,
+    usesDepth: true,
+  },
+  velvet_aurora: {
+    id: 'velvet_aurora',
+    label: 'Velvet Aurora',
+    description: 'Soft flow-warped ribbons with chromatic smears',
+    defaultMix: 1,
+    usesDepth: false,
   },
 } as const satisfies Readonly<Record<ScreenEffectId, ScreenEffectDefinition>>;
 
@@ -45,7 +112,16 @@ export const CREATIVE_SCREEN_EFFECT_IDS = [
   'matrix',
   'pixel8',
   'cartoon',
+  'bubble_melt',
+  'octagram_bloom',
+  'pyramid_cathedral',
+  'creation_well',
+  'sea_glass',
+  'firefly_hug',
+  'velvet_aurora',
 ] as const satisfies readonly ScreenEffectId[];
+
+export type CreativeScreenEffectId = (typeof CREATIVE_SCREEN_EFFECT_IDS)[number];
 
 export interface ScreenEffectSettings {
   id: ScreenEffectId;
@@ -60,6 +136,12 @@ export const DEFAULT_SCREEN_EFFECT_SETTINGS: Readonly<ScreenEffectSettings> = Ob
 
 export function isScreenEffectId(value: unknown): value is ScreenEffectId {
   return typeof value === 'string' && (SCREEN_EFFECT_IDS as readonly string[]).includes(value);
+}
+
+export function isCreativeScreenEffectId(value: unknown): value is CreativeScreenEffectId {
+  return (
+    typeof value === 'string' && (CREATIVE_SCREEN_EFFECT_IDS as readonly string[]).includes(value)
+  );
 }
 
 export function clampScreenEffectMix(value: number): number {

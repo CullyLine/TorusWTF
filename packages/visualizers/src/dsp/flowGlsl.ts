@@ -1,7 +1,7 @@
 /**
  * GLSL twin of `flowfield.ts` — the same curl-noise flow math as a shader
- * chunk, shared by the Flow Field GPGPU sim and any fullscreen-shader preset
- * that wants true divergence-free warping (Liquid Blob's domain warp).
+ * chunk, shared by the Flow Field GPGPU sim and shader presets that want
+ * true divergence-free warping (including Galaxy Garden's arm flow).
  *
  * Keep the constants in sync with flowfield.ts: same hash, same domain
  * offsets, same vortex/well profiles — so CPU-advected presets and GPU

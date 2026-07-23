@@ -28,6 +28,9 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   halo_rain: '#A5B4FC',
   mist_spiral: '#8EB4C8',
   night_bloom: '#F0A8C0',
+  rainforest_reverie: '#4ADE80',
+  alien_planet: '#C084FC',
+  tidal_sanctuary: '#22D3EE',
   mandelbrot_zoom: '#34D399',
 };
 
@@ -36,11 +39,7 @@ export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) 
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-medium text-torus-fg-dim">Preset</h2>
-        <button
-          type="button"
-          onClick={onRandom}
-          className="text-xs text-torus-mid hover:underline"
-        >
+        <button type="button" onClick={onRandom} className="text-xs text-torus-mid hover:underline">
           Random
         </button>
       </div>
@@ -69,7 +68,3 @@ export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) 
     </section>
   );
 }
-
-
-
-
