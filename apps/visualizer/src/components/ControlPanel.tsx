@@ -211,6 +211,7 @@ export function ControlPanel({
 
           {renderControl('cameraDistance')}
           {renderControl('bassShake')}
+          {renderControl('depthOfField')}
           {controls.cameraMode === 'cinematic' ? renderControl('cinematicSpeed') : null}
         </details>
 
@@ -274,7 +275,7 @@ export function ControlPanel({
           {background.mode !== 'none' && FULLSCREEN_PRESETS.has(activePreset) ? (
             <p className="text-[10px] text-torus-fg-faint">
               This preset fills the whole frame, so the background sits hidden behind it.
-              Try it with Torus Field, Star Field, or Cosmic Mandala.
+              Try it with Torus Field, Galaxy Garden, or Cosmic Mandala.
             </p>
           ) : null}
         </details>

@@ -31,6 +31,7 @@ export type ControlKey =
   | 'scale'
   | 'cameraDistance'
   | 'bassShake'
+  | 'depthOfField'
   | 'cinematicSpeed'
   | 'bassMix'
   | 'midMix'
@@ -250,6 +251,16 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     group: 'framing',
   },
   {
+    key: 'depthOfField',
+    label: 'Depth of field',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 0,
+    hint: 'Focus blur that kicks with heavy bass — pairs with Shake',
+    group: 'framing',
+  },
+  {
     key: 'cinematicSpeed',
     label: 'Cinematic speed',
     min: 0.25,
@@ -300,28 +311,28 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     min: 0,
     max: 1,
     step: 0.01,
-    fallback: 0.5,
-    hint: '0 = stretchy taffy, 1 = round puff',
+    fallback: 0.55,
+    hint: '0 = distinct stretching voices, 1 = plush fused choir',
     group: 'preset',
   },
   {
     key: 'appendages',
-    label: 'Appendages',
+    label: 'Voices',
     min: 0,
     max: 10,
     step: 1,
-    fallback: 4,
-    hint: 'Orbiting satellite spheres that fuse into the blob',
+    fallback: 5,
+    hint: 'Persistent harmonic orbs in the lava choir',
     group: 'preset',
   },
   {
     key: 'subSpheres',
-    label: 'Sub-spheres',
+    label: 'Harmonics',
     min: 0,
     max: 8,
     step: 1,
-    fallback: 6,
-    hint: 'Big fluid bubbles on hi-hats and cymbals',
+    fallback: 5,
+    hint: 'Transient high-frequency orbs on shimmer / hats',
     group: 'preset',
   },
   {

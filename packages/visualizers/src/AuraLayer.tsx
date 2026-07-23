@@ -43,6 +43,17 @@ const FLOCK_CX = 0;
 const FLOCK_CY = 0;
 const FLOCK_CZ = -1.5;
 
+function createAuraRng(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function smoothToward(
   current: number,
   target: number,
@@ -75,7 +86,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const bassColor = useRef(new THREE.Color(palette.bass));
   const midColor = useRef(new THREE.Color(palette.mid));
 
-  const wispCount = tier === 'high' ? WISP_COUNT_HIGH : tier === 'mid' ? WISP_COUNT_MID : WISP_COUNT_LOW;
+  const wispCount =
+    tier === 'high' ? WISP_COUNT_HIGH : tier === 'mid' ? WISP_COUNT_MID : WISP_COUNT_LOW;
 
   // Per-wisp seeds for stable trajectory + per-wisp brightness phase offset.
   const { positions, seeds, colors } = useMemo(() => {
@@ -85,21 +97,22 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const bass = new THREE.Color(palette.bass);
     const mid = new THREE.Color(palette.mid);
     const high = new THREE.Color(palette.high);
+    const random = createAuraRng(0xa17a5eed ^ wispCount);
     for (let i = 0; i < wispCount; i++) {
       // Spawn in a sphere around the camera-facing region.
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 2 + Math.random() * 3;
+      const theta = random() * Math.PI * 2;
+      const phi = Math.acos(2 * random() - 1);
+      const r = 2 + random() * 3;
       pos[i * 3] = Math.sin(phi) * Math.cos(theta) * r;
       pos[i * 3 + 1] = Math.sin(phi) * Math.sin(theta) * r;
       pos[i * 3 + 2] = Math.cos(phi) * r - 1.5;
       // Per-wisp trajectory seeds (sin frequencies for x/y/z + brightness phase).
-      seed[i * 4] = 0.05 + Math.random() * 0.12;
-      seed[i * 4 + 1] = 0.05 + Math.random() * 0.12;
-      seed[i * 4 + 2] = 0.05 + Math.random() * 0.12;
-      seed[i * 4 + 3] = Math.random() * Math.PI * 2;
+      seed[i * 4] = 0.05 + random() * 0.12;
+      seed[i * 4 + 1] = 0.05 + random() * 0.12;
+      seed[i * 4 + 2] = 0.05 + random() * 0.12;
+      seed[i * 4 + 3] = random() * Math.PI * 2;
       // Color: a tertiary mix biased toward mid (rare bass/high wisps).
-      const pick = Math.random();
+      const pick = random();
       const c = pick < 0.2 ? bass : pick < 0.85 ? mid : high;
       col[i * 3] = c.r;
       col[i * 3 + 1] = c.g;
@@ -140,10 +153,10 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     }
   `;
 
-  useFrame((_state, delta) => {
+  useFrame((state, delta) => {
     if (amount <= 0) return;
     const m = metricsRef.current;
-    const now = performance.now() / 1000;
+    const now = state.clock.elapsedTime;
     const dt = Math.min(delta, 0.05);
 
     // Fast rise on hits / gather so the inhale lands; slower fall so the
@@ -268,8 +281,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Stillness softens the live pulse so listening feels quieter.
       // Lean slightly brightens — presence leans closer into the light.
       const livePulse = 1 - stillness * 0.55;
-      const phaseTwinkle =
-        glitter > 0.08 ? 0.5 + 0.5 * Math.sin(now * 28 + glitter * 9) : 0;
+      const phaseTwinkle = glitter > 0.08 ? 0.5 + 0.5 * Math.sin(now * 28 + glitter * 9) : 0;
       mat.size =
         (0.04 +
           m.high * 0.1 * livePulse +
@@ -325,8 +337,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       glowMat.uniforms.uRadius!.value =
         1 - gather * 0.12 + burst * 0.08 - stillness * 0.1 + lean * 0.05 * leanMul;
       if (glowMesh) {
-        const s =
-          1 - gather * 0.06 + burst * 0.05 - stillness * 0.04 + lean * 0.035 * leanMul;
+        const s = 1 - gather * 0.06 + burst * 0.05 - stillness * 0.04 + lean * 0.035 * leanMul;
         glowMesh.scale.setScalar(s);
       }
     }
