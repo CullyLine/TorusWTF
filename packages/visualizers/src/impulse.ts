@@ -18,6 +18,8 @@ export interface VisualImpulses {
   hueKick: number;
   /** One-shot camera FOV punch-in. */
   camPunch: number;
+  /** One-shot focus rack — blur thump. */
+  dofPunch: number;
   /** One-shot bloom surge. */
   bloomPulse: number;
   /** Brief full-scene light flash. */
@@ -32,6 +34,7 @@ export function createImpulses(): VisualImpulses {
   return {
     hueKick: 0,
     camPunch: 0,
+    dofPunch: 0,
     bloomPulse: 0,
     flash: 0,
     emitterBurst: 0,

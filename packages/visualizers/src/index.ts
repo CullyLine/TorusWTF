@@ -35,10 +35,12 @@ export {
   CREATIVE_SCREEN_EFFECT_IDS,
   DEFAULT_SCREEN_EFFECT_SETTINGS,
   isScreenEffectId,
+  isCreativeScreenEffectId,
   clampScreenEffectMix,
   sanitizeScreenEffectSettings,
   pickRandomScreenEffect,
   type ScreenEffectId,
+  type CreativeScreenEffectId,
   type ScreenEffectDefinition,
   type ScreenEffectSettings,
 } from './effects/screenEffects';

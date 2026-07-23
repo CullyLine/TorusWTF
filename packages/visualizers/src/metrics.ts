@@ -218,6 +218,12 @@ export interface MetricsScales {
   /** Optional last-onset-timestamp ref (from useBPM). Anchors phase wrapping. */
   lastOnsetRef?: RefObject<number>;
   /**
+   * Optional deterministic timeline in seconds. Offline prerender supplies
+   * song time here, and `lastOnsetRef` is then interpreted in that same time
+   * domain instead of against wall-clock time.
+   */
+  simulationTimeRef?: RefObject<number>;
+  /**
    * Mirror of the freshest metrics for consumers OUTSIDE the canvas (trigger
    * engine, projector broadcast). Updated every frame with the same object
    * the scene reads — no copying, no allocation.
@@ -269,6 +275,7 @@ export function AudioMetricsProvider({
   midMaxHz = 2000,
   bpmRef,
   lastOnsetRef,
+  simulationTimeRef,
   energy: energyExpand = 0,
   autoGain = true,
   linger = 0.3,
@@ -548,6 +555,10 @@ export function AudioMetricsProvider({
       return prevVal + (target - prevVal) * a;
     };
 
+    // Macro/phase timing uses the explicit song timeline during prerender.
+    // Live canvases keep the existing wall-clock onset domain.
+    const timelineNowSec = simulationTimeRef?.current ?? performance.now() / 1000;
+
     // Macro state update — silence, tension, dropEvent.
     const bpmForMacro = bpmRef?.current ?? null;
     updateMacro(
@@ -561,7 +572,7 @@ export function AudioMetricsProvider({
         bpm: bpmForMacro,
       },
       Math.min(delta, 0.1),
-      performance.now() / 1000,
+      timelineNowSec,
     );
 
     // Song structure — where this moment sits vs the song's history, plus
@@ -615,8 +626,7 @@ export function AudioMetricsProvider({
     if (bpmNow && bpmNow > 30 && onsetNow > 0) {
       const beatPeriod = 60 / bpmNow;
       const barPeriod = 4 * beatPeriod;
-      const nowSec = performance.now() / 1000;
-      const sinceOnset = Math.max(0, nowSec - onsetNow);
+      const sinceOnset = Math.max(0, timelineNowSec - onsetNow);
       beatPhase = (sinceOnset % beatPeriod) / beatPeriod;
       barPhase = (sinceOnset % barPeriod) / barPeriod;
     }

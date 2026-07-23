@@ -36,6 +36,7 @@ export type TriggerActionKind =
   | 'randomShader'
   | 'hueKick' // living-palette hue jolt (same feel as a drop kick)
   | 'camPunch' // one-shot camera FOV punch-in
+  | 'dofPunch' // one-shot focus rack / blur thump
   | 'bloomPulse' // one-shot bloom surge
   | 'flash' // brief full-scene light flash
   | 'emitParticles' // bounded burst from the active emitter
@@ -78,6 +79,7 @@ export const TRIGGER_ACTION_LABELS: Record<TriggerActionKind, string> = {
   randomShader: 'Random screen shader',
   hueKick: 'Color kick',
   camPunch: 'Camera punch',
+  dofPunch: 'Focus punch',
   bloomPulse: 'Glow pulse',
   flash: 'Flash',
   emitParticles: 'Emitter burst',
@@ -87,6 +89,7 @@ export const TRIGGER_ACTION_LABELS: Record<TriggerActionKind, string> = {
 export const TRIGGER_IMPULSE_FIELDS = {
   hueKick: 'hueKick',
   camPunch: 'camPunch',
+  dofPunch: 'dofPunch',
   bloomPulse: 'bloomPulse',
   flash: 'flash',
   emitParticles: 'emitterBurst',
