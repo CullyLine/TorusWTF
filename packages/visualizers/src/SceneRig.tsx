@@ -22,7 +22,7 @@ import {
   clampReactiveLightIntensity,
 } from './effects/brightness';
 import { ScreenStyleEffect } from './effects/ScreenStyleEffect';
-import type { ScreenEffectId } from './effects/screenEffects';
+import { SCREEN_EFFECT_REGISTRY, type ScreenEffectId } from './effects/screenEffects';
 import {
   createCinematicState,
   updateCinematicCamera,
@@ -241,27 +241,36 @@ const SCREEN_DEPTH_TEXTURE_SIZE = 384;
 function ScreenStylePass({
   screenEffect,
   shaderMix,
+  palette,
+  tier,
 }: {
   screenEffect: Exclude<ScreenEffectId, 'none'>;
   shaderMix: number;
+  palette: { bass: string; mid: string; high: string };
+  tier: 'high' | 'mid' | 'low';
 }) {
   const mods = useModulation();
+  const metricsRef = useMetricsRef();
   const depthTarget = useFBO(SCREEN_DEPTH_TEXTURE_SIZE, SCREEN_DEPTH_TEXTURE_SIZE, {
     depth: true,
     samples: 0,
   });
+  // Reconstruct only when style or tier changes so a single selected module
+  // is compiled; depth texture identity is stable for the FBO lifetime.
   const effect = useMemo(
     () =>
       new ScreenStyleEffect(
-        'none',
+        screenEffect,
         0,
+        tier,
         depthTarget.depthTexture,
         0.1,
         1000,
         SCREEN_DEPTH_TEXTURE_SIZE,
       ),
-    [depthTarget.depthTexture],
+    [screenEffect, tier, depthTarget.depthTexture],
   );
+  const usesDepth = SCREEN_EFFECT_REGISTRY[screenEffect].usesDepth;
   const renderDepthRef = useRef(false);
 
   useEffect(() => () => effect.dispose(), [effect]);
@@ -270,16 +279,18 @@ function ScreenStylePass({
   // whenever the effective wet amount is zero.
   useFrame((state) => {
     const wet = mods.current.shaderMix ?? shaderMix;
-    effect.style = screenEffect;
     effect.mix = wet;
-    effect.time = state.clock.elapsedTime;
 
     const camera = state.camera as PerspectiveCamera;
-    effect.setCameraRange(camera.near, camera.far);
+    effect.updateFrame({
+      time: state.clock.elapsedTime,
+      palette,
+      metrics: metricsRef.current,
+      cameraNear: camera.near,
+      cameraFar: camera.far,
+    });
     renderDepthRef.current =
-      wet > 0.001 &&
-      screenEffect !== 'pixel8' &&
-      !state.gl.getContext().isContextLost();
+      wet > 0.001 && usesDepth && !state.gl.getContext().isContextLost();
   });
 
   // A small fixed-size prepass supplies depth discontinuities without asking
@@ -987,7 +998,12 @@ export function SceneRig({
           <>
             <LightLevel ref={lightLevelRef} level={level} />
             {screenEffect !== 'none' ? (
-              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+              <ScreenStylePass
+                screenEffect={screenEffect}
+                shaderMix={shaderMix}
+                palette={palette}
+                tier={tier}
+              />
             ) : null}
             <HighlightGuard enabled={highlightProtection} />
           </>
@@ -1000,7 +1016,12 @@ export function SceneRig({
             <LightLevel ref={lightLevelRef} level={level} />
             <Vignette eskil={false} offset={0.16} darkness={0.38} />
             {screenEffect !== 'none' ? (
-              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+              <ScreenStylePass
+                screenEffect={screenEffect}
+                shaderMix={shaderMix}
+                palette={palette}
+                tier={tier}
+              />
             ) : null}
             <HighlightGuard enabled={highlightProtection} />
           </>

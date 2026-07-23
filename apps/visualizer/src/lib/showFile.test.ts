@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CREATIVE_SCREEN_EFFECT_IDS,
   DEFAULT_BUBBLE_EMITTER_SETTINGS,
   DEFAULT_EMITTER_SETTINGS,
   DEFAULT_SCREEN_EFFECT_SETTINGS,
 } from '@torus/visualizers';
 import { DEFAULT_BACKGROUND, DEFAULT_CONTROLS } from './storage';
-import {
-  buildShowFile,
-  parseShowFile,
-  serializeShowFile,
-  type ShowFileState,
-} from './showFile';
+import { buildShowFile, parseShowFile, serializeShowFile, type ShowFileState } from './showFile';
 
 const baseState: ShowFileState = {
   preset: 'flow_field',
@@ -80,6 +76,52 @@ describe('showFile', () => {
     expect(result.show.savedPresets[0]?.emitter?.kind).toBe('bubbles');
   });
 
+  it('round-trips every creative screen effect in active and saved settings', () => {
+    for (const id of CREATIVE_SCREEN_EFFECT_IDS) {
+      const show = buildShowFile({
+        ...baseState,
+        screenEffect: { id, mix: 0.73 },
+        savedPresets: [
+          {
+            ...baseState.savedPresets[0]!,
+            screenEffect: { id, mix: 0.41 },
+          },
+        ],
+      });
+      const result = parseShowFile(serializeShowFile(show));
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.show.screenEffect).toEqual({ id, mix: 0.73 });
+      expect(result.show.savedPresets[0]?.screenEffect).toEqual({ id, mix: 0.41 });
+    }
+  });
+
+  it('round-trips new presets and preserves the legacy Liquid Blob and Star Field IDs', () => {
+    for (const preset of [
+      'rainforest_reverie',
+      'alien_planet',
+      'tidal_sanctuary',
+      'liquid_blob',
+      'star_field',
+    ] as const) {
+      const show = buildShowFile({
+        ...baseState,
+        preset,
+        savedPresets: [
+          {
+            ...baseState.savedPresets[0]!,
+            presetId: preset,
+          },
+        ],
+      });
+      const result = parseShowFile(serializeShowFile(show));
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.show.preset).toBe(preset);
+      expect(result.show.savedPresets[0]?.presetId).toBe(preset);
+    }
+  });
+
   it('rejects non-JSON text', () => {
     const result = parseShowFile('not json {{{');
     expect(result.ok).toBe(false);
@@ -95,9 +137,7 @@ describe('showFile', () => {
   });
 
   it('rejects wrong kind', () => {
-    const result = parseShowFile(
-      JSON.stringify({ kind: 'something-else', version: 1 }),
-    );
+    const result = parseShowFile(JSON.stringify({ kind: 'something-else', version: 1 }));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/kind/i);
@@ -119,9 +159,7 @@ describe('showFile', () => {
 
   it('migrates spectral_tunnel to infinite_tunnel', () => {
     const show = buildShowFile(baseState);
-    const result = parseShowFile(
-      JSON.stringify({ ...show, preset: 'spectral_tunnel' }),
-    );
+    const result = parseShowFile(JSON.stringify({ ...show, preset: 'spectral_tunnel' }));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.show.preset).toBe('infinite_tunnel');
@@ -141,9 +179,7 @@ describe('showFile', () => {
 
   it('rejects unknown preset id', () => {
     const show = buildShowFile(baseState);
-    const result = parseShowFile(
-      JSON.stringify({ ...show, preset: 'not_a_real_preset' }),
-    );
+    const result = parseShowFile(JSON.stringify({ ...show, preset: 'not_a_real_preset' }));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/unknown preset/i);
