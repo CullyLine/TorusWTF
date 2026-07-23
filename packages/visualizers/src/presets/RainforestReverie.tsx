@@ -18,6 +18,7 @@
  * comment. Musical anatomy (all hooks additive, none rewrite the art):
  *  - bass → fog breathes deeper, the camera leans down-valley
  *  - kick → instant exposure pop in the Image pass
+ *  - snare → brief lateral wind-gust brushes the canopy foliage
  *  - mids / swell → wind stirs the foliage noise, the gaze lifts
  *  - hat → spec glitter rolls across the canopy
  *  - gather / silence → fog thickens; silence also desaturates gently
@@ -108,6 +109,7 @@ uniform vec3 uWindPhase;  // mids/turbulence stir the foliage noise field
 uniform float uCloudTime; // cloud drift clock (turbulence/energy scaled)
 uniform float uSurge;     // release/drop → sun bursts through the clouds
 uniform float uHat;       // hats → spec glitter across the canopy
+uniform float uSnare;     // snare → brief lateral wind-gust through the canopy
 uniform float uTreeKeep;  // density control → deterministic clearings
 // [TorusFM] previous-frame camera rows for reprojection (see main image).
 uniform vec4 uOldCam0;
@@ -731,10 +733,16 @@ float treesMap( in vec3 p, in float rt, out float oHei, out float oMat, out floa
     {
         p.y -= 600.0;
         // [TorusFM] wind: mids/turbulence slowly stir the foliage noise field.
-        float s = fbm_4( p*3.0 + uWindPhase );
+        // Snare adds a brief lateral gust so the backbeat brushes the canopy
+        // sideways — distinct from kick exposure pop and hat spec glitter.
+        float snare = clamp(uSnare, 0.0, 1.2);
+        vec3 gust = vec3(snare * 3.2, snare * 0.35, -snare * 1.55);
+        float s = fbm_4( p*3.0 + uWindPhase + gust );
         s = s*s;
         float att = 1.0-smoothstep(100.0,1200.0,rt);
         d += 4.0*s*att;
+        // Extra silhouette shear: snare briefly fattens/shears the near canopy.
+        d += snare * 2.15 * att * (0.35 + 0.65 * noise(p.xz * 0.45 + gust.xz));
         oDis = s*att;
     }
     
@@ -1099,6 +1107,7 @@ uniform sampler2D iChannel0;
 uniform vec3 iResolution;
 uniform float uBgAlpha;
 uniform float uKickPulse;
+uniform float uSnareGust;
 uniform float uSurgeFast;
 uniform float uStillness;
 uniform float uPaletteMix;
@@ -1110,12 +1119,21 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     vec2 p = fragCoord/iResolution.xy;
 
-    vec4 buf = texture( iChannel0, p );
+    // [TorusFM] snare → brief lateral canopy brush at full frame rate (Buffer A
+    // would smear the gust). Upper half (trees) shears more than the valley floor.
+    float snare = clamp(uSnareGust, 0.0, 1.2);
+    float canopy = smoothstep(0.28, 0.78, p.y);
+    vec2 gustUv = p + vec2(snare * 0.014 * canopy * (p.x - 0.5) * 2.0, 0.0);
+
+    vec4 buf = texture( iChannel0, gustUv );
     vec3 col = buf.xyz;
 
     // [TorusFM] instant audio grade: kick pops the exposure, the drop lifts
-    // it, silence drains a little saturation.
+    // it, silence drains a little saturation. Snare adds a crisp flank brush
+    // (lateral, not a global pop) so it stays distinct from the kick.
     col *= 1.0 + 0.08*clamp(uKickPulse,0.0,1.2) + 0.07*clamp(uSurgeFast,0.0,1.5);
+    float flank = abs(p.x - 0.5) * 2.0;
+    col *= 1.0 + snare * 0.055 * flank * canopy;
     float lum = dot(col, vec3(0.299,0.587,0.114));
     col = mix(col, vec3(lum), 0.12*clamp(uStillness,0.0,1.0));
 
@@ -1235,6 +1253,7 @@ export function RainforestReverieScene({
   const surgeSmooth = useRef(0);
   const afterglowSmooth = useRef(0);
   const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const fogMulSmooth = useRef(1);
   const camPushSmooth = useRef(0);
@@ -1286,6 +1305,7 @@ export function RainforestReverieScene({
         uCloudTime: { value: 0 },
         uSurge: { value: 0 },
         uHat: { value: 0 },
+        uSnare: { value: 0 },
         uTreeKeep: { value: 1.01 },
         uOldCam0: { value: new THREE.Vector4(1, 0, 0, 0) },
         uOldCam1: { value: new THREE.Vector4(0, 1, 0, 0) },
@@ -1349,6 +1369,7 @@ export function RainforestReverieScene({
       iResolution: { value: new THREE.Vector3(1, 1, 1) },
       uBgAlpha: { value: 1 },
       uKickPulse: { value: 0 },
+      uSnareGust: { value: 0 },
       uSurgeFast: { value: 0 },
       uStillness: { value: 0 },
       uPaletteMix: { value: 0.2 },
@@ -1403,6 +1424,13 @@ export function RainforestReverieScene({
       Math.min(1.2, m.kick) * kitAmp,
       dt,
       0.028,
+      0.12,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
       0.12,
     );
     hatSmooth.current = smoothToward(
@@ -1491,6 +1519,7 @@ export function RainforestReverieScene({
     bu.uCloudTime!.value = cloudTimeRef.current;
     bu.uSurge!.value = surgeSmooth.current;
     bu.uHat!.value = hatSmooth.current;
+    bu.uSnare!.value = snareSmooth.current;
     // 0.4..1.01 — the hash never reaches 1.01, so full density keeps all.
     bu.uTreeKeep!.value = 0.4 + dens * 0.61;
     (bu.uOldCam0!.value as THREE.Vector4).copy(prevRows.current.row0);
@@ -1516,6 +1545,7 @@ export function RainforestReverieScene({
     );
     imageMat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     imageMat.uniforms.uKickPulse!.value = kickSmooth.current;
+    imageMat.uniforms.uSnareGust!.value = snareSmooth.current;
     imageMat.uniforms.uSurgeFast!.value = surgeSmooth.current;
     imageMat.uniforms.uStillness!.value = stillnessSmooth.current;
     imageMat.uniforms.uPaletteMix!.value = clamp(0.2 + afterglowSmooth.current * 0.08, 0, 0.3);
