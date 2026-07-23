@@ -8,6 +8,10 @@
  *  - snare → lateral surface crack (X shear / crease)
  *  - hat / shimmer → fresnel rim sparkles
  *  - echo → faint delayed ripples travel across the chrome in phrase gaps
+ * Hold-breath listen:
+ *  - holdBreath / deep silence → ease deformation speed + idle spin so the
+ *    chrome nearly freezes and listens, then thaws.
+ *  - gather inhale + kick/snare/echo + tenderness calm stay intact.
  */
 
 import { useMemo, useRef } from 'react';
@@ -222,6 +226,11 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const timeRef = useRef(0);
+  // Local idle-wobble clock so holdBreath can freeze X tilt (wall-clock
+  // elapsedTime would keep nodding through silence).
+  const wobblePhaseRef = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const echoSmooth = useRef(0);
   const sparkleSmooth = useRef(0);
@@ -258,7 +267,7 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
     [palette.mid, palette.high],
   );
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     const mesh = meshRef.current;
     const mat = matRef.current;
     if (!mesh || !mat) return;
@@ -266,11 +275,32 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
     const spd = mods.current.speed ?? speed;
+
+    // Hold-breath stillness: the chrome listens instead of writhing through quiet.
+    // Rise a touch slower than the thaw so freeze reads as settling, not a cut.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Deformation + idle spin nearly stop; a whisper remains so the metal
+    // never looks frozen-solid / dead.
+    const motionMul = 1 - stillness * 0.92;
+
     // Music-paced clock: flows faster in loud passages, honors Speed.
     // Tenderness stills the surface — vocal-led quiet passages read as a
-    // calm pool instead of churning metal.
+    // calm pool instead of churning metal. holdBreath gates the advance rate.
     const calm = 1 - m.tenderness * 0.35;
-    timeRef.current += dt * spd * (0.6 + m.swell * 0.9 + m.impact * 0.4) * calm;
+    timeRef.current +=
+      dt * spd * (0.6 + m.swell * 0.9 + m.impact * 0.4) * calm * motionMul;
+    wobblePhaseRef.current += dt * motionMul;
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass * calm;
     mat.uniforms.uMid!.value = m.mid;
@@ -280,6 +310,7 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
 
     // Call-and-response envelopes — springy rise, slower release so the
     // inhale and echo ripples feel continuous rather than gated.
+    // Kit/gather/echo stay on full dt so hits still fire when music returns.
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.045, 0.14);
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.28);
     const sparkleTarget = Math.min(1.2, m.hat * 0.85 + m.shimmer * 0.55) * sparkleAmp;
@@ -322,8 +353,9 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
 
     // Snare: absolute Z roll (never accumulate) — a lateral flash of the shell.
     mesh.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
-    mesh.rotation.y += delta * spd * (0.15 + m.mid * 0.4) * (0.72 + m.sectionLevel * 0.5);
-    mesh.rotation.x = Math.sin(state.clock.elapsedTime * 0.35) * 0.12 + m.high * 0.08;
+    mesh.rotation.y +=
+      dt * spd * (0.15 + m.mid * 0.4) * (0.72 + m.sectionLevel * 0.5) * motionMul;
+    mesh.rotation.x = Math.sin(wobblePhaseRef.current * 0.35) * 0.12 + m.high * 0.08;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
