@@ -12,27 +12,31 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 
-### Presets (17)
+### Presets (21)
 
-| ID | Name | Vibe |
-|---|---|---|
-| `liquid_blob` | Liquid Blob | Default — raymarched metaballs (smin field), amorphous, no spiky vertices |
-| `anima` | Anima | The living creature — aurora curtains + soul core that listens with you |
-| `torus_field` | Torus Field | Flowing torus with bass-reactive bloom, the brand signature |
-| `particle_storm` | Particle Storm | High-density particles, beat-driven bursts |
-| `infinite_tunnel` | Tunnel | Infinite segmented tunnel — bass explodes the walls, mids drive pyramid teeth, flow-field particles ride the current |
-| `volumetric_waveform` | Volumetric Waveform | Time-domain ribbon in 3D |
-| `cosmic_mandala` | Cosmic Mandala | Radial symmetry, dreamlike |
-| `star_field` | Star Field | Face-on spiral galaxy with twinkles and beat-driven camera punches |
-| `outrun_grid` | Outrun Grid | Real 3D wireframe terrain receding to a banded synthwave sun |
-| `liquid_chrome` | Liquid Chrome | GPU-shader chrome blob with fresnel + procedural env reflection |
-| `ember_drift` | Ember Drift | Rising warm ashfield — swell lift, gather inhale, impact flare, hat ticks |
-| `silk_wake` | Silk Wake | Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow |
-| `tide_veil` | Tide Veil | Soft caustic light-sheet — rolls with swell, folds before the beat, warm afterglow |
-| `halo_rain` | Halo Rain | Concentric luminous rings drifting like celestial rain — gather inhale, impact flare, hat ticks |
-| `mist_spiral` | Mist Spiral | Rising mist coils — gather inhale, impact flare, hat mote glitter |
-| `mandelbrot_zoom` | Mandelbrot Zoom | Smooth looped fractal zoom, palette-locked colors, audio-reactive speed |
-| `flow_field` | Flow Field | Quarter-million particles riding living currents — stir with the cursor |
+| ID                    | Name                | Vibe                                                                                                                 |
+| --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `liquid_blob`         | Lava Choir          | Raymarched harmonic lava orbs that stretch, breathe, and fuse with the music                                         |
+| `anima`               | Anima               | The living creature — aurora curtains + soul core that listens with you                                              |
+| `torus_field`         | Torus Field         | Flowing torus with bass-reactive bloom, the brand signature                                                          |
+| `particle_storm`      | Particle Storm      | High-density particles, beat-driven bursts                                                                           |
+| `infinite_tunnel`     | Tunnel              | Infinite segmented tunnel — bass explodes the walls, mids drive pyramid teeth, flow-field particles ride the current |
+| `volumetric_waveform` | Volumetric Waveform | Time-domain ribbon in 3D                                                                                             |
+| `cosmic_mandala`      | Cosmic Mandala      | Radial symmetry, dreamlike                                                                                           |
+| `star_field`          | Galaxy Garden       | Dimensional spiral galaxy with bass lensing, drop shockwaves, and shimmer glints                                     |
+| `outrun_grid`         | Outrun Grid         | Real 3D wireframe terrain receding to a banded synthwave sun                                                         |
+| `liquid_chrome`       | Liquid Chrome       | GPU-shader chrome blob with fresnel + procedural env reflection                                                      |
+| `ember_drift`         | Ember Drift         | Rising warm ashfield — swell lift, gather inhale, impact flare, hat ticks                                            |
+| `silk_wake`           | Silk Wake           | Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow                                    |
+| `tide_veil`           | Tide Veil           | Soft caustic light-sheet — rolls with swell, folds before the beat, warm afterglow                                   |
+| `halo_rain`           | Halo Rain           | Concentric luminous rings drifting like celestial rain — gather inhale, impact flare, hat ticks                      |
+| `mist_spiral`         | Mist Spiral         | Rising mist coils — gather inhale, impact flare, hat mote glitter                                                    |
+| `night_bloom`         | Night Bloom         | Radial soft-light petals — open on swell, inhale on gather, flare on impact, hat motes                               |
+| `rainforest_reverie`  | Rainforest Reverie  | iq's Rainforest (ported with permission) — audio breathes the fog, wind, clouds, and sun                             |
+| `alien_planet`        | Alien Planet        | Raymarched valley of alien tree crowns with breathing mist banks, wind, and sun bursts                               |
+| `tidal_sanctuary`     | Tidal Sanctuary     | Audio-reactive ocean with low-band depth, mid-band water, and high-band foam                                         |
+| `mandelbrot_zoom`     | Mandelbulb          | Living 3D fractal that grows more ornate as the music swells                                                         |
+| `flow_field`          | Flow Field          | Quarter-million particles riding living currents — stir with the cursor                                              |
 
 ### UI features
 
@@ -49,19 +53,19 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 ### Free vs paid
 
-| Feature | Free | Full ($10 one-time) |
-| --- | --- | --- |
-| All 16 presets + live preview | Yes | Yes |
-| Export length | Unlimited | Unlimited |
-| Export resolution | 720p | Up to 4K |
-| Export FPS | 30 | Up to 240 |
-| Watermark on exports | Small corner mark | Optional — off, default badge, or your own logo |
-| Pre-rendered MP4 (file/WTF) | Yes (watermarked) | Yes |
-| Smart palette from image | Yes | Yes |
-| Title card on exports | Bottom-left brand card | Position + color + opacity |
-| Custom 3-band palette | — | Yes |
-| Saved presets | — | Yes |
-| Future presets | — | Free forever |
+| Feature                       | Free                   | Full ($10 one-time)                             |
+| ----------------------------- | ---------------------- | ----------------------------------------------- |
+| All 21 presets + live preview | Yes                    | Yes                                             |
+| Export length                 | Unlimited              | Unlimited                                       |
+| Export resolution             | 720p                   | Up to 4K                                        |
+| Export FPS                    | 30                     | Up to 240                                       |
+| Watermark on exports          | Small corner mark      | Optional — off, default badge, or your own logo |
+| Pre-rendered MP4 (file/WTF)   | Yes (watermarked)      | Yes                                             |
+| Smart palette from image      | Yes                    | Yes                                             |
+| Title card on exports         | Bottom-left brand card | Position + color + opacity                      |
+| Custom 3-band palette         | —                      | Yes                                             |
+| Saved presets                 | —                      | Yes                                             |
+| Future presets                | —                      | Free forever                                    |
 
 Live preview is never watermarked.
 
@@ -74,7 +78,7 @@ pnpm install
 pnpm --filter @torus/visualizer dev
 ```
 
-Open <http://localhost:3001>.
+Open <http://localhost:3000>.
 
 ### Building locally (with WTF prefetch)
 
@@ -132,14 +136,14 @@ Two export paths:
 
 ## Keyboard shortcuts
 
-| Key | Action |
-|---|---|
-| `Space` | Play / pause (file source) |
-| `F` | Fullscreen viewport |
-| `R` | Random preset |
-| `←` / `→` | Seek ±5s (file source) |
-| `Shift+←` / `Shift+→` | Seek ±15s (file source) |
-| `?` | Show shortcuts modal |
+| Key                   | Action                     |
+| --------------------- | -------------------------- |
+| `Space`               | Play / pause (file source) |
+| `F`                   | Fullscreen viewport        |
+| `R`                   | Random preset              |
+| `←` / `→`             | Seek ±5s (file source)     |
+| `Shift+←` / `Shift+→` | Seek ±15s (file source)    |
+| `?`                   | Show shortcuts modal       |
 
 ## License
 

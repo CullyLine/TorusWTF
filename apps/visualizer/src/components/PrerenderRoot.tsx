@@ -46,6 +46,7 @@ interface PrerenderRootProps {
   syntheticAnalyser: SyntheticAnalyser;
   bpmRef: MutableRefObject<number | null>;
   lastOnsetRef: MutableRefObject<number>;
+  simulationTimeRef: MutableRefObject<number>;
   background?: BackgroundSettings;
   onReady: (handle: { state: RootState; canvas: HTMLCanvasElement }) => void;
   /** Called if the canvas unmounts mid-render (cleanup / cancel). */
@@ -66,6 +67,7 @@ export function PrerenderRoot({
   syntheticAnalyser,
   bpmRef,
   lastOnsetRef,
+  simulationTimeRef,
   background,
   onReady,
   onTeardown,
@@ -140,6 +142,7 @@ export function PrerenderRoot({
         creature={creature}
         bpmRef={bpmRef}
         lastOnsetRef={lastOnsetRef}
+        simulationTimeRef={simulationTimeRef}
         frameloop="never"
         glOverrides={{ preserveDrawingBuffer: true }}
         onR3FState={(state) => {

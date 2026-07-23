@@ -75,6 +75,7 @@ export interface PrerenderRootMount {
   syntheticAnalyser: SyntheticAnalyser;
   bpmRef: MutableRefObject<number | null>;
   lastOnsetRef: MutableRefObject<number>;
+  simulationTimeRef: MutableRefObject<number>;
   background?: BackgroundSettings;
   onReady: (handle: { state: RootState; canvas: HTMLCanvasElement }) => void;
   onTeardown?: () => void;
@@ -111,7 +112,9 @@ export function usePrerender(): PrerenderHookResult {
   }, []);
 
   const cancelRef = useRef(false);
-  const readyResolverRef = useRef<((h: { state: RootState; canvas: HTMLCanvasElement }) => void) | null>(null);
+  const readyResolverRef = useRef<
+    ((h: { state: RootState; canvas: HTMLCanvasElement }) => void) | null
+  >(null);
   const inFlightRef = useRef(false);
 
   const cancel = useCallback(() => {
@@ -155,8 +158,7 @@ export function usePrerender(): PrerenderHookResult {
       const fftResult = await precomputeFftFrames({
         buffer: options.audioBuffer,
         fps: options.fps,
-        onProgress: (p) =>
-          setProgress((prev) => ({ ...prev, percent: p * 0.35 })),
+        onProgress: (p) => setProgress((prev) => ({ ...prev, percent: p * 0.35 })),
         isCancelled: () => cancelRef.current,
       });
 
@@ -168,8 +170,7 @@ export function usePrerender(): PrerenderHookResult {
       }));
       const bpmResult = await prescanBpm({
         buffer: options.audioBuffer,
-        onProgress: (p) =>
-          setProgress((prev) => ({ ...prev, percent: 0.35 + p * 0.15 })),
+        onProgress: (p) => setProgress((prev) => ({ ...prev, percent: 0.35 + p * 0.15 })),
         isCancelled: () => cancelRef.current,
       });
 
@@ -185,6 +186,7 @@ export function usePrerender(): PrerenderHookResult {
 
       const bpmRef: MutableRefObject<number | null> = { current: bpmResult.bpm };
       const lastOnsetRef: MutableRefObject<number> = { current: 0 };
+      const simulationTimeRef: MutableRefObject<number> = { current: 0 };
 
       // ---- Stage 4: Mount the offscreen canvas, wait for R3F to be ready ----
       setProgress((prev) => ({
@@ -213,6 +215,7 @@ export function usePrerender(): PrerenderHookResult {
             syntheticAnalyser,
             bpmRef,
             lastOnsetRef,
+            simulationTimeRef,
             background: options.background,
             onReady: (h) => {
               const r = readyResolverRef.current;
@@ -278,17 +281,12 @@ export function usePrerender(): PrerenderHookResult {
             ? onsetSeconds[onsetCursor]!
             : 0;
 
-        // metrics.ts computes (performance.now()/1000 - lastOnsetRef.current)
-        // and expects that to equal (songTimeSec - mostRecentOnset). So
-        // we shift the ref by the wall-clock delta each frame.
-        const wallNowSec = performance.now() / 1000;
-        lastOnsetRef.current =
-          mostRecentOnset > 0 ? wallNowSec - (songTimeSec - mostRecentOnset) : 0;
+        // Metrics, beat/bar phase, and drop decay all share song time during
+        // offline rendering, independent of encoder speed or machine load.
+        simulationTimeRef.current = songTimeSec;
+        lastOnsetRef.current = mostRecentOnset;
         bpmRef.current = bpmResult.bpm;
-        syntheticAnalyser.currentFrameIndex = Math.min(
-          frame,
-          syntheticAnalyser.totalFrames - 1,
-        );
+        syntheticAnalyser.currentFrameIndex = Math.min(frame, syntheticAnalyser.totalFrames - 1);
 
         // Drive the R3F render loop one tick at song time. Internally this
         // calls every useFrame callback (AudioMetricsProvider, SceneRig,

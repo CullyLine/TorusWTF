@@ -22,7 +22,7 @@ import {
   clampReactiveLightIntensity,
 } from './effects/brightness';
 import { ScreenStyleEffect } from './effects/ScreenStyleEffect';
-import type { ScreenEffectId } from './effects/screenEffects';
+import { SCREEN_EFFECT_REGISTRY, type ScreenEffectId } from './effects/screenEffects';
 import {
   createCinematicState,
   updateCinematicCamera,
@@ -50,17 +50,19 @@ const SAFE_MIN_CAMERA_DISTANCE = 1.5;
 /**
  * Critically-damped spring smooth-time (seconds) for camera pose.
  * Short enough that orbit/drift track their targets without visible lag,
- * long enough that mode switches and cinematic cuts glide instead of teleport.
+ * long enough that mode switches glide instead of teleport.
  */
 const CAMERA_SPRING_SMOOTH = 0.16;
 /** Default look SmoothDamp — snappy enough for orbit/drift gaze. */
 const LOOK_SPRING_SMOOTH = 0.14;
 /**
- * Cinematic shot cuts jump look-at discontinuously; a longer SmoothDamp
- * (~0.28s) lets framing glide into each cut without a pop, while position
- * springs (CAMERA_SPRING_SMOOTH) still handle the body.
+ * Cinematic shot cuts jump look-at and pose discontinuously; a longer
+ * SmoothDamp (~0.28s) lets framing and dollies glide into each cut without
+ * a whip. Mid-shot authored paths still track through the spring.
  */
 const CINEMATIC_LOOK_SPRING_SMOOTH = 0.28;
+/** Matches look horizon so cinematic body and gaze ease on the same cut. */
+const CINEMATIC_POSE_SPRING_SMOOTH = 0.28;
 
 /** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
 const FOV_SPRING_SMOOTH = 0.09;
@@ -241,27 +243,36 @@ const SCREEN_DEPTH_TEXTURE_SIZE = 384;
 function ScreenStylePass({
   screenEffect,
   shaderMix,
+  palette,
+  tier,
 }: {
   screenEffect: Exclude<ScreenEffectId, 'none'>;
   shaderMix: number;
+  palette: { bass: string; mid: string; high: string };
+  tier: 'high' | 'mid' | 'low';
 }) {
   const mods = useModulation();
+  const metricsRef = useMetricsRef();
   const depthTarget = useFBO(SCREEN_DEPTH_TEXTURE_SIZE, SCREEN_DEPTH_TEXTURE_SIZE, {
     depth: true,
     samples: 0,
   });
+  // Reconstruct only when style or tier changes so a single selected module
+  // is compiled; depth texture identity is stable for the FBO lifetime.
   const effect = useMemo(
     () =>
       new ScreenStyleEffect(
-        'none',
+        screenEffect,
         0,
+        tier,
         depthTarget.depthTexture,
         0.1,
         1000,
         SCREEN_DEPTH_TEXTURE_SIZE,
       ),
-    [depthTarget.depthTexture],
+    [screenEffect, tier, depthTarget.depthTexture],
   );
+  const usesDepth = SCREEN_EFFECT_REGISTRY[screenEffect].usesDepth;
   const renderDepthRef = useRef(false);
 
   useEffect(() => () => effect.dispose(), [effect]);
@@ -270,16 +281,18 @@ function ScreenStylePass({
   // whenever the effective wet amount is zero.
   useFrame((state) => {
     const wet = mods.current.shaderMix ?? shaderMix;
-    effect.style = screenEffect;
     effect.mix = wet;
-    effect.time = state.clock.elapsedTime;
 
     const camera = state.camera as PerspectiveCamera;
-    effect.setCameraRange(camera.near, camera.far);
+    effect.updateFrame({
+      time: state.clock.elapsedTime,
+      palette,
+      metrics: metricsRef.current,
+      cameraNear: camera.near,
+      cameraFar: camera.far,
+    });
     renderDepthRef.current =
-      wet > 0.001 &&
-      screenEffect !== 'pixel8' &&
-      !state.gl.getContext().isContextLost();
+      wet > 0.001 && usesDepth && !state.gl.getContext().isContextLost();
   });
 
   // A small fixed-size prepass supplies depth discontinuities without asking
@@ -456,7 +469,7 @@ export function SceneRig({
   const camSpringRef = useRef<Spring3>(createSpring3());
   const lookSpringRef = useRef<Spring3>(createSpring3());
   const prevCameraModeRef = useRef<CameraMode>(cameraMode);
-  /** Tracks cinematic shot index so look velocity resets on each cut. */
+  /** Tracks cinematic shot index so pose/look velocity reset on each cut. */
   const prevCinematicShotRef = useRef(-1);
 
   useFrame((state, delta) => {
@@ -652,10 +665,14 @@ export function SceneRig({
         lookTargetX = cine.look.x;
         lookTargetY = cine.look.y;
         lookTargetZ = cine.look.z;
-        // Shot cuts jump look discontinuously — zero look velocity so the
-        // longer cinematic SmoothDamp eases framing in cleanly (~0.28s).
+        // Shot cuts jump pose + look discontinuously — zero both velocities
+        // so the longer cinematic SmoothDamp eases dollies and framing in
+        // cleanly (~0.28s) without a whip from residual cut-in momentum.
         if (prevCinematicShotRef.current !== cine.shotIndex) {
           if (prevCinematicShotRef.current >= 0) {
+            camSpringRef.current.vx = 0;
+            camSpringRef.current.vy = 0;
+            camSpringRef.current.vz = 0;
             lookSpringRef.current.vx = 0;
             lookSpringRef.current.vy = 0;
             lookSpringRef.current.vz = 0;
@@ -788,7 +805,12 @@ export function SceneRig({
       }
     }
 
-    springTo(camSpringRef.current, desiredX, desiredY, desiredZ, dtCam, CAMERA_SPRING_SMOOTH);
+    // Pose SmoothDamp: cinematic cuts use a longer smooth-time so dollies
+    // glide (~0.28s); other modes keep the snappier default. Mid-shot the
+    // authored path still tracks through the spring.
+    const poseSmooth =
+      cameraMode === 'cinematic' ? CINEMATIC_POSE_SPRING_SMOOTH : CAMERA_SPRING_SMOOTH;
+    springTo(camSpringRef.current, desiredX, desiredY, desiredZ, dtCam, poseSmooth);
     const sprung = camSpringRef.current;
     state.camera.position.set(sprung.x, sprung.y, sprung.z);
 
@@ -987,7 +1009,12 @@ export function SceneRig({
           <>
             <LightLevel ref={lightLevelRef} level={level} />
             {screenEffect !== 'none' ? (
-              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+              <ScreenStylePass
+                screenEffect={screenEffect}
+                shaderMix={shaderMix}
+                palette={palette}
+                tier={tier}
+              />
             ) : null}
             <HighlightGuard enabled={highlightProtection} />
           </>
@@ -1000,7 +1027,12 @@ export function SceneRig({
             <LightLevel ref={lightLevelRef} level={level} />
             <Vignette eskil={false} offset={0.16} darkness={0.38} />
             {screenEffect !== 'none' ? (
-              <ScreenStylePass screenEffect={screenEffect} shaderMix={shaderMix} />
+              <ScreenStylePass
+                screenEffect={screenEffect}
+                shaderMix={shaderMix}
+                palette={palette}
+                tier={tier}
+              />
             ) : null}
             <HighlightGuard enabled={highlightProtection} />
           </>

@@ -168,18 +168,15 @@ export interface VisualizerControls {
    */
   energy?: number;
   /**
-   * Liquid Blob deformation balance. 0 = pure stretch (taffy-pull),
-   * 1 = pure inflate (radial puff). Default 0.5. Only Liquid Blob uses it.
+   * Lava Choir fusion balance. 0 = distinct stretching voices,
+   * 1 = plush fused choir. Only the legacy `liquid_blob` preset ID uses it.
    */
   inflate?: number;
-  /**
-   * Liquid Blob: number of orbiting "appendage" spheres (0–10). Default 4.
-   */
+  /** Lava Choir: number of persistent harmonic voices (0–10). */
   appendages?: number;
   /**
-   * Liquid Blob: max number of tight fast-orbit sub-spheres that pop on
-   * high-frequency transients (hi-hats / sibilance) and melt back into
-   * the main blob between hits. 0 = disabled. Default 6.
+   * Lava Choir: max transient high-frequency voices that bloom on shimmer
+   * and hats, then melt back into the choir. 0 = disabled.
    */
   subSpheres?: number;
   /** Flow Field: fine turbulent detail 0..2. Default 1. */
