@@ -10,6 +10,7 @@
  * Musical anatomy:
  *  - bass / bassActivity → valley mist swells and breathes upward
  *  - kick → ring of light rolling outward across the canopy
+ *  - snare → brief lateral mist/canopy shear ripple (backbeat brush)
  *  - mids / swell → wind swaying the crown tops
  *  - high / shimmer / hat → wet-leaf sparkle on sunlit crowns
  *  - gather → mist thickens, wind stills before the hit
@@ -59,6 +60,7 @@ uniform float uShimmer;
 uniform float uHat;
 uniform float uKick;
 uniform float uKickTravel;
+uniform float uSnare;
 uniform float uGather;
 uniform float uSurge;
 uniform float uStillness;
@@ -151,7 +153,11 @@ vec3 crownField(vec2 xz) {
     (1.0 - clamp01(uStillness) * 0.85);
   // Low-frequency warp breaks the grid so crowns never form rows.
   vec2 warp = 0.38 * vec2(vnoise(xz * 0.21), vnoise(xz * 0.19 + 5.0));
-  vec2 p = xz * 1.45 + warp + windAmp * vec2(
+  // Snare: brief lateral shear through the canopy (not the kick's radial ring).
+  float snare = clamp(uSnare, 0.0, 1.2);
+  float snareRipple = 0.55 + 0.45 * vnoise(xz * 0.42 + vec2(uPhase * 0.8, -3.1));
+  vec2 snareShear = snare * snareRipple * vec2(0.72, -0.28);
+  vec2 p = xz * 1.45 + warp + snareShear + windAmp * vec2(
     sin(uPhase * 1.35 + xz.y * 0.4),
     cos(uPhase * 1.12 + xz.x * 0.33));
   vec2 cell = floor(p);
@@ -317,7 +323,12 @@ float valleyMist(vec3 ro, vec3 rd, float tEnd, float mistFloor) {
     float tm = 1.5 + seg * (float(i) + 0.5);
     vec3 mp = ro + rd * tm;
     float band = exp(-max(mp.y - mistFloor, 0.0) * 1.15);
-    float puff = 0.55 + 0.45 * vnoise(mp.xz * 0.13 + vec2(uPhase * 0.2, -uPhase * 0.12));
+    // Snare shears valley mist sideways so the backbeat brushes the haze.
+    float snareM = clamp(uSnare, 0.0, 1.2);
+    vec2 mistUv = mp.xz * 0.13 + vec2(uPhase * 0.2, -uPhase * 0.12) +
+      snareM * vec2(0.55, -0.22);
+    float puff = 0.55 + 0.45 * vnoise(mistUv);
+    puff *= 1.0 + snareM * 0.35 * (0.4 + 0.6 * abs(vnoise(mp.xz * 0.55)));
     acc += band * puff * seg;
   }
   float density = 0.030 +
@@ -434,6 +445,13 @@ void main() {
       col += mix(uColorHigh, uColorMid, 0.3) * ring * 0.5 * (0.3 + crownAmt);
     }
 
+    // Snare: brief lateral flank flash on crowns — shear, not a traveling ring.
+    float snareFlash = clamp01(uSnare) * crownAmt *
+      (0.28 + 0.72 * abs(n.x)) *
+      (0.45 + 0.55 * abs(vnoise(xz * 1.1 + vec2(uPhase * 2.4, 0.0))));
+    col += mix(uColorHigh, uColorMid, 0.45) * snareFlash * 0.38;
+    col += mistCol * clamp01(uSnare) * 0.06 * (0.35 + 0.65 * abs(n.x));
+
     // Afterglow leaves warm light on sun-facing slopes.
     col += sunCol * clamp01(uAfterglow) * 0.08 * dif;
 
@@ -521,6 +539,7 @@ export function AlienPlanetScene({
   const surgeSmooth = useRef(0);
   const afterglowSmooth = useRef(0);
   const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const kickTravel = useRef(30);
   const kickArmed = useRef(true);
@@ -544,6 +563,7 @@ export function AlienPlanetScene({
       uHat: { value: 0 },
       uKick: { value: 0 },
       uKickTravel: { value: 30 },
+      uSnare: { value: 0 },
       uGather: { value: 0 },
       uSurge: { value: 0 },
       uStillness: { value: 0 },
@@ -620,6 +640,13 @@ export function AlienPlanetScene({
       0.028,
       0.12,
     );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
     hatSmooth.current = smoothToward(
       hatSmooth.current,
       Math.min(1.2, m.hat) * kitAmp,
@@ -656,6 +683,7 @@ export function AlienPlanetScene({
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uKickTravel!.value = kickTravel.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
