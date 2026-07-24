@@ -24,8 +24,12 @@ import { getDotTexture } from './dotTexture';
  * sky tint on voice-led passages; while `afterglow` decays,
  * nebula/aurora/glow bias toward a warmer amber mix on top — intensity
  * afterglow stays; this is the color-temperature residue of a big
- * moment. Honors `prefers-reduced-motion` by freezing the drift.
- * Contrast-capped so it never competes with the foreground preset.
+ * moment. During `holdBreath` / deep `silence` the sky hush eases
+ * nebula/aurora drift and dims glitter so every backdrop listens,
+ * thawing when music returns — distinct from gather inhale, leanIn
+ * pull, and afterglow warmth. Honors `prefers-reduced-motion` by
+ * freezing the drift. Contrast-capped so it never competes with the
+ * foreground preset.
  */
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
@@ -80,6 +84,17 @@ const LEAN_SKY_PULL = 0.06;
 /** Star shell pull — slightly stronger so the approach reads on points. */
 const LEAN_STAR_PULL = 0.08;
 
+/**
+ * Hold-breath sky hush: rise a touch slower than thaw so the freeze feels
+ * attentive; thaw resumes promptly when music returns.
+ */
+const STILLNESS_RISE_TAU = 0.14;
+const STILLNESS_FALL_TAU = 0.08;
+/** Nearly freeze nebula/aurora/glow drift + star spin at full hush. */
+const DRIFT_HUSH = 0.92;
+/** Dim hat/shimmer glitter while listening — not gather dim, not lean. */
+const GLITTER_HUSH = 0.88;
+
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
 const SKY_RADIUS = 50;
 
@@ -92,6 +107,14 @@ function smoothToward(
 ): number {
   const tau = target > current ? riseTau : fallTau;
   return current + (target - current) * (1 - Math.exp(-dt / tau));
+}
+
+/** holdBreath + deep silence → sky listens (same blend as Aura / presets). */
+function stillnessFromMetrics(holdBreath: number, silence: number): number {
+  return Math.min(
+    1,
+    Math.max(holdBreath, silence * 0.92) + Math.min(holdBreath, silence) * 0.15,
+  );
 }
 
 /** Bias a sky color toward amber by eased afterglow; quiet (0) is a no-op. */
@@ -282,13 +305,24 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const stillnessRef = useRef(0);
   const warmthLingerRef = useRef(0);
   const vocalLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
-    timeRef.current += reducedMotion ? 0 : dt;
+    // Hold-breath hush: freeze drift clock; gather/lean/afterglow stay on full dt.
+    stillnessRef.current = smoothToward(
+      stillnessRef.current,
+      stillnessFromMetrics(m.holdBreath, m.silence),
+      dt,
+      STILLNESS_RISE_TAU,
+      STILLNESS_FALL_TAU,
+    );
+    const stillness = stillnessRef.current;
+    const motionMul = 1 - stillness * DRIFT_HUSH;
+    timeRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
@@ -315,7 +349,8 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     mat.uniforms.uInhale!.value = inhaleRef.current;
-    mat.uniforms.uGlitter!.value = glitterRef.current;
+    // Dim glitter while listening — distinct from gather density inhale.
+    mat.uniforms.uGlitter!.value = glitterRef.current * (1 - stillness * GLITTER_HUSH);
     mat.uniforms.uLean!.value = leanRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
@@ -363,6 +398,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const stillnessRef = useRef(0);
   const vocalLingerRef = useRef(0);
   const sprite = useMemo(() => getDotTexture(), []);
   const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
@@ -400,14 +436,24 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
     const g = groupRef.current;
+    stillnessRef.current = smoothToward(
+      stillnessRef.current,
+      stillnessFromMetrics(m.holdBreath, m.silence),
+      dt,
+      STILLNESS_RISE_TAU,
+      STILLNESS_FALL_TAU,
+    );
+    const stillness = stillnessRef.current;
+    const motionMul = 1 - stillness * DRIFT_HUSH;
+    const glitterLive = 1 - stillness * GLITTER_HUSH;
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     vocalLingerRef.current +=
       (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     if (g && !reducedMotion) {
-      // Very slow whole-sky rotation — deep-space drift.
-      g.rotation.y += delta * 0.004;
-      g.rotation.z += delta * 0.002;
+      // Very slow whole-sky rotation — hushes with holdBreath.
+      g.rotation.y += delta * 0.004 * motionMul;
+      g.rotation.z += delta * 0.002 * motionMul;
     }
     if (g) {
       // Lean pulls the star shell toward the camera (anticipation).
@@ -418,22 +464,20 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const glitterTau = glitterTarget > glitterRef.current ? 0.04 : 0.18;
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    const glitter = glitterRef.current * glitterLive;
     const mat = matRef.current;
     if (mat) {
       // Twinkle: base size + high-frequency sparkle. Opacity capped.
       // Sized up ~4x vs the old near-slab because the shell sits ~30
       // units out (point size attenuates with distance).
       // Gather dims the field; tension swells through builds; shimmer/hat
-      // glitter is a sharp tick distinct from bass flow.
+      // glitter is a sharp tick distinct from bass flow. HoldBreath dims
+      // glitter further so the shell listens without killing gather dim.
       const gatherDim = 1 - inhaleRef.current * 0.32;
-      mat.size = 0.26 + m.high * 0.45 + glitterRef.current * 0.38;
+      mat.size = 0.26 + m.high * 0.45 + glitter * 0.38;
       mat.opacity = Math.min(
         STAR_OPACITY_CAP,
-        (0.3 +
-          m.high * 0.35 +
-          m.flow * 0.15 +
-          m.tension * 0.22 +
-          glitterRef.current * 0.28) *
+        (0.3 + m.high * 0.35 + m.flow * 0.15 + m.tension * 0.22 + glitter * 0.28) *
           intensity *
           gatherDim,
       );
@@ -546,13 +590,23 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const stillnessRef = useRef(0);
   const warmthLingerRef = useRef(0);
   const vocalLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
-    timeRef.current += reducedMotion ? 0 : dt;
+    stillnessRef.current = smoothToward(
+      stillnessRef.current,
+      stillnessFromMetrics(m.holdBreath, m.silence),
+      dt,
+      STILLNESS_RISE_TAU,
+      STILLNESS_FALL_TAU,
+    );
+    const stillness = stillnessRef.current;
+    const motionMul = 1 - stillness * DRIFT_HUSH;
+    timeRef.current += reducedMotion ? 0 : dt * motionMul;
     // Smooth the bass drive so curtains billow rather than flicker.
     // Tension swells through builds on top of the slow breath.
     const target =
@@ -579,7 +633,7 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uIntensity!.value = Math.min(AURORA_CAP, levelRef.current * intensity * AURORA_CAP);
     mat.uniforms.uInhale!.value = inhaleRef.current;
-    mat.uniforms.uGlitter!.value = glitterRef.current;
+    mat.uniforms.uGlitter!.value = glitterRef.current * (1 - stillness * GLITTER_HUSH);
     mat.uniforms.uLean!.value = leanRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
@@ -651,17 +705,28 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const stillnessRef = useRef(0);
   const warmthLingerRef = useRef(0);
   const vocalLingerRef = useRef(0);
 
   useFrame((_s, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
-    tRef.current += reducedMotion ? 0 : dt;
+    stillnessRef.current = smoothToward(
+      stillnessRef.current,
+      stillnessFromMetrics(m.holdBreath, m.silence),
+      dt,
+      STILLNESS_RISE_TAU,
+      STILLNESS_FALL_TAU,
+    );
+    const stillness = stillnessRef.current;
+    const motionMul = 1 - stillness * DRIFT_HUSH;
+    tRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
     // The energy source drifts around the sky over ~4 minutes and bobs
     // gently in elevation — walking around it (orbit/flow cameras) works.
+    // HoldBreath nearly freezes the orbit so the glow listens with the sky.
     const az = tRef.current * 0.026;
     const el = 0.15 + Math.sin(tRef.current * 0.05) * 0.25;
     (mat.uniforms.uSunDir!.value as THREE.Vector3)
@@ -690,7 +755,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     mat.uniforms.uIntensity!.value = Math.min(GLOW_CAP, swell * silenceMute * intensity * GLOW_CAP);
     mat.uniforms.uInhale!.value = inhaleRef.current;
-    mat.uniforms.uGlitter!.value = glitterRef.current;
+    mat.uniforms.uGlitter!.value = glitterRef.current * (1 - stillness * GLITTER_HUSH);
     mat.uniforms.uLean!.value = leanRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
