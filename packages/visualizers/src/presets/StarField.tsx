@@ -15,6 +15,20 @@ import { FLOW_GLSL } from '../dsp/flowGlsl';
 const ARMS = 3;
 
 /**
+ * Galaxy Garden (Star Field) — spiral galaxy with kit accents + phrase echo.
+ *
+ *  - kick → nucleus lens punch
+ *  - snare → mid-arm tangential streak
+ *  - hat / shimmer → sparse glints
+ *  - drop → expanding accretion shockwave
+ *  - gather → arm inhale toward nucleus
+ *  - holdBreath / silence → nearly freeze spin + twinkle; thaw on return
+ *  - tenderness → softens arm wind / section pace
+ *  - echo → one-shot ghost counter-swirl of the arms + cooler star-glint
+ *    replay in post-phrase gaps (distinct from drop shockwave)
+ */
+
+/**
  * Smooth toward a target with asymmetric rise/fall (seconds).
  * Keeps kit accents fluid — no linear snaps on hat/kick envelopes.
  */
@@ -53,6 +67,8 @@ uniform float uDrop;
 uniform float uShockTravel;
 uniform float uShimmer;
 uniform float uAfterglow;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -143,6 +159,17 @@ void main() {
   pos.x += pos.x * snareAmt * 0.045;
   pos.z += pos.z * snareAmt * 0.045;
 
+  // Phrase-echo ghost reply: cooler glint crest travels core→rim once per
+  // gap (after-image, not a second drop shockwave). Sparse arm stars only.
+  float echoPulse = uEcho * (1.0 - uEchoTravel * 0.85);
+  float echoCrestR = mix(0.35, 5.4, clamp(uEchoTravel, 0.0, 1.0));
+  float echoCrest = exp(-pow((aRadius - echoCrestR) * 2.6, 2.0));
+  float echoSelect = step(0.52, fract(aPhase * 53.17 + aArm * 0.23 + h5 * 0.11));
+  float echoGlint = echoSelect * echoPulse * (0.4 + echoCrest * 1.1);
+  // Mild counter-tangential shear so the ghost reads opposite the snare whip.
+  pos.x -= tangential.x * echoGlint * 0.32;
+  pos.z -= tangential.y * echoGlint * 0.32;
+
   // Soft high-band twinkle + shimmer/hat sparse glints.
   float twinkle = sin(uTime * (3.0 + aPhase * 5.0) + aPhase * 40.0) * 0.5 + 0.5;
   twinkle *= 0.35 + uHigh * 0.55 + uShimmer * 0.35;
@@ -166,7 +193,8 @@ void main() {
     hatTick * 0.55 +
     shimmerGlint * 0.7 +
     snareAmt * 0.75 +
-    shockBand * 0.85;
+    shockBand * 0.85 +
+    echoGlint * 0.7;
 
   float rim = smoothstep(1.5, 5.0, aRadius);
   // Palette: hot high near core/glints, mid through arms, bass on outer/deep.
@@ -176,6 +204,8 @@ void main() {
   vec3 body = mix(mix(hotCore, armCol, smoothstep(0.0, 1.8, aRadius)), rimCol, rim);
   float lumDamp = mix(0.55, 1.0, smoothstep(0.2, 2.6, aRadius));
   float afterglowLift = uAfterglow * (0.08 + armWeight * 0.1);
+  // Cooler after-image tint — distinct from hat/shimmer high-color sparks.
+  vec3 ghostCol = mix(uColorHigh, vec3(0.82, 0.9, 1.0), 0.55);
   vec3 lit =
     body *
       (1.0 +
@@ -186,7 +216,8 @@ void main() {
         afterglowLift +
         shockBand * 0.4) +
     mix(body, uColorHigh, 0.7) * (hatTick * 0.85 + shimmerGlint * 0.95) +
-    mix(uColorMid, uColorHigh, 0.45) * snareAmt * 0.95;
+    mix(uColorMid, uColorHigh, 0.45) * snareAmt * 0.95 +
+    ghostCol * echoGlint * 1.05;
   // Preserve chroma under additive overlap — soft luma clamp, not desat-to-white.
   float luma = dot(lit, vec3(0.299, 0.587, 0.114));
   lit *= lumDamp * (luma > 1.35 ? (1.35 / luma) : 1.0);
@@ -203,7 +234,8 @@ void main() {
       shimmerGlint * 0.2 +
       kickCore * 0.08 +
       snareAmt * 0.2 +
-      shockBand * 0.14) *
+      shockBand * 0.14 +
+      echoGlint * 0.24) *
       coreDamp +
     core * 0.025;
 
@@ -247,6 +279,11 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
   const shockTravelRef = useRef(1);
   const shockArmedRef = useRef(true);
   const previousDropRef = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one counter-swirl per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
   // Tenderness hush — softens arm wind + particle jitter on gentle vocals.
@@ -261,6 +298,7 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
   const count = tier === 'high' ? 50_000 : tier === 'mid' ? 24_000 : 8_000;
   // Low tier: slightly softer kit so sparse stars don't strobe; mid/high full.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   // MIT GalaxyGeometry supplies zero positions + a_index; dispose on tier change.
   const geometry = useMemo(() => new GalaxyGeometry(count), [count]);
@@ -291,6 +329,8 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
       uShockTravel: { value: 1 },
       uShimmer: { value: 0 },
       uAfterglow: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uColorBass: { value: new THREE.Color('#FF2E93') },
       uColorMid: { value: new THREE.Color('#8A5CFF') },
       uColorHigh: { value: new THREE.Color('#33E5FF') },
@@ -426,6 +466,38 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
       );
     }
 
+    // Phrase-echo ghost counter-swirl: arm on quiet, fire one travel per
+    // echo rise — call-response in the gaps, not a scrub of drop/shock.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.3,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm ?? 120;
+      const echoPace = 0.9 + spd * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    // Brief reverse while the ghost travels — fades back to forward.
+    const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
+    const spinSign = 1 - reverseAmt * 2;
+
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
@@ -433,12 +505,15 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
     mat.uniforms.uDrop!.value = dropNow;
     mat.uniforms.uShockTravel!.value = shockTravelRef.current;
     mat.uniforms.uShimmer!.value = shimmerSmooth.current;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
 
     // Arm wind / particle jitter: hush on holdBreath + tenderness; gather
     // still softens swirl so the inhale reads as a held breath.
-    // Forward-only accumulators — never multiply clock time by changing energy.
+    // Accumulators advance by dt (never multiply wall-clock by energy). Echo
+    // briefly flips the curl sign with the arm counter-swirl.
     flowTimeRef.current +=
-      dt * spd * (0.4 + Math.min(energy, 1.5) * 0.4) * motionMul * windCalm;
+      dt * spd * (0.4 + Math.min(energy, 1.5) * 0.4) * motionMul * windCalm * spinSign;
     mat.uniforms.uFlowTime!.value = flowTimeRef.current;
     mat.uniforms.uFlowAmt!.value =
       (0.04 +
@@ -455,9 +530,15 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
 
     const sway = energy * 0.08 * (1 - tender * 0.3);
     // Continuous arm drift — mid energy still drives the swirl; nearly
-    // freezes on holdBreath; mid drive softens on tenderness.
+    // freezes on holdBreath; mid drive softens on tenderness. Phrase-echo
+    // briefly flips the sign so arms counter-swirl once in the gap.
     spinAccum.current +=
-      dt * spd * (0.03 + mid * 0.06 * (1 - tender * 0.48)) * sectionPace * motionMul;
+      dt *
+      spd *
+      (0.03 + mid * 0.06 * (1 - tender * 0.48)) *
+      sectionPace *
+      motionMul *
+      spinSign;
     // Bar-lock: a subtle sin phase once per bar. sin(0)=sin(2π)=0 so the
     // wrap is seamless — arms feel timed without stuttering.
     const barLock =
