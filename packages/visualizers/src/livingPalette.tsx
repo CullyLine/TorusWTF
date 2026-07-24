@@ -26,6 +26,10 @@ import type { VisualImpulses } from './impulse';
  *  - holdBreath hush: during a held quiet bar, cool mood warmth toward cyan
  *    and nearly freeze the hue crawl (beyond silence desat) so the shared
  *    palette listens with the creature; thaw restores warmth crawl promptly
+ *  - leanIn cool anticipation: as tension climbs before a drop, tilt hue
+ *    slightly cyan and tighten saturation (held-breath-before-the-drop),
+ *    then release into the existing impact/kick warm bloom — distinct from
+ *    gather's pre-beat inhale and hush's crawl freeze
  *  - saturation and brightness swell with loudness and land with beat
  *    impacts — choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
@@ -95,6 +99,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
   const hitWarmRef = useRef(0);
   /** Smoothed holdBreath hush — cools warmth + slows hue crawl while listening. */
   const hushSmooth = useRef(0);
+  /** Smoothed leanIn cool — cyan + sat tighten before the drop. */
+  const leanCoolRef = useRef(0);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
@@ -114,6 +120,7 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       gatherCoolRef.current *= Math.exp(-dt / 0.18);
       hitWarmRef.current *= Math.exp(-dt / 0.22);
       hushSmooth.current *= Math.exp(-dt / 0.2);
+      leanCoolRef.current *= Math.exp(-dt / 0.2);
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
       if (out.high !== base.high) out.high = base.high;
@@ -188,6 +195,15 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     const phraseSat = life * (-gather * 0.11 + hit * 0.14);
     const phraseLight = life * (-gather * 0.07 + hit * 0.12);
 
+    // LeanIn cool anticipation: tension climb before a drop. Rise eagerly,
+    // fall a bit slower so the cool cast dissolves into the hit warm bloom
+    // instead of snapping off. Hue cool + sat tighten only — no light dim
+    // (gather already inhales light) and no crawl freeze (hush owns that).
+    leanCoolRef.current = smoothToward(leanCoolRef.current, m.leanIn, dt, 0.08, 0.2);
+    const lean = leanCoolRef.current;
+    const leanHue = life * (-lean * 0.02);
+    const leanSat = life * (-lean * 0.18);
+
     // Signed hue cast: + → amber (~+14°), − → cyan (~−14°). Independent of
     // the slow orbit and additive with drop kicks so drops still punch.
     // Extra hush cyan lean (~−8°) so quiet bars cool even when mood was warm.
@@ -197,14 +213,15 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     const moodSat = life * (warmth * 0.14 + m.tenderness * 0.06 * (1 - hush * 0.7));
 
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
-    const hueShift = life * drift + hueKickRef.current + moodHue + phraseHue;
+    const hueShift = life * drift + hueKickRef.current + moodHue + phraseHue + leanHue;
     // Afterglow holds saturation and light elevated for seconds after a
     // peak — the color equivalent of a room still ringing.
     const satBoost =
       1 +
       life * (m.swell * 0.22 + m.impact * 0.1 + m.afterglow * 0.16 - m.silence * 0.4) +
       moodSat +
-      phraseSat;
+      phraseSat +
+      leanSat;
     const lightBoost =
       1 +
       life *
