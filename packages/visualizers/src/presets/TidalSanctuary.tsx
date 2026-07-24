@@ -5,6 +5,7 @@
  * clip-space triangle. Musical anatomy:
  *  - bass / bassActivity → broad swells / deep movement
  *  - kick → outward crest pulse (forward-only travel)
+ *  - snare → short lateral whitecap crack (foam/spray shear along crest)
  *  - mids / swell → surface roll
  *  - high / shimmer / hat → foam + micro-crests
  *  - gather → calms / draws the sea inward before a hit
@@ -46,6 +47,7 @@ uniform float uShimmer;
 uniform float uHat;
 uniform float uKick;
 uniform float uKickTravel;
+uniform float uSnare;
 uniform float uGather;
 uniform float uSurge;
 uniform float uStillness;
@@ -150,6 +152,19 @@ float heightField(vec2 xz) {
     h += ring * kickW * 0.42 * glass;
   }
 
+  // Snare: short lateral whitecap crack — foam ridge shearing along X on the
+  // near crest line. Distinct from the kick's radial traveling ring.
+  float snareW = max(uSnare, 0.0);
+  if (snareW > 0.01) {
+    float zBand = exp(-(xz.y - 1.55) * (xz.y - 1.55) * 0.9);
+    float lateral =
+      sin(xz.x * 6.8 + t * 0.35) * 0.55 + sin(xz.x * 13.2 - t * 0.85) * 0.45;
+    float ridge = pow(0.5 + 0.5 * lateral, 3.4);
+    // Sparse spray ticks along the crest — reads as foam flecks, not hat glitter.
+    float sprayTick = step(0.6, fract(xz.x * 1.9 + 0.17));
+    h += zBand * (ridge * 0.3 + sprayTick * ridge * 0.12) * snareW * glass;
+  }
+
   // Bound height so extreme gain never floods the camera.
   return clamp(h, -1.35, 1.55);
 }
@@ -177,6 +192,12 @@ float foamMask(vec2 xz, vec3 n, float h) {
     slope * 0.18 +
     crest * 0.48 +
     micro * 0.06 * (0.35 + uShimmer * 0.5 + uHat * 0.3);
+  // Snare boosts foam along a lateral crest shear — short whitecap crack.
+  float snareCrack =
+    clamp01(uSnare) *
+    crest *
+    (0.35 + 0.65 * abs(sin(xz.x * 5.4 + uPhase * 0.2)));
+  raw += snareCrack * 0.4;
   raw *= 0.48 + dens * 0.52;
   float foam = smoothstep(thresh, thresh + 0.22, raw);
   foam *= 1.0 - clamp01(uStillness) * 0.85;
@@ -356,6 +377,15 @@ void main() {
     foamCol = min(foamCol, uColorHigh * 1.12 + vec3(0.02));
     water = mix(water, foamCol, foam * (0.42 + uDensity * 0.2));
 
+    // Snare spray flash: lateral flank brighten along crest foam (not kick pop).
+    float snareFlash =
+      clamp01(uSnare) *
+      foam *
+      (0.3 + 0.7 * abs(n.x)) *
+      (1.0 - clamp01(uStillness) * 0.9);
+    water = mix(water, tintHighlight(foamCol, 0.16), snareFlash * 0.52);
+    water += uColorHigh * snareFlash * 0.2;
+
     // Small specular accents in the high band.
     vec3 R = reflect(-L, n);
     float spec = pow(clamp01(dot(R, V)), 48.0);
@@ -442,6 +472,7 @@ export function TidalSanctuaryScene({
   const surgeSmooth = useRef(0);
   const afterglowSmooth = useRef(0);
   const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const kickTravel = useRef(28);
   const kickArmed = useRef(true);
@@ -468,6 +499,7 @@ export function TidalSanctuaryScene({
       uHat: { value: 0 },
       uKick: { value: 0 },
       uKickTravel: { value: 28 },
+      uSnare: { value: 0 },
       uGather: { value: 0 },
       uSurge: { value: 0 },
       uStillness: { value: 0 },
@@ -537,6 +569,13 @@ export function TidalSanctuaryScene({
       0.028,
       0.12,
     );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
     hatSmooth.current = smoothToward(
       hatSmooth.current,
       Math.min(1.2, m.hat) * kitAmp,
@@ -573,6 +612,7 @@ export function TidalSanctuaryScene({
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uKickTravel!.value = kickTravel.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
