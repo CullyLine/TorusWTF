@@ -93,7 +93,7 @@ Runs several times a day. Ships exactly one item per run.
 - [x] NS-20260724-07 (S) **Mandelbulb holdBreath stillness** — During `holdBreath` / deep `silence`, nearly freeze the fractal's morph/orbit motion so it listens, thawing on the music's return. Alive. Area: `presets/MandelbrotZoom.tsx`. Accept: a quiet held bar almost freezes the bulb then it resumes; gather dive, kick/snare accents, and phrase-echo orbit reverse from #31/#51 still fire when music returns. — PR #90
 - [x] NS-20260724-08 (S) **Torus Field leanIn anticipation pull** — On `leanIn`, ease tube radius / presence slightly inward (anticipation) without overriding gather inhale, kit accents, or afterglow warmth. Alive. Area: `presets/TorusField.tsx`. Accept: pre-drop leanIn visibly pulls the field in; kick/snare/hat + echo reverse + afterglow from #29/#58 stay distinct. — PR #91
 - [x] NS-20260724-09 (S) **Silk Wake holdBreath hush + tenderness soften** — During `holdBreath`, slow braid travel and ease ribbon contrast; on `tenderness` soften ribbon sharpness/jitter so the silk listens on gentle vocals. Alive. Area: `presets/SilkWake.tsx`. Accept: quiet bar nearly stills braids then resumes; tender passage softens vs aggressive drop; kit accents + gather fold + afterglow from #36/#68 stay intact. — PR #92
-- [~] building 2026-07-24T22:01:27Z NS-20260724-10 (S) **Mist Spiral kit accents** — The coils rise, inhale on gather, flare on impact, and mote-tick on hats, but kick and snare pass silently; wire `kick` as an upward swirl thrust and `snare` as a lateral coil shear so drums drive the mist. Alive. Area: `presets/MistSpiral.tsx`. Accept: kick/snare/hat each produce a distinct mist accent; gather inhale + impact flare from #64 stay intact.
+- [x] NS-20260724-10 (S) **Mist Spiral kit accents** — The coils rise, inhale on gather, flare on impact, and mote-tick on hats, but kick and snare pass silently; wire `kick` as an upward swirl thrust and `snare` as a lateral coil shear so drums drive the mist. Alive. Area: `presets/MistSpiral.tsx`. Accept: kick/snare/hat each produce a distinct mist accent; gather inhale + impact flare from #64 stay intact. — PR #93
 
 ## Built log
 
@@ -175,3 +175,4 @@ Runs several times a day. Ships exactly one item per run.
 - 2026-07-24 — NS-20260724-07 — PR #90 — Mandelbulb holdBreath: nearly freeze morph/orbit; gather/kit/echo stay.
 - 2026-07-24 — NS-20260724-08 — PR #91 — Torus Field leanIn: inward major-radius/tube presence pull; gather/kit/echo/afterglow stay.
 - 2026-07-24 — NS-20260724-09 — PR #92 — Silk Wake holdBreath hush + tenderness soften; kit/gather/afterglow stay.
+2026-07-24 — NS-20260724-10 — PR #93 — Mist Spiral kick upward swirl thrust + snare lateral coil shear; hat/gather/impact stay.
