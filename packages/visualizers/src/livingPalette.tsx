@@ -30,6 +30,10 @@ import type { VisualImpulses } from './impulse';
  *    slightly cyan and tighten saturation (held-breath-before-the-drop),
  *    then release into the existing impact/kick warm bloom — distinct from
  *    gather's pre-beat inhale and hush's crawl freeze
+ *  - phrase-echo hue glint: when a phrase gap opens, a one-shot hue
+ *    shimmer + saturation glint pulses with the replayed rhythm then
+ *    settles — color answers the gaps without stealing gather cool,
+ *    leanIn cool, hush, or mood warmth
  *  - saturation and brightness swell with loudness and land with beat
  *    impacts — choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
@@ -101,6 +105,14 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
   const hushSmooth = useRef(0);
   /** Smoothed leanIn cool — cyan + sat tighten before the drop. */
   const leanCoolRef = useRef(0);
+  /** Smoothed phrase-echo — one-shot travel drives the hue/sat glint. */
+  const echoSmooth = useRef(0);
+  /** 0..1 traveling; >=1 idle. */
+  const echoTravel = useRef(1);
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  /** Alternating shimmer sign so successive echo pulses call-and-answer. */
+  const echoGlintSign = useRef(1);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
@@ -121,6 +133,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       hitWarmRef.current *= Math.exp(-dt / 0.22);
       hushSmooth.current *= Math.exp(-dt / 0.2);
       leanCoolRef.current *= Math.exp(-dt / 0.2);
+      echoSmooth.current *= Math.exp(-dt / 0.28);
+      if (echoTravel.current < 1) echoTravel.current = Math.min(1, echoTravel.current + dt * 1.2);
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
       if (out.high !== base.high) out.high = base.high;
@@ -204,6 +218,36 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     const leanHue = life * (-lean * 0.02);
     const leanSat = life * (-lean * 0.18);
 
+    // Phrase-echo hue glint: one reverse-rhythm answer per gap. Arm on quiet
+    // echo, fire on the first rise past 0.22, then travel at BPM pace so the
+    // shimmer/sat glint pulses with the replayed train and settles still.
+    // Distinct from gather/lean cool (sustained cyan), hush (crawl freeze),
+    // and mood warmth (long EMA) — this is a brief, rhythmic flash only.
+    echoSmooth.current = smoothToward(echoSmooth.current, Math.min(1, m.echo), dt, 0.05, 0.28);
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      echoGlintSign.current *= -1;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      echoTravel.current = Math.min(1, echoTravel.current + dt * (0.85 + bpm / 180));
+    }
+    const echoTraveling = echoTravel.current < 1;
+    // Envelope fades as travel completes; idle keeps a whisper so sticky glow
+    // never stains speaking passages. Pulse rides the smoothed echo train.
+    const echoEnv = echoTraveling
+      ? (1 - echoTravel.current * 0.85) * (0.55 + 0.45 * Math.sin(echoTravel.current * Math.PI))
+      : 0.04;
+    const echoPulse = echoNow * echoEnv;
+    // ~±6° shimmer alternating sign per gap; sat/light glint blooms with pulse.
+    const echoHue = life * echoPulse * 0.016 * echoGlintSign.current;
+    const echoSat = life * echoPulse * 0.11;
+    const echoLight = life * echoPulse * 0.05;
+
     // Signed hue cast: + → amber (~+14°), − → cyan (~−14°). Independent of
     // the slow orbit and additive with drop kicks so drops still punch.
     // Extra hush cyan lean (~−8°) so quiet bars cool even when mood was warm.
@@ -213,7 +257,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     const moodSat = life * (warmth * 0.14 + m.tenderness * 0.06 * (1 - hush * 0.7));
 
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
-    const hueShift = life * drift + hueKickRef.current + moodHue + phraseHue + leanHue;
+    const hueShift =
+      life * drift + hueKickRef.current + moodHue + phraseHue + leanHue + echoHue;
     // Afterglow holds saturation and light elevated for seconds after a
     // peak — the color equivalent of a room still ringing.
     const satBoost =
@@ -221,7 +266,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       life * (m.swell * 0.22 + m.impact * 0.1 + m.afterglow * 0.16 - m.silence * 0.4) +
       moodSat +
       phraseSat +
-      leanSat;
+      leanSat +
+      echoSat;
     const lightBoost =
       1 +
       life *
@@ -232,7 +278,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
           m.silence * 0.22 +
           // Soft warm lift — amber passages feel lit, not just tinted.
           Math.max(0, warmth) * 0.05) +
-      phraseLight;
+      phraseLight +
+      echoLight;
 
     applyLife(out, 'bass', base.bass, hueShift, satBoost, lightBoost * 0.96);
     applyLife(out, 'mid', base.mid, hueShift + life * 0.006, satBoost, lightBoost);
