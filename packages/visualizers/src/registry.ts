@@ -20,6 +20,7 @@ import { EmberDriftScene } from './presets/EmberDrift';
 import { HaloRainScene } from './presets/HaloRain';
 import { MistSpiralScene } from './presets/MistSpiral';
 import { NightBloomScene } from './presets/NightBloom';
+import { InkBloomScene } from './presets/InkBloom';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -42,6 +43,7 @@ export type VisualizerId =
   | 'halo_rain'
   | 'mist_spiral'
   | 'night_bloom'
+  | 'ink_bloom'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -499,6 +501,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 0.85,
       cameraDistance: 1,
       lightLevel: 1.05,
+    },
+  },
+  ink_bloom: {
+    id: 'ink_bloom',
+    label: 'Ink Bloom',
+    hint: 'Dark still water from above — kick blooms curling ink plumes, snare shears, hats sparkle, gather draws center, tenderness pales to milk.',
+    Scene: InkBloomScene,
+    // Fullscreen ink sheet owns the frame via clip-space quad; still camera
+    // keeps the water stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.72,
+      scale: 1,
+      bassShake: 0.3,
+      anima: 0.5,
+      aura: 0.25,
+      cameraMode: 'still',
+      bloomIntensity: 0.7,
+      cameraDistance: 1,
+      lightLevel: 1.0,
     },
   },
   rainforest_reverie: {
