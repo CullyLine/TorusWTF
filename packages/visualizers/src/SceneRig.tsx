@@ -92,6 +92,13 @@ const SHAKE_OFFSET_SPRING_SMOOTH = 0.055;
  */
 const CHOREO_Z_SPRING_SMOOTH = 0.22;
 
+/**
+ * Phrase-echo parallax sway — slow SmoothDamp so the camera drifts out and
+ * home once per gap without snapping. Longer than kit shake; shorter than
+ * cinematic cut horizon so it still reads as a reply, not a shot change.
+ */
+const ECHO_SWAY_SPRING_SMOOTH = 0.26;
+
 interface ScalarSpring {
   value: number;
   velocity: number;
@@ -353,7 +360,8 @@ interface SceneRigProps {
 }
 
 /**
- * Shared lighting, bass-reactive camera shake, and bloom god-rays for all presets.
+ * Shared lighting, bass-reactive camera shake, bloom, and phrase-echo
+ * parallax sway for all presets.
  */
 export function SceneRig({
   palette,
@@ -398,6 +406,15 @@ export function SceneRig({
   // drop exhales glide; pose spring + shake SmoothDamp stay independent.
   const leanZSpringRef = useRef<ScalarSpring>(createScalarSpring());
   const releaseZSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  // Phrase-echo parallax sway — one-shot lateral look-around per gap.
+  // Arm/fire + travel clock below; SmoothDamp carries the camera out and home.
+  const echoSmoothRef = useRef(0);
+  const echoTravelRef = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmedRef = useRef(true);
+  const prevEchoRef = useRef(0);
+  const echoSignRef = useRef(1);
+  const echoSwaySpringRef = useRef<ScalarSpring>(createScalarSpring());
+  const echoLookSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // DoF kick spring — SmoothDamp so bass/trigger envelopes never write
   // focusDistance / bokehScale as raw stair-steps.
   const dofKickSpringRef = useRef<ScalarSpring>(createScalarSpring());
@@ -819,6 +836,56 @@ export function SceneRig({
       CHOREO_Z_SPRING_SMOOTH,
     );
     desiredZ += leanZ + releaseZ;
+
+    // Phrase-echo parallax sway — one-shot slow lateral drift-and-return when
+    // a phrase gap opens. Arm on quiet, fire on echo rise; SmoothDamp carries
+    // the camera out then home. Kit accents, leanIn Z, cinematic pose cuts,
+    // and shake stay on their own springs — this only adds gentle X look-around.
+    const echoAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.7;
+    echoSmoothRef.current = smoothToward(
+      echoSmoothRef.current,
+      Math.min(1, m.echo) * echoAmp,
+      dtCam,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmoothRef.current;
+    if (echoNow < 0.08) echoArmedRef.current = true;
+    if (echoArmedRef.current && echoNow > 0.22 && prevEchoRef.current <= 0.22) {
+      echoTravelRef.current = 0;
+      echoArmedRef.current = false;
+      echoSignRef.current *= -1;
+    }
+    prevEchoRef.current = echoNow;
+    if (echoTravelRef.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      // Slightly slower than preset echo travels — a look-around, not a whip.
+      echoTravelRef.current = Math.min(
+        1,
+        echoTravelRef.current + dtCam * 0.72 * (0.85 + bpm / 180),
+      );
+    }
+    const echoTraveling = echoTravelRef.current < 1;
+    // First half: SmoothDamp toward peak; second half: SmoothDamp home.
+    const swayPeak =
+      (embedded ? 0.09 : 0.14) * echoAmp * echoSignRef.current * Math.min(1, echoNow + 0.15);
+    const swayTarget = echoTraveling && echoTravelRef.current < 0.48 ? swayPeak : 0;
+    const lookPeak = swayPeak * 0.38;
+    const lookTarget = echoTraveling && echoTravelRef.current < 0.48 ? lookPeak : 0;
+    const swayX = smoothDampScalar(
+      echoSwaySpringRef.current,
+      swayTarget,
+      dtCam,
+      ECHO_SWAY_SPRING_SMOOTH,
+    );
+    const lookSwayX = smoothDampScalar(
+      echoLookSpringRef.current,
+      lookTarget,
+      dtCam,
+      ECHO_SWAY_SPRING_SMOOTH,
+    );
+    desiredX += swayX;
+    lookTargetX += lookSwayX;
 
     // Anima heartbeat folds into the desired pose so breathing eases with
     // the spring instead of fighting it.
