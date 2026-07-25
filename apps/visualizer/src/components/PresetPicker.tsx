@@ -28,6 +28,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   halo_rain: '#A5B4FC',
   mist_spiral: '#8EB4C8',
   night_bloom: '#F0A8C0',
+  ink_bloom: '#7B8CDE',
   rainforest_reverie: '#4ADE80',
   alien_planet: '#C084FC',
   tidal_sanctuary: '#22D3EE',
