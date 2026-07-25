@@ -58,6 +58,7 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
   const scratchWarm = useRef(new THREE.Color(1, 0.55, 0.22));
+  const scratchCoal = useRef(new THREE.Color(0.18, 0.08, 0.04));
   const scratchMix = useRef(new THREE.Color());
 
   const gatherSmooth = useRef(0);
@@ -70,7 +71,6 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
   const timeRef = useRef(0);
-  const scratchCoal = useRef(new THREE.Color(0.18, 0.08, 0.04));
 
   const sprite = useMemo(() => getDotTexture(), []);
 
