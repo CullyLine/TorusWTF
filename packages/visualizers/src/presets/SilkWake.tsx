@@ -10,6 +10,8 @@
  *  - kick → thrust along the braid (flow surge + core punch)
  *  - snare → lateral shear flash (phase-split L/R crack)
  *  - hat → sparse mote ticks on braid edges (distinct from shimmer)
+ *  - holdBreath / deep silence → nearly still braid travel + ease contrast
+ *  - tenderness → soften ribbon sharpness / sway so gentle vocals hush the silk
  */
 
 import { useMemo, useRef } from 'react';
@@ -43,6 +45,8 @@ uniform float uShimmer;
 uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
+uniform float uStillness;
+uniform float uTenderness;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -53,13 +57,16 @@ float hash11(float n) {
 
 // Soft distance to a flowing silk strand: a sine-braided horizontal curve
 // with per-ribbon phase, vertical weave, and thickness that breathes.
-float ribbonDist(vec2 uv, float id, float t, float fold, float flare) {
+// soft (0-1 from tenderness) hushes weave/sway and widens the strand so
+// gentle vocals read as softer silk without freezing braid travel.
+float ribbonDist(vec2 uv, float id, float t, float fold, float flare, float soft) {
   float phase = id * 1.6180339887;
   float seed = hash11(id + 0.37);
   float y0 = (seed - 0.5) * 1.55;
   float weave = 0.18 + uSwell * 0.22 + uMid * 0.12;
   // Gather pulls strands toward the horizontal mid-line; impact unfurls.
-  float braidAmp = weave * (1.0 - fold * 0.72) * (1.0 + flare * 0.85);
+  // Tenderness eases braid amplitude so ribbons feel held, not jagged.
+  float braidAmp = weave * (1.0 - fold * 0.72) * (1.0 + flare * 0.85) * mix(1.0, 0.42, soft);
   // Kick thrusts flow along the braid (local surge, not a fullscreen wash).
   float kick = clamp(uKick, 0.0, 1.2);
   float flow = t * (0.35 + seed * 0.25 + uBass * 0.15 + kick * 0.55) + phase
@@ -68,8 +75,11 @@ float ribbonDist(vec2 uv, float id, float t, float fold, float flare) {
     + sin(uv.x * (2.1 + seed * 1.4) + flow) * braidAmp
     + sin(uv.x * (4.6 + seed * 2.0) - flow * 1.35 + phase) * braidAmp * 0.42;
   // Soft lateral sway so the braid feels alive, not a flat curtain.
-  pathY += cos(uv.x * 1.1 + t * 0.55 + phase) * (0.04 + uHigh * 0.06) * (1.0 - fold * 0.5);
+  // Tenderness hushes the jitter so intimate passages don't chatter.
+  float sway = (0.04 + uHigh * 0.06) * (1.0 - fold * 0.5) * mix(1.0, 0.28, soft);
+  pathY += cos(uv.x * 1.1 + t * 0.55 + phase) * sway;
   // Snare lateral shear: phase-split L/R crack across the braid.
+  // Kit accents stay readable; tenderness only softens continuous jitter.
   float snare = clamp(uSnare, 0.0, 1.2);
   float lateral = sign(sin(phase * 6.2831853 + seed * 12.0));
   if (abs(lateral) < 0.01) lateral = 1.0;
@@ -77,7 +87,8 @@ float ribbonDist(vec2 uv, float id, float t, float fold, float flare) {
 
   float halfW = (0.028 + uEnergy * 0.012 + flare * 0.035 + kick * 0.022)
     * (1.0 + fold * 0.55) // thicker when gathered (silk bunching)
-    * (1.0 - flare * 0.15);
+    * (1.0 - flare * 0.15)
+    * mix(1.0, 1.55, soft); // tender passages widen strands (softer edge)
   float d = abs(uv.y - pathY) / max(halfW, 1e-4);
   return d;
 }
@@ -101,6 +112,8 @@ void main() {
   float kick = clamp(uKick, 0.0, 1.2);
   float snare = clamp(uSnare, 0.0, 1.2);
   float hat = clamp(uHat, 0.0, 1.2);
+  float soft = clamp(uTenderness, 0.0, 1.0);
+  float stillness = clamp(uStillness, 0.0, 1.0);
 
   // Gather folds the frame inward; impact stretches it back open.
   // Kick adds a brief along-braid zoom punch (local, not a sky wash).
@@ -115,6 +128,7 @@ void main() {
   // Snare shears the whole braid sheet laterally before distance sampling.
   uv.x += snare * 0.045 * sign(uv.x + 1e-4);
 
+  // holdBreath gates uTime advance in JS so braid travel nearly freezes.
   float t = uTime * (0.55 + uSwell * 0.55 + uEnergy * 0.2 + kick * 0.35);
   vec3 body = silkBackdrop(uv);
   body *= 0.5 + uEnergy * 0.22 + uAfterglow * 0.4;
@@ -124,13 +138,18 @@ void main() {
   float mote = 0.0;
   vec3 ribbonCol = vec3(0.0);
 
+  // Tenderness softens core falloff (less bite); holdBreath eases contrast.
+  float corePow = mix(1.85, 1.15, soft);
+  float haloPow = mix(0.35, 0.22, soft);
+  float contrast = mix(1.0, 0.55, stillness);
+
   for (int i = 0; i < RIBBON_COUNT; i++) {
     float id = float(i);
-    float d = ribbonDist(uv, id, t, fold, flare);
+    float d = ribbonDist(uv, id, t, fold, flare, soft);
     // Core strand + soft halo.
-    float core = exp(-d * d * 1.85);
-    float halo = exp(-d * d * 0.35) * 0.45;
-    float strand = core + halo;
+    float core = exp(-d * d * corePow);
+    float halo = exp(-d * d * haloPow) * mix(0.45, 0.55, soft);
+    float strand = (core + halo) * contrast;
 
     // Afterglow leaves warm residual trails beside each ribbon.
     float wake = exp(-d * d * 0.12) * uAfterglow * (0.35 + 0.25 * sin(uv.x * 3.0 + t + id));
@@ -230,6 +249,10 @@ export function SilkWakeScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
+  // Tenderness hush — softens ribbon sharpness / sway on gentle vocals.
+  const tenderSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -259,6 +282,8 @@ export function SilkWakeScene({
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
+      uStillness: { value: 0 },
+      uTenderness: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -276,9 +301,42 @@ export function SilkWakeScene({
     const calm = reducedMotion ? 0.35 : 1;
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
 
-    timeRef.current +=
-      dt * pace * sectionPace * calm * (0.55 + m.swell * 0.7 + m.impact * 0.25);
+    // Hold-breath stillness: the silk listens instead of traveling through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so kit accents + gather fold still fire.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze braid travel; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
 
+    // Tenderness hush — soft rise/fall so ribbons ease into softness.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.22,
+    );
+
+    timeRef.current +=
+      dt *
+      pace *
+      sectionPace *
+      calm *
+      motionMul *
+      (0.55 + m.swell * 0.7 + m.impact * 0.25);
+
+    // Gather / impact / afterglow / kit stay on full dt so replies still fire on thaw.
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
     impactSmooth.current = smoothToward(
@@ -331,10 +389,14 @@ export function SilkWakeScene({
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
-    mat.uniforms.uShimmer!.value = m.shimmer * flashAmp;
+    // Tenderness hushes sustained shimmer glitter; kit hat ticks stay on uHat.
+    mat.uniforms.uShimmer!.value =
+      m.shimmer * flashAmp * (1 - tenderSmooth.current * 0.55);
     mat.uniforms.uEnergy!.value = m.energy + afterglowSmooth.current * 0.25;
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
+    mat.uniforms.uStillness!.value = stillness;
+    mat.uniforms.uTenderness!.value = tenderSmooth.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
