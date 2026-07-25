@@ -9,6 +9,7 @@
  *  - kick → upward lift punch through the ash column
  *  - snare → lateral ash shear (phase-split L/R)
  *  - hat → sparse tick sparkles on selected embers
+ *  - holdBreath / deep silence → freeze mid-air + dim toward coals; thaw upward
  */
 
 import { useMemo, useRef } from 'react';
@@ -66,7 +67,10 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const hatSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const afterglowSmooth = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
   const timeRef = useRef(0);
+  const scratchCoal = useRef(new THREE.Color(0.18, 0.08, 0.04));
 
   const sprite = useMemo(() => getDotTexture(), []);
 
@@ -127,7 +131,26 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const calm = reducedMotion ? 0.4 : 1;
     const sectionPace = 0.78 + m.sectionLevel * 0.4;
 
-    timeRef.current += dt * pace * sectionPace * calm;
+    // Hold-breath stillness: the ashfield listens instead of rising through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so kit / gather / impact still fire.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous rise / wobble / sway; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.9;
+
+    // Continuous clock freezes with the ash; kit envelopes stay on full dt.
+    timeRef.current += dt * pace * sectionPace * calm * motionMul;
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
@@ -172,22 +195,33 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const afterglow = afterglowSmooth.current;
 
     // Lift on swell: choruses loft the ashfield; gather slows the rise.
+    // motionMul suspends the column mid-air during holdBreath.
     const lift =
       dt *
       pace *
       sectionPace *
       calm *
+      motionMul *
       (0.55 + swell * 1.15 + m.energy * 0.35 + m.bass * 0.2) *
       (1 - gather * 0.72);
 
     // Kick: brief upward punch — distinct from swell's sustained loft.
+    // Kit accents stay ungated so thaw + drum hits remain intact.
     const kickLift = kick * dt * pace * calm * 2.8;
     // Snare: lateral ash shear amplitude (phase-split L/R per ember).
     const snareShear = snare * dt * pace * calm * 3.4;
 
     const flare = 1 + impact * 0.85 + afterglow * 0.2;
-    mat.size = (0.048 + swell * 0.028 + impact * 0.04 + kick * 0.018) * (0.92 + kitAmp * 0.08);
-    mat.opacity = Math.min(1, 0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12);
+    // Coals dim: size + opacity ease down while suspended, then rekindle on thaw.
+    const coalDim = 1 - stillness * 0.48;
+    mat.size =
+      (0.048 + swell * 0.028 + impact * 0.04 + kick * 0.018) *
+      (0.92 + kitAmp * 0.08) *
+      (0.72 + coalDim * 0.28);
+    mat.opacity = Math.min(
+      1,
+      (0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12) * coalDim,
+    );
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
@@ -198,10 +232,12 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
     const warmC = scratchWarm.current.setRGB(1, 0.55, 0.22);
+    const coalC = scratchCoal.current.setRGB(0.18, 0.08, 0.04);
     const mixC = scratchMix.current;
     const t = timeRef.current;
 
     // Inhale toward center on gather — stronger on outer embers.
+    // Gather stays ungated so pre-beat inhale still reads under thaw.
     const gatherPull = 1 - gather * dt * 2.1;
 
     for (let i = 0; i < baseCount; i++) {
@@ -254,6 +290,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       const baseCol = band === 0 ? bassC : band === 1 ? midC : highC;
       const warmth = 0.42 + phase * 0.28 + afterglow * 0.35 + impact * 0.2 + kick * 0.12;
       mixC.copy(baseCol).lerp(warmC, Math.min(0.85, warmth));
+      // Hold-breath coals: milk the ember toward dark residual heat.
+      mixC.lerp(coalC, stillness * 0.62);
 
       // Height gradient: cooler near the hearth, hotter as they rise.
       const heightGlow = 0.75 + ((y - Y_MIN) / Y_SPAN) * 0.45;
@@ -263,7 +301,13 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       // Kick warms bass embers; snare flashes mid — motion is the primary accent.
       const kitGlow =
         (band === 0 ? kick * 0.28 : kick * 0.08) + (band === 1 ? snare * 0.32 : snare * 0.1);
-      const gain = heightGlow * flare * sparkle * (0.85 + swell * 0.25) * (1 + kitGlow);
+      const gain =
+        heightGlow *
+        flare *
+        sparkle *
+        (0.85 + swell * 0.25) *
+        (1 + kitGlow) *
+        (1 - stillness * 0.42);
 
       colArr[i3] = Math.min(1, mixC.r * gain);
       colArr[i3 + 1] = Math.min(1, mixC.g * gain);
@@ -273,8 +317,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
 
-    // Very slow column sway — alive, never storm-spin.
-    points.rotation.y += dt * pace * calm * (0.04 + m.mid * 0.03 + swell * 0.02);
+    // Very slow column sway — alive, never storm-spin; freezes with holdBreath.
+    points.rotation.y += dt * pace * calm * motionMul * (0.04 + m.mid * 0.03 + swell * 0.02);
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
