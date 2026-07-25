@@ -243,8 +243,10 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       ? (1 - echoTravel.current * 0.85) * (0.55 + 0.45 * Math.sin(echoTravel.current * Math.PI))
       : 0.04;
     const echoPulse = echoNow * echoEnv;
-    // ~±6° shimmer alternating sign per gap; sat/light glint blooms with pulse.
-    const echoHue = life * echoPulse * 0.016 * echoGlintSign.current;
+    // Several small hue wobbles over the travel (~±6° peak) so it reads as a
+    // shimmer, not a sustained cast; sat/light glint blooms with each pulse.
+    const shimmerWave = Math.sin(echoTravel.current * Math.PI * 5);
+    const echoHue = life * echoPulse * 0.018 * shimmerWave * echoGlintSign.current;
     const echoSat = life * echoPulse * 0.11;
     const echoLight = life * echoPulse * 0.05;
 
