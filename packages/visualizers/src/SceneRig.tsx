@@ -871,7 +871,7 @@ export function SceneRig({
       (embedded ? 0.09 : 0.14) * echoAmp * echoSignRef.current * Math.min(1, echoNow + 0.15);
     const swayTarget = echoTraveling && echoTravelRef.current < 0.48 ? swayPeak : 0;
     const lookPeak = swayPeak * 0.38;
-    const lookTarget = echoTraveling && echoTravelRef.current < 0.48 ? lookPeak : 0;
+    const echoLookTarget = echoTraveling && echoTravelRef.current < 0.48 ? lookPeak : 0;
     const swayX = smoothDampScalar(
       echoSwaySpringRef.current,
       swayTarget,
@@ -880,7 +880,7 @@ export function SceneRig({
     );
     const lookSwayX = smoothDampScalar(
       echoLookSpringRef.current,
-      lookTarget,
+      echoLookTarget,
       dtCam,
       ECHO_SWAY_SPRING_SMOOTH,
     );
