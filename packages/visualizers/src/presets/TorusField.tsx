@@ -53,6 +53,7 @@ function applyAfterglowWarmth(
 /**
  * Torus Field — brand torus with kit accents + phrase-echo reverse.
  *  - gather → shell inhale (existing breath)
+ *  - leanIn → mild inward pull on major radius / presence (pre-drop anticipation)
  *  - kick → tube pulse (wire + particle tube radius)
  *  - snare → lateral flash / X crack on the point cloud
  *  - hat → outer point-cloud size ticks
@@ -86,6 +87,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  // Lean-in anticipation: ease inward so pre-drop tension reads as a held pull.
+  // Slower fall than rise so the approach lingers into the drop (Aura-style).
+  const leanSmooth = useRef(0);
 
   const particleCount = tier === 'high' ? 6000 : tier === 'mid' ? 2500 : 800;
   // Low tier keeps gestures readable without strobing sparse points.
@@ -157,6 +161,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       0.012,
       0.055,
     );
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    leanSmooth.current = smoothToward(leanSmooth.current, m.leanIn, dtClamped, 0.06, 0.18);
+    const lean = leanSmooth.current;
 
     // One reverse drift per echo impulse — arm on quiet, fire on rise.
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dtClamped, 0.05, 0.3);
@@ -190,12 +197,15 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     // Gather: the pre-beat inhale pulls the shell in a breath before each
     // predicted hit, so downbeats read as exhale-release.
+    // LeanIn: milder section-scale pull (stacks with gather; never replaces it).
     // Kick: tube pulse — shell thickens/blooms on the kick envelope.
     const kickTube = kickSmooth.current * 0.12;
+    const leanPull = lean * 0.038;
+    const shellBase = 1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 - leanPull;
     torus.scale.set(
-      1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 + kickTube * 0.35,
-      1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 + kickTube,
-      1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 + kickTube * 0.35,
+      shellBase + kickTube * 0.35,
+      shellBase + kickTube,
+      shellBase + kickTube * 0.35,
     );
     torus.rotation.y += flowSpeed * 0.4;
     torus.rotation.x += delta * spd * (0.03 + m.high * 0.2);
@@ -286,6 +296,10 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const snareX = snareSmooth.current * 0.14;
     // Kick expands the particle tube radius — the ring thickens with the hit.
     const kickTubeR = kickSmooth.current * 0.18;
+    // LeanIn anticipation: ease major radius + tube presence inward (distinct
+    // from gather's shell-scale inhale and kick's tube bloom).
+    const leanRadius = lean * 0.14;
+    const leanTube = lean * 0.045;
 
     for (let i = 0; i < particleCount; i++) {
       if (i / particleCount > activeRatio) continue;
@@ -293,8 +307,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       baseTheta[i] =
         (baseTheta[i]! + delta * spd * (0.15 + m.high * 1.2 + m.impact) * flowSign) %
         (Math.PI * 2);
-      const radius = 1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08;
-      const tube = 0.5 + m.breath * 0.15 + kickTubeR;
+      const radius =
+        1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08 - leanRadius;
+      const tube = 0.5 + m.breath * 0.15 + kickTubeR - leanTube;
       const i3 = i * 3;
       setTorusPoint(arr, i3, baseTheta[i]!, basePhi[i]!, radius, tube);
       sampleFlow(fv, arr[i3]!, arr[i3 + 1]!, arr[i3 + 2]!, i % 3, fp);

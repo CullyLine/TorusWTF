@@ -11,6 +11,7 @@
  *  - gather → calms / draws the sea inward before a hit
  *  - release / drop → surges the sea
  *  - silence / holdBreath → glassy resting surface
+ *  - tenderness → ease chop/swell + milky pearlescent sheen (still moves)
  *  - afterglow → restrained horizon / foam warmth
  *
  * Controls (existing storage keys only):
@@ -51,6 +52,7 @@ uniform float uSnare;
 uniform float uGather;
 uniform float uSurge;
 uniform float uStillness;
+uniform float uTenderness;
 uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uBarPhase;
@@ -101,8 +103,13 @@ float heightField(vec2 xz) {
   float stillness = clamp01(uStillness);
   float gather = clamp01(uGather);
   float surge = clamp01(uSurge);
+  float tender = clamp01(uTenderness);
   float chop = clamp(uTurbulence, 0.0, 2.0);
   float glass = mix(1.0, 0.08, stillness);
+  // Tenderness eases chop/swell while the sea keeps rolling (holdBreath owns glass).
+  float swellCalm = mix(1.0, 0.52, tender);
+  float chopMul = mix(1.0, 0.28, tender);
+  chop *= chopMul;
 
   // Gather draws wavelengths inward and calms amplitude before the hit.
   float pull = 1.0 + gather * 0.55;
@@ -112,17 +119,17 @@ float heightField(vec2 xz) {
 
   float h = 0.0;
   // Broad swells — deep movement from bass / bassActivity.
-  h += dirWave(xz * pull, vec2(0.92, 0.28), 0.42, 0.38 * ampScale, 0.55, 0.25, t);
-  h += dirWave(xz * pull, vec2(-0.35, 0.94), 0.31, 0.28 * ampScale, 0.41, 0.2, t * 0.92);
-  h += dirWave(xz * pull, vec2(0.55, -0.72), 0.58, 0.16 * ampScale * (0.7 + uBassAct), 0.68, 0.3, t * 1.07);
+  h += dirWave(xz * pull, vec2(0.92, 0.28), 0.42, 0.38 * ampScale * swellCalm, 0.55, 0.25, t);
+  h += dirWave(xz * pull, vec2(-0.35, 0.94), 0.31, 0.28 * ampScale * swellCalm, 0.41, 0.2, t * 0.92);
+  h += dirWave(xz * pull, vec2(0.55, -0.72), 0.58, 0.16 * ampScale * swellCalm * (0.7 + uBassAct), 0.68, 0.3, t * 1.07);
 
   // Mid roll — surface body from mids / swell.
-  float midAmp = ampScale * (0.45 + uMid * 0.55 + uSwell * 0.35);
-  h += dirWave(xz * pull, vec2(0.78, 0.62), 1.15, 0.12 * midAmp, 0.95, 0.35, t * 1.15);
-  h += dirWave(xz * pull, vec2(-0.66, 0.55), 1.55, 0.08 * midAmp, 1.22, 0.4, t * 1.28);
+  float midAmp = ampScale * swellCalm * (0.45 + uMid * 0.55 + uSwell * 0.35);
+  h += dirWave(xz * pull, vec2(0.78, 0.62), 1.15, 0.12 * midAmp, 0.95, mix(0.35, 0.18, tender), t * 1.15);
+  h += dirWave(xz * pull, vec2(-0.66, 0.55), 1.55, 0.08 * midAmp, 1.22, mix(0.4, 0.2, tender), t * 1.28);
 
   // Chop / detail octaves — turbulence raises frequency content.
-  float octAmp = 0.07 * ampScale * (0.35 + chop * 0.65);
+  float octAmp = 0.07 * ampScale * swellCalm * (0.35 + chop * 0.65);
   float octFreq = 2.1 + chop * 1.4;
   vec2 oDir = vec2(0.71, 0.41);
   for (int i = 0; i < WAVE_OCTAVES; i++) {
@@ -133,7 +140,7 @@ float heightField(vec2 xz) {
     d = normalize(d * 0.85 + oDir * 0.15);
     float f = octFreq * pow(1.72, fi);
     float a = octAmp * pow(0.52, fi);
-    float sharp = clamp01(0.2 + chop * 0.25 + uHigh * 0.15);
+    float sharp = clamp01(0.2 + chop * 0.25 + uHigh * 0.15) * mix(1.0, 0.42, tender);
     h += dirWave(xz * pull, d, f, a, 1.4 + fi * 0.35, sharp, t * (1.0 + fi * 0.08));
   }
 
@@ -202,6 +209,8 @@ float foamMask(vec2 xz, vec3 n, float h) {
   float foam = smoothstep(thresh, thresh + 0.22, raw);
   foam *= 1.0 - clamp01(uStillness) * 0.85;
   foam *= 1.0 - clamp01(uGather) * 0.45;
+  // Tender passages thin foam slightly — milky calm, not holdBreath wipe.
+  foam *= 1.0 - clamp01(uTenderness) * 0.32;
   return clamp01(foam);
 }
 
@@ -367,6 +376,7 @@ void main() {
       contour *
       (0.12 + slopeLight * 0.88) *
       (1.0 - clamp01(uStillness) * 0.85) *
+      (1.0 - clamp01(uTenderness) * 0.45) *
       (0.45 + uEnergy * 0.2);
     water += mix(uColorMid, uColorHigh, 0.58) * contourAccent * 0.22;
 
@@ -376,6 +386,16 @@ void main() {
     // Cap foam brightness — hue-preserving, never plain white wash.
     foamCol = min(foamCol, uColorHigh * 1.12 + vec3(0.02));
     water = mix(water, foamCol, foam * (0.42 + uDensity * 0.2));
+
+    // Tenderness: milky pearlescent sheen — soft vocals pearl the surface while
+    // waves keep rolling (distinct from holdBreath near-silence glass).
+    float tender = clamp01(uTenderness);
+    vec3 milk = vec3(0.9, 0.92, 0.97);
+    vec3 pearl = mix(milk, mix(uColorHigh, uColorMid, 0.42), 0.34);
+    pearl = mix(pearl, mix(uColorMid, vec3(0.82, 0.88, 1.0), 0.55), fres * 0.4);
+    float pearlAmt = tender * (0.18 + fres * 0.52 + ndv * 0.14);
+    water = mix(water, pearl, pearlAmt * 0.58);
+    water += pearl * pearlAmt * fres * 0.12;
 
     // Snare spray flash: lateral flank brighten along crest foam (not kick pop).
     float snareFlash =
@@ -467,6 +487,7 @@ export function TidalSanctuaryScene({
 
   const phaseRef = useRef(0);
   const stillnessSmooth = useRef(0);
+  const tenderSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const surgeSmooth = useRef(0);
@@ -503,6 +524,7 @@ export function TidalSanctuaryScene({
       uGather: { value: 0 },
       uSurge: { value: 0 },
       uStillness: { value: 0 },
+      uTenderness: { value: 0 },
       uAfterglow: { value: 0 },
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
@@ -539,6 +561,14 @@ export function TidalSanctuaryScene({
     );
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.9;
+
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.22,
+    );
 
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
     // Forward-only accumulated phase — never reverses when energy drops.
@@ -616,6 +646,7 @@ export function TidalSanctuaryScene({
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
+    mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uAfterglow!.value = afterglowSmooth.current;
     mat.uniforms.uEnergy!.value = clamp(m.energy + afterglowSmooth.current * 0.25, 0, 2);
     // Phase 0 is a real downbeat only when BPM tracking is valid. Use the
