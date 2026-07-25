@@ -31,6 +31,9 @@ import { useModulation } from '../modulation';
  *    crack distinct from any radial kick/impact dive
  *  - `echo` fires a one-shot ghost orbit reverse in phrase gaps, then
  *    tumble resumes forward
+ *  - `holdBreath` / deep `silence` nearly freeze morph + orbit so the
+ *    bulb listens, then thaw on the music's return (kit/gather/echo stay
+ *    on their own envelopes so hits still fire)
  *  - orbit-trap coloring rides the living palette; mids scroll the ramp
  *  - `impact` flashes the surface glow, `shimmer` lights the rim
  *  - `afterglow` holds a warm emissive floor for seconds after a peak
@@ -241,6 +244,8 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
   const gatherSmooth = useRef(0);
   const diveSmooth = useRef(0);
   const tensionSmooth = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
   const worldScale = useRef(new THREE.Vector3());
 
   const reducedMotion = useMemo(() => {
@@ -291,7 +296,25 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
     const pace = reducedMotion ? 0.25 : 1;
     const spd = mods.current.speed ?? speed;
 
+    // Hold-breath stillness: the bulb listens instead of morphing through quiet.
+    // Rise a touch slower than the thaw so freeze reads as settling, not a cut.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous morph/orbit; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
+
     // Snare: fast attack, short fall — a crack, not a sustained warp.
+    // Kit/gather/echo stay on full dt so hits still fire when music returns.
     snareSmooth.current = smoothToward(
       snareSmooth.current,
       Math.min(1.2, m.snare) * kitAmp,
@@ -320,11 +343,16 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
     const orbitDir = 1 - reverseAmt * 2;
 
     // Slow tumble so the fractal evolves even under a still camera;
-    // energy leans into the spin, quiet valleys nearly freeze it.
+    // energy leans into the spin; holdBreath nearly freezes it.
     // Phrase-echo briefly flips yaw so the bulb ghosts backward once.
     yawRef.current +=
-      dt * spd * pace * (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04) * orbitDir;
-    pitchRef.current += dt * spd * pace * 0.017;
+      dt *
+      spd *
+      pace *
+      (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04) *
+      orbitDir *
+      motionMul;
+    pitchRef.current += dt * spd * pace * 0.017 * motionMul;
 
     // Pre-beat gather + hit dive, smoothed so the zoom never stairs.
     gatherSmooth.current = smoothToward(
@@ -351,7 +379,8 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
 
     // Power morph: autonomous wander + swell + tension through builds.
     // Tension ornate-ness eases in so mid-tier DE iters never hitch.
-    powerWanderRef.current += dt * spd * pace * 0.11;
+    // holdBreath gates wander advance so the lobes stop reshaping mid-hush.
+    powerWanderRef.current += dt * spd * pace * 0.11 * motionMul;
     const power =
       7.0 +
       Math.sin(powerWanderRef.current) * 0.8 +
@@ -360,8 +389,11 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
       m.dropEvent * 0.7;
 
     // Vocals gently accelerate the color ramp — sung passages iridesce.
+    // hush the crawl with stillness so the surface stops iridescing mid-listen.
     paletteShiftRef.current =
-      (paletteShiftRef.current + dt * (0.03 + m.mid * 0.14 + m.vocalActivity * 0.05) * pace) % 1;
+      (paletteShiftRef.current +
+        dt * (0.03 + m.mid * 0.14 + m.vocalActivity * 0.05) * pace * motionMul) %
+      1;
 
     // The fractal domain tracks the proxy mesh's real world scale, so both
     // the user Scale slider AND the modulation matrix (via the modulated
