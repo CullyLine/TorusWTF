@@ -526,7 +526,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   rainforest_reverie: {
     id: 'rainforest_reverie',
     label: 'Rainforest Reverie',
-    hint: "iq's Rainforest, ported with permission — fog breathes on bass, wind stirs the canopy, the sun bursts through the clouds on the drop.",
+    hint: "iq's Rainforest, ported with permission — fog breathes on bass, wind stirs the canopy, tenderness lays a warm mist, the sun bursts through on the drop.",
     Scene: RainforestReverieScene,
     presetControls: ['turbulence', 'density'],
     // The port is already tone-mapped + vignetted — bloom and aura must stay
