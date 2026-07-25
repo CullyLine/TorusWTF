@@ -6,6 +6,8 @@
  *  - idle / swell → soft coils spiral upward around a vertical axis
  *  - gather → inhale toward center before the beat
  *  - impact → soft flare (brightness + coil bloom), not a strobe
+ *  - kick → upward swirl thrust (local rise punch + bass-warm coils)
+ *  - snare → lateral coil shear + flank flash (backbeat crack)
  *  - hat → sparse mote glitter on selected coils
  */
 
@@ -34,6 +36,8 @@ uniform float uTime;
 uniform float uRise;
 uniform float uGather;
 uniform float uImpact;
+uniform float uKick;
+uniform float uSnare;
 uniform float uHat;
 uniform float uBass;
 uniform float uMid;
@@ -97,23 +101,34 @@ void main() {
   vec2 res = max(uResolution, vec2(1.0));
   vec2 uv = (gl_FragCoord.xy - 0.5 * res) / min(res.x, res.y);
 
+  float kick = clamp(uKick, 0.0, 1.2);
+  float snare = clamp(uSnare, 0.0, 1.2);
+
   // Gather inhale: coils pull toward the vertical axis.
   float fold = uGather * 0.6;
   float r0 = length(uv) + 1e-4;
   uv *= 1.0 - fold * (0.5 + 0.5 * smoothstep(0.12, 1.15, r0));
   // Soft vertical settle so the column listens before the beat.
   uv.y += (0.0 - uv.y) * fold * 0.28;
+  // Kick: brief upward swirl thrust — column surges up, not a fullscreen wash.
+  uv.y -= kick * 0.055;
+  // Snare: lateral coil shear before spiral sampling (backbeat crack).
+  uv.x += snare * 0.048 * sign(uv.x + 1e-4);
 
   float r = length(uv);
   float ang = atan(uv.y, uv.x);
+  // Snare also twists coil phase slightly so arms crack sideways.
+  ang += snare * 0.14 * sign(sin(ang * float(COIL_COUNT) + 0.35));
 
   // Soft elliptical breathe — living mist, not a hard helix.
   float oval = 1.0 + sin(ang * 2.0 + uTime * 0.32) * (0.028 + uMid * 0.035);
   r *= oval;
 
   float rise = uRise * (1.0 - uGather * 0.85);
-  float width = 0.14 + uBass * 0.04 + uImpact * 0.05;
-  float pitch = 1.55 + uSwell * 0.35;
+  // Kick advances spiral phase (upward thrust along the helix).
+  float riseKick = rise + kick * (0.55 + uBass * 0.2);
+  float width = 0.14 + uBass * 0.04 + uImpact * 0.05 + kick * 0.03;
+  float pitch = 1.55 + uSwell * 0.35 + kick * 0.18;
 
   float coils = 0.0;
   float moteTick = 0.0;
@@ -124,13 +139,14 @@ void main() {
     // Spiral around vertical axis: angle tracks height + continuous rise.
     float target = fi * (6.2831853 / float(COIL_COUNT))
       + uv.y * pitch
-      + rise * (1.15 + seed * 0.35)
-      + seed * 0.4;
+      + riseKick * (1.15 + seed * 0.35)
+      + seed * 0.4
+      + snare * (seed - 0.5) * 0.28;
     float line = coilLine(ang, target, width * (0.75 + seed * 0.45));
     // Outer mist thinner so the axis owns the frame.
     float weight = mix(1.2, 0.45, smoothstep(0.1, 1.2, r));
     // Soft radial falloff keeps coils readable as a column.
-    float radial = exp(-r * r * (1.1 - uSwell * 0.25));
+    float radial = exp(-r * r * (1.1 - uSwell * 0.25 - kick * 0.08));
     coils += line * weight * radial;
 
     // Hat motes: sparse glitter on every ~3rd coil sample.
@@ -140,7 +156,7 @@ void main() {
 
   // Mist body from FBM — soft vapor between the coils.
   vec2 mistUv = uv * (1.6 + uSwell * 0.35);
-  mistUv.y += rise * 0.55;
+  mistUv.y += riseKick * 0.55;
   mistUv += (fbm(mistUv * 1.4 + uTime * 0.12) - 0.5) * (0.18 + uSwell * 0.2);
   float mist = fbm(mistUv);
   mist = smoothstep(0.28, 0.82, mist) * (0.45 + uSwell * 0.4 + uEnergy * 0.15);
@@ -150,9 +166,9 @@ void main() {
 
   // Impact flare: brighten coils + soft core bloom.
   float flare = uImpact * (0.85 + coils * 0.5);
-  coils *= 0.68 + uSwell * 0.48 + flare * 0.9 + uEnergy * 0.12;
+  coils *= 0.68 + uSwell * 0.48 + flare * 0.9 + uEnergy * 0.12 + kick * 0.2;
   coils += flare * 0.32 * exp(-r * r * 2.4);
-  mist *= 0.75 + uSwell * 0.35 + flare * 0.45;
+  mist *= 0.75 + uSwell * 0.35 + flare * 0.45 + kick * 0.12;
 
   vec3 body = mistWash(uv, r);
   body *= 0.52 + uEnergy * 0.22 + uAfterglow * 0.28 + mist * 0.35;
@@ -163,10 +179,16 @@ void main() {
   coilCol = mix(coilCol, uColorHigh, smoothstep(0.4, 1.1, tCol));
   vec3 silver = mix(uColorMid, vec3(0.78, 0.88, 0.96), 0.55);
   coilCol = mix(coilCol, silver, 0.28 + uAfterglow * 0.25);
+  // Kick bass-warms coil body; snare cracks toward cooler mid/white.
+  coilCol = mix(coilCol, mix(uColorBass, vec3(0.92, 0.88, 0.82), 0.35), kick * 0.36);
+  coilCol = mix(coilCol, mix(uColorMid, vec3(0.96, 0.98, 1.0), 0.48), snare * 0.3);
 
   vec3 col = body;
-  col += coilCol * coils * (0.52 + flare * 0.55);
+  col += coilCol * coils * (0.52 + flare * 0.55 + kick * 0.2);
   col += silver * mist * (0.22 + uAfterglow * 0.18);
+  // Snare flank flash along the column sides (distinct from upward kick / hat motes).
+  float flank = smoothstep(0.28, 0.9, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.25, abs(uv.y)));
+  col += mix(uColorMid, vec3(0.94, 0.97, 1.0), 0.4) * flank * snare * 0.55;
   // Hat mote glitter — cool high-band sparkle on selected coils.
   col += mix(uColorHigh, vec3(1.0), 0.3) * moteTick * uHat * 1.2;
   col += silver * uAfterglow * (0.08 + coils * 0.1);
@@ -224,6 +246,8 @@ export function MistSpiralScene({
   const riseRef = useRef(0);
   const gatherSmooth = useRef(0);
   const impactSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const afterglowSmooth = useRef(0);
@@ -249,6 +273,8 @@ export function MistSpiralScene({
       uRise: { value: 0 },
       uGather: { value: 0 },
       uImpact: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
       uHat: { value: 0 },
       uBass: { value: 0 },
       uMid: { value: 0 },
@@ -287,6 +313,22 @@ export function MistSpiralScene({
       0.03,
       0.16,
     );
+    // Kit accents: kick thrusts fast / falls medium; snare shears fast;
+    // hats tick with a short fall so mote glitter stays crisp.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.025,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
     hatSmooth.current = smoothToward(
       hatSmooth.current,
       Math.min(1.2, m.hat * 0.95 + m.shimmer * 0.25) * kitAmp,
@@ -297,8 +339,13 @@ export function MistSpiralScene({
     afterglowSmooth.current = smoothToward(afterglowSmooth.current, m.afterglow, dt, 0.18, 0.8);
 
     // Rise velocity: mist climbs the column; gather slows the loft.
+    // Kick adds a brief upward loft punch (sustained rise stays on swell/bass).
     const riseSpeed =
-      (0.48 + swellSmooth.current * 0.9 + m.bass * 0.3 + m.energy * 0.22) *
+      (0.48 +
+        swellSmooth.current * 0.9 +
+        m.bass * 0.3 +
+        m.energy * 0.22 +
+        kickSmooth.current * 0.85) *
       pace *
       sectionPace *
       calm;
@@ -309,6 +356,8 @@ export function MistSpiralScene({
     mat.uniforms.uRise!.value = riseRef.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uImpact!.value = impactSmooth.current;
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
