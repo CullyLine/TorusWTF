@@ -5,7 +5,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useFBO } from '@react-three/drei';
 import { EffectComposer, Vignette } from '@react-three/postprocessing';
 import { BloomEffect, DepthOfFieldEffect } from 'postprocessing';
-import type { PerspectiveCamera, PointLight } from 'three';
+import type { PerspectiveCamera, PointLight, SpotLight } from 'three';
 import { useMetricsRef } from './metrics';
 import { useModulation } from './modulation';
 import { consumeCinematicCut, type VisualImpulses } from './impulse';
@@ -380,6 +380,7 @@ export function SceneRig({
   const bassLight = useRef<PointLight>(null);
   const midLight = useRef<PointLight>(null);
   const highLight = useRef<PointLight>(null);
+  const keySpotRef = useRef<SpotLight>(null);
   const resolvedBloomRef = useRef(1);
   const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
@@ -413,6 +414,9 @@ export function SceneRig({
   const bloomHitRef = useRef(0);
   // Hold-breath hush: eases bloom breath down a notch while the creature listens.
   const bloomHushRef = useRef(0);
+  // Tenderness stage soften: asymmetric EMA so gentle vocals dim/warm the
+  // key+rim lights and lower the shake floor without freezing kit accents.
+  const tenderSmoothRef = useRef(0);
 
   // Constructed directly (not via the <Bloom> wrapper) so the frame loop
   // can pulse `intensity` with the music. The wrapper memoizes with
@@ -558,7 +562,25 @@ export function SceneRig({
     // laterally, hat ticks the high light — discrete drum answers on top of
     // the continuous swell/impact/shimmer ride. Envelopes already ring down,
     // so accents land as soft hits rather than strobing the whole stage.
+    //
+    // Tenderness stage soften: gentle vocals ease key (bass + overhead spot)
+    // and rim (high) intensity down and tilt them warm amber, while fill
+    // (mid) softens less so the stage still reads. Kit accents stay additive
+    // on the softened base so kick/snare/hat punches remain distinct.
     if (lightLevelRef.current) lightLevelRef.current.level = effectiveLightLevel;
+    tenderSmoothRef.current = smoothToward(
+      tenderSmoothRef.current,
+      Math.min(1, m.tenderness),
+      dtImp,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmoothRef.current;
+    // Key/rim dim harder; fill softer so the stage goes gentle without going flat.
+    const keyRimDim = 1 - tender * 0.38;
+    const fillDim = 1 - tender * 0.18;
+    // Kit accents keep most of their punch so drums still speak on tender bars.
+    const kitKeep = 1 - tender * 0.12;
     const bassSignal = clampLightSignal(m.bass);
     const midSignal = clampLightSignal(m.mid);
     const highSignal = clampLightSignal(m.high);
@@ -572,41 +594,65 @@ export function SceneRig({
     const flashLightBoost = calculateFlashLightBoost(flash);
     if (bassLight.current) {
       bassLight.current.intensity = clampReactiveLightIntensity(
-        0.55 +
+        (0.55 +
           bassSignal * 2.4 +
           impactSignal * 2.2 +
-          kickPunch * 1.6 +
           afterglowSignal * 0.7 +
-          flashLightBoost,
+          flashLightBoost) *
+          keyRimDim +
+          kickPunch * 1.6 * kitKeep,
       );
       bassLight.current.distance = 12 + clampLightSignal(m.breath) * 6 + kickPunch * 2.5;
       bassLight.current.color.set(palette.bass);
+      // Warm amber tilt on key — hue toward red/orange, slight sat ease.
+      if (tender > 0.001) {
+        bassLight.current.color.offsetHSL(-0.04 * tender, -0.07 * tender, 0.025 * tender);
+      }
     }
     if (midLight.current) {
       midLight.current.intensity = clampReactiveLightIntensity(
-        0.45 +
+        (0.45 +
           midSignal * 2.0 +
           swellSignal * 0.8 +
-          snareCrack * 1.8 +
           afterglowSignal * 0.4 +
-          flashLightBoost,
+          flashLightBoost) *
+          fillDim +
+          snareCrack * 1.8 * kitKeep,
       );
       // Lateral crack: snare snaps the mid light outward on its home axis
       // then the envelope eases it home — a sideways flash, not a strobe.
       midLight.current.position.set(2 + snareCrack * 0.85, 1 + snareCrack * 0.15, 1);
       midLight.current.color.set(palette.mid);
+      if (tender > 0.001) {
+        midLight.current.color.offsetHSL(-0.025 * tender, -0.04 * tender, 0.015 * tender);
+      }
     }
     if (highLight.current) {
       highLight.current.intensity = clampReactiveLightIntensity(
-        0.3 + highSignal * 1.6 + shimmerSignal * 1.9 + hatTick * 1.4 + flashLightBoost,
+        (0.3 + highSignal * 1.6 + shimmerSignal * 1.9 + flashLightBoost) * keyRimDim +
+          hatTick * 1.4 * kitKeep,
       );
       highLight.current.color.set(palette.high);
+      if (tender > 0.001) {
+        highLight.current.color.offsetHSL(-0.045 * tender, -0.08 * tender, 0.03 * tender);
+      }
+    }
+    if (keySpotRef.current) {
+      keySpotRef.current.intensity = 0.4 * keyRimDim;
+      keySpotRef.current.color.set(palette.mid);
+      if (tender > 0.001) {
+        keySpotRef.current.color.offsetHSL(-0.035 * tender, -0.06 * tender, 0.02 * tender);
+      }
     }
 
     const dtCam = Math.min(Math.max(delta, 0), 0.05);
     // Mode shake amp (dive/drift): SmoothDamp the envelope so kicks rumble
     // without frame-to-frame chatter on raw impact/bass.
-    const shakeTarget = m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015;
+    // Tenderness lowers the shake floor so gentle vocals settle the stage;
+    // kit / impact can still punch when drums speak (target scales, spring stays).
+    const shakeFloor = 1 - tender * 0.55;
+    const shakeTarget =
+      (m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015) * shakeFloor;
     const shake = smoothDampScalar(
       shakeAmpSpringRef.current,
       shakeTarget,
@@ -820,7 +866,9 @@ export function SceneRig({
     {
       const bassPunch = m.bass * 0.5 + m.impact * 1.3;
       const ampTarget =
-        bassShakeNow > 0 ? bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07) : 0;
+        bassShakeNow > 0
+          ? bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07) * shakeFloor
+          : 0;
       const amp = smoothDampScalar(
         bassShakeAmpSpringRef.current,
         ampTarget,
@@ -994,6 +1042,7 @@ export function SceneRig({
         intensity={0.6}
       />
       <spotLight
+        ref={keySpotRef}
         position={[0, 4, 0]}
         angle={0.45}
         penumbra={0.8}
