@@ -21,6 +21,8 @@
  *  - snare → brief lateral wind-gust brushes the canopy foliage
  *  - mids / swell → wind stirs the foliage noise, the gaze lifts
  *  - hat → spec glitter rolls across the canopy
+ *  - echo → one-shot bioluminescent firefly glints drift the canopy
+ *    in phrase gaps (Image pass — Buffer A would smear the ticks)
  *  - gather / silence → fog thickens; silence also desaturates gently
  *  - release / drop → fog burns off, sun bursts through the clouds
  *  - afterglow → the palette wash warms slightly
@@ -1099,8 +1101,8 @@ void main() {
 
 /**
  * Image pass — the original applies the vignette; TorusFM adds the
- * full-frame-rate audio grading here so fast transients (kick, drop) stay
- * crisp instead of being smeared by Buffer A's temporal filter.
+ * full-frame-rate audio grading here so fast transients (kick, drop, echo
+ * fireflies) stay crisp instead of being smeared by Buffer A's temporal filter.
  */
 const IMAGE_FRAGMENT = /* glsl */ `
 uniform sampler2D iChannel0;
@@ -1114,6 +1116,13 @@ uniform float uPaletteMix;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
+// [TorusFM] phrase-echo firefly replay (one-shot travel through the canopy).
+uniform float uEcho;
+uniform float uEchoTravel;
+
+float echoHash11(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
 
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
@@ -1148,6 +1157,38 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     // own color story, the palette only breathes on it.
     tint = mix(vec3(1.0), tint, 0.3);
     col = mix(col, col*tint, clamp(uPaletteMix, 0.0, 0.5));
+
+    // [TorusFM] phrase-echo → sparse cool-lime firefly glints drift the canopy
+    // once per gap, blinking on a traveling crest. Distinct from hat specular
+    // (Buffer A speC), kick exposure pop, and snare lateral gust.
+    float echoPulse = uEcho * (1.0 - uEchoTravel * 0.85);
+    float aspect = iResolution.x / max(iResolution.y, 1.0);
+    float fireflies = 0.0;
+    float crestX = mix(-0.08, 1.08, clamp(uEchoTravel, 0.0, 1.0));
+    for (int i = 0; i < 22; i++) {
+      float fi = float(i);
+      float seed = echoHash11(fi * 17.13 + 3.7);
+      float seed2 = echoHash11(fi * 91.7 + 11.3);
+      // Sparse select so the reply reads as discrete bugs, not a wash.
+      float select = step(0.38, fract(seed * 5.17 + fi * 0.31));
+      float baseX = fract(seed * 1.37 + 0.07);
+      float baseY = 0.34 + seed2 * 0.52;
+      // Drift with the echo travel + a little vertical bob.
+      float px = fract(baseX + uEchoTravel * (0.42 + seed * 0.38) + seed2 * 0.04);
+      float py = baseY + sin(uEchoTravel * 6.28318 + seed * 12.0) * 0.018;
+      vec2 d = (p - vec2(px, py)) * vec2(aspect, 1.0);
+      float glow = exp(-dot(d, d) * mix(2200.0, 3800.0, seed));
+      // Rhythm blink: crest-weighted so the swarm pulses as it replays.
+      float crest = exp(-pow((px - crestX) * 3.4, 2.0));
+      float blink = 0.35 + 0.65 * crest * (0.55 + 0.45 * sin(uEchoTravel * 22.0 + seed * 40.0));
+      float canopyW = smoothstep(0.28, 0.72, py);
+      fireflies += glow * blink * select * (0.45 + canopyW * 0.7);
+    }
+    fireflies = clamp(fireflies * echoPulse, 0.0, 2.4);
+    // Cool lime bioluminescence with a touch of High-band palette.
+    vec3 fireflyCol = mix(vec3(0.42, 1.0, 0.52), uColorHigh, 0.28);
+    fireflyCol = mix(fireflyCol, vec3(0.7, 1.0, 0.85), 0.22);
+    col += fireflyCol * fireflies * 1.35;
 
     col *= 0.5 + 0.5*pow( 16.0*p.x*p.y*(1.0-p.x)*(1.0-p.y), 0.05 );
 
@@ -1255,6 +1296,11 @@ export function RainforestReverieScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one canopy firefly drift per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const fogMulSmooth = useRef(1);
   const camPushSmooth = useRef(0);
   const camLiftSmooth = useRef(0);
@@ -1278,6 +1324,7 @@ export function RainforestReverieScene({
 
   const config = useMemo(() => getRainforestPortConfig(tier as RainforestTier), [tier]);
   const kitAmp = tier === 'low' ? 0.78 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   // Buffer A: its own scene + material rendered into the ping-pong targets.
   const buffer = useMemo(() => {
@@ -1376,6 +1423,8 @@ export function RainforestReverieScene({
       uColorBass: { value: new THREE.Color(1, 1, 1) },
       uColorMid: { value: new THREE.Color(1, 1, 1) },
       uColorHigh: { value: new THREE.Color(1, 1, 1) },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
     }),
     // Colors rewritten every frame from the living palette.
     [],
@@ -1440,6 +1489,35 @@ export function RainforestReverieScene({
       0.02,
       0.09,
     );
+
+    // Phrase-echo firefly replay: arm on quiet, fire one travel per echo rise —
+    // call-response in the gaps, not a scrub of kick/snare/hat.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.3,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm ?? 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
 
     // Wind stirs the foliage noise field; stillness becalms it.
     const windRate =
@@ -1552,6 +1630,8 @@ export function RainforestReverieScene({
     (imageMat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (imageMat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (imageMat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
+    imageMat.uniforms.uEcho!.value = echoVis;
+    imageMat.uniforms.uEchoTravel!.value = echoTravel.current;
 
     // Roll history forward.
     prevRows.current.row0.copy(currRows.current.row0);

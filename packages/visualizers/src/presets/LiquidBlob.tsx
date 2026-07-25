@@ -27,9 +27,11 @@ import { useModulation } from '../modulation';
  *  - high / shimmer → birth transient harmonic orbs
  *  - kick → vertical floor / puff pulse
  *  - snare → shears alternating voices
+ *  - hat → sparse ember-spark ticks on the crust
  *  - gather → contracts / inhales; impact+release expands
  *  - echo → one traveling surface harmonic
  *  - holdBreath / silence → ease motion nearly still
+ *  - tenderness → dark-glass cooling sheen that damps the glow
  *  - afterglow → residual heat
  */
 
@@ -77,11 +79,20 @@ uniform float uEcho;
 uniform float uEchoTravel;
 uniform float uKick;
 uniform float uSnare;
+uniform float uHat;
+// 0..1 — tender vocal hush: cool toward dark glass, damp heat glow.
+uniform float uTenderness;
 // 1 = paint built-in backdrop on ray miss; 0 = transparent for BackgroundLayer.
 uniform float uBgAlpha;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
+
+float emberHash(vec2 p) {
+  p = fract(p * vec2(127.1, 311.7));
+  p += dot(p, p + 19.19);
+  return fract(p.x * p.y);
+}
 
 float sdSphere(vec3 p, float r) {
   return length(p) - r;
@@ -222,10 +233,10 @@ float sceneInner(vec3 p) {
     d = smin(d, td, tk);
   }
 
-  // Subtle lava skin ripples (gated by mid, softened on gather).
+  // Subtle lava skin ripples (gated by mid, softened on gather / tenderness).
   float skin = 0.012 * sin(pk.x * 5.2 + tw * 0.85) * cos(pk.y * 4.6 + tw * 1.05);
   skin += 0.008 * sin(dot(pk, vec3(2.1, 1.7, 2.4)) * 3.1 + tw * 1.2);
-  d += skin * (1.0 + uMid * 0.3) * (1.0 - uGather * 0.4);
+  d += skin * (1.0 + uMid * 0.3) * (1.0 - uGather * 0.4) * mix(1.0, 0.62, clamp(uTenderness, 0.0, 1.0));
 
   return d;
 }
@@ -334,31 +345,46 @@ void main() {
     // high hot rims + transient harmonic orbs.
     float facing = clamp(0.5 + 0.5 * n.y + n.x * 0.12, 0.0, 1.0);
     float fres = pow(1.0 - max(0.0, dot(n, V)), 2.4);
+    float cool = clamp(uTenderness, 0.0, 1.0);
     vec3 body = mix(uColorBass, uColorMid, facing);
     // Occluded / downward faces stay in deep lava.
     float cave = 1.0 - smoothstep(-0.55, 0.15, n.y);
     body = mix(body, uColorBass * 0.72, cave * 0.65);
-    vec3 base = mix(body, uColorHigh, fres * 0.85);
+    // Tenderness: cool the body toward dark-glass bass, hush hot rims.
+    body = mix(body, uColorBass * 0.42, cool * 0.62);
+    vec3 base = mix(body, mix(uColorHigh, uColorBass * 0.55, cool * 0.7), fres * mix(0.85, 0.42, cool));
 
     vec3 R = reflect(rd, n);
-    float spec = pow(max(0.0, dot(R, keyDir)), 22.0);
+    float spec = pow(max(0.0, dot(R, keyDir)), mix(22.0, 38.0, cool));
 
     col = base * (0.2 + keyDiff * 0.62 + fillDiff * 0.32);
-    col = heatHighlight(col, spec * 0.55);
-    col += uColorHigh * fres * 0.4;
+    // Heat highlight eases into cooler glass specular on tender passages.
+    col = heatHighlight(col, spec * mix(0.55, 0.22, cool));
+    col += mix(uColorHigh, vec3(0.22, 0.28, 0.34), cool * 0.85) * fres * mix(0.4, 0.22, cool);
+    // Obsidian cooling sheen — dark glass rim that damps residual glow.
+    col *= mix(1.0, 0.58, cool);
+    col += vec3(0.06, 0.08, 0.11) * fres * cool * 0.45;
 
     // Transient tint at hit — well-defined ascending smoothstep.
     vec3 pInner = sceneDomain(p);
     float subAtHit = transientField(kickDomain(pInner)) * sceneScale();
     float subWeight = 1.0 - smoothstep(-0.015, 0.09, subAtHit);
-    col = mix(col, uColorHigh * (1.25 + uHigh * 0.45), subWeight * 0.6);
+    col = mix(col, uColorHigh * (1.25 + uHigh * 0.45), subWeight * mix(0.6, 0.28, cool));
 
     float barFlash = uBarPhase > 0.0 ? pow(1.0 - uBarPhase, 6.0) : 0.0;
     float silenceMute = 1.0 - uSilence * 0.7;
+    float heatMute = silenceMute * mix(1.0, 0.42, cool);
     // Afterglow heat rides uEnergy (JS adds afterglow into the uniform).
-    col += uColorHigh * (uBeat * 0.28 + uEnergy * 0.1 + barFlash * 0.32 + uDrop * 0.75) * silenceMute;
+    col += uColorHigh * (uBeat * 0.28 + uEnergy * 0.1 + barFlash * 0.32 + uDrop * 0.75) * heatMute;
     col += uColorBass * uKick * 0.2 * silenceMute;
     col += mix(uColorMid, uColorHigh, 0.4) * uSnare * 0.14 * silenceMute;
+
+    // Hat: sparse ember-spark ticks on the crust (rim / fresnel cells).
+    // Distinct from kick Y puff and snare lateral shear — brief surface sparks.
+    float cell = emberHash(floor(pInner.xy * 18.0 + pInner.z * 7.0));
+    float tickSelect = step(0.78, cell);
+    float emberSpark = tickSelect * fres * pow(cell, 2.2) * uHat;
+    col += mix(uColorHigh, vec3(1.0, 0.52, 0.18), 0.55) * emberSpark * 1.55 * silenceMute;
 
     float crest = echoCrest(pInner);
     col += mix(uColorMid, uColorHigh, 0.6) * crest * uEcho * 0.5 * silenceMute;
@@ -421,6 +447,8 @@ export function LiquidBlobScene({
   const prevEcho = useRef(0);
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
+  const tenderSmooth = useRef(0);
 
   const steps = tier === 'high' ? RAY_STEPS_HIGH : tier === 'mid' ? RAY_STEPS_MID : RAY_STEPS_LOW;
   const fragmentShader = useMemo(() => buildFragmentShader(steps), [steps]);
@@ -453,6 +481,8 @@ export function LiquidBlobScene({
       uEchoTravel: { value: 1 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
+      uHat: { value: 0 },
+      uTenderness: { value: 0 },
       uBgAlpha: { value: 1 },
       uColorBass: { value: new THREE.Color(1, 1, 1) },
       uColorMid: { value: new THREE.Color(1, 1, 1) },
@@ -515,6 +545,20 @@ export function LiquidBlobScene({
       0.025,
       0.1,
     );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat * 0.95 + m.shimmer * 0.22) * kitAmp,
+      dt,
+      0.018,
+      0.08,
+    );
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.22,
+    );
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather * gatherAmp, dt, 0.04, 0.13);
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dt, 0.05, 0.3);
@@ -562,6 +606,8 @@ export function LiquidBlobScene({
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
+    mat.uniforms.uHat!.value = hatSmooth.current;
+    mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
