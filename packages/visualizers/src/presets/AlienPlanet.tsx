@@ -16,6 +16,8 @@
  *  - gather → mist thickens, wind stills before the hit
  *  - release / drop → fog burns off, the sun surges through
  *  - silence / holdBreath → windless, mist-heavy held breath
+ *  - tenderness → ease canopy sway + warm-soften bioluminescent glow
+ *    (still breathes; distinct from holdBreath freeze)
  *  - afterglow → warm light lingering on slopes and haze
  *
  * Controls (existing storage keys only):
@@ -64,6 +66,7 @@ uniform float uSnare;
 uniform float uGather;
 uniform float uSurge;
 uniform float uStillness;
+uniform float uTenderness;
 uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uTurbulence;
@@ -148,9 +151,11 @@ float treeCover(vec2 xz) {
 // Jittered crown domes on a unit grid (nearest four cells).
 // Returns (height, treeId, apex01) — apex01 is 0 at the crown top, 1 at rim.
 vec3 crownField(vec2 xz) {
+  // Tenderness eases sway (~half of holdBreath hush) so the jungle keeps breathing.
   float windAmp = 0.05 * clamp(uTurbulence, 0.0, 2.0) *
     (0.25 + clamp01(uSwell) * 0.6 + clamp01(uMid * 0.5) * 0.5) *
-    (1.0 - clamp01(uStillness) * 0.85);
+    (1.0 - clamp01(uStillness) * 0.85) *
+    (1.0 - clamp01(uTenderness) * 0.42);
   // Low-frequency warp breaks the grid so crowns never form rows.
   vec2 warp = 0.38 * vec2(vnoise(xz * 0.21), vnoise(xz * 0.19 + 5.0));
   // Snare: brief lateral shear through the canopy (not the kick's radial ring).
@@ -331,11 +336,13 @@ float valleyMist(vec3 ro, vec3 rd, float tEnd, float mistFloor) {
     puff *= 1.0 + snareM * 0.35 * (0.4 + 0.6 * abs(vnoise(mp.xz * 0.55)));
     acc += band * puff * seg;
   }
+  // Soft mist thicken on tenderness (weaker than gather/stillness) — warm hush, not freeze.
   float density = 0.030 +
     clamp01(uBass) * 0.018 +
     clamp01(uBassAct) * 0.008 +
     clamp01(uGather) * 0.035 +
-    clamp01(uStillness) * 0.030;
+    clamp01(uStillness) * 0.030 +
+    clamp01(uTenderness) * 0.014;
   density *= 1.0 - clamp01(uSurge) * 0.55;
   density *= 0.75 + clamp(uDensity, 0.05, 1.0) * 0.4;
   return min(1.0 - exp(-acc * density), 0.85);
@@ -377,6 +384,9 @@ void main() {
   vec3 hazeCol = mix(vec3(0.52, 0.54, 0.60), mix(uColorBass, uColorMid, 0.55), 0.42);
   hazeCol *= 0.95 + clamp01(uAfterglow) * 0.22;
   hazeCol += sunCol * pow(sunAmt, 3.0) * (0.12 + clamp01(uSurge) * 0.16);
+  // Tenderness: milk-honey warmth in the valley haze (distinct from afterglow amber linger).
+  float tenderHaze = clamp01(uTenderness);
+  hazeCol = mix(hazeCol, mix(hazeCol, vec3(0.96, 0.86, 0.68), 0.42), tenderHaze * 0.35);
   vec3 mistCol = hazeCol * 1.1 + sunCol * pow(sunAmt, 5.0) * 0.2;
 
   float tHit;
@@ -429,12 +439,27 @@ void main() {
     col = albedo * lin;
 
     // Wet-leaf sparkle on the high band — per-tree twinkle phase.
+    // Tenderness softens harsh glints while the bio hush below warms the crowns.
+    float tender = clamp01(uTenderness);
     vec3 R = reflect(rd, n);
-    float spec = pow(clamp01(dot(R, sunDir)), 20.0);
+    float spec = pow(clamp01(dot(R, sunDir)), mix(20.0, 10.0, tender));
     float twinkle = 0.5 + 0.5 * sin(uPhase * 7.0 + treeTone * 61.0);
-    float glint = spec * sha * (0.25 + pow(twinkle, 6.0) * 1.2) * crownAmt *
-      (clamp01(uHigh) * 0.5 + clamp01(uShimmer) * 0.8 + clamp01(uHat) * 0.5);
+    float glint = spec * sha * (0.25 + pow(twinkle, mix(6.0, 3.2, tender)) * 1.2) * crownAmt *
+      (clamp01(uHigh) * 0.5 + clamp01(uShimmer) * 0.8 + clamp01(uHat) * 0.5) *
+      (1.0 - tender * 0.38);
     col += mix(uColorHigh, vec3(1.0), 0.25) * glint * 1.4;
+
+    // Tenderness: warm-soften bioluminescent canopy glow — gentling, not a stop.
+    // Distinct from holdBreath mist freeze and afterglow sun linger.
+    if (tender > 0.001) {
+      vec3 bioWarm = mix(vec3(0.62, 0.98, 0.78), mix(uColorMid, uColorHigh, 0.48), 0.42);
+      bioWarm = mix(bioWarm, vec3(0.98, 0.86, 0.62), 0.28);
+      float bioAmt = tender * crownAmt * (0.14 + dome * 0.12 + rim * 0.18);
+      col = mix(col, mix(col, bioWarm, 0.55), bioAmt);
+      col += bioWarm * tender * (0.04 + 0.06 * crownAmt) * (0.45 + dome * 0.55);
+      // Soft rim honey — alive hush on the crown edges.
+      col += mix(bioWarm, sunCol, 0.35) * tender * rim * 0.22 * crownAmt;
+    }
 
     // Kick: a ring of light rolling outward across the canopy.
     float ringTravel = clamp(uKickTravel, 0.0, 30.0);
@@ -534,6 +559,7 @@ export function AlienPlanetScene({
   const phaseRef = useRef(0);
   const camDistRef = useRef(0);
   const stillnessSmooth = useRef(0);
+  const tenderSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const surgeSmooth = useRef(0);
@@ -548,6 +574,7 @@ export function AlienPlanetScene({
   const budgets = useMemo(() => getAlienPlanetBudgets(tier as AlienPlanetTier), [tier]);
   const fragmentShader = useMemo(() => buildFragmentShader(budgets), [budgets]);
   const kitAmp = tier === 'low' ? 0.78 : tier === 'mid' ? 0.9 : 1;
+  const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -567,6 +594,7 @@ export function AlienPlanetScene({
       uGather: { value: 0 },
       uSurge: { value: 0 },
       uStillness: { value: 0 },
+      uTenderness: { value: 0 },
       uAfterglow: { value: 0 },
       uEnergy: { value: 0 },
       uTurbulence: { value: 1 },
@@ -603,13 +631,28 @@ export function AlienPlanetScene({
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.9;
 
+    // Tenderness: gentle rise/fall so soft vocals hush the jungle without
+    // snapping — holdBreath stillness stays the freeze path.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness) * tenderAmp,
+      dt,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmooth.current;
+    // Ease continuous wind/glide clocks (~half of holdBreath) so the canopy
+    // keeps breathing through tender passages.
+    const tenderMotion = 1 - tender * 0.35;
+
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
     // Forward-only wind/mist clock — never reverses when energy drops.
     const phaseRate =
       (0.28 + Math.min(m.energy, 1.5) * 0.14 + Math.min(m.swell, 1) * 0.1) *
       pace *
       sectionPace *
-      motionMul;
+      motionMul *
+      tenderMotion;
     phaseRef.current += dt * Math.max(phaseRate, 0.02 * pace * (1 - stillness * 0.85));
 
     // Forward-only glide down the valley.
@@ -620,7 +663,8 @@ export function AlienPlanetScene({
         Math.min(m.bassActivity, 1) * 0.1) *
       pace *
       sectionPace *
-      motionMul;
+      motionMul *
+      tenderMotion;
     camDistRef.current += dt * Math.max(glideRate, 0.04 * pace);
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
@@ -687,6 +731,7 @@ export function AlienPlanetScene({
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
+    mat.uniforms.uTenderness!.value = tender;
     mat.uniforms.uAfterglow!.value = afterglowSmooth.current;
     mat.uniforms.uEnergy!.value = clamp(m.energy + afterglowSmooth.current * 0.25, 0, 2);
     mat.uniforms.uTurbulence!.value = clamp(mv.turbulence ?? turbulence, 0, 2);
