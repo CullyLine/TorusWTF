@@ -27,9 +27,11 @@ import { getDotTexture } from './dotTexture';
  * moment. During `holdBreath` / deep `silence` the sky hush eases
  * nebula/aurora drift and dims glitter so every backdrop listens,
  * thawing when music returns — distinct from gather inhale, leanIn
- * pull, and afterglow warmth. Honors `prefers-reduced-motion` by
- * freezing the drift. Contrast-capped so it never competes with the
- * foreground preset.
+ * pull, and afterglow warmth. On `tenderness`, nebula/aurora/glow
+ * drift eases (still breathes) and the sky warm-dims so tender vocals
+ * gentle the backdrop without the hush freeze — re-brightening on
+ * release. Honors `prefers-reduced-motion` by freezing the drift.
+ * Contrast-capped so it never competes with the foreground preset.
  */
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
@@ -95,6 +97,22 @@ const DRIFT_HUSH = 0.92;
 /** Dim hat/shimmer glitter while listening — not gather dim, not lean. */
 const GLITTER_HUSH = 0.88;
 
+/**
+ * Tenderness sky soften: ease drift (still breathes — not holdBreath freeze)
+ * and warm-dim glow under tender vocals; re-brightens on release.
+ */
+const TENDER_RISE_TAU = 0.12;
+const TENDER_FALL_TAU = 0.22;
+/** Drift ease at full tenderness — far softer than DRIFT_HUSH (0.92). */
+const DRIFT_TENDER = 0.42;
+/** Warm-dim intensity notch — sky gentles without going dark. */
+const TENDER_DIM = 0.24;
+/** Soft milk-amber; cooler/milkier than afterglow amber so peaks stay distinct. */
+const TENDER_WARM = new THREE.Color(1.0, 0.74, 0.58);
+const TENDER_WARMTH_MIX = 0.2;
+/** Soften glitter under tenderness — less than holdBreath hush. */
+const GLITTER_TENDER = 0.35;
+
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
 const SKY_RADIUS = 50;
 
@@ -137,6 +155,20 @@ function applyVocalWarmth(
   const t = Math.max(0, Math.min(1, vocalLinger)) * VOCAL_WARMTH_MIX;
   if (t < 0.001) return;
   color.lerp(scratchWarm.copy(VOCAL_WARM), t);
+}
+
+/**
+ * Milk-amber tenderness tint; apply after vocal, before afterglow so big-moment
+ * amber linger still owns peaks and vocal warmth stays a separate cue.
+ */
+function applyTenderWarmth(
+  color: THREE.Color,
+  tender: number,
+  scratchWarm: THREE.Color,
+): void {
+  const t = Math.max(0, Math.min(1, tender)) * TENDER_WARMTH_MIX;
+  if (t < 0.001) return;
+  color.lerp(scratchWarm.copy(TENDER_WARM), t);
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -289,6 +321,7 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   const scratchHigh = useRef(new THREE.Color());
   const scratchAmber = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
+  const scratchTender = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -306,6 +339,7 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
   const stillnessRef = useRef(0);
+  const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
   const vocalLingerRef = useRef(0);
 
@@ -320,8 +354,17 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       STILLNESS_RISE_TAU,
       STILLNESS_FALL_TAU,
     );
+    tenderRef.current = smoothToward(
+      tenderRef.current,
+      Math.min(1, m.tenderness),
+      dt,
+      TENDER_RISE_TAU,
+      TENDER_FALL_TAU,
+    );
     const stillness = stillnessRef.current;
-    const motionMul = 1 - stillness * DRIFT_HUSH;
+    const tender = tenderRef.current;
+    // Tenderness eases drift without the hush freeze — stack under stillness.
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
@@ -334,7 +377,12 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       m.tension * 0.42 +
       m.dropEvent * 0.25 +
       m.afterglow * 0.2;
-    mat.uniforms.uIntensity!.value = Math.min(NEBULA_CAP, swell * intensity * NEBULA_CAP);
+    // Warm-dim under tenderness — re-brightens on release; not gather dim.
+    const tenderDim = 1 - tender * TENDER_DIM;
+    mat.uniforms.uIntensity!.value = Math.min(
+      NEBULA_CAP,
+      swell * intensity * NEBULA_CAP * tenderDim,
+    );
     // Ease gather/glitter so the sky inhales and sparkles fluidly.
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
     const glitterTarget = Math.min(1, m.shimmer * 0.9 + m.hat * 0.55);
@@ -349,8 +397,9 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     mat.uniforms.uInhale!.value = inhaleRef.current;
-    // Dim glitter while listening — distinct from gather density inhale.
-    mat.uniforms.uGlitter!.value = glitterRef.current * (1 - stillness * GLITTER_HUSH);
+    // Dim glitter while listening; soft tenderness soften — distinct from hush.
+    mat.uniforms.uGlitter!.value =
+      glitterRef.current * (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     mat.uniforms.uLean!.value = leanRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
@@ -366,9 +415,11 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       scratchHigh.current.set(palette.high),
       warmth * 0.6,
     );
-    // Voice warmth first; afterglow amber linger still owns big-moment peaks.
+    // Voice → tenderness milk → afterglow amber (peaks still win).
     applyVocalWarmth(colorA, vocalLingerRef.current, scratchVocal.current);
     applyVocalWarmth(colorB, vocalLingerRef.current, scratchVocal.current);
+    applyTenderWarmth(colorA, tender, scratchTender.current);
+    applyTenderWarmth(colorB, tender, scratchTender.current);
     applyAfterglowWarmth(colorA, warmthLingerRef.current, scratchAmber.current);
     applyAfterglowWarmth(colorB, warmthLingerRef.current, scratchAmber.current);
   });
@@ -395,10 +446,12 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
+  const scratchTender = useRef(new THREE.Color());
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
   const stillnessRef = useRef(0);
+  const tenderRef = useRef(0);
   const vocalLingerRef = useRef(0);
   const sprite = useMemo(() => getDotTexture(), []);
   const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
@@ -443,15 +496,24 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       STILLNESS_RISE_TAU,
       STILLNESS_FALL_TAU,
     );
+    tenderRef.current = smoothToward(
+      tenderRef.current,
+      Math.min(1, m.tenderness),
+      dt,
+      TENDER_RISE_TAU,
+      TENDER_FALL_TAU,
+    );
     const stillness = stillnessRef.current;
-    const motionMul = 1 - stillness * DRIFT_HUSH;
-    const glitterLive = 1 - stillness * GLITTER_HUSH;
+    const tender = tenderRef.current;
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
+    const glitterLive = (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
+    const tenderDim = 1 - tender * TENDER_DIM;
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     vocalLingerRef.current +=
       (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     if (g && !reducedMotion) {
-      // Very slow whole-sky rotation — hushes with holdBreath.
+      // Very slow whole-sky rotation — hushes with holdBreath; eases on tenderness.
       g.rotation.y += delta * 0.004 * motionMul;
       g.rotation.z += delta * 0.002 * motionMul;
     }
@@ -473,13 +535,15 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       // Gather dims the field; tension swells through builds; shimmer/hat
       // glitter is a sharp tick distinct from bass flow. HoldBreath dims
       // glitter further so the shell listens without killing gather dim.
+      // Tenderness warm-dims opacity while stars keep breathing.
       const gatherDim = 1 - inhaleRef.current * 0.32;
       mat.size = 0.26 + m.high * 0.45 + glitter * 0.38;
       mat.opacity = Math.min(
         STAR_OPACITY_CAP,
         (0.3 + m.high * 0.35 + m.flow * 0.15 + m.tension * 0.22 + glitter * 0.28) *
           intensity *
-          gatherDim,
+          gatherDim *
+          tenderDim,
       );
     }
     // Live palette: stars re-tint per frame so they follow color life.
@@ -494,6 +558,12 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
         const warm = scratchVocal.current.copy(VOCAL_WARM);
         midC.lerp(warm, vocalT);
         highC.lerp(warm, vocalT);
+      }
+      const tenderT = Math.max(0, Math.min(1, tender)) * TENDER_WARMTH_MIX;
+      if (tenderT >= 0.001) {
+        const milk = scratchTender.current.copy(TENDER_WARM);
+        midC.lerp(milk, tenderT);
+        highC.lerp(milk, tenderT);
       }
       for (let i = 0; i < count; i++) {
         const c = starBand[i] === 1 ? highC : midC;
@@ -573,6 +643,7 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   const metricsRef = useMetricsRef();
   const scratchAmber = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
+  const scratchTender = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -591,6 +662,7 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
   const stillnessRef = useRef(0);
+  const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
   const vocalLingerRef = useRef(0);
 
@@ -604,8 +676,16 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
       STILLNESS_RISE_TAU,
       STILLNESS_FALL_TAU,
     );
+    tenderRef.current = smoothToward(
+      tenderRef.current,
+      Math.min(1, m.tenderness),
+      dt,
+      TENDER_RISE_TAU,
+      TENDER_FALL_TAU,
+    );
     const stillness = stillnessRef.current;
-    const motionMul = 1 - stillness * DRIFT_HUSH;
+    const tender = tenderRef.current;
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
     // Smooth the bass drive so curtains billow rather than flicker.
     // Tension swells through builds on top of the slow breath.
@@ -631,9 +711,14 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     const mat = matRef.current;
     if (!mat) return;
     mat.uniforms.uTime!.value = timeRef.current;
-    mat.uniforms.uIntensity!.value = Math.min(AURORA_CAP, levelRef.current * intensity * AURORA_CAP);
+    const tenderDim = 1 - tender * TENDER_DIM;
+    mat.uniforms.uIntensity!.value = Math.min(
+      AURORA_CAP,
+      levelRef.current * intensity * AURORA_CAP * tenderDim,
+    );
     mat.uniforms.uInhale!.value = inhaleRef.current;
-    mat.uniforms.uGlitter!.value = glitterRef.current * (1 - stillness * GLITTER_HUSH);
+    mat.uniforms.uGlitter!.value =
+      glitterRef.current * (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     mat.uniforms.uLean!.value = leanRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
@@ -645,6 +730,8 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     colorB.set(palette.high);
     applyVocalWarmth(colorA, vocalLingerRef.current, scratchVocal.current);
     applyVocalWarmth(colorB, vocalLingerRef.current, scratchVocal.current);
+    applyTenderWarmth(colorA, tender, scratchTender.current);
+    applyTenderWarmth(colorB, tender, scratchTender.current);
     applyAfterglowWarmth(colorA, warmthLingerRef.current, scratchAmber.current);
     applyAfterglowWarmth(colorB, warmthLingerRef.current, scratchAmber.current);
   });
@@ -690,6 +777,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const scratchMid = useRef(new THREE.Color());
   const scratchAmber = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
+  const scratchTender = useRef(new THREE.Color());
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(palette.mid) },
@@ -706,6 +794,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
   const stillnessRef = useRef(0);
+  const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
   const vocalLingerRef = useRef(0);
 
@@ -719,14 +808,23 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
       STILLNESS_RISE_TAU,
       STILLNESS_FALL_TAU,
     );
+    tenderRef.current = smoothToward(
+      tenderRef.current,
+      Math.min(1, m.tenderness),
+      dt,
+      TENDER_RISE_TAU,
+      TENDER_FALL_TAU,
+    );
     const stillness = stillnessRef.current;
-    const motionMul = 1 - stillness * DRIFT_HUSH;
+    const tender = tenderRef.current;
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
     tRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
     // The energy source drifts around the sky over ~4 minutes and bobs
     // gently in elevation — walking around it (orbit/flow cameras) works.
     // HoldBreath nearly freezes the orbit so the glow listens with the sky.
+    // Tenderness eases the orbit without freezing — still breathes.
     const az = tRef.current * 0.026;
     const el = 0.15 + Math.sin(tRef.current * 0.05) * 0.25;
     (mat.uniforms.uSunDir!.value as THREE.Vector3)
@@ -742,6 +840,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
       m.dropEvent * 0.4 +
       m.afterglow * 0.3;
     const silenceMute = 1 - m.silence * 0.5;
+    const tenderDim = 1 - tender * TENDER_DIM;
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
     const glitterTarget = Math.min(1, m.shimmer * 0.85 + m.hat * 0.5);
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
@@ -753,9 +852,13 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     vocalLingerRef.current +=
       (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
-    mat.uniforms.uIntensity!.value = Math.min(GLOW_CAP, swell * silenceMute * intensity * GLOW_CAP);
+    mat.uniforms.uIntensity!.value = Math.min(
+      GLOW_CAP,
+      swell * silenceMute * intensity * GLOW_CAP * tenderDim,
+    );
     mat.uniforms.uInhale!.value = inhaleRef.current;
-    mat.uniforms.uGlitter!.value = glitterRef.current * (1 - stillness * GLITTER_HUSH);
+    mat.uniforms.uGlitter!.value =
+      glitterRef.current * (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     mat.uniforms.uLean!.value = leanRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
@@ -769,6 +872,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
       warmth,
     );
     applyVocalWarmth(color, vocalLingerRef.current, scratchVocal.current);
+    applyTenderWarmth(color, tender, scratchTender.current);
     applyAfterglowWarmth(color, warmthLingerRef.current, scratchAmber.current);
   });
 
