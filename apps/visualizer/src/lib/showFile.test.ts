@@ -100,6 +100,7 @@ describe('showFile', () => {
     for (const preset of [
       'night_bloom',
       'ink_bloom',
+      'opal_slick',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',
