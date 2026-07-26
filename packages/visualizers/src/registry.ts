@@ -21,6 +21,7 @@ import { HaloRainScene } from './presets/HaloRain';
 import { MistSpiralScene } from './presets/MistSpiral';
 import { NightBloomScene } from './presets/NightBloom';
 import { InkBloomScene } from './presets/InkBloom';
+import { OpalSlickScene } from './presets/OpalSlick';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -44,6 +45,7 @@ export type VisualizerId =
   | 'mist_spiral'
   | 'night_bloom'
   | 'ink_bloom'
+  | 'opal_slick'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -523,10 +525,30 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       lightLevel: 1.0,
     },
   },
+  opal_slick: {
+    id: 'opal_slick',
+    label: 'Opal Slick',
+    hint: 'Dark rain puddle close-up — thin-film rainbow sheen swirls; kick ripples bend the film, snare shears, hats glint, gather pulls center, tenderness milkens to pearl.',
+    Scene: OpalSlickScene,
+    // Fullscreen oil-film sheet owns the frame via clip-space quad; still camera
+    // keeps the puddle stable while the shader does the motion.
+    defaults: {
+      speed: 1,
+      smoothness: 0.74,
+      scale: 1,
+      bassShake: 0.28,
+      anima: 0.45,
+      aura: 0.22,
+      cameraMode: 'still',
+      bloomIntensity: 0.65,
+      cameraDistance: 1,
+      lightLevel: 1.0,
+    },
+  },
   rainforest_reverie: {
     id: 'rainforest_reverie',
     label: 'Rainforest Reverie',
-    hint: "iq's Rainforest, ported with permission — fog breathes on bass, wind stirs the canopy, the sun bursts through the clouds on the drop.",
+    hint: "iq's Rainforest, ported with permission — fog breathes on bass, wind stirs the canopy, tenderness lays a warm mist, the sun bursts through on the drop.",
     Scene: RainforestReverieScene,
     presetControls: ['turbulence', 'density'],
     // The port is already tone-mapped + vignetted — bloom and aura must stay

@@ -6,6 +6,8 @@
  *  - idle → rings drift downward like celestial rain
  *  - gather → reverse-inhale: drift flips upward and radii tighten to center
  *  - impact → rings flare bright (soft flash, not a strobe)
+ *  - kick → center-born ring pulse (radial outward surge + bass-warm core)
+ *  - snare → lateral ring shear + flank flash (backbeat crack)
  *  - hat → sparse ring brightness ticks (distinct from impact flare)
  *  - echo → one-shot upward rain reverse + ring after-image in phrase gaps
  */
@@ -30,6 +32,8 @@ uniform float uTime;
 uniform float uDrift;
 uniform float uGather;
 uniform float uImpact;
+uniform float uKick;
+uniform float uSnare;
 uniform float uHat;
 uniform float uBass;
 uniform float uMid;
@@ -70,13 +74,21 @@ void main() {
   vec2 res = max(uResolution, vec2(1.0));
   vec2 uv = (gl_FragCoord.xy - 0.5 * res) / min(res.x, res.y);
 
+  float kick = clamp(uKick, 0.0, 1.2);
+  float snare = clamp(uSnare, 0.0, 1.2);
+
   // Gather reverse-inhale: pull space toward center before the beat.
   float fold = uGather * 0.62;
   float r0 = length(uv) + 1e-4;
-  uv *= 1.0 - fold * (0.5 + 0.5 * smoothstep(0.12, 1.15, r0));
+  // Kick: brief radial zoom punch so a new ring is born at the core.
+  uv *= 1.0 - fold * (0.5 + 0.5 * smoothstep(0.12, 1.15, r0)) + kick * 0.055;
+  // Snare: lateral ring shear before radius sampling (backbeat crack).
+  uv.x += snare * 0.048 * sign(uv.x + 1e-4);
 
   float r = length(uv);
   float ang = atan(uv.y, uv.x);
+  // Snare also twists ring phase slightly so ellipses crack sideways.
+  ang += snare * 0.1 * sign(sin(ang * 2.0 + 0.35));
 
   // Soft elliptical breathe so rings feel alive, not compass-perfect.
   float oval = 1.0 + sin(ang * 2.0 + uTime * 0.35) * (0.03 + uMid * 0.04);
@@ -89,7 +101,8 @@ void main() {
   // Echo reverse is applied in JS to uDrift itself (brief upward reply).
   float rain = uDrift * (1.0 - uGather * 1.35);
   float spacing = 0.115 + uSwell * 0.018;
-  float width = 0.012 + uBass * 0.006 + uImpact * 0.01;
+  // Kick thickens the ring line at the core; impact width path stays separate.
+  float width = 0.012 + uBass * 0.006 + uImpact * 0.01 + kick * 0.008;
 
   float rings = 0.0;
   float hatTick = 0.0;
@@ -102,7 +115,9 @@ void main() {
     float fi = float(i);
     float seed = hash11(fi * 17.13 + 3.7);
     // Staggered radii scroll through the frame — rain falling past the lens.
+    // Kick pushes targets outward from center (center-born pulse).
     float target = fract(fi * spacing + phase * 0.55 + seed * 0.08) * 1.45;
+    target *= 1.0 + kick * 0.12 * (1.0 - smoothstep(0.05, 0.85, target));
     float line = ringLine(r, target, width * (0.85 + seed * 0.4));
     // Outer rings slightly thinner so the core owns the frame.
     float weight = mix(1.15, 0.55, smoothstep(0.15, 1.25, target));
@@ -127,8 +142,10 @@ void main() {
 
   // Impact flare: brighten + slight radial bloom of the ring field.
   float flare = uImpact * (0.85 + rings * 0.55);
-  rings *= 0.7 + uSwell * 0.45 + flare * 0.9 + uEnergy * 0.12;
+  rings *= 0.7 + uSwell * 0.45 + flare * 0.9 + uEnergy * 0.12 + kick * 0.18;
   rings += flare * 0.35 * exp(-r * r * 2.2);
+  // Kick: soft center-born ring pulse (local core surge, not a fullscreen wash).
+  rings += kick * 0.42 * exp(-r * r * 3.4);
 
   vec3 body = skyWash(uv, r);
   body *= 0.55 + uEnergy * 0.22 + uAfterglow * 0.28;
@@ -139,15 +156,21 @@ void main() {
   ringCol = mix(ringCol, uColorHigh, smoothstep(0.4, 1.1, tCol));
   vec3 warm = mix(uColorBass, vec3(1.0, 0.78, 0.48), 0.5);
   ringCol = mix(ringCol, warm, uAfterglow * 0.4);
+  // Kick bass-warms the core; snare cracks toward cooler mid/white.
+  ringCol = mix(ringCol, mix(uColorBass, vec3(0.95, 0.88, 0.78), 0.35), kick * 0.36);
+  ringCol = mix(ringCol, mix(uColorMid, vec3(0.96, 0.98, 1.0), 0.48), snare * 0.3);
 
   vec3 col = body;
-  col += ringCol * rings * (0.55 + flare * 0.55);
+  col += ringCol * rings * (0.55 + flare * 0.55 + kick * 0.2);
+  // Snare flank flash along the ring sides (distinct from kick core / hat ticks).
+  float flank = smoothstep(0.25, 0.95, abs(uv.x)) * exp(-r * r * 1.15);
+  col += mix(uColorMid, vec3(0.94, 0.97, 1.0), 0.4) * flank * snare * 0.55;
   // Hat ticks: cool high-band glitter on selected rings.
   col += mix(uColorHigh, vec3(1.0), 0.25) * hatTick * uHat * 1.15;
   col += warm * uAfterglow * (0.1 + rings * 0.12);
 
   // Ghost reply: cooler ring after-image + traveling crest — distinct from
-  // gather inhale (fold), impact flare, and hat ticks.
+  // gather inhale (fold), impact flare, kit accents, and hat ticks.
   vec3 ghostCol = mix(uColorHigh, vec3(0.82, 0.9, 1.0), 0.55);
   col += ghostCol * (ghostRings * 0.5 + ghostCrest * 0.75) * echoPulse;
 
@@ -205,6 +228,8 @@ export function HaloRainScene({
   const driftRef = useRef(0);
   const gatherSmooth = useRef(0);
   const impactSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const afterglowSmooth = useRef(0);
@@ -230,6 +255,8 @@ export function HaloRainScene({
       uDrift: { value: 0 },
       uGather: { value: 0 },
       uImpact: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
       uHat: { value: 0 },
       uBass: { value: 0 },
       uMid: { value: 0 },
@@ -269,6 +296,22 @@ export function HaloRainScene({
       dt,
       0.03,
       0.16,
+    );
+    // Kit accents: kick pulses fast / falls medium; snare shears fast;
+    // hat ticks stay on the sparse ring path below.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.025,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
     );
     hatSmooth.current = smoothToward(
       hatSmooth.current,
@@ -326,6 +369,8 @@ export function HaloRainScene({
     mat.uniforms.uDrift!.value = driftRef.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uImpact!.value = impactSmooth.current;
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;

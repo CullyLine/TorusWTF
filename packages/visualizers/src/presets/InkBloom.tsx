@@ -8,6 +8,10 @@
  *  - gather → ink draws toward center (pre-beat inhale)
  *  - tenderness → ink pales toward milk on gentle vocals
  *  - swell / afterglow → soft residual bloom in the water body
+ * Hold-breath listen:
+ *  - holdBreath / deep silence → suspend plumes mid-curl + glass the
+ *    surface so the ink listens, then thaw into billow and drift.
+ *  - kick bloom, snare shear, hat motes, gather pull, tenderness milk stay.
  */
 
 import { useMemo, useRef } from 'react';
@@ -53,6 +57,7 @@ uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
+uniform float uStillness;
 uniform vec4 uPlumes[PLUME_COUNT];
 uniform float uPlumeAge[PLUME_COUNT];
 uniform float uPlumeSpin[PLUME_COUNT];
@@ -131,6 +136,7 @@ void main() {
   float snare = clamp(uSnare, 0.0, 1.2);
   float gather = clamp(uGather, 0.0, 1.0);
   float tender = clamp(uTenderness, 0.0, 1.0);
+  float still = clamp(uStillness, 0.0, 1.0);
 
   // Gather inhale: water draws toward the still center.
   float r0 = length(uv) + 1e-4;
@@ -141,11 +147,15 @@ void main() {
   float r = length(uv);
 
   // Still dark water body — barely alive idle shimmer.
+  // holdBreath glasses the surface: hush grain drift, polish toward mirror.
   vec2 waterUv = uv * 1.35;
-  waterUv += curlOffset(waterUv * 1.1, uTime * 0.08) * (0.04 + uSwell * 0.05);
-  float waterGrain = fbm(waterUv * 1.6 + uTime * 0.04);
+  waterUv += curlOffset(waterUv * 1.1, uTime * 0.08) * (0.04 + uSwell * 0.05) * (1.0 - still * 0.88);
+  float waterGrain = fbm(waterUv * 1.6 + uTime * 0.04 * (1.0 - still * 0.9));
   float sheen = smoothstep(0.35, 0.75, waterGrain) * (0.04 + uSwell * 0.06 + uMid * 0.03);
   sheen *= exp(-r * r * 0.55);
+  // Cool glass highlight — listens as a quiet mirror, not dead black.
+  float glassRim = pow(clamp(1.0 - r * 0.85, 0.0, 1.0), 2.2) * (0.05 + 0.07 * (1.0 - waterGrain));
+  sheen = mix(sheen, sheen * 0.32 + glassRim, still);
 
   float ink = 0.0;
   float edge = 0.0;
@@ -180,6 +190,9 @@ void main() {
 
   vec3 waterCol = deepWater + sheen * mix(uColorMid, inkHigh, 0.4) * 0.55;
   waterCol += inkHigh * uAfterglow * 0.05 * exp(-r * r * 0.8);
+  // holdBreath: cool glass skim over deep water (distinct from tenderness milk).
+  vec3 glassWater = mix(deepWater, mix(inkHigh, vec3(0.72, 0.8, 0.9), 0.45), 0.28);
+  waterCol = mix(waterCol, glassWater + sheen * inkHigh * 0.35, still * 0.55);
 
   float tCol = clamp(ink * 0.45 + r * 0.2, 0.0, 1.0);
   vec3 plumeCol = mix(inkBody, inkMid, smoothstep(0.0, 0.55, tCol));
@@ -266,6 +279,7 @@ export function InkBloomScene({
   const swellSmooth = useRef(0.12);
   const afterglowSmooth = useRef(0);
   const kickSmooth = useRef(0);
+  const stillnessSmooth = useRef(0);
   const prevKickRef = useRef(0);
   const spawnSeedRef = useRef(0.37);
 
@@ -304,6 +318,7 @@ export function InkBloomScene({
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
+      uStillness: { value: 0 },
       uPlumes: { value: plumeVecs },
       uPlumeAge: { value: plumeAges },
       uPlumeSpin: { value: plumeSpins },
@@ -323,8 +338,30 @@ export function InkBloomScene({
     const calm = reducedMotion ? 0.35 : 1;
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
 
+    // Hold-breath stillness: ink suspends mid-curl and the surface glasses.
+    // Rise a touch slower than the thaw so freeze reads as settling, not a cut.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze billow clock + plume drift; a whisper remains so thaw never pops.
+    const motionMul = 1 - stillness * 0.9;
+
     timeRef.current +=
-      dt * pace * sectionPace * calm * (0.45 + m.swell * 0.55 + m.impact * 0.15);
+      dt *
+      pace *
+      sectionPace *
+      calm *
+      motionMul *
+      (0.45 + m.swell * 0.55 + m.impact * 0.15);
 
     if (plumesRef.current.length !== plumeCount) {
       plumesRef.current = makePlumes(plumeCount);
@@ -357,6 +394,7 @@ export function InkBloomScene({
     );
 
     // One-shot plume spawn on kick rise — each kick blooms a distinct curl.
+    // Kit stays ungated so a kick through quiet still lands a new plume.
     const kick = kickSmooth.current;
     const prevKick = prevKickRef.current;
     if (kick > 0.22 && prevKick < 0.14) {
@@ -373,7 +411,7 @@ export function InkBloomScene({
       spawnSeedRef.current = (spawnSeedRef.current * 1.6180339887 + 0.37) % 1;
       const seed = spawnSeedRef.current;
       const ang = seed * Math.PI * 2;
-      const rad = 0.12 + (seed * 7.13 % 1) * 0.42;
+      const rad = 0.12 + ((seed * 7.13) % 1) * 0.42;
       const gatherPull = 1 - gatherSmooth.current * 0.55;
       plumes[slot] = {
         x: Math.cos(ang) * rad * gatherPull,
@@ -387,6 +425,7 @@ export function InkBloomScene({
     prevKickRef.current = kick;
 
     // Drift / billow / gather-pull each plume in CPU so the shader stays cheap.
+    // holdBreath gates age/drift/spin/fade so curls suspend mid-coil; gather still reels.
     const plumes = plumesRef.current;
     const gather = gatherSmooth.current;
     for (let i = 0; i < plumes.length; i++) {
@@ -395,17 +434,18 @@ export function InkBloomScene({
         p.strength = 0;
         continue;
       }
-      p.age += dt * pace * calm;
+      p.age += dt * pace * calm * motionMul;
       // Soft outward drift + swirl; gather gently reels toward center.
       const swirl = 0.18 + p.seed * 0.12;
-      const ox = -p.y * swirl * dt;
-      const oy = p.x * swirl * dt;
-      p.x += ox + (p.seed - 0.5) * 0.04 * dt;
-      p.y += oy + (0.5 - p.seed) * 0.03 * dt;
+      const ox = -p.y * swirl * dt * motionMul;
+      const oy = p.x * swirl * dt * motionMul;
+      p.x += ox + (p.seed - 0.5) * 0.04 * dt * motionMul;
+      p.y += oy + (0.5 - p.seed) * 0.03 * dt * motionMul;
       p.x *= 1 - gather * 0.55 * dt * 4;
       p.y *= 1 - gather * 0.55 * dt * 4;
-      p.spin += dt * (0.35 + p.seed * 0.45) * pace;
-      p.strength *= Math.exp(-dt / (1.35 + p.seed * 0.4));
+      p.spin += dt * (0.35 + p.seed * 0.45) * pace * motionMul;
+      // Strength fade nearly freezes while listening so plumes don't evaporate mid-hold.
+      p.strength *= Math.exp((-dt * motionMul) / (1.35 + p.seed * 0.4));
     }
 
     const plumeVecs = mat.uniforms.uPlumes!.value as THREE.Vector4[];
@@ -424,6 +464,7 @@ export function InkBloomScene({
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
