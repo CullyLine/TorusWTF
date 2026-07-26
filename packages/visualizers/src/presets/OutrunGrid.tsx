@@ -325,7 +325,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     [],
   );
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     const terrainMat = terrainMatRef.current;
     const skyMat = skyMatRef.current;
     if (!terrainMat || !skyMat) return;
