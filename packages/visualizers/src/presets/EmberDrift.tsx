@@ -10,6 +10,8 @@
  *  - snare → lateral ash shear (phase-split L/R)
  *  - hat → sparse tick sparkles on selected embers
  *  - holdBreath / deep silence → freeze mid-air + dim toward coals; thaw upward
+ *  - tenderness → slow the rise, gentle the drift, warm toward rosy soft coals
+ *    (a gentling, not a stop — distinct from holdBreath freeze)
  */
 
 import { useMemo, useRef } from 'react';
@@ -53,12 +55,15 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const metricsRef = useMetricsRef();
   const baseCount = tier === 'high' ? COUNT_HIGH : tier === 'mid' ? COUNT_MID : COUNT_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
   const scratchWarm = useRef(new THREE.Color(1, 0.55, 0.22));
   const scratchCoal = useRef(new THREE.Color(0.18, 0.08, 0.04));
+  // Rosy soft coals — tender passages milk toward honey-rose, not dark hush.
+  const scratchRosy = useRef(new THREE.Color(1.0, 0.48, 0.42));
   const scratchMix = useRef(new THREE.Color());
 
   const gatherSmooth = useRef(0);
@@ -70,6 +75,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const afterglowSmooth = useRef(0);
   // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
+  // Tenderness hush — gentles rise/drift + warms glow (still breathes).
+  const tenderSmooth = useRef(0);
   const timeRef = useRef(0);
 
   const sprite = useMemo(() => getDotTexture(), []);
