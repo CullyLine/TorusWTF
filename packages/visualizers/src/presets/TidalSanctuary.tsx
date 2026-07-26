@@ -12,6 +12,7 @@
  *  - release / drop → surges the sea
  *  - silence / holdBreath → glassy resting surface
  *  - tenderness → ease chop/swell + milky pearlescent sheen (still moves)
+ *  - echo → one-shot moonlit glint train across the swell (phrase-gap replay)
  *  - afterglow → restrained horizon / foam warmth
  *
  * Controls (existing storage keys only):
@@ -53,6 +54,8 @@ uniform float uGather;
 uniform float uSurge;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uBarPhase;
@@ -406,6 +409,38 @@ void main() {
     water = mix(water, tintHighlight(foamCol, 0.16), snareFlash * 0.52);
     water += uColorHigh * snareFlash * 0.2;
 
+    // Phrase-echo: one-shot moonlit glint train traveling across the swell —
+    // cool silver pinpoints pulse with the replayed rhythm, then fade. Lateral
+    // +X crest (not kick +Z travel), not hat micro-foam, not tenderness pearl.
+    float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+    if (echoPulse > 0.01) {
+      float moonGlints = 0.0;
+      float crestX = mix(-7.0, 7.0, clamp(uEchoTravel, 0.0, 1.0));
+      for (int i = 0; i < 14; i++) {
+        float fi = float(i);
+        float seed = fract(sin(fi * 17.13 + 3.7) * 43758.5453123);
+        float seed2 = fract(sin(fi * 91.7 + 11.3) * 43758.5453123);
+        float select = step(0.34, fract(seed * 5.17 + fi * 0.31));
+        // Sparse motes drift with travel; crest-weight blinks the train in rhythm.
+        float px = mix(-7.2, 7.2, fract(seed * 1.37 + uEchoTravel * (0.48 + seed2 * 0.4)));
+        float pz = 1.1 + seed2 * 10.5 + sin(uEchoTravel * 6.28318 + seed * 9.0) * 0.45;
+        vec2 d = pHit.xz - vec2(px, pz);
+        float glow = exp(-dot(d, d) * mix(6.5, 16.0, seed));
+        float crest = exp(-pow((px - crestX) * 0.48, 2.0));
+        float blink =
+          0.28 + 0.72 * crest * (0.5 + 0.5 * sin(uEchoTravel * 24.0 + seed * 40.0));
+        // Prefer near/mid water so far horizon stays calm.
+        float nearW = 1.0 - smoothstep(14.0, 26.0, tHit);
+        moonGlints += glow * blink * select * (0.55 + nearW * 0.55);
+      }
+      moonGlints = clamp(moonGlints * echoPulse, 0.0, 2.2);
+      vec3 moonCol = mix(vec3(0.7, 0.82, 1.0), uColorHigh, 0.32);
+      float moonAmt =
+        moonGlints * (0.2 + fres * 0.22 + slopeLight * 0.08) * (1.0 - clamp01(uStillness) * 0.75);
+      water += moonCol * moonAmt * 0.55;
+      water = mix(water, tintHighlight(moonCol, 0.1), moonAmt * 0.18);
+    }
+
     // Small specular accents in the high band.
     vec3 R = reflect(-L, n);
     float spec = pow(clamp01(dot(R, V)), 48.0);
@@ -498,6 +533,11 @@ export function TidalSanctuaryScene({
   const kickTravel = useRef(28);
   const kickArmed = useRef(true);
   const prevKick = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one moonlit glint train per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   const budgets = useMemo(() => getTidalBudgets(tier as TidalTier), [tier]);
   const fragmentShader = useMemo(
@@ -505,6 +545,7 @@ export function TidalSanctuaryScene({
     [budgets.traceSteps, budgets.refineSteps, budgets.waveOctaves],
   );
   const kitAmp = tier === 'low' ? 0.78 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -525,6 +566,8 @@ export function TidalSanctuaryScene({
       uSurge: { value: 0 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uAfterglow: { value: 0 },
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
@@ -630,6 +673,35 @@ export function TidalSanctuaryScene({
       );
     }
 
+    // Phrase-echo moonlit glint replay: arm on quiet, fire one travel per echo
+    // rise — call-response in the gaps, not a scrub of kick/snare/hat.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     mat.uniforms.uResolution!.value.set(size.width * viewport.dpr, size.height * viewport.dpr);
     mat.uniforms.uTime!.value = phaseRef.current;
     mat.uniforms.uPhase!.value = phaseRef.current;
@@ -647,6 +719,8 @@ export function TidalSanctuaryScene({
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uAfterglow!.value = afterglowSmooth.current;
     mat.uniforms.uEnergy!.value = clamp(m.energy + afterglowSmooth.current * 0.25, 0, 2);
     // Phase 0 is a real downbeat only when BPM tracking is valid. Use the

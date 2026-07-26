@@ -24,6 +24,8 @@
  *  - echo → one-shot bioluminescent firefly glints drift the canopy
  *    in phrase gaps (Image pass — Buffer A would smear the ticks)
  *  - gather / silence → fog thickens; silence also desaturates gently
+ *  - tenderness → ease canopy wind sway + warm soft-mist veil (still
+ *    breathes; distinct from holdBreath freeze/desat)
  *  - release / drop → fog burns off, sun bursts through the clouds
  *  - afterglow → the palette wash warms slightly
  *
@@ -1112,6 +1114,7 @@ uniform float uKickPulse;
 uniform float uSnareGust;
 uniform float uSurgeFast;
 uniform float uStillness;
+uniform float uTenderness;
 uniform float uPaletteMix;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
@@ -1189,6 +1192,19 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec3 fireflyCol = mix(vec3(0.42, 1.0, 0.52), uColorHigh, 0.28);
     fireflyCol = mix(fireflyCol, vec3(0.7, 1.0, 0.85), 0.22);
     col += fireflyCol * fireflies * 1.35;
+
+    // [TorusFM] tenderness → warm soft-mist veil over the light. Soft vocals
+    // gentle the forest with milk-amber haze while Buffer A keeps breathing
+    // (wind only eases on the CPU). Distinct from holdBreath desat (uStillness)
+    // and afterglow palette wash — no freeze, no cool hush.
+    float tender = clamp(uTenderness, 0.0, 1.0);
+    if (tender > 0.001) {
+      vec3 mistWarm = mix(vec3(0.96, 0.88, 0.74), mix(uColorMid, uColorHigh, 0.42), 0.4);
+      float mistAmt = tender * (0.15 + (1.0 - lum) * 0.16);
+      col = mix(col, mix(col, mistWarm, 0.58), mistAmt);
+      // Soft light-through-mist lift — warm, not a flat grade.
+      col += mistWarm * tender * 0.05 * (0.5 + lum * 0.5);
+    }
 
     col *= 0.5 + 0.5*pow( 16.0*p.x*p.y*(1.0-p.x)*(1.0-p.y), 0.05 );
 
@@ -1296,6 +1312,8 @@ export function RainforestReverieScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
+  // Tenderness misty hush: ease canopy sway + warm Image veil (still moves).
+  const tenderSmooth = useRef(0);
   // Phrase-echo one-shot: arm on quiet, fire one canopy firefly drift per gap.
   const echoSmooth = useRef(0);
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
@@ -1419,6 +1437,7 @@ export function RainforestReverieScene({
       uSnareGust: { value: 0 },
       uSurgeFast: { value: 0 },
       uStillness: { value: 0 },
+      uTenderness: { value: 0 },
       uPaletteMix: { value: 0.2 },
       uColorBass: { value: new THREE.Color(1, 1, 1) },
       uColorMid: { value: new THREE.Color(1, 1, 1) },
@@ -1489,6 +1508,15 @@ export function RainforestReverieScene({
       0.02,
       0.09,
     );
+    // Tenderness: gentle rise/fall so soft vocals mist the forest without
+    // snapping — holdBreath stillness stays the freeze path.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness),
+      dt,
+      0.12,
+      0.22,
+    );
 
     // Phrase-echo firefly replay: arm on quiet, fire one travel per echo rise —
     // call-response in the gaps, not a scrub of kick/snare/hat.
@@ -1519,12 +1547,14 @@ export function RainforestReverieScene({
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
 
-    // Wind stirs the foliage noise field; stillness becalms it.
+    // Wind stirs the foliage noise field; stillness becalms it; tenderness
+    // eases the sway (~half of holdBreath hush) so the canopy keeps breathing.
     const windRate =
       pace *
       (0.25 + swellSmooth.current * 0.9 + clamp(m.mid, 0, 2) * 0.4) *
       (0.3 + turb * 0.7) *
-      (1 - stillnessSmooth.current * 0.85);
+      (1 - stillnessSmooth.current * 0.85) *
+      (1 - tenderSmooth.current * 0.42);
     windPhase.current.x += dt * windRate * 0.9;
     windPhase.current.y += dt * windRate * 0.6;
     windPhase.current.z += dt * windRate * 0.5;
@@ -1539,11 +1569,14 @@ export function RainforestReverieScene({
     // Centered so ordinary music holds the original's fog (~1.0): steady bass
     // barely thickens it, gathers and silence roll the mist in, the drop
     // burns it off.
+    // Soft mist thicken on tenderness (weaker than gather/stillness) so the
+    // valley reads misty-warm without swallowing the shot.
     const fogTarget = clamp(
       0.92 +
         bassSmooth.current * 0.28 +
         gatherSmooth.current * 0.7 +
-        stillnessSmooth.current * 0.55 -
+        stillnessSmooth.current * 0.55 +
+        tenderSmooth.current * 0.2 -
         surgeSmooth.current * 0.5,
       0.45,
       2.2,
@@ -1626,6 +1659,7 @@ export function RainforestReverieScene({
     imageMat.uniforms.uSnareGust!.value = snareSmooth.current;
     imageMat.uniforms.uSurgeFast!.value = surgeSmooth.current;
     imageMat.uniforms.uStillness!.value = stillnessSmooth.current;
+    imageMat.uniforms.uTenderness!.value = tenderSmooth.current;
     imageMat.uniforms.uPaletteMix!.value = clamp(0.2 + afterglowSmooth.current * 0.08, 0, 0.3);
     (imageMat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (imageMat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
