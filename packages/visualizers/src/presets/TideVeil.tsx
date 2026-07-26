@@ -6,6 +6,9 @@
  *  - swell → veil rolls / wave amplitude grows through choruses
  *  - gather → UV folds inward (pre-beat crease) before the hit
  *  - impact → caustic ridges flash bright
+ *  - kick → deep caustic surge (center-born ridge punch + bass warmth)
+ *  - snare → lateral fold crack (UV shear + flank flash)
+ *  - hat → pinpoint sparkles on sparse caustic ridges
  *  - afterglow → warm residual light holds after peaks
  *  - holdBreath / deep silence → nearly still the caustic roll + ease ridge contrast
  *  - tenderness → soften caustic sharpness so gentle vocals read as a softer sheet
@@ -41,6 +44,9 @@ uniform float uBarPhase;
 uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uKick;
+uniform float uSnare;
+uniform float uHat;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -115,43 +121,71 @@ void main() {
   vec2 res = max(uResolution, vec2(1.0));
   vec2 uv = (gl_FragCoord.xy - 0.5 * res) / min(res.x, res.y);
 
+  float kick = clamp(uKick, 0.0, 1.2);
+  float snare = clamp(uSnare, 0.0, 1.2);
+  float hat = clamp(uHat, 0.0, 1.2);
+
   // Gather folds the sheet toward center — anticipation crease.
   float fold = uGather * 0.55;
   float r0 = length(uv) + 1e-4;
-  uv *= 1.0 - fold * (0.55 + 0.45 * smoothstep(0.15, 1.1, r0));
+  // Kick: brief center-born surge (local UV inhale, not a fullscreen wash).
+  uv *= 1.0 - fold * (0.55 + 0.45 * smoothstep(0.15, 1.1, r0)) + kick * 0.05;
+  // Snare: lateral fold crack before caustic sampling (backbeat shear).
+  uv.x += snare * 0.052 * sign(uv.x + 1e-4);
   // Slight angular squeeze so the fold reads as a living membrane.
   float ang = atan(uv.y, uv.x);
   ang += sin(ang * 3.0 + uTime * 0.4) * fold * 0.22;
+  // Snare also twists the membrane phase so the crack reads sideways.
+  ang += snare * 0.11 * sign(sin(ang * 3.0 + 0.35));
   float rr = length(uv);
   uv = vec2(cos(ang), sin(ang)) * rr;
 
   // Swell rolls the veil: scroll + wave amplitude.
   // holdBreath gates uTime advance in JS so the roll nearly freezes while listening.
-  float roll = 0.35 + uSwell * 1.15 + uBass * 0.35;
+  float roll = 0.35 + uSwell * 1.15 + uBass * 0.35 + kick * 0.22;
   float t = uTime * (0.22 + uSwell * 0.35 + uEnergy * 0.12);
-  vec2 flow = uv * (1.15 + uSwell * 0.35);
+  vec2 flow = uv * (1.15 + uSwell * 0.35 + kick * 0.12);
   flow.x += t * 0.18 * roll;
+  // Snare shears the flow field laterally so ridges crack mid-sheet.
+  flow.x += snare * 0.085 * sign(uv.x + 1e-4);
   flow.y += sin(uv.x * 2.4 + t * 0.7) * (0.08 + uSwell * 0.14);
   flow += (fbm(flow * 1.6 + t * 0.15) - 0.5) * (0.22 + uSwell * 0.28);
 
   float caust = causticField(flow, t, uTenderness);
-  // Impact flashes the ridges; shimmer adds fine glitter on hats.
+  // Impact flashes the ridges; shimmer adds fine continuous glitter.
   float flash = uImpact * 1.15 + uShimmer * 0.35;
-  caust *= 0.55 + uSwell * 0.55 + flash * 0.85 + uMid * 0.25;
-  // Quiet hush eases ridge contrast without killing gather fold / impact flash paths.
+  caust *= 0.55 + uSwell * 0.55 + flash * 0.85 + uMid * 0.25 + kick * 0.32;
+  // Kick punches a soft core surge under the caustic sheet.
+  float coreR = length(uv);
+  caust += kick * 0.42 * exp(-coreR * coreR * 2.4);
+  // Quiet hush eases ridge contrast without killing gather fold / impact / kit paths.
   caust *= mix(1.0, 0.58, uStillness);
+
+  // Hat pinpoint sparkles: sparse hash cells on bright ridges only.
+  float sparkCell = hash21(floor(flow * 18.0 + vec2(uTime * 0.8, uTime * 1.1)));
+  float tickSelect = step(0.78, sparkCell);
+  float ridgeMask = smoothstep(0.35, 0.95, caust);
+  float hatSpark = tickSelect * ridgeMask * hat;
 
   // Soft body veil under the caustics.
   vec3 body = veilBackground(uv);
-  body *= 0.55 + uEnergy * 0.25 + uAfterglow * 0.35;
+  body *= 0.55 + uEnergy * 0.25 + uAfterglow * 0.35 + kick * 0.08;
 
   // Caustic light: palette mid→high with a warm afterglow tint.
   vec3 caustCol = mix(uColorMid, uColorHigh, clamp(caust * 0.65, 0.0, 1.0));
   vec3 warm = mix(uColorBass, vec3(1.0, 0.72, 0.42), 0.55);
   caustCol = mix(caustCol, warm, uAfterglow * 0.55);
+  // Kick bass-warms the sheet; snare cracks toward cooler mid/white.
+  caustCol = mix(caustCol, mix(uColorBass, vec3(1.0, 0.82, 0.62), 0.42), kick * 0.4);
+  caustCol = mix(caustCol, mix(uColorMid, vec3(0.94, 0.97, 1.0), 0.5), snare * 0.34);
 
   vec3 col = body;
-  col += caustCol * caust * (0.55 + flash * 0.7);
+  col += caustCol * caust * (0.55 + flash * 0.7 + kick * 0.22);
+  // Snare flank flash along the sheet sides (distinct from kick core / hat sparks).
+  float flank = smoothstep(0.28, 0.9, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.25, abs(uv.y)));
+  col += mix(uColorMid, vec3(0.95, 0.98, 1.0), 0.45) * flank * snare * 0.58;
+  // Hat pinpoint sparkles — cool high-band glitter on selected ridges.
+  col += mix(uColorHigh, vec3(1.0), 0.35) * hatSpark * 1.35;
   // Secondary soft bloom of residual warmth after peaks.
   col += warm * uAfterglow * (0.12 + caust * 0.18);
   // Downbeat wink — subtle, not a strobe.
@@ -209,6 +243,9 @@ export function TideVeilScene({
   const afterglowSmooth = useRef(0);
   const stillnessSmooth = useRef(0);
   const tenderSmooth = useRef(0);
+  const kickSmooth = useRef(0);
+  const snareSmooth = useRef(0);
+  const hatSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -218,6 +255,7 @@ export function TideVeilScene({
   const octaves = tier === 'high' ? OCTAVES_HIGH : tier === 'mid' ? OCTAVES_MID : OCTAVES_LOW;
   // Low tier still gets the full musical envelope — just fewer caustic layers.
   const flashAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(octaves), [octaves]);
 
   const uniforms = useMemo(
@@ -237,6 +275,9 @@ export function TideVeilScene({
       uBgAlpha: { value: 1 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
+      uHat: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -304,6 +345,29 @@ export function TideVeilScene({
       0.8,
     );
 
+    // Kit accents stay on full dt so kick/snare/hat still fire through holdBreath thaw.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.025,
+      0.14,
+    );
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
+    hatSmooth.current = smoothToward(
+      hatSmooth.current,
+      Math.min(1.2, m.hat) * kitAmp,
+      dt,
+      0.015,
+      0.08,
+    );
+
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uSwell!.value = swellSmooth.current;
@@ -319,6 +383,9 @@ export function TideVeilScene({
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uSnare!.value = snareSmooth.current;
+    mat.uniforms.uHat!.value = hatSmooth.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
