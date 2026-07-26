@@ -149,8 +149,24 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Nearly freeze continuous rise / wobble / sway; leave a whisper so thaw never pops.
     const motionMul = 1 - stillness * 0.9;
 
+    // Tenderness hush — soft rise/fall so intimate passages ease into soft coals
+    // without freezing (holdBreath stillness stays the freeze path).
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness) * tenderAmp,
+      dt,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmooth.current;
+    // Gentling, not a stop: slow the continuous loft + lateral drift while kit
+    // punches stay on full envelopes so kick/snare still crack through.
+    const tenderLiftMul = 1 - tender * 0.48;
+    const tenderDriftMul = 1 - tender * 0.55;
+
     // Continuous clock freezes with the ash; kit envelopes stay on full dt.
-    timeRef.current += dt * pace * sectionPace * calm * motionMul;
+    // Tenderness eases the clock a notch so the field feels held, not torn.
+    timeRef.current += dt * pace * sectionPace * calm * motionMul * (1 - tender * 0.35);
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
@@ -195,13 +211,15 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const afterglow = afterglowSmooth.current;
 
     // Lift on swell: choruses loft the ashfield; gather slows the rise.
-    // motionMul suspends the column mid-air during holdBreath.
+    // motionMul suspends the column mid-air during holdBreath; tenderLiftMul
+    // gentles the loft on soft vocals without stopping it.
     const lift =
       dt *
       pace *
       sectionPace *
       calm *
       motionMul *
+      tenderLiftMul *
       (0.55 + swell * 1.15 + m.energy * 0.35 + m.bass * 0.2) *
       (1 - gather * 0.72);
 
@@ -213,14 +231,17 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     const flare = 1 + impact * 0.85 + afterglow * 0.2;
     // Coals dim: size + opacity ease down while suspended, then rekindle on thaw.
+    // Tenderness softens into slightly larger, milkier glow (rosy soft coals).
     const coalDim = 1 - stillness * 0.48;
+    const softGlow = 1 + tender * 0.14;
     mat.size =
       (0.048 + swell * 0.028 + impact * 0.04 + kick * 0.018) *
       (0.92 + kitAmp * 0.08) *
-      (0.72 + coalDim * 0.28);
+      (0.72 + coalDim * 0.28) *
+      softGlow;
     mat.opacity = Math.min(
       1,
-      (0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12) * coalDim,
+      (0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12) * coalDim * (1 - tender * 0.06),
     );
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -233,6 +254,7 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const highC = scratchHigh.current.set(palette.high);
     const warmC = scratchWarm.current.setRGB(1, 0.55, 0.22);
     const coalC = scratchCoal.current.setRGB(0.18, 0.08, 0.04);
+    const rosyC = scratchRosy.current.setRGB(1.0, 0.48, 0.42);
     const mixC = scratchMix.current;
     const t = timeRef.current;
 
@@ -250,9 +272,12 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       let y = arr[i3 + 1] ?? 0;
       let z = arr[i3 + 2] ?? 0;
 
-      const wobble = Math.sin(t * (1.1 + phase * 1.8) + phase * 12.0) * (0.01 + m.mid * 0.012);
-      const driftX = (velocities[i3] ?? 0) + wobble;
-      const driftZ = (velocities[i3 + 2] ?? 0) + Math.cos(t * (0.9 + phase) + phase * 7.0) * 0.008;
+      const wobble =
+        Math.sin(t * (1.1 + phase * 1.8) + phase * 12.0) * (0.01 + m.mid * 0.012) * tenderDriftMul;
+      const driftX = ((velocities[i3] ?? 0) + wobble) * tenderDriftMul;
+      const driftZ =
+        ((velocities[i3 + 2] ?? 0) + Math.cos(t * (0.9 + phase) + phase * 7.0) * 0.008) *
+        tenderDriftMul;
       const rise = (velocities[i3 + 1] ?? 0.5) * (0.85 + sizeMul * 0.25);
 
       x += driftX * lift * 18;
@@ -290,6 +315,9 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       const baseCol = band === 0 ? bassC : band === 1 ? midC : highC;
       const warmth = 0.42 + phase * 0.28 + afterglow * 0.35 + impact * 0.2 + kick * 0.12;
       mixC.copy(baseCol).lerp(warmC, Math.min(0.85, warmth));
+      // Tenderness: milk toward rosy soft coals while the field keeps breathing.
+      // Softened under stillness so holdBreath dark coals stay the freeze read.
+      mixC.lerp(rosyC, tender * (1 - stillness * 0.85) * 0.58);
       // Hold-breath coals: milk the ember toward dark residual heat.
       mixC.lerp(coalC, stillness * 0.62);
 
@@ -317,8 +345,10 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
 
-    // Very slow column sway — alive, never storm-spin; freezes with holdBreath.
-    points.rotation.y += dt * pace * calm * motionMul * (0.04 + m.mid * 0.03 + swell * 0.02);
+    // Very slow column sway — alive, never storm-spin; freezes with holdBreath,
+    // gentles under tenderness so intimate passages feel held.
+    points.rotation.y +=
+      dt * pace * calm * motionMul * (1 - tender * 0.5) * (0.04 + m.mid * 0.03 + swell * 0.02);
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
