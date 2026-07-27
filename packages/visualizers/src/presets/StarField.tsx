@@ -22,6 +22,7 @@ const ARMS = 3;
  *  - hat / shimmer → sparse glints
  *  - drop → expanding accretion shockwave
  *  - gather → arm inhale toward nucleus
+ *  - leanIn → camera approach + arm-glint anticipation (pre-chorus pull)
  *  - holdBreath / silence → nearly freeze spin + twinkle; thaw on return
  *  - tenderness → softens arm wind / section pace
  *  - echo → one-shot ghost counter-swirl of the arms + cooler star-glint
@@ -69,6 +70,7 @@ uniform float uShimmer;
 uniform float uAfterglow;
 uniform float uEcho;
 uniform float uEchoTravel;
+uniform float uLeanIn;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -181,6 +183,16 @@ void main() {
     uShimmer *
     (0.55 + twinkle * 0.45);
 
+  // LeanIn anticipation: mid-arm glints brighten as the pre-chorus pulls in
+  // (camera also approaches). Distinct from gather's radial inhale and from
+  // hat/shimmer sparse ticks — a sustained warm arm glow, not a whip.
+  float leanArm =
+    smoothstep(0.55, 1.7, aRadius) * (1.0 - smoothstep(3.6, 5.2, aRadius));
+  float leanGlint =
+    leanArm *
+    uLeanIn *
+    (0.55 + step(0.42, fract(aPhase * 29.3 + aArm * 0.19)) * 0.55);
+
   float burst = step(0.97, fract(aPhase * 17.0 + uTime * 0.5 + uMid * 0.35));
   float core = 1.0 - smoothstep(0.0, 2.5, aRadius);
   float kickCore = core * uKick;
@@ -194,7 +206,8 @@ void main() {
     shimmerGlint * 0.7 +
     snareAmt * 0.75 +
     shockBand * 0.85 +
-    echoGlint * 0.7;
+    echoGlint * 0.7 +
+    leanGlint * 0.42;
 
   float rim = smoothstep(1.5, 5.0, aRadius);
   // Palette: hot high near core/glints, mid through arms, bass on outer/deep.
@@ -206,6 +219,8 @@ void main() {
   float afterglowLift = uAfterglow * (0.08 + armWeight * 0.1);
   // Cooler after-image tint — distinct from hat/shimmer high-color sparks.
   vec3 ghostCol = mix(uColorHigh, vec3(0.82, 0.9, 1.0), 0.55);
+  // Warm anticipation tint — distinct from cooler echo ghost.
+  vec3 leanCol = mix(uColorMid, uColorHigh, 0.35);
   vec3 lit =
     body *
       (1.0 +
@@ -214,10 +229,12 @@ void main() {
         kickCore * 0.55 +
         uGather * armWeight * 0.08 +
         afterglowLift +
-        shockBand * 0.4) +
+        shockBand * 0.4 +
+        leanGlint * 0.22) +
     mix(body, uColorHigh, 0.7) * (hatTick * 0.85 + shimmerGlint * 0.95) +
     mix(uColorMid, uColorHigh, 0.45) * snareAmt * 0.95 +
-    ghostCol * echoGlint * 1.05;
+    ghostCol * echoGlint * 1.05 +
+    leanCol * leanGlint * 0.75;
   // Preserve chroma under additive overlap — soft luma clamp, not desat-to-white.
   float luma = dot(lit, vec3(0.299, 0.587, 0.114));
   lit *= lumDamp * (luma > 1.35 ? (1.35 / luma) : 1.0);
@@ -235,7 +252,8 @@ void main() {
       kickCore * 0.08 +
       snareAmt * 0.2 +
       shockBand * 0.14 +
-      echoGlint * 0.24) *
+      echoGlint * 0.24 +
+      leanGlint * 0.16) *
       coreDamp +
     core * 0.025;
 
@@ -288,6 +306,9 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
   const stillnessSmooth = useRef(0);
   // Tenderness hush — softens arm wind + particle jitter on gentle vocals.
   const tenderSmooth = useRef(0);
+  // LeanIn anticipation: camera approach + arm glints (pre-chorus pull).
+  // Rise eager, fall slower so the approach lingers into the drop.
+  const leanSmooth = useRef(0);
   // Local clocks so twinkle / tilt wobble freeze during holdBreath (wall clock never stops).
   const timeRef = useRef(0);
   const wobblePhaseRef = useRef(0);
@@ -299,6 +320,7 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
   // Low tier: slightly softer kit so sparse stars don't strobe; mid/high full.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   // MIT GalaxyGeometry supplies zero positions + a_index; dispose on tier change.
   const geometry = useMemo(() => new GalaxyGeometry(count), [count]);
@@ -331,6 +353,7 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
       uAfterglow: { value: 0 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
+      uLeanIn: { value: 0 },
       uColorBass: { value: new THREE.Color('#FF2E93') },
       uColorMid: { value: new THREE.Color('#8A5CFF') },
       uColorHigh: { value: new THREE.Color('#33E5FF') },
@@ -384,6 +407,18 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
     // Gentle vocals hush arm wind / particle jitter; kit punches stay on
     // their own envelopes so kick/snare/hat remain readable when drums speak.
     const windCalm = 1 - tender * 0.58;
+
+    // LeanIn anticipation: eager climb, slower release so the pull lingers
+    // into the drop (Aura / Torus Field pattern). Soften only a little under
+    // holdBreath so approach still reads through partial hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // The galaxy turns with the song's arc — slow drift in valleys, real
     // rotation at peaks. Tenderness eases section pace so intimate moments
@@ -507,6 +542,7 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
     mat.uniforms.uShimmer!.value = shimmerSmooth.current;
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
+    mat.uniforms.uLeanIn!.value = lean;
 
     // Arm wind / particle jitter: hush on holdBreath + tenderness; gather
     // still softens swirl so the inhale reads as a held breath.
@@ -557,10 +593,12 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
     const aspect = Math.max(0.45, state.size.width / Math.max(state.size.height, 1));
     const aspectFit = Math.max(1, 1.4 / aspect);
     const baseZ = (zoomRef?.current ?? 3.1) * 3.55 * aspectFit;
+    // LeanIn: drift nearer on the pre-chorus pull (section-scale, SmoothDamp'd
+    // via lean). Distinct from kick's snappy nucleus punch and beatZoom impact.
     camera.position.set(
       Math.sin(state.clock.elapsedTime * 0.08) * sway * 2,
       Math.cos(state.clock.elapsedTime * 0.11) * sway,
-      baseZ - beatZoomRef.current * 0.35 - kickSmooth.current * 0.12,
+      baseZ - beatZoomRef.current * 0.35 - kickSmooth.current * 0.12 - lean * 0.52,
     );
     camera.lookAt(0, 0, 0);
   });
