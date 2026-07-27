@@ -99,6 +99,15 @@ const CHOREO_Z_SPRING_SMOOTH = 0.22;
  */
 const ECHO_SWAY_SPRING_SMOOTH = 0.26;
 
+/**
+ * Build-up tension coil — FOV tighten + subtle upward creep over seconds
+ * while tension climbs. Far slower than FOV hit punch / leanIn Z so the
+ * held breath before a drop reads as anticipation, not a kick.
+ */
+const TENSION_COIL_SPRING_SMOOTH = 1.85;
+/** Spring-loose on dropEvent / release — open the frame without a snap. */
+const TENSION_RELEASE_SPRING_SMOOTH = 0.22;
+
 interface ScalarSpring {
   value: number;
   velocity: number;
@@ -415,6 +424,10 @@ export function SceneRig({
   const echoSignRef = useRef(1);
   const echoSwaySpringRef = useRef<ScalarSpring>(createScalarSpring());
   const echoLookSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  // Tension coil — slow FOV tighten + upward Y creep through builds; springs
+  // loose on dropEvent/release. Independent of FOV hit punch, leanIn Z,
+  // cinematic pose cuts, and echo sway.
+  const tensionCoilSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // DoF kick spring — SmoothDamp so bass/trigger envelopes never write
   // focusDistance / bokehScale as raw stair-steps.
   const dofKickSpringRef = useRef<ScalarSpring>(createScalarSpring());
@@ -837,6 +850,26 @@ export function SceneRig({
     );
     desiredZ += leanZ + releaseZ;
 
+    // Tension coil — as tension climbs, creep the camera upward a touch
+    // (FOV tighten lives with the lens spring below). SmoothDamp over
+    // seconds so build-ups hold their breath; dropEvent/release spring
+    // the coil loose. leanIn Z, echo X sway, cinematic cuts stay separate.
+    const coilAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.7;
+    const releasing =
+      m.dropEvent > 0.12 || m.release > 0.18;
+    const coilTarget = releasing ? 0 : Math.min(1, m.tension) * coilAmp;
+    const coilSmooth =
+      releasing || coilTarget < tensionCoilSpringRef.current.value
+        ? TENSION_RELEASE_SPRING_SMOOTH
+        : TENSION_COIL_SPRING_SMOOTH;
+    const coil = smoothDampScalar(
+      tensionCoilSpringRef.current,
+      coilTarget,
+      dtCam,
+      coilSmooth,
+    );
+    desiredY += coil * (embedded ? 0.055 : 0.1);
+
     // Phrase-echo parallax sway — one-shot slow lateral drift-and-return when
     // a phrase gap opens. Arm on quiet, fire on echo rise; SmoothDamp carries
     // the camera out then home. Kit accents, leanIn Z, cinematic pose cuts,
@@ -998,8 +1031,10 @@ export function SceneRig({
     state.camera.lookAt(look.x + lookYaw, look.y + lookPitch, look.z);
 
     // FOV punch-in: hits tighten the lens a couple of degrees and afterglow
-    // exhales wider. Target is SmoothDamp'd so envelope/FFT stair-steps
-    // never write FOV directly — fluid punch across every preset.
+    // exhales wider. Tension coil adds a slower couple-degree tighten through
+    // builds (coil envelope above); hit punch stays on its short spring.
+    // Target is SmoothDamp'd so envelope/FFT stair-steps never write FOV
+    // directly — fluid punch across every preset.
     const cam = state.camera as PerspectiveCamera;
     if (cam.isPerspectiveCamera) {
       if (baseFovRef.current === null) baseFovRef.current = cam.fov;
@@ -1007,7 +1042,11 @@ export function SceneRig({
         7,
         m.impact * (0.9 + m.swell * 2.1) + camPunchEnvRef.current * 5,
       );
-      const targetFov = baseFovRef.current - punchIn + m.afterglow * 1.3;
+      // Couple degrees of FOV tighten from the tension coil — distinct from
+      // the punchy hit envelope (punchIn) and afterglow exhale.
+      const coilTighten = coil * (embedded ? 1.6 : 2.4);
+      const targetFov =
+        baseFovRef.current - punchIn - coilTighten + m.afterglow * 1.3;
       const dtFov = Math.min(Math.max(delta, 0), 0.05);
       const nextFov = smoothDampScalar(
         fovSpringRef.current,
