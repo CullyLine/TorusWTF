@@ -9,7 +9,7 @@ import { useModulation } from '../modulation';
 
 /**
  * Outrun Grid — synthwave drive with build-and-drop cinema + kit road ticks
- * + phrase-echo ghost road:
+ * + phrase-echo ghost road + holdBreath stillness:
  *  - tension → sun swells + stretches (charges the horizon)
  *  - gather → horizon dips (pre-drop inhale)
  *  - drop / afterglow → grid heat wash that eases back
@@ -17,6 +17,8 @@ import { useModulation } from '../modulation';
  *  - kick → sun-core punch (local, not a sky wash)
  *  - snare → roadside shoulder flash (left/right of the valley)
  *  - echo → one-shot ghost dash/lane shimmer + brief road reverse in phrase gaps
+ *  - holdBreath / deep silence → ease road rush to a crawl, dim the sun a
+ *    notch, and hold dash ticks; thaw when the music returns
  */
 
 const terrainVertex = /* glsl */ `
@@ -83,12 +85,14 @@ uniform float uHat;
 uniform float uSnare;
 uniform float uEcho;
 uniform float uEchoTravel;
+uniform float uStillness;
 
 varying vec2 vUv;
 varying float vHeight;
 varying float vDist;
 
 void main() {
+  float stillness = clamp(uStillness, 0.0, 1.0);
   vec2 grid = abs(fract(vUv * 40.0) - 0.5);
   // Crisp neon lines: a tight core stroke plus a faint halo. The previous
   // wide smoothstep made every cell glow edge-to-edge and the whole floor
@@ -104,10 +108,11 @@ void main() {
 
   // Hat dash ticks: short segments on the depth-axis grid lines only —
   // sparse so hats glitter the road dashes instead of flooding the floor.
+  // holdBreath nearly freezes dash scroll (uTime crawls) and gates uHat.
   float dashCell = fract(vUv.y * 22.0 + uTime * 0.35);
   float dashMask = step(0.52, dashCell) * step(dashCell, 0.78);
   float depthLine = smoothstep(0.12, 0.0, grid.x);
-  float hatTick = dashMask * depthLine * clamp(uHat, 0.0, 1.2);
+  float hatTick = dashMask * depthLine * clamp(uHat, 0.0, 1.2) * (1.0 - stillness * 0.92);
   line += hatTick * 0.85;
 
   // Phrase-echo ghost road: one-shot after-image lanes that travel down
@@ -168,6 +173,7 @@ uniform float uGather;
 uniform float uDropWash;
 uniform float uKick;
 uniform float uSnare;
+uniform float uStillness;
 uniform vec3 uSunColor;
 uniform vec3 uSkyColor;
 
@@ -175,6 +181,7 @@ varying vec2 vUv;
 
 void main() {
   vec2 uv = vUv;
+  float stillness = clamp(uStillness, 0.0, 1.0);
   // Horizon dips on gather — the whole dusk plane inhales before the drop.
   float horizonDip = uGather * 0.085;
   float sunY = 0.62 - horizonDip;
@@ -193,6 +200,8 @@ void main() {
   sky = mix(sky, uSkyColor * 0.16, smoothstep(0.0, 0.35, skyY));
   // Build heat in the lower sky as tension climbs.
   sky = mix(sky, uSunColor * 0.45, uTension * 0.28 * (1.0 - skyY));
+  // holdBreath dims the dusk a notch — listening sky, not a blackout.
+  sky *= mix(1.0, 0.78, stillness);
 
   vec2 sunCenter = vec2(0.5 + sin(uTime * 0.15) * 0.02, sunY);
   vec2 sunUv = (uv - sunCenter) * vec2(stretchX, stretchY);
@@ -203,11 +212,13 @@ void main() {
   // Hotter inner core on kick — reads as a punch, not a fullscreen strobe.
   float sunCore = smoothstep(sunRadius * 0.42, 0.0, sunDist);
   sunCol += mix(uSunColor, vec3(1.0, 0.95, 0.82), 0.55) * sunCore * kick * 0.95;
+  // Dim the sun on holdBreath; tension stretch shape stays intact.
+  sunCol *= mix(1.0, 0.52, stillness);
 
   float bandMask = smoothstep(0.02, 0.0, abs(fract((uv.y - sunY) * 28.0 + uTime * 0.5) - 0.5));
   sunCol *= 0.6 + bandMask * 0.8;
 
-  float shimmer = sin(uv.x * 80.0 + uTime * 6.0) * uHigh * 0.015;
+  float shimmer = sin(uv.x * 80.0 + uTime * 6.0) * uHigh * 0.015 * (1.0 - stillness * 0.85);
   uv.x += shimmer;
 
   vec3 col = sky + sunCol;
@@ -258,6 +269,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  const stillnessSmooth = useRef(0);
+  const timeRef = useRef(0);
   const heatColorScratch = useRef(new THREE.Color());
   const heatHighScratch = useRef(new THREE.Color());
   const { camera } = useThree();
@@ -268,6 +281,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const cinemaAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.65;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // holdBreath crawl amp — low tier still crawls, just a touch softer.
+  const stillAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
 
   const terrainUniforms = useMemo(
     () => ({
@@ -285,6 +300,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uSnare: { value: 0 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
+      uStillness: { value: 0 },
     }),
     [palette.mid, palette.high, palette.bass, bloom],
   );
@@ -302,13 +318,14 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uDropWash: { value: 0 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
+      uStillness: { value: 0 },
       uSunColor: { value: new THREE.Color(palette.bass) },
       uSkyColor: { value: new THREE.Color(palette.bass) },
     }),
     [],
   );
 
-  useFrame((state, delta) => {
+  useFrame((_state, delta) => {
     const terrainMat = terrainMatRef.current;
     const skyMat = skyMatRef.current;
     if (!terrainMat || !skyMat) return;
@@ -316,6 +333,27 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const m = metricsRef.current;
     const spd = mods.current.speed ?? speed;
     const dt = Math.min(delta, 0.1);
+
+    // Hold-breath stillness: the road listens instead of rushing through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly so tension/kit/echo still fire when music returns.
+    const stillnessTarget =
+      Math.min(
+        1,
+        Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+      ) * stillAmp;
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze road rush; leave a whisper so the grid never dies.
+    const rushMul = 1 - stillness * 0.94;
+    // Local clock crawls with stillness so dash ticks + sun bands hold.
+    timeRef.current += dt * (0.08 + rushMul * 0.92);
 
     // Phrase-echo ghost road: arm on quiet, fire one travel per echo rise
     // so the road answers once in a gap — not while the drums keep speaking.
@@ -349,6 +387,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     // Drive speed follows the song's arc: valleys cruise, peaks floor it.
     // Tension adds a cinematic charge (not only "scroll faster").
+    // rushMul eases the conveyor to a crawl during holdBreath.
     const sectionPace = 0.7 + m.sectionLevel * 0.55;
     const tensionPace = 1 + tensionSmooth.current * 0.22;
     scrollRef.current +=
@@ -357,7 +396,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       (0.45 + m.energy * 1.4 + m.impact * 0.8) *
       sectionPace *
       tensionPace *
-      scrollDir;
+      scrollDir *
+      rushMul;
     beatDollyRef.current = Math.max(0, beatDollyRef.current - dt * 4);
     if (m.impact > 0.35 || m.dropEvent > 0.45) beatDollyRef.current = 1;
 
@@ -391,6 +431,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     );
     // Kit accents: kick punches rise fast / fall medium; snare cracks fast;
     // hats tick with a very short fall so dash glitter stays crisp.
+    // Hats gate under stillness so dash ticks hold; kick/snare stay live for thaw.
+    const hatMul = 1 - stillness * 0.95;
     kickSmooth.current = smoothToward(
       kickSmooth.current,
       Math.min(1.2, m.kick) * kitAmp,
@@ -407,13 +449,14 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     );
     hatSmooth.current = smoothToward(
       hatSmooth.current,
-      Math.min(1.2, m.hat) * kitAmp,
+      Math.min(1.2, m.hat) * kitAmp * hatMul,
       dt,
       0.02,
       0.07,
     );
 
-    terrainMat.uniforms.uTime!.value = state.clock.elapsedTime;
+    const t = timeRef.current;
+    terrainMat.uniforms.uTime!.value = t;
     terrainMat.uniforms.uScroll!.value = scrollRef.current;
     terrainMat.uniforms.uBass!.value = m.bass + m.impact * 0.4 + tensionSmooth.current * 0.15;
     terrainMat.uniforms.uMid!.value = m.mid + m.afterglow * 0.2;
@@ -423,13 +466,14 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     terrainMat.uniforms.uSnare!.value = snareSmooth.current;
     terrainMat.uniforms.uEcho!.value = echoVis;
     terrainMat.uniforms.uEchoTravel!.value = echoTravel.current;
+    terrainMat.uniforms.uStillness!.value = stillness;
     (terrainMat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (terrainMat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (terrainMat.uniforms.uHeatColor!.value as THREE.Color)
       .copy(heatColorScratch.current.set(palette.bass))
       .lerp(heatHighScratch.current.set(palette.high), 0.35);
 
-    skyMat.uniforms.uTime!.value = state.clock.elapsedTime;
+    skyMat.uniforms.uTime!.value = t;
     skyMat.uniforms.uBass!.value = m.bass + tensionSmooth.current * 0.4 + m.afterglow * 0.15;
     skyMat.uniforms.uHigh!.value = m.high;
     skyMat.uniforms.uBeat!.value = m.impact + m.dropEvent * 0.6;
@@ -438,6 +482,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     skyMat.uniforms.uDropWash!.value = dropWashSmooth.current;
     skyMat.uniforms.uKick!.value = kickSmooth.current;
     skyMat.uniforms.uSnare!.value = snareSmooth.current;
+    skyMat.uniforms.uStillness!.value = stillness;
     (skyMat.uniforms.uSunColor!.value as THREE.Color).set(palette.bass);
     (skyMat.uniforms.uSkyColor!.value as THREE.Color).set(palette.bass);
 
