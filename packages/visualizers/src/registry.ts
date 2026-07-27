@@ -22,6 +22,7 @@ import { MistSpiralScene } from './presets/MistSpiral';
 import { NightBloomScene } from './presets/NightBloom';
 import { InkBloomScene } from './presets/InkBloom';
 import { OpalSlickScene } from './presets/OpalSlick';
+import { PaperLanternsScene } from './presets/PaperLanterns';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -46,6 +47,7 @@ export type VisualizerId =
   | 'night_bloom'
   | 'ink_bloom'
   | 'opal_slick'
+  | 'paper_lanterns'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -543,6 +545,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 0.65,
       cameraDistance: 1,
       lightLevel: 1.0,
+    },
+  },
+  paper_lanterns: {
+    id: 'paper_lanterns',
+    label: 'Paper Lanterns',
+    hint: 'Night flotilla over dark water — lanterns bob with buoyant inertia; kick flares lift, snare gusts sway, hats tick embers, gather draws center, tenderness honey-warms.',
+    Scene: PaperLanternsScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.68,
+      scale: 1.05,
+      bassShake: 0.4,
+      anima: 0.55,
+      aura: 0.32,
+      cameraMode: 'drift',
+      bloomIntensity: 1.05,
+      cameraDistance: 1,
+      lightLevel: 1.05,
     },
   },
   rainforest_reverie: {
