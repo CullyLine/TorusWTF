@@ -17,6 +17,7 @@ import { useMetricsRef } from './metrics';
  *  - impact / release → burst outward
  *  - shimmer / hat → glitter ticks on size + opacity
  *  - leanIn → mild approach toward camera/center (anticipation, pre-drop)
+ *  - echo → one-shot counter-drift swirl + rhythmic glint replay in phrase gaps
  *
  * Stillness (holdBreath / deep silence):
  *  - Perlin drift nearly freezes
@@ -81,6 +82,12 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const leanSmooth = useRef(0);
   // Smoothed stillness so freeze/thaw never pops.
   const stillnessSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one counter-swirl per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  const echoSign = useRef(1);
 
   // Reused color temps — avoid per-frame Color allocations in the glow lerp.
   const bassColor = useRef(new THREE.Color(palette.bass));
@@ -88,6 +95,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
 
   const wispCount =
     tier === 'high' ? WISP_COUNT_HIGH : tier === 'mid' ? WISP_COUNT_MID : WISP_COUNT_LOW;
+  // Soften reply on mid/low so the overlay never strobes under the preset.
+  const echoAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
 
   // Per-wisp seeds for stable trajectory + per-wisp brightness phase offset.
   const { positions, seeds, colors } = useMemo(() => {
@@ -184,6 +193,39 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       0.07,
     );
 
+    // Phrase-echo reply: arm on quiet, fire one travel per echo rise so the
+    // overlay answers once in the gap instead of strobing with sustained echo.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      echoSign.current *= -1;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      // BPM-paced travel — a reply swirl, not a whip.
+      echoTravel.current = Math.min(1, echoTravel.current + dt * 0.88 * (0.85 + bpm / 180));
+    }
+    const traveling = echoTravel.current < 1;
+    // Envelope peaks early, eases as travel completes — settle without snap.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    // Counter-swirl strength fades across the travel; sign flips each gap.
+    const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
+    const swirlAmt = reverseAmt * echoSign.current;
+    // Drift flips against the usual wander while the reply is active.
+    const driftDir = 1 - reverseAmt * 2;
+
     const gather = gatherSmooth.current;
     const burst = burstSmooth.current;
     const glitter = glitterSmooth.current;
@@ -196,6 +238,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     // Lean approach keeps moving through hush — anticipation ≠ listening freeze.
     // Soften only a little so lean still reads under partial stillness.
     const leanMul = 1 - stillness * 0.35;
+    // Echo reply still reads under partial hush (a memory in the quiet), but
+    // never fights a full holdBreath freeze.
+    const echoMul = 1 - stillness * 0.55;
 
     // Update wisp positions (gentle Perlin-style drift + musical flock + stillness).
     const points = pointsRef.current;
@@ -216,6 +261,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Camera is +Z-facing; lean drifts wisps toward the viewer separately
       // from the radial gather inhale.
       const approachZ = lean * 0.85 * leanMul;
+      // Tangential swirl speed (units/sec) — orthogonal to gather radial axis.
+      const swirlSpeed = swirlAmt * 2.6 * echoMul;
       for (let i = 0; i < wispCount; i++) {
         const fx = seeds[i * 4]!;
         const fy = seeds[i * 4 + 1]!;
@@ -226,10 +273,12 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         let z = arr[i3 + 2] ?? 0;
 
         // Drift along a wandering path. Bass slightly amplifies vertical motion
-        // so the cloud "swells" subtly with the kick.
-        x += Math.sin(now * fx + i * 0.13) * dt * 0.08 * wanderScale;
-        y += Math.cos(now * fy + i * 0.17) * dt * 0.06 * (1 + m.bass * 0.4) * wanderScale;
-        z += Math.sin(now * fz + i * 0.21) * dt * 0.04 * wanderScale;
+        // so the cloud "swells" subtly with the kick. Phrase-echo briefly flips
+        // the wander direction — a counter-drift, not a radial flock move.
+        x += Math.sin(now * fx + i * 0.13) * dt * 0.08 * wanderScale * driftDir;
+        y +=
+          Math.cos(now * fy + i * 0.17) * dt * 0.06 * (1 + m.bass * 0.4) * wanderScale * driftDir;
+        z += Math.sin(now * fz + i * 0.21) * dt * 0.04 * wanderScale * driftDir;
 
         // Flock: radial pull toward / push from the spawn-region center.
         const dx = x - FLOCK_CX;
@@ -243,6 +292,19 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         x += dx * invR * radial;
         y += dy * invR * radial;
         z += dz * invR * radial;
+
+        // Phrase-echo counter-swirl: tangential orbit around the flock center.
+        // Distinct from gather (radial) and leanIn (Z approach) — a sideways reply.
+        if (Math.abs(swirlSpeed) > 0.01) {
+          const swirlPhase = 0.8 + 0.4 * Math.sin(seeds[i * 4 + 3]! * 1.9 + i * 0.09);
+          const sx = -dy * invR;
+          const sy = dx * invR;
+          // Mild vertical lift on the swirl so the reply reads in depth too.
+          const sz = Math.sin(seeds[i * 4 + 3]! + echoTravel.current * Math.PI) * 0.35;
+          x += sx * swirlSpeed * swirlPhase * dt;
+          y += sy * swirlSpeed * swirlPhase * dt;
+          z += sz * Math.abs(swirlSpeed) * swirlPhase * dt * 0.45;
+        }
 
         // Lean approach: bias toward the camera (+Z) with per-wisp phase so
         // anticipation feels like a flock leaning forward, not a Z snap.
@@ -280,13 +342,26 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Wisp brightness: high-band wash + sharp hat/shimmer glitter ticks.
       // Stillness softens the live pulse so listening feels quieter.
       // Lean slightly brightens — presence leans closer into the light.
+      // Phrase-echo replays glints on a BPM-ish pulse that fades with travel.
       const livePulse = 1 - stillness * 0.55;
       const phaseTwinkle = glitter > 0.08 ? 0.5 + 0.5 * Math.sin(now * 28 + glitter * 9) : 0;
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      const echoGlint =
+        echoVis * echoMul > 0.04
+          ? 0.5 +
+            0.5 *
+              Math.sin(
+                now * ((bpm / 60) * Math.PI * 2) * 2 +
+                  echoTravel.current * Math.PI * 4 +
+                  echoSign.current,
+              )
+          : 0;
       mat.size =
         (0.04 +
           m.high * 0.1 * livePulse +
           glitter * 0.09 * (0.55 + phaseTwinkle * 0.9) +
-          lean * 0.025 * leanMul) *
+          lean * 0.025 * leanMul +
+          echoVis * echoMul * 0.07 * (0.45 + echoGlint * 0.9)) *
         (0.7 + amount * 0.3);
       mat.opacity = Math.min(
         1,
@@ -294,7 +369,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           (m.high * 0.4 + m.flow * 0.12) * livePulse +
           glitter * 0.45 +
           gather * 0.08 +
-          lean * 0.06 * leanMul) *
+          lean * 0.06 * leanMul +
+          echoVis * echoMul * 0.32 * (0.5 + echoGlint * 0.7)) *
           amount,
       );
     }
@@ -310,6 +386,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       const silenceMute = 1 - m.silence * 0.6;
       // Inhale dims slightly; burst + glitter lift intensity with the flock.
       // Lean adds a soft presence lift (anticipation), weaker than burst.
+      // Echo lifts the halo briefly during the reply, then eases with travel.
       glowMat.uniforms.uIntensity!.value =
         (autoBreath +
           m.bass * 0.5 +
@@ -317,13 +394,16 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           m.release * 0.5 +
           burst * 0.22 +
           glitter * 0.18 +
-          lean * 0.1 * leanMul -
+          lean * 0.1 * leanMul +
+          echoVis * echoMul * 0.14 -
           gather * 0.12) *
         amount *
         silenceMute *
         tenderExpand;
       // Warm vs cool target color depends on moodValence and tenderness.
-      const warmth = 0.5 + m.moodValence * 0.35 + m.tenderness * 0.2;
+      // Phrase-echo cools a touch so the reply reads as after-image, not a hit.
+      const warmth =
+        0.5 + m.moodValence * 0.35 + m.tenderness * 0.2 - echoVis * echoMul * 0.18;
       bassColor.current.set(palette.bass);
       midColor.current.set(palette.mid);
       (glowMat.uniforms.uColor!.value as THREE.Color).lerpColors(
@@ -335,9 +415,20 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Stillness tucks the halo in slightly while listening.
       // Lean gently enlarges toward the viewer — presence approaches.
       glowMat.uniforms.uRadius!.value =
-        1 - gather * 0.12 + burst * 0.08 - stillness * 0.1 + lean * 0.05 * leanMul;
+        1 -
+        gather * 0.12 +
+        burst * 0.08 -
+        stillness * 0.1 +
+        lean * 0.05 * leanMul +
+        echoVis * echoMul * 0.04;
       if (glowMesh) {
-        const s = 1 - gather * 0.06 + burst * 0.05 - stillness * 0.04 + lean * 0.035 * leanMul;
+        const s =
+          1 -
+          gather * 0.06 +
+          burst * 0.05 -
+          stillness * 0.04 +
+          lean * 0.035 * leanMul +
+          echoVis * echoMul * 0.025;
         glowMesh.scale.setScalar(s);
       }
     }
