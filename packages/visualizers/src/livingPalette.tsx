@@ -34,6 +34,11 @@ import type { VisualImpulses } from './impulse';
  *    shimmer + saturation glint pulses with the replayed rhythm then
  *    settles — color answers the gaps without stealing gather cool,
  *    leanIn cool, hush, or mood warmth
+ *  - convergence chord lock: when bass/mid/high lock into one rhythm,
+ *    pull the three palette hues toward their circular mean and deepen
+ *    saturation — a single unified chord that relaxes as parts diverge.
+ *    Distinct from gather/leanIn cyan casts, hush crawl-freeze, and
+ *    echo's one-shot glint
  *  - saturation and brightness swell with loudness and land with beat
  *    impacts — choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
@@ -75,6 +80,22 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
+/** Shortest signed hue delta on the unit circle (−0.5..0.5). */
+function hueDelta(from: number, to: number): number {
+  let d = to - from;
+  if (d > 0.5) d -= 1;
+  if (d < -0.5) d += 1;
+  return d;
+}
+
+/** Circular mean of three unit-circle hues (0..1). */
+function meanHue3(a: number, b: number, c: number): number {
+  const x = Math.cos(a * Math.PI * 2) + Math.cos(b * Math.PI * 2) + Math.cos(c * Math.PI * 2);
+  const y = Math.sin(a * Math.PI * 2) + Math.sin(b * Math.PI * 2) + Math.sin(c * Math.PI * 2);
+  if (x * x + y * y < 1e-8) return a;
+  return wrap01(Math.atan2(y, x) / (Math.PI * 2));
+}
+
 /** Asymmetric EMA — rise/fall taus so hush freezes attentively and thaws promptly. */
 function smoothToward(
   current: number,
@@ -113,6 +134,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
   const prevEcho = useRef(0);
   /** Alternating shimmer sign so successive echo pulses call-and-answer. */
   const echoGlintSign = useRef(1);
+  /** Smoothed convergence — chord lock pulls hues together + deepens sat. */
+  const chordSmooth = useRef(0);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
@@ -134,6 +157,7 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       hushSmooth.current *= Math.exp(-dt / 0.2);
       leanCoolRef.current *= Math.exp(-dt / 0.2);
       echoSmooth.current *= Math.exp(-dt / 0.28);
+      chordSmooth.current *= Math.exp(-dt / 0.28);
       if (echoTravel.current < 1) echoTravel.current = Math.min(1, echoTravel.current + dt * 1.2);
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
@@ -250,6 +274,18 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     const echoSat = life * echoPulse * 0.11;
     const echoLight = life * echoPulse * 0.05;
 
+    // Convergence chord lock: when bands lock into one rhythm, pull the
+    // three palette hues toward their circular mean and deepen saturation.
+    // Rise eagerly into the lock (~0.12s), release a touch slower (~0.28s)
+    // so the chord dissolves without a snap. No cyan cast (gather/leanIn),
+    // no crawl freeze (hush), no one-shot flash (echo) — just unification.
+    chordSmooth.current = smoothToward(chordSmooth.current, clamp(m.convergence, 0, 1), dt, 0.12, 0.28);
+    const chord = chordSmooth.current;
+    const chordPull = life * chord * 0.62;
+    const chordSat = life * chord * 0.18;
+    // Collapse the tiny mid/high orbit offsets as the chord locks.
+    const bandSpread = 1 - chord * 0.92;
+
     // Signed hue cast: + → amber (~+14°), − → cyan (~−14°). Independent of
     // the slow orbit and additive with drop kicks so drops still punch.
     // Extra hush cyan lean (~−8°) so quiet bars cool even when mood was warm.
@@ -269,7 +305,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       moodSat +
       phraseSat +
       leanSat +
-      echoSat;
+      echoSat +
+      chordSat;
     const lightBoost =
       1 +
       life *
@@ -283,16 +320,39 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       phraseLight +
       echoLight;
 
-    applyLife(out, 'bass', base.bass, hueShift, satBoost, lightBoost * 0.96);
-    applyLife(out, 'mid', base.mid, hueShift + life * 0.006, satBoost, lightBoost);
+    // Chord center = circular mean of the three base hues. Each band walks
+    // toward it by chordPull; sparse verses leave bandSpread open.
+    scratchColor.set(base.bass);
+    scratchColor.getHSL(scratchHSL);
+    const hBass = scratchHSL.h;
+    scratchColor.set(base.mid);
+    scratchColor.getHSL(scratchHSL);
+    const hMid = scratchHSL.h;
+    scratchColor.set(base.high);
+    scratchColor.getHSL(scratchHSL);
+    const hHigh = scratchHSL.h;
+    const chordHue = meanHue3(hBass, hMid, hHigh);
+    const bassChord = hueDelta(hBass, chordHue) * chordPull;
+    const midChord = hueDelta(hMid, chordHue) * chordPull;
+    const highChord = hueDelta(hHigh, chordHue) * chordPull;
+
+    applyLife(out, 'bass', base.bass, hueShift + bassChord, satBoost, lightBoost * 0.96);
+    applyLife(
+      out,
+      'mid',
+      base.mid,
+      hueShift + life * 0.006 * bandSpread + midChord,
+      satBoost,
+      lightBoost,
+    );
     // Highs shimmer a touch further around the wheel and catch the sparkle.
     applyLife(
       out,
       'high',
       base.high,
-      hueShift + life * (0.012 + m.shimmer * 0.015),
+      hueShift + life * (0.012 + m.shimmer * 0.015) * bandSpread + highChord,
       satBoost,
-      lightBoost * (1 + m.shimmer * 0.1),
+      lightBoost * (1 + m.shimmer * 0.1 * bandSpread),
     );
   });
 
