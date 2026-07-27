@@ -8,6 +8,11 @@
  *  - gather → swirl pulls toward center (pre-beat inhale)
  *  - tenderness → film milkens toward pearl
  *  - swell / afterglow → soft residual spectral wash
+ * Hold-breath listen:
+ *  - holdBreath / deep silence → ease swirl + ripples to stillness and
+ *    flatten the film toward a dark glass mirror; rainbow sheen barely
+ *    breathes, then thaws on the music's return.
+ *  - kick ripples, snare shear, hat glints, gather pull, tenderness pearl stay.
  */
 
 import { useMemo, useRef } from 'react';
@@ -53,6 +58,7 @@ uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
+uniform float uStillness;
 uniform vec4 uRipples[RIPPLE_COUNT];
 uniform float uRippleAge[RIPPLE_COUNT];
 uniform vec3 uColorBass;
@@ -131,36 +137,44 @@ void main() {
   float gather = clamp(uGather, 0.0, 1.0);
   float tender = clamp(uTenderness, 0.0, 1.0);
   float kick = clamp(uKick, 0.0, 1.2);
+  float still = clamp(uStillness, 0.0, 1.0);
+  // Whisper of motion remains so thaw never pops from a dead freeze.
+  float motion = 1.0 - still * 0.92;
 
   // Gather inhale: film swirls tighten toward the still center.
   float r0 = length(uv) + 1e-4;
   uv *= 1.0 - gather * (0.38 + 0.42 * smoothstep(0.08, 1.2, r0));
   float ang0 = atan(uv.y, uv.x);
-  ang0 += sin(ang0 * 2.0 + uTime * 0.35) * gather * 0.18;
+  ang0 += sin(ang0 * 2.0 + uTime * 0.35) * gather * 0.18 * motion;
   uv = vec2(cos(ang0), sin(ang0)) * length(uv);
   // Snare: lateral shear crack across the slick.
   uv.x += snare * 0.06 * sign(uv.x + 1e-4);
 
   float crest = 0.0;
   uv += rippleBend(uv, crest);
+  // Held rings hang as frozen refraction; crest flash stays available for kit.
+  crest *= mix(1.0, 0.55, still);
 
   float r = length(uv);
 
-  // Slow oil-film swirl — living thickness field.
+  // Slow oil-film swirl — living thickness field; holdBreath eases it still.
   float swirlT = uTime * (0.12 + uSwell * 0.18 + uEnergy * 0.06);
   vec2 flow = uv * (1.25 + uSwell * 0.2);
-  flow += curlOffset(flow * 1.15 + gather * 0.4, swirlT) * (0.18 + uSwell * 0.22);
+  flow += curlOffset(flow * 1.15 + gather * 0.4, swirlT) * (0.18 + uSwell * 0.22) * motion;
   flow.x += snare * 0.04;
-  // Soft angular drift so idle still breathes.
-  float ang = atan(flow.y, flow.x) + swirlT * 0.15 + gather * 0.35;
+  // Soft angular drift so idle still breathes; hush under stillness.
+  float ang = atan(flow.y, flow.x) + swirlT * 0.15 * motion + gather * 0.35;
   float fr = length(flow);
   flow = vec2(cos(ang), sin(ang)) * fr;
 
-  float film = fbm(flow * 1.55 + vec2(swirlT * 0.2, 0.0));
-  film = mix(film, fbm(flow * 2.4 - swirlT * 0.15), 0.45);
+  float filmLive = fbm(flow * 1.55 + vec2(swirlT * 0.2 * motion, 0.0));
+  filmLive = mix(filmLive, fbm(flow * 2.4 - swirlT * 0.15 * motion), 0.45);
   // Kick crest locally thickens the film (refraction bend reads as rainbow warp).
-  film += crest * (0.35 + kick * 0.2);
-  film += uBass * 0.06 + uMid * 0.04;
+  filmLive += crest * (0.35 + kick * 0.2);
+  filmLive += uBass * 0.06 + uMid * 0.04;
+  // Flatten toward a dark glass sheet — even thickness, barely breathing.
+  float filmGlass = 0.28 + r * 0.06 + fbm(uv * 1.1) * 0.04 * motion;
+  float film = mix(filmLive, filmGlass, still * 0.88);
 
   // Optical path from film + grazing falloff toward rim.
   float path = 0.35 + film * 1.85 + r * 0.22 + uAfterglow * 0.12;
@@ -168,12 +182,20 @@ void main() {
   // Mix living palette into the spectral sheen so it stays branded.
   iridescence = mix(iridescence, mix(uColorMid, uColorHigh, film), 0.28);
   iridescence = mix(iridescence, uColorBass, 0.12 * (1.0 - film));
+  // holdBreath: rainbow sheen barely breathes on dark glass (not pearl milk).
+  vec3 glassSheen = mix(iridescence, mix(uColorHigh, vec3(0.55, 0.62, 0.72), 0.55), 0.62) * 0.38;
+  iridescence = mix(iridescence, glassSheen, still * 0.78);
 
-  // Dark wet asphalt under the oil.
+  // Dark wet asphalt under the oil → dark glass mirror on holdBreath.
   vec3 puddle = mix(uColorBass, vec3(0.03, 0.035, 0.05), 0.78) * 0.28;
-  puddle += curlOffset(uv * 2.2, swirlT * 0.5).x * 0.015;
-  float wetSheen = smoothstep(0.4, 0.85, fbm(uv * 2.8 + swirlT * 0.05)) * (0.04 + uSwell * 0.05);
+  puddle += curlOffset(uv * 2.2, swirlT * 0.5).x * 0.015 * motion;
+  float wetSheen = smoothstep(0.4, 0.85, fbm(uv * 2.8 + swirlT * 0.05 * motion)) * (0.04 + uSwell * 0.05);
+  wetSheen *= mix(1.0, 0.28, still);
   puddle += wetSheen * mix(uColorMid, uColorHigh, 0.4);
+  // Cool glass rim — listens as a quiet mirror, distinct from tenderness pearl.
+  vec3 glassMirror = mix(vec3(0.02, 0.025, 0.04), mix(uColorHigh, vec3(0.52, 0.62, 0.76), 0.4), 0.14);
+  float glassRim = pow(clamp(1.0 - r * 0.9, 0.0, 1.0), 2.4) * (0.06 + 0.08 * (1.0 - film));
+  puddle = mix(puddle, glassMirror + glassRim * mix(uColorMid, uColorHigh, 0.55), still * 0.72);
 
   // Pearl milk on tenderness — softens spectral bite toward opal white.
   vec3 pearl = mix(vec3(0.88, 0.9, 0.94), mix(uColorHigh, vec3(1.0), 0.35), 0.35);
@@ -181,8 +203,10 @@ void main() {
   puddle = mix(puddle, mix(puddle, pearl, 0.55), tender * 0.32);
 
   // Film coverage: stronger toward center, lifted by swell/energy/crest.
+  // holdBreath thins coverage so the dark glass reads through.
   float cover = smoothstep(1.35, 0.15, r);
   cover *= 0.42 + uSwell * 0.35 + uEnergy * 0.2 + crest * 0.35 + film * 0.25;
+  cover = mix(cover, cover * 0.22 + 0.06, still * 0.85);
   cover = clamp(cover, 0.0, 1.0);
 
   vec3 col = puddle;
@@ -197,10 +221,10 @@ void main() {
   float moteField = 0.0;
   for (int i = 0; i < 3; i++) {
     float fi = float(i);
-    vec2 cell = floor(uv * (11.0 + fi * 4.0) + vec2(fi * 2.1, uTime * 0.2));
+    vec2 cell = floor(uv * (11.0 + fi * 4.0) + vec2(fi * 2.1, uTime * 0.2 * motion));
     float h = hash21(cell + fi * 19.0);
     float tickSelect = step(0.68, fract(h * 5.17 + fi * 0.31));
-    vec2 local = fract(uv * (11.0 + fi * 4.0) + vec2(fi * 2.1, uTime * 0.2)) - 0.5;
+    vec2 local = fract(uv * (11.0 + fi * 4.0) + vec2(fi * 2.1, uTime * 0.2 * motion)) - 0.5;
     float spark = exp(-dot(local, local) * 110.0) * tickSelect * smoothstep(0.55, 0.95, h);
     moteField += spark;
   }
@@ -209,7 +233,7 @@ void main() {
 
   col += pearl * uAfterglow * (0.05 + cover * 0.08);
   float barFlash = pow(1.0 - uBarPhase, 9.0) * (0.03 + crest * 0.05);
-  col += pearl * barFlash;
+  col += pearl * barFlash * mix(1.0, 0.35, still);
 
   float vig = 1.0 - smoothstep(0.85, 1.55, r);
   col *= 0.55 + 0.45 * vig;
@@ -275,6 +299,7 @@ export function OpalSlickScene({
   const tenderSmooth = useRef(0);
   const swellSmooth = useRef(0.12);
   const afterglowSmooth = useRef(0);
+  const stillnessSmooth = useRef(0);
   const prevKickRef = useRef(0);
   const spawnSeedRef = useRef(0.41);
 
@@ -314,6 +339,7 @@ export function OpalSlickScene({
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
+      uStillness: { value: 0 },
       uRipples: { value: rippleVecs },
       uRippleAge: { value: rippleAges },
       uColorBass: { value: new THREE.Color(palette.bass) },
@@ -332,8 +358,30 @@ export function OpalSlickScene({
     const calm = reducedMotion ? 0.35 : 1;
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
 
+    // Hold-breath stillness: swirl eases, ripples hang, film flattens to dark glass.
+    // Rise a touch slower than the thaw so freeze reads as settling, not a cut.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze swirl clock + ripple age; a whisper remains so thaw never pops.
+    const motionMul = 1 - stillness * 0.9;
+
     timeRef.current +=
-      dt * pace * sectionPace * calm * (0.45 + m.swell * 0.55 + m.impact * 0.15);
+      dt *
+      pace *
+      sectionPace *
+      calm *
+      motionMul *
+      (0.45 + m.swell * 0.55 + m.impact * 0.15);
 
     if (ripplesRef.current.length !== rippleCount) {
       ripplesRef.current = makeRipples(rippleCount);
@@ -366,6 +414,7 @@ export function OpalSlickScene({
     );
 
     // One-shot ripple spawn on kick rise — each kick drops a distinct ring.
+    // Kit stays ungated so a kick through quiet still lands a new ring.
     const kick = kickSmooth.current;
     const prevKick = prevKickRef.current;
     if (kick > 0.22 && prevKick < 0.14) {
@@ -402,11 +451,12 @@ export function OpalSlickScene({
         rip.strength = 0;
         continue;
       }
-      rip.age += dt * pace * calm;
+      // holdBreath gates age/fade so rings hang mid-expansion; gather still reels.
+      rip.age += dt * pace * calm * motionMul;
       // Mild center drift under gather so rings tighten with the inhale.
       rip.x *= 1 - gather * 0.4 * dt * 3.5;
       rip.y *= 1 - gather * 0.4 * dt * 3.5;
-      rip.strength *= Math.exp(-dt / (1.15 + rip.seed * 0.35));
+      rip.strength *= Math.exp((-dt * motionMul) / (1.15 + rip.seed * 0.35));
     }
 
     const rippleVecs = mat.uniforms.uRipples!.value as THREE.Vector4[];
@@ -424,6 +474,7 @@ export function OpalSlickScene({
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
