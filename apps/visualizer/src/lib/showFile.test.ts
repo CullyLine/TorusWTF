@@ -101,6 +101,7 @@ describe('showFile', () => {
       'night_bloom',
       'ink_bloom',
       'opal_slick',
+      'paper_lanterns',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',
