@@ -10,6 +10,8 @@
  *  - snare → lateral ring shear + flank flash (backbeat crack)
  *  - hat → sparse ring brightness ticks (distinct from impact flare)
  *  - echo → one-shot upward rain reverse + ring after-image in phrase gaps
+ *  - holdBreath / deep silence → suspend ring fall mid-air + dim to still glow
+ *  - tenderness → warm candlelit hush (softer rings, honey light) — gentling, not a freeze
  */
 
 import { useMemo, useRef } from 'react';
@@ -45,6 +47,8 @@ uniform float uBarPhase;
 uniform float uBgAlpha;
 uniform float uEcho;
 uniform float uEchoTravel;
+uniform float uStillness;
+uniform float uTenderness;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -76,6 +80,8 @@ void main() {
 
   float kick = clamp(uKick, 0.0, 1.2);
   float snare = clamp(uSnare, 0.0, 1.2);
+  float soft = clamp(uTenderness, 0.0, 1.0);
+  float stillness = clamp(uStillness, 0.0, 1.0);
 
   // Gather reverse-inhale: pull space toward center before the beat.
   float fold = uGather * 0.62;
@@ -91,7 +97,8 @@ void main() {
   ang += snare * 0.1 * sign(sin(ang * 2.0 + 0.35));
 
   // Soft elliptical breathe so rings feel alive, not compass-perfect.
-  float oval = 1.0 + sin(ang * 2.0 + uTime * 0.35) * (0.03 + uMid * 0.04);
+  // holdBreath gates uTime advance in JS so oval nearly freezes.
+  float oval = 1.0 + sin(ang * 2.0 + uTime * 0.35) * (0.03 + uMid * 0.04) * mix(1.0, 0.12, stillness);
   r *= oval;
 
   // Phrase-echo reply envelope: peaks early, fades as the ghost travels.
@@ -102,7 +109,9 @@ void main() {
   float rain = uDrift * (1.0 - uGather * 1.35);
   float spacing = 0.115 + uSwell * 0.018;
   // Kick thickens the ring line at the core; impact width path stays separate.
+  // Tenderness widens rings (softer candle edge); kit width paths stay intact.
   float width = 0.012 + uBass * 0.006 + uImpact * 0.01 + kick * 0.008;
+  width *= mix(1.0, 1.38, soft);
 
   float rings = 0.0;
   float hatTick = 0.0;
@@ -133,8 +142,10 @@ void main() {
     ghostRings += ghostLine * weight;
   }
 
-  rings = clamp(rings, 0.0, 2.2);
-  hatTick = clamp(hatTick, 0.0, 1.6);
+  // Tenderness softens ring bite; holdBreath eases field contrast toward still glow.
+  float contrast = mix(1.0, 0.58, stillness);
+  rings = clamp(rings * contrast, 0.0, 2.2);
+  hatTick = clamp(hatTick * mix(1.0, 0.72, stillness), 0.0, 1.6);
   ghostRings = clamp(ghostRings, 0.0, 2.0);
   // Soft crest rides core→rim so the reply reads as a traveling after-image.
   float crestR = mix(0.1, 1.32, clamp(uEchoTravel, 0.0, 1.0));
@@ -159,15 +170,25 @@ void main() {
   // Kick bass-warms the core; snare cracks toward cooler mid/white.
   ringCol = mix(ringCol, mix(uColorBass, vec3(0.95, 0.88, 0.78), 0.35), kick * 0.36);
   ringCol = mix(ringCol, mix(uColorMid, vec3(0.96, 0.98, 1.0), 0.48), snare * 0.3);
+  // Tenderness: candlelit honey soften — warm pale wash, distinct from holdBreath hush.
+  vec3 candleHoney = mix(warm, vec3(1.0, 0.9, 0.72), 0.55);
+  ringCol = mix(ringCol, candleHoney, soft * 0.48);
+  body = mix(body, mix(body, candleHoney * 0.5, 0.45), soft * 0.38);
+  // holdBreath cools contrast toward a quiet still glow (not tenderness warmth).
+  vec3 hushGlow = mix(uColorBass, vec3(0.28, 0.3, 0.42), 0.4) * 0.55;
+  ringCol = mix(ringCol, mix(ringCol, hushGlow, 0.35), stillness * 0.42);
+  body *= mix(1.0, 0.72, stillness);
 
   vec3 col = body;
   col += ringCol * rings * (0.55 + flare * 0.55 + kick * 0.2);
   // Snare flank flash along the ring sides (distinct from kick core / hat ticks).
   float flank = smoothstep(0.25, 0.95, abs(uv.x)) * exp(-r * r * 1.15);
   col += mix(uColorMid, vec3(0.94, 0.97, 1.0), 0.4) * flank * snare * 0.55;
-  // Hat ticks: cool high-band glitter on selected rings.
-  col += mix(uColorHigh, vec3(1.0), 0.25) * hatTick * uHat * 1.15;
-  col += warm * uAfterglow * (0.1 + rings * 0.12);
+  // Hat ticks: cool high-band glitter on selected rings; hangs during holdBreath.
+  col += mix(uColorHigh, vec3(1.0), 0.25) * hatTick * uHat * 1.15 * mix(1.0, 0.85, soft);
+  // Residual ring hang glow while listening (visible without hat ticks).
+  col += mix(uColorHigh, warm, 0.35) * rings * stillness * 0.18;
+  col += warm * uAfterglow * (0.1 + rings * 0.12) * mix(1.0, 1.1, soft);
 
   // Ghost reply: cooler ring after-image + traveling crest — distinct from
   // gather inhale (fold), impact flare, kit accents, and hat ticks.
@@ -237,6 +258,10 @@ export function HaloRainScene({
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
+  // Tenderness hush — candlelit softens ring bite on gentle vocals.
+  const tenderSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -246,6 +271,9 @@ export function HaloRainScene({
   const ringCount = tier === 'high' ? RINGS_HIGH : tier === 'mid' ? RINGS_MID : RINGS_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Soft-metric amps: full on high, gentle mid, restrained low.
+  const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(ringCount), [ringCount]);
 
   const uniforms = useMemo(
@@ -268,6 +296,8 @@ export function HaloRainScene({
       uBgAlpha: { value: 1 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
+      uStillness: { value: 0 },
+      uTenderness: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -283,11 +313,43 @@ export function HaloRainScene({
     const dt = Math.min(delta, 0.1);
     const pace = Math.max(0.05, mods.current.speed ?? speed);
     const calm = reducedMotion ? 0.35 : 1;
-    const sectionPace = 0.75 + m.sectionLevel * 0.45;
 
+    // Hold-breath stillness: the rain listens instead of falling through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so gather/kit accents still fire.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget * stillAmp,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous rain; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
+
+    // Tenderness hush — soft rise/fall so rings ease into candlelit soft.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness) * tenderAmp,
+      dt,
+      0.12,
+      0.22,
+    );
+
+    // Tenderness eases section pace so intimate moments feel held, not torn.
+    const sectionPace =
+      (0.75 + m.sectionLevel * 0.45) * (1 - tenderSmooth.current * 0.28);
+
+    // holdBreath gates oval / rain clocks; kit envelopes stay on full dt.
     timeRef.current +=
-      dt * pace * sectionPace * calm * (0.5 + m.swell * 0.65 + m.impact * 0.2);
+      dt * pace * sectionPace * calm * motionMul * (0.5 + m.swell * 0.65 + m.impact * 0.2);
 
+    // Gather / impact / kit stay on full dt so replies still fire on thaw.
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
     impactSmooth.current = smoothToward(
@@ -357,11 +419,13 @@ export function HaloRainScene({
 
     // Rain velocity: steady fall, bass thickens the pace, gather reverses in
     // the shader; echo briefly flips accumulation for the upward reply.
+    // holdBreath nearly freezes rain scroll; echo reverse + kit stay ungated above.
     const fallSpeed =
       (0.55 + swellSmooth.current * 0.85 + m.bass * 0.35 + m.energy * 0.2) *
       pace *
       sectionPace *
-      calm;
+      calm *
+      motionMul;
     driftRef.current += dt * fallSpeed * scrollDir;
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
@@ -382,6 +446,8 @@ export function HaloRainScene({
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
+    mat.uniforms.uStillness!.value = stillness;
+    mat.uniforms.uTenderness!.value = tenderSmooth.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
