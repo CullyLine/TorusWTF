@@ -8,6 +8,7 @@
  *  - gather → ink draws toward center (pre-beat inhale)
  *  - tenderness → ink pales toward milk on gentle vocals
  *  - swell / afterglow → soft residual bloom in the water body
+ *  - echo → one-shot cooler/paler ghost-plume replay in phrase gaps
  * Hold-breath listen:
  *  - holdBreath / deep silence → suspend plumes mid-curl + glass the
  *    surface so the ink listens, then thaw into billow and drift.
@@ -25,9 +26,16 @@ const PLUMES_HIGH = 8;
 const PLUMES_MID = 6;
 const PLUMES_LOW = 4;
 
+const GHOSTS_HIGH = 5;
+const GHOSTS_MID = 4;
+const GHOSTS_LOW = 3;
+
 const OCTAVES_HIGH = 5;
 const OCTAVES_MID = 4;
 const OCTAVES_LOW = 3;
+
+/** Recent kick spawns remembered so phrase-echo can re-curl what was just played. */
+const KICK_MEMORY = 5;
 
 type Plume = {
   x: number;
@@ -38,9 +46,21 @@ type Plume = {
   spin: number;
 };
 
-function buildFragmentShader(plumeCount: number, octaves: number): string {
+type KickMemory = {
+  x: number;
+  y: number;
+  seed: number;
+  spin: number;
+};
+
+function buildFragmentShader(
+  plumeCount: number,
+  ghostCount: number,
+  octaves: number,
+): string {
   return /* glsl */ `
 #define PLUME_COUNT ${plumeCount}
+#define GHOST_COUNT ${ghostCount}
 #define NOISE_OCTAVES ${octaves}
 
 uniform vec2 uResolution;
@@ -58,9 +78,14 @@ uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
 uniform float uStillness;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec4 uPlumes[PLUME_COUNT];
 uniform float uPlumeAge[PLUME_COUNT];
 uniform float uPlumeSpin[PLUME_COUNT];
+uniform vec4 uGhosts[GHOST_COUNT];
+uniform float uGhostAge[GHOST_COUNT];
+uniform float uGhostSpin[GHOST_COUNT];
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -168,6 +193,25 @@ void main() {
   ink = clamp(ink, 0.0, 2.6);
   edge = clamp(edge, 0.0, 1.8);
 
+  // Phrase-echo: cooler/paler ghost plumes re-curl what the kicks just played.
+  float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+  float ghostInk = 0.0;
+  float ghostEdge = 0.0;
+  if (echoPulse > 0.01) {
+    for (int i = 0; i < GHOST_COUNT; i++) {
+      float d = plumeDensity(uv, uGhosts[i], uGhostAge[i], uGhostSpin[i]);
+      // Rhythm replay: each ghost blinks once as the travel crest passes its seed.
+      float fi = float(i);
+      float crest = fract(uEchoTravel * (1.15 + uGhosts[i].w * 0.55) + fi * 0.17);
+      float blink = smoothstep(0.0, 0.12, crest) * (1.0 - smoothstep(0.28, 0.62, crest));
+      float pulse = 0.35 + 0.65 * blink;
+      ghostInk += d * pulse;
+      ghostEdge += smoothstep(0.02, 0.16, d) * (1.0 - smoothstep(0.16, 0.5, d)) * pulse;
+    }
+    ghostInk = clamp(ghostInk * echoPulse, 0.0, 2.2);
+    ghostEdge = clamp(ghostEdge * echoPulse, 0.0, 1.6);
+  }
+
   // Sparse hat motes on the water surface (not sustained shimmer).
   float moteField = 0.0;
   for (int i = 0; i < 3; i++) {
@@ -187,6 +231,9 @@ void main() {
   vec3 inkMid = mix(uColorMid, vec3(0.35, 0.32, 0.48), 0.4);
   vec3 inkHigh = mix(uColorHigh, vec3(0.78, 0.82, 0.92), 0.35);
   vec3 milk = mix(inkHigh, vec3(0.92, 0.93, 0.96), 0.7);
+  // Cooler silver-blue ghost ink — distinct from kick indigo and tenderness milk.
+  vec3 ghostInkCol = mix(vec3(0.55, 0.72, 0.92), uColorHigh, 0.28);
+  vec3 ghostPale = mix(ghostInkCol, vec3(0.82, 0.9, 1.0), 0.45);
 
   vec3 waterCol = deepWater + sheen * mix(uColorMid, inkHigh, 0.4) * 0.55;
   waterCol += inkHigh * uAfterglow * 0.05 * exp(-r * r * 0.8);
@@ -204,6 +251,12 @@ void main() {
   vec3 col = waterCol;
   col = mix(col, plumeCol, clamp(ink * (0.55 + uEnergy * 0.12), 0.0, 0.92));
   col += mix(inkMid, milk, tender * 0.5) * edge * (0.22 + uAfterglow * 0.12);
+  // Phrase-echo ghost plumes: cooler/paler re-curl over the water (not kick body).
+  float ghostAmt = ghostInk * (1.0 - still * 0.45);
+  vec3 ghostCol = mix(ghostInkCol, ghostPale, clamp(ghostInk * 0.4, 0.0, 1.0));
+  col = mix(col, ghostCol, clamp(ghostAmt * 0.48, 0.0, 0.72));
+  col += ghostPale * ghostEdge * 0.38;
+  col += ghostInkCol * ghostAmt * 0.18;
   // Snare flank flash on the sheared sides.
   float flank = smoothstep(0.22, 0.85, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.25, abs(uv.y)));
   col += mix(uColorMid, milk, 0.35) * flank * snare * 0.42;
@@ -282,11 +335,21 @@ export function InkBloomScene({
   const stillnessSmooth = useRef(0);
   const prevKickRef = useRef(0);
   const spawnSeedRef = useRef(0.37);
+  // Phrase-echo one-shot: arm on quiet, fire one ghost-plume replay per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  const kickMemoryRef = useRef<KickMemory[]>([]);
+  const ghostsRef = useRef<Plume[]>(makePlumes(0));
 
   const plumeCount = tier === 'high' ? PLUMES_HIGH : tier === 'mid' ? PLUMES_MID : PLUMES_LOW;
+  const ghostCount =
+    tier === 'high' ? GHOSTS_HIGH : tier === 'mid' ? GHOSTS_MID : GHOSTS_LOW;
   const octaveCount =
     tier === 'high' ? OCTAVES_HIGH : tier === 'mid' ? OCTAVES_MID : OCTAVES_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const plumesRef = useRef<Plume[]>(makePlumes(plumeCount));
 
   const reducedMotion = useMemo(() => {
@@ -295,14 +358,17 @@ export function InkBloomScene({
   }, []);
 
   const fragmentShader = useMemo(
-    () => buildFragmentShader(plumeCount, octaveCount),
-    [plumeCount, octaveCount],
+    () => buildFragmentShader(plumeCount, ghostCount, octaveCount),
+    [plumeCount, ghostCount, octaveCount],
   );
 
   const uniforms = useMemo(() => {
     const plumeVecs = Array.from({ length: plumeCount }, () => new THREE.Vector4(0, 0, 0, 0));
     const plumeAges = new Array(plumeCount).fill(0) as number[];
     const plumeSpins = new Array(plumeCount).fill(0) as number[];
+    const ghostVecs = Array.from({ length: ghostCount }, () => new THREE.Vector4(0, 0, 0, 0));
+    const ghostAges = new Array(ghostCount).fill(0) as number[];
+    const ghostSpins = new Array(ghostCount).fill(0) as number[];
     return {
       uResolution: { value: new THREE.Vector2(1, 1) },
       uTime: { value: 0 },
@@ -319,15 +385,20 @@ export function InkBloomScene({
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
       uStillness: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uPlumes: { value: plumeVecs },
       uPlumeAge: { value: plumeAges },
       uPlumeSpin: { value: plumeSpins },
+      uGhosts: { value: ghostVecs },
+      uGhostAge: { value: ghostAges },
+      uGhostSpin: { value: ghostSpins },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
     };
     // Colors rewritten every frame from the living palette.
-  }, [plumeCount]);
+  }, [plumeCount, ghostCount]);
 
   useFrame((_state, delta) => {
     const mat = matRef.current;
@@ -413,16 +484,82 @@ export function InkBloomScene({
       const ang = seed * Math.PI * 2;
       const rad = 0.12 + ((seed * 7.13) % 1) * 0.42;
       const gatherPull = 1 - gatherSmooth.current * 0.55;
+      const nx = Math.cos(ang) * rad * gatherPull;
+      const ny = Math.sin(ang) * rad * gatherPull;
+      const nSpin = (seed - 0.5) * 2.4;
       plumes[slot] = {
-        x: Math.cos(ang) * rad * gatherPull,
-        y: Math.sin(ang) * rad * gatherPull,
+        x: nx,
+        y: ny,
         strength: Math.min(1.35, 0.7 + kick * 0.65),
         seed,
         age: 0,
-        spin: (seed - 0.5) * 2.4,
+        spin: nSpin,
       };
+      // Remember this kick so phrase-echo can re-curl what was just played.
+      const mem = kickMemoryRef.current;
+      mem.push({ x: nx, y: ny, seed, spin: nSpin });
+      if (mem.length > KICK_MEMORY) mem.shift();
     }
     prevKickRef.current = kick;
+
+    // Phrase-echo ghost-plume replay: arm on quiet, fire one travel per echo
+    // rise — cooler/paler curls remembering the last kicks, not a kit scrub.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      // Seed ghosts from kick memory (or a soft synthetic ring if none yet).
+      const mem = kickMemoryRef.current;
+      const ghosts = makePlumes(ghostCount);
+      for (let i = 0; i < ghostCount; i++) {
+        const src = mem.length > 0 ? mem[mem.length - 1 - (i % mem.length)]! : null;
+        if (src) {
+          // Slight counter-spin + pale strength so the ghost is a memory, not a clone.
+          ghosts[i] = {
+            x: src.x * (0.92 + (src.seed % 1) * 0.08),
+            y: src.y * (0.92 + ((1 - src.seed) % 1) * 0.08),
+            strength: 0.85 + echoNow * 0.35,
+            seed: (src.seed * 0.73 + 0.19 + i * 0.11) % 1,
+            age: 0.08 + i * 0.05,
+            spin: -src.spin * 0.85,
+          };
+        } else {
+          const seed = (i + 1) * 0.173;
+          const ang = seed * Math.PI * 2;
+          const rad = 0.18 + seed * 0.28;
+          ghosts[i] = {
+            x: Math.cos(ang) * rad,
+            y: Math.sin(ang) * rad,
+            strength: 0.75,
+            seed,
+            age: 0.1,
+            spin: (seed - 0.5) * -2.1,
+          };
+        }
+      }
+      ghostsRef.current = ghosts;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
 
     // Drift / billow / gather-pull each plume in CPU so the shader stays cheap.
     // holdBreath gates age/drift/spin/fade so curls suspend mid-coil; gather still reels.
@@ -448,6 +585,30 @@ export function InkBloomScene({
       p.strength *= Math.exp((-dt * motionMul) / (1.35 + p.seed * 0.4));
     }
 
+    // Ghost plumes billow only while the phrase-echo travel is live.
+    if (ghostsRef.current.length !== ghostCount) {
+      ghostsRef.current = makePlumes(ghostCount);
+    }
+    const ghosts = ghostsRef.current;
+    const ghostMotion = traveling ? motionMul : 0;
+    for (let i = 0; i < ghosts.length; i++) {
+      const g = ghosts[i]!;
+      if (!traveling || g.strength < 0.002) {
+        if (!traveling) g.strength = 0;
+        continue;
+      }
+      g.age += dt * pace * calm * ghostMotion * 1.15;
+      const swirl = 0.22 + g.seed * 0.14;
+      const ox = -g.y * swirl * dt * ghostMotion;
+      const oy = g.x * swirl * dt * ghostMotion;
+      g.x += ox + (g.seed - 0.5) * 0.05 * dt * ghostMotion;
+      g.y += oy + (0.5 - g.seed) * 0.04 * dt * ghostMotion;
+      g.spin += dt * (0.4 + g.seed * 0.5) * pace * ghostMotion;
+      // Fade with travel so the ghost settles as the phrase gap closes.
+      const travelFade = 1 - echoTravel.current * 0.55;
+      g.strength *= Math.exp((-dt * ghostMotion) / (1.1 + g.seed * 0.35)) * (0.985 + travelFade * 0.01);
+    }
+
     const plumeVecs = mat.uniforms.uPlumes!.value as THREE.Vector4[];
     const plumeAges = mat.uniforms.uPlumeAge!.value as number[];
     const plumeSpins = mat.uniforms.uPlumeSpin!.value as number[];
@@ -458,6 +619,16 @@ export function InkBloomScene({
       plumeSpins[i] = p.spin;
     }
 
+    const ghostVecs = mat.uniforms.uGhosts!.value as THREE.Vector4[];
+    const ghostAges = mat.uniforms.uGhostAge!.value as number[];
+    const ghostSpins = mat.uniforms.uGhostSpin!.value as number[];
+    for (let i = 0; i < ghostCount; i++) {
+      const g = ghosts[i]!;
+      ghostVecs[i]!.set(g.x, g.y, traveling ? g.strength : 0, g.seed);
+      ghostAges[i] = g.age;
+      ghostSpins[i] = g.spin;
+    }
+
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
@@ -465,6 +636,8 @@ export function InkBloomScene({
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
