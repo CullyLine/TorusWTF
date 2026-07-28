@@ -16,8 +16,10 @@ import { useMetricsRef } from './metrics';
  *  - gather → wisps drift inward (the inhale before the kick)
  *  - impact / release → burst outward
  *  - shimmer / hat → glitter ticks on size + opacity
+ *  - snare → brief lateral scatter flick (backbeat sideways, not radial/Z)
  *  - leanIn → mild approach toward camera/center (anticipation, pre-drop)
  *  - echo → one-shot counter-drift swirl + rhythmic glint replay in phrase gaps
+ *  - afterglow → residual ember warmth on wisps + soul glow while peaks decay
  *
  * Stillness (holdBreath / deep silence):
  *  - Perlin drift nearly freezes
@@ -27,6 +29,15 @@ import { useMetricsRef } from './metrics';
  * Both exist regardless of audio source. With music they brighten and
  * flock; in silence they listen, then keep drifting like dust in a beam.
  */
+
+/**
+ * Ember residue mixed into wisp/glow colors while afterglow decays.
+ * Deeper than Background/Torus amber so the overlay remembers coals, not sky.
+ */
+const AFTERGLOW_EMBER = new THREE.Color(1.0, 0.42, 0.16);
+const AFTERGLOW_WARMTH_MIX = 0.4;
+/** Ease tau for color-temperature linger (fluid, not stair-stepped). */
+const AFTERGLOW_WARMTH_TAU = 0.35;
 
 interface AuraLayerProps {
   palette: { bass: string; mid: string; high: string };
@@ -67,6 +78,18 @@ function smoothToward(
   return current + (target - current) * k;
 }
 
+/** Bias a color toward ember by eased afterglow; quiet (0) is a no-op. */
+function applyAfterglowEmber(
+  color: THREE.Color,
+  warmthLinger: number,
+  scratchEmber: THREE.Color,
+  mix: number,
+): void {
+  const t = Math.max(0, Math.min(1, warmthLinger)) * mix;
+  if (t < 0.001) return;
+  color.lerp(scratchEmber.copy(AFTERGLOW_EMBER), t);
+}
+
 export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
@@ -78,6 +101,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const gatherSmooth = useRef(0);
   const burstSmooth = useRef(0);
   const glitterSmooth = useRef(0);
+  // Snare backbeat: brief lateral scatter — distinct from gather/lean/echo.
+  const snareSmooth = useRef(0);
   // Smoothed lean-in so anticipation eases toward the viewer, not snaps.
   const leanSmooth = useRef(0);
   // Smoothed stillness so freeze/thaw never pops.
@@ -88,18 +113,25 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
   const echoSign = useRef(1);
+  // Color-temperature linger tracks afterglow (intensity path unchanged).
+  const warmthLingerRef = useRef(0);
 
   // Reused color temps — avoid per-frame Color allocations in the glow lerp.
   const bassColor = useRef(new THREE.Color(palette.bass));
   const midColor = useRef(new THREE.Color(palette.mid));
+  const scratchEmber = useRef(new THREE.Color());
 
   const wispCount =
     tier === 'high' ? WISP_COUNT_HIGH : tier === 'mid' ? WISP_COUNT_MID : WISP_COUNT_LOW;
   // Soften reply on mid/low so the overlay never strobes under the preset.
   const echoAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
+  // Kit + ember amp: mid/low keep the flick/warmth readable without fighting presets.
+  const kitAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
+  const warmthMix =
+    (tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75) * AFTERGLOW_WARMTH_MIX;
 
   // Per-wisp seeds for stable trajectory + per-wisp brightness phase offset.
-  const { positions, seeds, colors } = useMemo(() => {
+  const { positions, seeds, colors, baseColors } = useMemo(() => {
     const pos = new Float32Array(wispCount * 3);
     const seed = new Float32Array(wispCount * 4);
     const col = new Float32Array(wispCount * 3);
@@ -127,7 +159,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       col[i * 3 + 1] = c.g;
       col[i * 3 + 2] = c.b;
     }
-    return { positions: pos, seeds: seed, colors: col };
+    // Immutable palette snapshot so afterglow ember can lerp without drift.
+    return { positions: pos, seeds: seed, colors: col, baseColors: col.slice() };
   }, [wispCount, palette.bass, palette.mid, palette.high]);
 
   // Soul glow shader: a soft radial gradient that breathes with audio.
@@ -175,6 +208,14 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     burstSmooth.current = smoothToward(burstSmooth.current, burstTarget, dt, 0.03, 0.14);
     const glitterTarget = Math.min(1.3, m.hat * 0.95 + m.shimmer * 0.55);
     glitterSmooth.current = smoothToward(glitterSmooth.current, glitterTarget, dt, 0.025, 0.11);
+    // Snare rises fast (backbeat flick), eases out — kit ungated by stillness.
+    snareSmooth.current = smoothToward(
+      snareSmooth.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      0.02,
+      0.12,
+    );
     // Lean-in rises with tension (eager anticipation); settles slower so the
     // approach lingers into the drop rather than snapping back.
     leanSmooth.current = smoothToward(leanSmooth.current, m.leanIn, dt, 0.06, 0.18);
@@ -229,8 +270,13 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const gather = gatherSmooth.current;
     const burst = burstSmooth.current;
     const glitter = glitterSmooth.current;
+    const snare = snareSmooth.current;
     const lean = leanSmooth.current;
     const stillness = stillnessSmooth.current;
+    // Color-temperature linger tracks afterglow — quiet verses leave wisps untinted.
+    warmthLingerRef.current +=
+      (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
+    const warmthLinger = warmthLingerRef.current;
     // Drift nearly stops at full stillness; a whisper remains so the cloud
     // never looks frozen-dead. Flock gather/burst still owns the radial axis.
     const driftMul = 1 - stillness * 0.92;
@@ -248,6 +294,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     if (points && mat) {
       const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
       const arr = posAttr.array as Float32Array;
+      const colAttr = points.geometry.getAttribute('color') as THREE.BufferAttribute | undefined;
+      const colArr = colAttr ? (colAttr.array as Float32Array) : null;
       // Radial flock speed (units/sec). Gather pulls harder than burst so
       // the inhale reads clearly; burst rides impact without exploding.
       // Lean-in is a milder approach (~0.9 vs gather 2.4) so pre-drop
@@ -263,6 +311,12 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       const approachZ = lean * 0.85 * leanMul;
       // Tangential swirl speed (units/sec) — orthogonal to gather radial axis.
       const swirlSpeed = swirlAmt * 2.6 * echoMul;
+      // Lateral scatter speed — world-X flick with per-wisp sign (not echo swirl).
+      const snareFlick = snare * 3.4;
+      const emberMix = Math.max(0, Math.min(1, warmthLinger)) * warmthMix;
+      const emberR = AFTERGLOW_EMBER.r;
+      const emberG = AFTERGLOW_EMBER.g;
+      const emberB = AFTERGLOW_EMBER.b;
       for (let i = 0; i < wispCount; i++) {
         const fx = seeds[i * 4]!;
         const fy = seeds[i * 4 + 1]!;
@@ -306,6 +360,18 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           z += sz * Math.abs(swirlSpeed) * swirlPhase * dt * 0.45;
         }
 
+        // Snare lateral scatter flick: world-X kick with opposing signs so the
+        // cloud spatters sideways on the backbeat — not gather radial, not
+        // leanIn Z, not echo tangential orbit. Kit stays ungated by hush.
+        if (snareFlick > 0.01) {
+          const seedPhase = seeds[i * 4 + 3]!;
+          const sign = Math.sin(seedPhase * 3.7 + i * 0.31) >= 0 ? 1 : -1;
+          const scatter = 0.55 + 0.45 * Math.sin(seedPhase * 2.3 + i * 0.17);
+          const yKick = 0.28 * Math.sin(seedPhase * 1.4 + i * 0.23);
+          x += sign * snareFlick * scatter * dt;
+          y += sign * snareFlick * yKick * dt;
+        }
+
         // Lean approach: bias toward the camera (+Z) with per-wisp phase so
         // anticipation feels like a flock leaning forward, not a Z snap.
         if (approachZ > 0.01) {
@@ -336,8 +402,26 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         arr[i3] = x;
         arr[i3 + 1] = y;
         arr[i3 + 2] = z;
+
+        // Afterglow ember: restore palette base, then bias toward coals while
+        // the peak residue decays — quiet afterglow leaves colors untinted.
+        if (colArr) {
+          const br = baseColors[i3]!;
+          const bg = baseColors[i3 + 1]!;
+          const bb = baseColors[i3 + 2]!;
+          if (emberMix > 0.001) {
+            colArr[i3] = br + (emberR - br) * emberMix;
+            colArr[i3 + 1] = bg + (emberG - bg) * emberMix;
+            colArr[i3 + 2] = bb + (emberB - bb) * emberMix;
+          } else {
+            colArr[i3] = br;
+            colArr[i3 + 1] = bg;
+            colArr[i3 + 2] = bb;
+          }
+        }
       }
       posAttr.needsUpdate = true;
+      if (colAttr) colAttr.needsUpdate = true;
 
       // Wisp brightness: high-band wash + sharp hat/shimmer glitter ticks.
       // Stillness softens the live pulse so listening feels quieter.
@@ -406,11 +490,15 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         0.5 + m.moodValence * 0.35 + m.tenderness * 0.2 - echoVis * echoMul * 0.18;
       bassColor.current.set(palette.bass);
       midColor.current.set(palette.mid);
-      (glowMat.uniforms.uColor!.value as THREE.Color).lerpColors(
+      const glowColor = glowMat.uniforms.uColor!.value as THREE.Color;
+      glowColor.lerpColors(
         bassColor.current,
         midColor.current,
         Math.max(0, Math.min(1, warmth)),
       );
+      // Peak residue: ember coals on the halo while afterglow decays — distinct
+      // from echo cool and from tenderness soft expand.
+      applyAfterglowEmber(glowColor, warmthLinger, scratchEmber.current, warmthMix);
       // Soft radius inhale / release so the halo flocks with the wisps.
       // Stillness tucks the halo in slightly while listening.
       // Lean gently enlarges toward the viewer — presence approaches.
