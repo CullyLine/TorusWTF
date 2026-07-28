@@ -18,6 +18,19 @@ import { getDotTexture } from '../dotTexture';
 
 const FOLDS = 8;
 
+/**
+ * Cosmic Mandala — sacred nested wire tori + shimmer halo.
+ *
+ * Soft-metric gestures (NS-20260727-05):
+ *  - `holdBreath` / deep silence → ease ring/halo rotation to a suspended
+ *    pause; hat ticks hold. Kit punches stay live so the thaw reads.
+ *  - `leanIn` → draw the mandala nearer and tighten outer-ring spacing
+ *    with pre-chorus anticipation (distinct from gather's whole-scale inhale).
+ *
+ * Gather inhale, kit split, phrase-echo shimmer reverse, and vocal rim /
+ * tenderness soften stay ungated and distinct.
+ */
+
 /** EMA toward target with separate rise/fall time constants. */
 function smoothToward(
   current: number,
@@ -42,6 +55,8 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
   const pulseRef = useRef(0);
   const vocalSmooth = useRef(0);
   const tenderSmooth = useRef(0);
+  const stillnessSmooth = useRef(0);
+  const leanSmooth = useRef(0);
   const scratchColor = useRef(new THREE.Color());
   const sprite = useMemo(() => getDotTexture(), []);
 
@@ -49,6 +64,9 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
   const shimmerCount = tier === 'high' ? 900 : tier === 'mid' ? 420 : 180;
   // Vocal rim amp softens on lower tiers so mid/low stay readable without bloom blowout.
   const vocalAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  // HoldBreath / leanIn amp — low tier still pauses and approaches, just softer.
+  const stillAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   // Flow Field Update: the shimmer halo is advected through the shared curl
   // current with a spring back to its home ring — fluid swirl, stable form.
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
@@ -84,6 +102,35 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     pulseRef.current = Math.max(0, pulseRef.current - delta * 2.5);
     if (m.impact > 0.55) pulseRef.current = 1;
 
+    // Hold-breath stillness: the mandala listens — rings pause, halo ticks hold.
+    const stillnessTarget =
+      Math.min(
+        1,
+        Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+      ) * stillAmp;
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    const motionMul = 1 - stillness * 0.92;
+    // Hats gate under stillness so halo ticks hang; kick/snare stay live for thaw.
+    const hatMul = 1 - stillness * 0.95;
+
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
     // Vocal rim: voice presence deepens the outer sacred ring; tenderness
     // softens that rim-vs-core contrast so quiet verses glow gently.
     vocalSmooth.current = smoothToward(
@@ -113,15 +160,23 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
 
     // Gather: whole mandala inhales before the predicted beat, then the
     // existing impact/bass breath reads as the release.
+    // LeanIn presence is Z approach + ring spacing (below) — never replaces gather.
     const gatherSqueeze = 1 - m.gather * 0.14;
     const breath =
       (1 + m.bass * 0.22 + m.swell * 0.12 + m.impact * 0.14 * soften) * gatherSqueeze;
     root.scale.setScalar(breath);
+    // Draw nearer on leanIn — mild camera-ward pull, distinct from gather squeeze.
+    root.position.z = -lean * 0.48;
     // Whole-mandala spin: now picks up mid + high + impact so the wheel
     // visibly turns at normal listening gain instead of waiting for the
     // user to crank everything to mad-scientist mode.
+    // motionMul nearly freezes the wheel on holdBreath (no snap).
     root.rotation.y +=
-      delta * spd * (0.18 + m.mid * 0.65 + m.high * 0.28 + m.impact * 0.5) * sectionPace;
+      delta *
+      spd *
+      (0.18 + m.mid * 0.65 + m.high * 0.28 + m.impact * 0.5) *
+      sectionPace *
+      motionMul;
 
     // Rings follow the living palette: color assignments happen every frame
     // (the JSX material color would otherwise stay frozen at mount).
@@ -148,14 +203,19 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
           snareCrack * 1.1 +
           kickPulse * 0.55) *
         sectionPace;
-      child.rotation.z += delta * spd * spin * (i % 2 === 0 ? 1 : -1);
+      // Continuous spin hushes under holdBreath; kit scale pulses stay ungated.
+      child.rotation.z += delta * spd * spin * (i % 2 === 0 ? 1 : -1) * motionMul;
       child.rotation.x =
-        Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12) +
+        Math.sin(_state.clock.elapsedTime * 0.4 + i) *
+          (m.high * 0.35 + m.mid * 0.12) *
+          motionMul +
         snareCrack * 0.08;
       // Kick: inner rings bloom outward; snare: outer rings briefly flare.
       // Vocal: outer rim thickens slightly — sacred geometry answering the voice.
+      // LeanIn: outer rings pull inward (tighten spacing) — distinct from gather.
+      const leanTighten = 1 - lean * 0.14 * outerness;
       child.scale.setScalar(
-        1 + kickPulse * 0.2 + snareCrack * 0.14 + vocalRim * 0.18 * rimSoft,
+        (1 + kickPulse * 0.2 + snareCrack * 0.14 + vocalRim * 0.18 * rimSoft) * leanTighten,
       );
       const hex = i % 3 === 0 ? palette.bass : i % 3 === 1 ? palette.mid : palette.high;
       c.set(hex);
@@ -187,11 +247,12 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
       // Hat ticks: sharp, short twinkles on the halo — distinct from the
       // slower shimmer envelope and the impact pulse.
       // Vocal: halo deepens with the voice (size + opacity), softened by tenderness.
+      // hatMul holds ticks mid-air during holdBreath.
       shimmerMat.size =
         0.035 +
         m.shimmer * 0.05 +
         pulseRef.current * 0.03 +
-        m.hat * 0.07 +
+        m.hat * 0.07 * hatMul +
         vocal * 0.045 * rimSoft;
       // Lead lines make the halo glitter — melody gets its own voice here.
       shimmerMat.opacity = Math.min(
@@ -200,7 +261,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
           m.high * 0.45 +
           m.afterglow * 0.15 +
           m.leadActivity * 0.2 +
-          m.hat * 0.35 +
+          m.hat * 0.35 * hatMul +
           vocal * 0.32 * rimSoft,
       );
       shimmerMat.color.set(palette.high);
@@ -210,15 +271,23 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
       // Counter-rotating shimmer cloud — also bumped up so it streaks
       // visibly across the rings on busy passages.
       shimmer.rotation.y -=
-        delta * spd * (0.35 + m.high * 1.6 + m.mid * 0.5) * sectionPace * echoFlip;
+        delta *
+        spd *
+        (0.35 + m.high * 1.6 + m.mid * 0.5) *
+        sectionPace *
+        echoFlip *
+        motionMul;
 
       // Advect the halo through the shared current, spring-tethered to its
       // home ring so the mandala's silhouette survives the swirl.
+      // motionMul freezes advection on holdBreath; spring still settles home.
       const dtClamped = Math.min(delta, 0.05);
-      flowTimeRef.current += dtClamped * (0.4 + Math.min(m.energy, 1.5) * 0.4) * echoFlip;
+      flowTimeRef.current +=
+        dtClamped * (0.4 + Math.min(m.energy, 1.5) * 0.4) * echoFlip * motionMul;
       const fp = flowParamsFromMetrics(m, flowParamsRef.current);
       fp.time = flowTimeRef.current;
-      const drift = dtClamped * (0.3 + m.energy * 0.7 + m.dropEvent * 1.4) * echoFlip;
+      const drift =
+        dtClamped * (0.3 + m.energy * 0.7 + m.dropEvent * 1.4) * echoFlip * motionMul;
       const spring = dtClamped * 1.6;
       const fv = flowScratch.current;
       const posAttr = shimmer.geometry.getAttribute('position') as THREE.BufferAttribute;
