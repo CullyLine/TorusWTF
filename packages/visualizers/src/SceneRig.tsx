@@ -108,6 +108,16 @@ const TENSION_COIL_SPRING_SMOOTH = 1.85;
 /** Spring-loose on dropEvent / release — open the frame without a snap. */
 const TENSION_RELEASE_SPRING_SMOOTH = 0.22;
 
+/**
+ * Convergence plant — when bass/mid/high lock into one groove, ease the idle
+ * drift/sway floor down so the frame sits in the pocket. Faster than the
+ * tension coil (chorus lock, not a long build); slower release so divergence
+ * loosens without a snap. Independent of tension coil / leanIn / echo sway.
+ */
+const CONVERGENCE_PLANT_SPRING_SMOOTH = 0.38;
+/** Ease back out as bands diverge — a touch slower than the plant-in. */
+const CONVERGENCE_LOOSEN_SPRING_SMOOTH = 0.55;
+
 interface ScalarSpring {
   value: number;
   velocity: number;
@@ -428,6 +438,9 @@ export function SceneRig({
   // loose on dropEvent/release. Independent of FOV hit punch, leanIn Z,
   // cinematic pose cuts, and echo sway.
   const tensionCoilSpringRef = useRef<ScalarSpring>(createScalarSpring());
+  // Convergence plant — SmoothDamp idle-sway floor when bands lock; distinct
+  // from tension coil (FOV/Y), leanIn Z, echo X sway, and kit shake.
+  const convergencePlantSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // DoF kick spring — SmoothDamp so bass/trigger envelopes never write
   // focusDistance / bokehScale as raw stair-steps.
   const dofKickSpringRef = useRef<ScalarSpring>(createScalarSpring());
@@ -690,6 +703,24 @@ export function SceneRig({
       SHAKE_AMP_SPRING_SMOOTH,
     );
 
+    // Convergence plant — locked chorus sits the idle drift/sway floor down;
+    // sparse / divergent passages loosen back. SmoothDamp so neither side snaps.
+    // Does not touch tension coil, leanIn/release Z, echo sway, or kit accents.
+    const plantAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.7;
+    const plantTarget = Math.min(1, Math.max(0, m.convergence ?? 0)) * plantAmp;
+    const plantSmooth =
+      plantTarget < convergencePlantSpringRef.current.value
+        ? CONVERGENCE_LOOSEN_SPRING_SMOOTH
+        : CONVERGENCE_PLANT_SPRING_SMOOTH;
+    const plant = smoothDampScalar(
+      convergencePlantSpringRef.current,
+      plantTarget,
+      dtCam,
+      plantSmooth,
+    );
+    // Residual ~22% idle motion at full lock — planted, not frozen.
+    const idleMul = 1 - plant * 0.78;
+
     // Desired pose for this frame. Modes write here; the spring below eases
     // the real camera toward it so nothing teleports on mode changes.
     // Mode impact/bass shake XY(Z) offsets are SmoothDamp'd separately so
@@ -711,9 +742,11 @@ export function SceneRig({
         desiredZ = baseZ;
         break;
       case 'orbit': {
-        const radius = embedded ? 0.8 : 1.2;
+        // Convergence plant eases the idle orbit radius so a locked chorus
+        // sits steadier; kit / leanIn / tension stay on their own springs.
+        const radius = (embedded ? 0.8 : 1.2) * idleMul;
         desiredX = Math.sin(t * 0.35) * radius;
-        desiredY = Math.sin(t * 0.18) * 0.35;
+        desiredY = Math.sin(t * 0.18) * 0.35 * idleMul;
         desiredZ = baseZ + Math.cos(t * 0.35) * radius * 0.5;
         break;
       }
@@ -768,7 +801,10 @@ export function SceneRig({
         const anchor = flowAnchorRef.current;
         const fv = flowCamScratch.current;
         sampleFlow(fv, anchor.x * 2.2, anchor.y * 2.2, anchor.z * 2.2, 0, fp);
-        const drift = dt * (0.16 + m.energy * 0.18 + m.dropEvent * 0.3);
+        // Plant softens the idle current; energy/drop still push when music speaks.
+        const drift =
+          dt *
+          (0.16 * idleMul + m.energy * 0.18 + m.dropEvent * 0.3);
         anchor.x += fv.x * drift;
         anchor.y += fv.y * drift * 0.6; // damp vertical so the horizon stays sane
         anchor.z += fv.z * drift;
@@ -777,8 +813,13 @@ export function SceneRig({
         anchor.y /= alen;
         anchor.z /= alen;
         // Lean into the music: the camera drifts closer as the track
-        // swells and eases back out as it exhales.
-        const radius = baseZ * (1 - m.swell * 0.09 - m.impact * 0.03 + Math.sin(t * 0.4) * 0.03);
+        // swells and eases back out as it exhales. Idle sin wobble plants too.
+        const radius =
+          baseZ *
+          (1 -
+            m.swell * 0.09 -
+            m.impact * 0.03 +
+            Math.sin(t * 0.4) * 0.03 * idleMul);
         desiredX = anchor.x * radius;
         desiredY = anchor.y * radius;
         desiredZ = anchor.z * radius;
@@ -789,7 +830,8 @@ export function SceneRig({
         // A slow lissajous float (actual drifting) + impact-driven shake.
         // Drift amplitude follows the song's section level so quiet
         // valleys hold nearly still — the camera lingers with the music.
-        const driftAmp = 0.55 + m.sectionLevel * 0.45;
+        // Convergence plant further eases the idle floor when bands lock.
+        const driftAmp = (0.55 + m.sectionLevel * 0.45) * idleMul;
         desiredX = Math.sin(t * 0.21) * 0.3 * driftAmp;
         desiredY = Math.cos(t * 0.17) * 0.2 * driftAmp;
         desiredZ = baseZ * (1 - m.swell * 0.06) + Math.sin(t * 0.13) * 0.22 * driftAmp;
@@ -929,8 +971,10 @@ export function SceneRig({
       const a = animaState.current;
       const animaAmp = anima * stillness;
       desiredZ += a.heartbeat * 0.025 * animaAmp;
-      lookYaw = a.driftYaw * 0.6 * animaAmp;
-      lookPitch = a.driftPitch * 0.6 * animaAmp;
+      // Plant steadies gaze drift when the groove locks; heartbeat stays.
+      const lookIdle = 1 - plant * 0.55;
+      lookYaw = a.driftYaw * 0.6 * animaAmp * lookIdle;
+      lookPitch = a.driftPitch * 0.6 * animaAmp * lookIdle;
     }
 
     // Safe-zone the *desired* pose before springing — the spring then never
