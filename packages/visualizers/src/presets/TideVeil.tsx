@@ -12,6 +12,7 @@
  *  - afterglow → warm residual light holds after peaks
  *  - holdBreath / deep silence → nearly still the caustic roll + ease ridge contrast
  *  - tenderness → soften caustic sharpness so gentle vocals read as a softer sheet
+ *  - echo → one-shot cool moonlit glint train across the veil (phrase-gap replay)
  */
 
 import { useMemo, useRef } from 'react';
@@ -47,6 +48,8 @@ uniform float uTenderness;
 uniform float uKick;
 uniform float uSnare;
 uniform float uHat;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -186,6 +189,36 @@ void main() {
   col += mix(uColorMid, vec3(0.95, 0.98, 1.0), 0.45) * flank * snare * 0.58;
   // Hat pinpoint sparkles — cool high-band glitter on selected ridges.
   col += mix(uColorHigh, vec3(1.0), 0.35) * hatSpark * 1.35;
+
+  // Phrase-echo: one-shot cool moonlit glint train traveling across the veil —
+  // lateral crest (not kick core, not snare flank, not hat ridge ticks).
+  float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+  if (echoPulse > 0.01) {
+    float moonGlints = 0.0;
+    float crestX = mix(-1.15, 1.15, clamp(uEchoTravel, 0.0, 1.0));
+    for (int i = 0; i < 12; i++) {
+      float fi = float(i);
+      float seed = fract(sin(fi * 17.13 + 3.7) * 43758.5453123);
+      float seed2 = fract(sin(fi * 91.7 + 11.3) * 43758.5453123);
+      float select = step(0.32, fract(seed * 5.17 + fi * 0.31));
+      // Sparse motes drift with travel; crest-weight blinks the train in rhythm.
+      float px = mix(-1.2, 1.2, fract(seed * 1.37 + uEchoTravel * (0.48 + seed2 * 0.4)));
+      float py = mix(-0.85, 0.85, fract(seed2 * 2.11 + seed * 0.53));
+      vec2 d = uv - vec2(px, py);
+      float glow = exp(-dot(d, d) * mix(28.0, 72.0, seed));
+      float crest = exp(-pow((px - crestX) * 2.4, 2.0));
+      float blink =
+        0.28 + 0.72 * crest * (0.5 + 0.5 * sin(uEchoTravel * 24.0 + seed * 40.0));
+      moonGlints += glow * blink * select;
+    }
+    moonGlints = clamp(moonGlints * echoPulse, 0.0, 2.4);
+    // Cool silver-blue — distinct from kick bass-warm and afterglow amber.
+    vec3 moonCol = mix(vec3(0.62, 0.78, 1.0), uColorHigh, 0.28);
+    float moonAmt = moonGlints * (1.0 - uStillness * 0.55);
+    col += moonCol * moonAmt * 0.72;
+    col = mix(col, moonCol, clamp(moonAmt * 0.12, 0.0, 0.35));
+  }
+
   // Secondary soft bloom of residual warmth after peaks.
   col += warm * uAfterglow * (0.12 + caust * 0.18);
   // Downbeat wink — subtle, not a strobe.
@@ -246,6 +279,11 @@ export function TideVeilScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one moonlit glint train per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -256,6 +294,7 @@ export function TideVeilScene({
   // Low tier still gets the full musical envelope — just fewer caustic layers.
   const flashAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(octaves), [octaves]);
 
   const uniforms = useMemo(
@@ -278,6 +317,8 @@ export function TideVeilScene({
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uHat: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -368,6 +409,35 @@ export function TideVeilScene({
       0.08,
     );
 
+    // Phrase-echo moonlit glint replay: arm on quiet, fire one travel per echo
+    // rise — call-response in the gaps, not a scrub of kick/snare/hat.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     mat.uniforms.uResolution!.value.set(size.width, size.height);
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uSwell!.value = swellSmooth.current;
@@ -386,6 +456,8 @@ export function TideVeilScene({
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
