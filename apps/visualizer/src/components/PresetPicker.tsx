@@ -31,6 +31,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   ink_bloom: '#7B8CDE',
   opal_slick: '#9B8CFF',
   paper_lanterns: '#F5B86A',
+  jellyfish_bloom: '#5EEAD4',
   rainforest_reverie: '#4ADE80',
   alien_planet: '#C084FC',
   tidal_sanctuary: '#22D3EE',
