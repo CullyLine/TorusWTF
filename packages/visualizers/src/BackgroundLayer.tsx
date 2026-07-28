@@ -30,8 +30,12 @@ import { getDotTexture } from './dotTexture';
  * pull, and afterglow warmth. On `tenderness`, nebula/aurora/glow
  * drift eases (still breathes) and the sky warm-dims so tender vocals
  * gentle the backdrop without the hush freeze — re-brightening on
- * release. Honors `prefers-reduced-motion` by freezing the drift.
- * Contrast-capped so it never competes with the foreground preset.
+ * release. Kit accents: `kick` sends a deep pulse from the nebula/glow
+ * core and `snare` a brief lateral aurora shear so the sky answers the
+ * drums under every preset — subtle, never fighting the foreground;
+ * gather / leanIn / holdBreath / afterglow / tenderness stay distinct.
+ * Honors `prefers-reduced-motion` by freezing the drift. Contrast-capped
+ * so it never competes with the foreground preset.
  */
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
@@ -113,8 +117,22 @@ const TENDER_WARMTH_MIX = 0.2;
 /** Soften glitter under tenderness — less than holdBreath hush. */
 const GLITTER_TENDER = 0.35;
 
+/**
+ * Kit accents: fast attack / medium fall so kick depth-pulse and snare
+ * lateral flick read as struck bells, not band swell. Hat glitter stays
+ * on its own path above.
+ */
+const KIT_KICK_RISE_TAU = 0.025;
+const KIT_KICK_FALL_TAU = 0.14;
+const KIT_SNARE_RISE_TAU = 0.02;
+const KIT_SNARE_FALL_TAU = 0.12;
+
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
 const SKY_RADIUS = 50;
+
+function kitAmpForTier(tier: 'high' | 'mid' | 'low'): number {
+  return tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
+}
 
 function smoothToward(
   current: number,
@@ -287,17 +305,25 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform float uInhale;
   uniform float uGlitter;
   uniform float uLean;
+  uniform float uKick;
+  uniform float uSnare;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
     vec3 d = normalize(vDir);
+    float kick = clamp(uKick, 0.0, 1.2);
+    float snare = clamp(uSnare, 0.0, 1.2);
     // Lean zooms features (sky approaches) — distinct from gather's density inhale.
-    float zoom = 1.0 - uLean * 0.28;
-    float n1 = fbmDir(d, 2.6 * zoom, vec2(uTime * 0.020, uTime * 0.015));
-    float n2 = fbmDir(d, 4.4 * zoom, vec2(-uTime * 0.012, uTime * 0.008));
+    // Kick briefly opens the domain (depth pulse from the fog core).
+    float zoom = 1.0 - uLean * 0.28 + kick * 0.07;
+    // Snare: brief lateral shear of the fog field (backbeat flick).
+    vec2 shear = vec2(snare * 0.055 * sign(d.x + 1e-4), 0.0);
+    float n1 = fbmDir(d, 2.6 * zoom, vec2(uTime * 0.020, uTime * 0.015) + shear);
+    float n2 = fbmDir(d, 4.4 * zoom, vec2(-uTime * 0.012, uTime * 0.008) + shear * 1.2);
     // Gather raises the density floor so fog thins / pulls toward denser
     // pockets — a pre-beat inhale instead of a flat dim.
-    float lo = 0.28 + uInhale * 0.16;
+    // Kick drops the floor so dense cores surge outward (depth pulse).
+    float lo = 0.28 + uInhale * 0.16 - kick * 0.1;
     float hi = 0.95 + uInhale * 0.04;
     float density = smoothstep(lo, hi, n1 * 0.62 + n2 * 0.38);
     vec3 col = mix(uColorA, uColorB, n2);
@@ -308,12 +334,16 @@ const NEBULA_FRAGMENT = /* glsl */ `
     float sparkle = noise(d.xy * 38.0 + vec2(uTime * 9.0, uTime * 6.5));
     float glitter = 1.0 + uGlitter * (0.25 + 0.75 * sparkle);
     // Lean slightly brightens (anticipation), gather dims (inhale).
-    float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * (1.0 + uLean * 0.08) * glitter;
+    // Kick core pulse + snare flank flash stay under the contrast cap.
+    float corePulse = 1.0 + kick * 0.14 * density;
+    float flank = smoothstep(0.15, 0.85, abs(d.x)) * (1.0 - abs(d.y) * 0.55);
+    float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * (1.0 + uLean * 0.08)
+            * glitter * corePulse * (1.0 + snare * 0.1 * flank);
     gl_FragColor = vec4(col, a);
   }
 `;
 
-function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
+function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
@@ -331,6 +361,8 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
       uInhale: { value: 0 },
       uGlitter: { value: 0 },
       uLean: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
     }),
     [palette.bass, palette.mid],
   );
@@ -338,6 +370,8 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const kickRef = useRef(0);
+  const snareRef = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -346,6 +380,7 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
   useFrame((_s, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
+    const kitAmp = kitAmpForTier(tier);
     // Hold-breath hush: freeze drift clock; gather/lean/afterglow stay on full dt.
     stillnessRef.current = smoothToward(
       stillnessRef.current,
@@ -390,6 +425,21 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
+    // Kit accents stay on full dt so kick/snare still fire through holdBreath thaw.
+    kickRef.current = smoothToward(
+      kickRef.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      KIT_KICK_RISE_TAU,
+      KIT_KICK_FALL_TAU,
+    );
+    snareRef.current = smoothToward(
+      snareRef.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      KIT_SNARE_RISE_TAU,
+      KIT_SNARE_FALL_TAU,
+    );
     // Color-temperature linger tracks afterglow (intensity path unchanged).
     warmthLingerRef.current +=
       (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
@@ -401,6 +451,8 @@ function Nebula({ intensity, palette, reducedMotion }: ModeProps) {
     mat.uniforms.uGlitter!.value =
       glitterRef.current * (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     mat.uniforms.uLean!.value = leanRef.current;
+    mat.uniforms.uKick!.value = kickRef.current;
+    mat.uniforms.uSnare!.value = snareRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }
@@ -610,18 +662,25 @@ const AURORA_FRAGMENT = /* glsl */ `
   uniform float uInhale;
   uniform float uGlitter;
   uniform float uLean;
+  uniform float uKick;
+  uniform float uSnare;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
     vec3 d = normalize(vDir);
+    float kick = clamp(uKick, 0.0, 1.2);
+    float snare = clamp(uSnare, 0.0, 1.2);
     // Horizontal domain (seam-free): the direction's x/z components,
     // ignoring elevation — curtains wrap 360° around the viewer.
-    vec3 flat3 = normalize(vec3(d.x, 0.0, d.z) + 1e-4);
+    // Snare shears the horizon domain laterally (aurora backbeat flick).
+    vec3 flat3 = normalize(vec3(d.x + snare * 0.08 * sign(d.x + 1e-4), 0.0, d.z) + 1e-4);
     // Lean zooms curtain detail (approach); gather drops the top edge.
-    float leanZoom = 1.0 - uLean * 0.22;
-    float wave = fbmDir(flat3, 2.4 * leanZoom, vec2(uTime * 0.05, 0.0));
+    // Kick briefly opens the domain (depth pulse through the curtain).
+    float leanZoom = 1.0 - uLean * 0.22 + kick * 0.06;
+    float wave = fbmDir(flat3, 2.4 * leanZoom, vec2(uTime * 0.05 + snare * 0.12 * sign(d.x + 1e-4), 0.0));
     // Gather drops the curtain edge toward the horizon (inward inhale).
-    float topEdge = 0.16 + 0.34 * wave - uInhale * 0.14;
+    // Kick lifts the ribbon slightly from depth (distinct from gather drop).
+    float topEdge = 0.16 + 0.34 * wave - uInhale * 0.14 + kick * 0.05;
     // Curtain: bright ribbon below its wavy top edge, fading out toward
     // the nadir so it hugs the horizon like the real thing.
     float curtain = smoothstep(topEdge, topEdge - 0.55, d.y) * smoothstep(-0.75, -0.25, d.y);
@@ -632,12 +691,16 @@ const AURORA_FRAGMENT = /* glsl */ `
     shimmer += uGlitter * (0.35 + 0.65 * sparkle);
     float hueBand = clamp(d.y * 1.3 + 0.55, 0.0, 1.0);
     vec3 col = mix(uColorA, uColorB, hueBand + 0.2 * wave);
-    float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38) * (1.0 + uLean * 0.07);
+    // Kick core pulse along denser curtain; snare flank flash at the sides.
+    float corePulse = 1.0 + kick * 0.12 * curtain;
+    float flank = smoothstep(0.2, 0.9, abs(d.x)) * (1.0 - abs(d.y) * 0.4);
+    float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38) * (1.0 + uLean * 0.07)
+            * corePulse * (1.0 + snare * 0.14 * flank);
     gl_FragColor = vec4(col, a);
   }
 `;
 
-function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
+function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
@@ -653,6 +716,8 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
       uInhale: { value: 0 },
       uGlitter: { value: 0 },
       uLean: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
     }),
     [palette.bass, palette.high],
   );
@@ -661,6 +726,8 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const kickRef = useRef(0);
+  const snareRef = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -669,6 +736,7 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
   useFrame((_s, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
+    const kitAmp = kitAmpForTier(tier);
     stillnessRef.current = smoothToward(
       stillnessRef.current,
       stillnessFromMetrics(m.holdBreath, m.silence),
@@ -703,6 +771,21 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
+    // Kit accents stay on full dt so kick/snare still fire through holdBreath thaw.
+    kickRef.current = smoothToward(
+      kickRef.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      KIT_KICK_RISE_TAU,
+      KIT_KICK_FALL_TAU,
+    );
+    snareRef.current = smoothToward(
+      snareRef.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      KIT_SNARE_RISE_TAU,
+      KIT_SNARE_FALL_TAU,
+    );
     warmthLingerRef.current +=
       (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
     vocalLingerRef.current +=
@@ -720,6 +803,8 @@ function Aurora({ intensity, palette, reducedMotion }: ModeProps) {
     mat.uniforms.uGlitter!.value =
       glitterRef.current * (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     mat.uniforms.uLean!.value = leanRef.current;
+    mat.uniforms.uKick!.value = kickRef.current;
+    mat.uniforms.uSnare!.value = snareRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }
@@ -754,22 +839,31 @@ const GLOW_FRAGMENT = /* glsl */ `
   uniform float uInhale;
   uniform float uGlitter;
   uniform float uLean;
+  uniform float uKick;
+  uniform float uSnare;
   varying vec3 vDir;
   void main() {
     vec3 d = normalize(vDir);
+    float kick = clamp(uKick, 0.0, 1.2);
+    float snare = clamp(uSnare, 0.0, 1.2);
+    // Snare flicks the sample direction sideways so the halo cracks laterally.
+    vec3 dSample = normalize(d + vec3(snare * 0.07 * sign(d.x + 1e-4), 0.0, 0.0));
     // Wide soft halo around the drifting energy source...
     // Gather tightens the core (inward inhale); lean gently focuses it.
-    float core = pow(max(dot(d, uSunDir), 0.0), 3.0 + uInhale * 2.2 + uLean * 0.9);
+    // Kick softens the falloff (depth pulse from the glow core).
+    float core = pow(max(dot(dSample, uSunDir), 0.0), 3.0 + uInhale * 2.2 + uLean * 0.9 - kick * 0.85);
     // ...plus a faint horizon glow so the rest of the sky isn't dead.
     float horizon = (1.0 - abs(d.y)) * 0.18 * (1.0 - uInhale * 0.35);
     float sparkle = fract(sin(dot(d.xy, vec2(12.9898, 78.233))) * 43758.5453);
     float glitter = 1.0 + uGlitter * (0.2 + 0.8 * sparkle);
-    float a = (core + horizon) * uIntensity * (1.0 - uInhale * 0.3) * (1.0 + uLean * 0.06) * glitter;
+    float flank = smoothstep(0.2, 0.95, abs(d.x)) * (1.0 - abs(d.y) * 0.5);
+    float a = (core + horizon) * uIntensity * (1.0 - uInhale * 0.3) * (1.0 + uLean * 0.06)
+            * glitter * (1.0 + kick * 0.16 * core) * (1.0 + snare * 0.12 * flank);
     gl_FragColor = vec4(uColor, a);
   }
 `;
 
-function Glow({ intensity, palette, reducedMotion }: ModeProps) {
+function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const metricsRef = useMetricsRef();
@@ -786,6 +880,8 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
       uInhale: { value: 0 },
       uGlitter: { value: 0 },
       uLean: { value: 0 },
+      uKick: { value: 0 },
+      uSnare: { value: 0 },
     }),
     [palette.mid],
   );
@@ -793,6 +889,8 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const kickRef = useRef(0);
+  const snareRef = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -801,6 +899,7 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
   useFrame((_s, delta) => {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
+    const kitAmp = kitAmpForTier(tier);
     stillnessRef.current = smoothToward(
       stillnessRef.current,
       stillnessFromMetrics(m.holdBreath, m.silence),
@@ -847,6 +946,21 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     glitterRef.current +=
       (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
+    // Kit accents stay on full dt so kick/snare still fire through holdBreath thaw.
+    kickRef.current = smoothToward(
+      kickRef.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      KIT_KICK_RISE_TAU,
+      KIT_KICK_FALL_TAU,
+    );
+    snareRef.current = smoothToward(
+      snareRef.current,
+      Math.min(1.2, m.snare) * kitAmp,
+      dt,
+      KIT_SNARE_RISE_TAU,
+      KIT_SNARE_FALL_TAU,
+    );
     warmthLingerRef.current +=
       (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dt / AFTERGLOW_WARMTH_TAU));
     vocalLingerRef.current +=
@@ -860,6 +974,8 @@ function Glow({ intensity, palette, reducedMotion }: ModeProps) {
     mat.uniforms.uGlitter!.value =
       glitterRef.current * (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     mat.uniforms.uLean!.value = leanRef.current;
+    mat.uniforms.uKick!.value = kickRef.current;
+    mat.uniforms.uSnare!.value = snareRef.current;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }

@@ -23,6 +23,7 @@ import { NightBloomScene } from './presets/NightBloom';
 import { InkBloomScene } from './presets/InkBloom';
 import { OpalSlickScene } from './presets/OpalSlick';
 import { PaperLanternsScene } from './presets/PaperLanterns';
+import { JellyfishBloomScene } from './presets/JellyfishBloom';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -48,6 +49,7 @@ export type VisualizerId =
   | 'ink_bloom'
   | 'opal_slick'
   | 'paper_lanterns'
+  | 'jellyfish_bloom'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -561,6 +563,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       aura: 0.32,
       cameraMode: 'drift',
       bloomIntensity: 1.05,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  jellyfish_bloom: {
+    id: 'jellyfish_bloom',
+    label: 'Jellyfish Bloom',
+    hint: 'Bioluminescent jellies in dark water — bells contract on gather and thrust on kick; tentacles trail with lagged inertia; snare gusts, hat plankton, tender moonlight, holdBreath hang.',
+    Scene: JellyfishBloomScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1.05,
+      bassShake: 0.35,
+      anima: 0.5,
+      aura: 0.38,
+      cameraMode: 'drift',
+      bloomIntensity: 1.1,
       cameraDistance: 1,
       lightLevel: 1.05,
     },
