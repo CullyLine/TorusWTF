@@ -42,6 +42,8 @@ function smoothToward(
  * Alive cohesion:
  *  - `tenderness` calms turbulence and trail jitter (gentle vocal passages)
  *  - `convergence` power-locks bandSpread so choruses read as one river
+ *  - `holdBreath` / deep silence → nearly freeze advection (particles hang)
+ *  - `leanIn` → densify + draw nearer with pre-chorus anticipation
  *
  * Kit currents (on top of gather/echo):
  *  - kick → bass stream thrusts forward (toward camera / −Z)
@@ -96,6 +98,8 @@ uniform float uDrop;
 uniform float uKick;
 uniform float uSnare;
 uniform float uHat;
+uniform float uStillness;
+uniform float uLeanIn;
 uniform vec4 uWellA;   // xyz center, w strength
 uniform vec4 uWellB;
 uniform vec4 uPointer; // xyz world point, w strength
@@ -124,31 +128,36 @@ void main() {
   // Call and response: gather inhales toward center pre-beat, the hit and
   // the drop release outward; echo replays the phrase as radial ripples.
   v -= p * (uGather * 1.1);
+  // LeanIn: milder sustained draw-in (section anticipation) — stacks with
+  // gather but never replaces the pre-beat inhale.
+  v -= p * (uLeanIn * 0.32);
   v += dir * (uBeat * 0.5 + uRelease * 0.35 + uDrop * 1.4);
   float wave = sin(length(p) * 5.0 - uTime * 7.0);
   v += dir * wave * uEcho * 1.6;
-
-  // Kit currents: bass thrusts forward on kick, mid shears on snare.
-  // Hats only sparkle/densify in the render pass — motion stays axis-split.
-  float bassMask = 1.0 - smoothstep(0.4, 0.6, band);
-  float midMask = smoothstep(0.4, 0.6, band) * (1.0 - smoothstep(1.4, 1.6, band));
-  // Forward = toward camera (−Z) so kicks read as the bass river lunging
-  // into the frame rather than escaping behind it.
-  v.z -= uKick * bassMask * 2.8;
-  // Phase-split L/R so the mid swarm cracks open instead of translating.
-  float lateral = pSeed > 0.5 ? 1.0 : -1.0;
-  v.x += uSnare * midMask * 2.6 * lateral;
 
   // Mood buoyancy (warm rises, cold sinks).
   v.y += uBuoyancy;
 
   // Per-particle speed character so the swarm has individuals in it.
   float character = 0.65 + pSeed * 0.7;
-  p += v * uDelta * character;
+  // HoldBreath freezes continuous advection; leave a whisper so thaw never pops.
+  float stillMul = 1.0 - uStillness * 0.92;
+  p += v * uDelta * character * stillMul;
+
+  // Kit currents stay ungated so kick/snare still punch through thaw.
+  // Hats only sparkle/densify in the render pass — motion stays axis-split.
+  float bassMask = 1.0 - smoothstep(0.4, 0.6, band);
+  float midMask = smoothstep(0.4, 0.6, band) * (1.0 - smoothstep(1.4, 1.6, band));
+  // Forward = toward camera (−Z) so kicks read as the bass river lunging
+  // into the frame rather than escaping behind it.
+  p.z -= uKick * bassMask * 2.8 * uDelta * character;
+  // Phase-split L/R so the mid swarm cracks open instead of translating.
+  float lateral = pSeed > 0.5 ? 1.0 : -1.0;
+  p.x += uSnare * midMask * 2.6 * lateral * uDelta * character;
 
   // Soft containment, then hard respawn at the shell if truly escaped.
   float r = length(p);
-  p -= dir * smoothstep(${(BOUNDS_RADIUS * 0.75).toFixed(2)}, ${(BOUNDS_RADIUS * 1.15).toFixed(2)}, r) * uDelta * 2.2;
+  p -= dir * smoothstep(${(BOUNDS_RADIUS * 0.75).toFixed(2)}, ${(BOUNDS_RADIUS * 1.15).toFixed(2)}, r) * uDelta * 2.2 * stillMul;
 
   float h = ffHash(vec3(vUv * 913.37, fract(uTime) * 100.0), uSeed);
   if (r > ${(BOUNDS_RADIUS * 1.25).toFixed(2)} || h > 0.99935) {
@@ -354,11 +363,19 @@ export function FlowFieldScene({
   // Tenderness / convergence envelopes — fluid calm and lock-in.
   const tenderSmooth = useRef(0);
   const lockSmooth = useRef(0);
+  // HoldBreath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
+  // LeanIn anticipation: densify + draw nearer (pre-chorus pull).
+  const leanSmooth = useRef(0);
   // Kit current envelopes — asymmetric rise/fall so punches feel fluid.
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+
+  const groupRef = useRef<THREE.Group>(null);
 
   // Magnet wells: positions hop on bar boundaries, eased between.
   const wellsRef = useRef({
@@ -433,6 +450,8 @@ export function FlowFieldScene({
         uKick: { value: 0 },
         uSnare: { value: 0 },
         uHat: { value: 0 },
+        uStillness: { value: 0 },
+        uLeanIn: { value: 0 },
         uWellA: { value: new THREE.Vector4(1.2, 0.5, 0, 0) },
         uWellB: { value: new THREE.Vector4(-1.2, -0.5, 0.3, 0) },
         uPointer: { value: new THREE.Vector4(0, 0, 0, 0) },
@@ -625,10 +644,37 @@ export function FlowFieldScene({
     // Field-evolution time: monotonic, music-paced, user-paced. The impact
     // envelope (not the raw beat spike) surges the current on hits so the
     // acceleration reads as a fluid push rather than a jolt.
+    // HoldBreath nearly freezes field evolution so streams hang mid-current.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget * stillAmp,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    const motionMul = 1 - stillness * 0.92;
+
+    // LeanIn: eager climb, slower release so the pull lingers into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
     timeRef.current +=
       dt *
       (0.5 + Math.min(m.energy, 1.5) * 0.4 + m.impact * 0.45 + m.sectionLevel * 0.12) *
-      Math.max(0.05, spd);
+      Math.max(0.05, spd) *
+      motionMul;
 
     // Drop → the field reorganizes into a new pattern.
     if (m.dropEvent > 0.9 && prevDropRef.current <= 0.9) {
@@ -733,6 +779,8 @@ export function FlowFieldScene({
     su.uKick!.value = kickSmooth.current;
     su.uSnare!.value = snareSmooth.current;
     su.uHat!.value = hatSmooth.current;
+    su.uStillness!.value = stillness;
+    su.uLeanIn!.value = lean;
     (su.uWellA!.value as THREE.Vector4).set(wells.a.x, wells.a.y, wells.a.z, wellStrength);
     (su.uWellB!.value as THREE.Vector4).set(wells.b.x, wells.b.y, wells.b.z, wellStrength * 0.8);
     (su.uPointer!.value as THREE.Vector4).set(ptr.world.x, ptr.world.y, ptr.world.z, ptr.strength);
@@ -758,7 +806,9 @@ export function FlowFieldScene({
       (0.04 +
         trailNow * 0.07 * (1 + m.swell * 0.55 * trailCalm + m.impact * 0.2 + m.afterglow * 0.15)) *
       (0.72 + 0.28 * trailCalm);
-    ru.uDensity.value = Math.max(0.02, Math.min(1, densityNow));
+    // LeanIn densifies the visible swarm (distinct from hat high-band sparkle).
+    const densityLean = Math.max(0.02, Math.min(1, densityNow * (1 + lean * 0.32)));
+    ru.uDensity.value = densityLean;
     ru.uHat.value = hatSmooth.current;
     // Additive overdraw normalization: a quarter-million translucent lines
     // saturate to white unless per-line alpha shrinks with the swarm size.
@@ -774,7 +824,7 @@ export function FlowFieldScene({
 
     const hu = headUniforms;
     hu.uPositions.value = writeTarget.texture;
-    hu.uDensity.value = Math.max(0.02, Math.min(1, densityNow));
+    hu.uDensity.value = densityLean;
     hu.uHat.value = hatSmooth.current;
     hu.uOpacity.value =
       (0.52 + m.swell * 0.32 + m.impact * 0.12 + hatSmooth.current * 0.1) *
@@ -786,11 +836,19 @@ export function FlowFieldScene({
     (hu.uColorMid.value as THREE.Color).set(palette.mid);
     (hu.uColorHigh.value as THREE.Color).set(palette.high);
 
+    // LeanIn: draw nearer + slightly larger presence (StarField / Torus pattern).
+    // −Z matches kit punch / Galaxy Garden lean so the river fills the frame.
+    const group = groupRef.current;
+    if (group) {
+      group.position.z = -lean * 0.42;
+      group.scale.setScalar(1 + lean * 0.055);
+    }
+
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
   return (
-    <group>
+    <group ref={groupRef}>
       <lineSegments ref={trailRef} geometry={trailGeometry} material={trailMaterial} frustumCulled={false} />
       <points ref={headRef} geometry={headGeometry} material={headMaterial} frustumCulled={false} />
     </group>
