@@ -39,6 +39,7 @@ const VOCAL_WARMTH_MIX = 0.34;
 /**
  * Particle Storm — curl-advected swarm with kit whip + phrase echo.
  *  - gather → contracts toward center (existing inhale)
+ *  - leanIn → tighten orbit radius + drift nearer (pre-drop coil)
  *  - kick → floor punch along Y
  *  - snare → lateral crack along X
  *  - hat → sparkle size-ticks
@@ -80,6 +81,8 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
 
   // Hold-breath stillness — freeze continuous orbit; kit/echo stay ungated.
   const stillnessSmooth = useRef(0);
+  // LeanIn anticipation: coil orbit tighter + drift nearer (pre-drop pull).
+  const leanSmooth = useRef(0);
 
   // Low tier keeps the gestures readable without strobing sparse points.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
@@ -88,6 +91,7 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
   const vocalAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   // Stillness amp: full hang on high; slightly softer on mid/low.
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const { positions, velocities, phases, bands } = useMemo(() => {
     const p = new Float32Array(baseCount * 3);
@@ -153,6 +157,17 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     // Size ticks held: hat sparkle contribution eases off under stillness
     // (distinct from kit punch envelopes, which stay ungated for thaw hits).
     const hatMul = 1 - stillness * 0.95;
+
+    // LeanIn: eager climb, slower release so the coil lingers into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dtClamped,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // Tenderness calm + vocal warmth (alive cohesion). Soft rise/fall so
     // the swarm eases into hush / warm tint instead of stepping.
@@ -256,7 +271,11 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
       motionMul;
     // Pre-beat gather: the swarm contracts toward center in the breath
     // before each predicted beat, then the hit flings it back out.
+    // LeanIn orbit coil is separate (sustained section-scale, below).
     const gatherPull = 1 - m.gather * dtClamped * 1.6;
+    // Lean tightens the allowed orbit — cloud coils expectant, not gather-pulse.
+    const orbitBound = (5 + m.breath * 2) * (1 - lean * 0.42);
+    const comfortR = orbitBound * 0.85;
     const fv = flowScratch.current;
 
     // Hat sparkle: sharp size ticks on top of swell/impact body size.
@@ -323,8 +342,20 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
       y -= kickY;
       const lateral = phases[i]! > 0.5 ? 1 : -1;
       x += snareX * lateral;
-      const dist = Math.hypot(x, y, z);
-      if (dist > 5 + m.breath * 2) {
+      let dist = Math.hypot(x, y, z);
+      // Soft radial coil under lean: ease excess radius toward the tightened
+      // comfort sphere. Strength tracks excess so advection keeps the swarm
+      // alive at the new orbit — no collapse to a point, and release lets flow
+      // refill the larger bound (distinct from gather's pulsed inhale).
+      if (lean > 0.001 && dist > comfortR) {
+        const excess = (dist - comfortR) / Math.max(0.35, comfortR);
+        const pull = 1 - lean * Math.min(1, excess) * dtClamped * 2.4;
+        x *= pull;
+        y *= pull;
+        z *= pull;
+        dist = Math.hypot(x, y, z);
+      }
+      if (dist > orbitBound) {
         x *= 0.45;
         y *= 0.45;
         z *= 0.45;
@@ -335,6 +366,10 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     }
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
+    // LeanIn: drift the whole swarm nearer (expectant approach). −Z matches
+    // Flow Field / Cosmic Mandala / Mandelbulb so the coil fills the frame.
+    // Distinct from gather's per-particle radial pulse and kit axis punches.
+    points.position.z = -lean * 0.55;
     // Echo reverse also flips the whole-cloud spin so the reverse swirl reads.
     // Tenderness already hushes via `drive * calm`; mid spin softens further.
     // Continuous Y spin rides `drive` (already × motionMul); kit X/Z tilts stay ungated.
