@@ -9,6 +9,8 @@
  *  - kick → upward swirl thrust (local rise punch + bass-warm coils)
  *  - snare → lateral coil shear + flank flash (backbeat crack)
  *  - hat → sparse mote glitter on selected coils
+ *  - holdBreath / deep silence → suspend coils mid-turn + hang motes; thaw on return
+ *  - tenderness → gentle swirl + warm mist toward rosy dusk — gentling, not a freeze
  */
 
 import { useMemo, useRef } from 'react';
@@ -47,6 +49,8 @@ uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
+uniform float uStillness;
+uniform float uTenderness;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -103,6 +107,8 @@ void main() {
 
   float kick = clamp(uKick, 0.0, 1.2);
   float snare = clamp(uSnare, 0.0, 1.2);
+  float soft = clamp(uTenderness, 0.0, 1.0);
+  float stillness = clamp(uStillness, 0.0, 1.0);
 
   // Gather inhale: coils pull toward the vertical axis.
   float fold = uGather * 0.6;
@@ -121,14 +127,18 @@ void main() {
   ang += snare * 0.14 * sign(sin(ang * float(COIL_COUNT) + 0.35));
 
   // Soft elliptical breathe — living mist, not a hard helix.
-  float oval = 1.0 + sin(ang * 2.0 + uTime * 0.32) * (0.028 + uMid * 0.035);
+  // holdBreath gates uTime / uRise in JS so oval nearly freezes mid-turn.
+  float oval = 1.0 + sin(ang * 2.0 + uTime * 0.32) * (0.028 + uMid * 0.035) * mix(1.0, 0.12, stillness);
   r *= oval;
 
   float rise = uRise * (1.0 - uGather * 0.85);
   // Kick advances spiral phase (upward thrust along the helix).
   float riseKick = rise + kick * (0.55 + uBass * 0.2);
+  // Tenderness widens coils (softer dusk edge); kit width paths stay intact.
   float width = 0.14 + uBass * 0.04 + uImpact * 0.05 + kick * 0.03;
-  float pitch = 1.55 + uSwell * 0.35 + kick * 0.18;
+  width *= mix(1.0, 1.38, soft);
+  // Tenderness gentles helix pitch so the swirl eases without freezing.
+  float pitch = (1.55 + uSwell * 0.35 + kick * 0.18) * mix(1.0, 0.82, soft);
 
   float coils = 0.0;
   float moteTick = 0.0;
@@ -150,19 +160,24 @@ void main() {
     coils += line * weight * radial;
 
     // Hat motes: sparse glitter on every ~3rd coil sample.
+    // During holdBreath they hang mid-place (uTime/uRise freeze) at soft residual glow.
     float tickSelect = step(0.62, fract(seed * 5.17 + fi * 0.31));
-    moteTick += line * tickSelect * weight * radial;
+    moteTick += line * tickSelect * weight * radial * mix(1.0, 0.72, stillness);
   }
 
   // Mist body from FBM — soft vapor between the coils.
+  // holdBreath nearly freezes mist advection so vapor hangs with the coils.
   vec2 mistUv = uv * (1.6 + uSwell * 0.35);
   mistUv.y += riseKick * 0.55;
-  mistUv += (fbm(mistUv * 1.4 + uTime * 0.12) - 0.5) * (0.18 + uSwell * 0.2);
+  mistUv += (fbm(mistUv * 1.4 + uTime * 0.12) - 0.5) * (0.18 + uSwell * 0.2) * mix(1.0, 0.12, stillness);
   float mist = fbm(mistUv);
   mist = smoothstep(0.28, 0.82, mist) * (0.45 + uSwell * 0.4 + uEnergy * 0.15);
 
-  coils = clamp(coils, 0.0, 2.2);
+  // Tenderness softens coil bite; holdBreath eases field contrast toward still glow.
+  float contrast = mix(1.0, 0.58, stillness);
+  coils = clamp(coils * contrast, 0.0, 2.2);
   moteTick = clamp(moteTick, 0.0, 1.6);
+  mist *= contrast;
 
   // Impact flare: brighten coils + soft core bloom.
   float flare = uImpact * (0.85 + coils * 0.5);
@@ -182,16 +197,27 @@ void main() {
   // Kick bass-warms coil body; snare cracks toward cooler mid/white.
   coilCol = mix(coilCol, mix(uColorBass, vec3(0.92, 0.88, 0.82), 0.35), kick * 0.36);
   coilCol = mix(coilCol, mix(uColorMid, vec3(0.96, 0.98, 1.0), 0.48), snare * 0.3);
+  // Tenderness: rosy dusk soften — warm pale wash, distinct from holdBreath hush.
+  vec3 rosyDusk = mix(mix(uColorMid, vec3(0.95, 0.62, 0.72), 0.48), vec3(1.0, 0.88, 0.78), 0.4);
+  coilCol = mix(coilCol, rosyDusk, soft * 0.48);
+  silver = mix(silver, mix(silver, vec3(1.0, 0.92, 0.84), 0.5), soft * 0.55);
+  body = mix(body, mix(body, rosyDusk * 0.5, 0.45), soft * 0.38);
+  // holdBreath cools contrast toward a quiet still glow (not tenderness warmth).
+  vec3 hushGlow = mix(uColorBass, vec3(0.28, 0.32, 0.42), 0.4) * 0.55;
+  coilCol = mix(coilCol, mix(coilCol, hushGlow, 0.35), stillness * 0.42);
+  body *= mix(1.0, 0.72, stillness);
 
   vec3 col = body;
   col += coilCol * coils * (0.52 + flare * 0.55 + kick * 0.2);
-  col += silver * mist * (0.22 + uAfterglow * 0.18);
+  col += silver * mist * (0.22 + uAfterglow * 0.18) * mix(1.0, 0.88, soft);
   // Snare flank flash along the column sides (distinct from upward kick / hat motes).
   float flank = smoothstep(0.28, 0.9, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.25, abs(uv.y)));
   col += mix(uColorMid, vec3(0.94, 0.97, 1.0), 0.4) * flank * snare * 0.55;
-  // Hat mote glitter — cool high-band sparkle on selected coils.
-  col += mix(uColorHigh, vec3(1.0), 0.3) * moteTick * uHat * 1.2;
-  col += silver * uAfterglow * (0.08 + coils * 0.1);
+  // Hat mote glitter — cool high-band sparkle on selected coils; hangs during holdBreath.
+  col += mix(uColorHigh, vec3(1.0), 0.3) * moteTick * uHat * 1.2 * mix(1.0, 0.85, soft);
+  // Residual coil/mote hang glow while listening (visible without hat ticks).
+  col += mix(uColorHigh, silver, 0.4) * (coils * 0.14 + moteTick * 0.2) * stillness;
+  col += silver * uAfterglow * (0.08 + coils * 0.1) * mix(1.0, 1.1, soft);
 
   float barFlash = pow(1.0 - uBarPhase, 9.0) * (0.05 + uImpact * 0.1);
   col += uColorHigh * barFlash;
@@ -251,6 +277,10 @@ export function MistSpiralScene({
   const hatSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const afterglowSmooth = useRef(0);
+  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  const stillnessSmooth = useRef(0);
+  // Tenderness hush — rosy dusk gentles swirl on soft vocals.
+  const tenderSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -261,6 +291,9 @@ export function MistSpiralScene({
   const mistOctaves =
     tier === 'high' ? OCTAVES_HIGH : tier === 'mid' ? OCTAVES_MID : OCTAVES_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  // Soft-metric amps: full on high, gentle mid, restrained low.
+  const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(
     () => buildFragmentShader(coilCount, mistOctaves),
     [coilCount, mistOctaves],
@@ -284,6 +317,8 @@ export function MistSpiralScene({
       uEnergy: { value: 0 },
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
+      uStillness: { value: 0 },
+      uTenderness: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -299,10 +334,41 @@ export function MistSpiralScene({
     const dt = Math.min(delta, 0.1);
     const pace = Math.max(0.05, mods.current.speed ?? speed);
     const calm = reducedMotion ? 0.35 : 1;
-    const sectionPace = 0.75 + m.sectionLevel * 0.45;
 
+    // Hold-breath stillness: the mist listens instead of coiling through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so gather/kit accents still fire.
+    const stillnessTarget = Math.min(
+      1,
+      Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+    );
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget * stillAmp,
+      dt,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous motion; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
+
+    // Tenderness hush — soft rise/fall so mist eases into rosy dusk.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness) * tenderAmp,
+      dt,
+      0.12,
+      0.22,
+    );
+
+    // Tenderness eases section pace so intimate moments feel held, not torn.
+    const sectionPace =
+      (0.75 + m.sectionLevel * 0.45) * (1 - tenderSmooth.current * 0.28);
+
+    // holdBreath gates oval / rise clocks; kit envelopes stay on full dt.
     timeRef.current +=
-      dt * pace * sectionPace * calm * (0.5 + m.swell * 0.65 + m.impact * 0.2);
+      dt * pace * sectionPace * calm * motionMul * (0.5 + m.swell * 0.65 + m.impact * 0.2);
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
@@ -340,6 +406,8 @@ export function MistSpiralScene({
 
     // Rise velocity: mist climbs the column; gather slows the loft.
     // Kick adds a brief upward loft punch (sustained rise stays on swell/bass).
+    // holdBreath nearly freezes continuous rise so coils hang mid-turn; kit
+    // envelopes above stay on full dt so accents still fire on thaw.
     const riseSpeed =
       (0.48 +
         swellSmooth.current * 0.9 +
@@ -348,7 +416,8 @@ export function MistSpiralScene({
         kickSmooth.current * 0.85) *
       pace *
       sectionPace *
-      calm;
+      calm *
+      motionMul;
     riseRef.current += dt * riseSpeed;
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
@@ -367,6 +436,8 @@ export function MistSpiralScene({
     mat.uniforms.uEnergy!.value = m.energy + afterglowSmooth.current * 0.25;
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
+    mat.uniforms.uStillness!.value = stillness;
+    mat.uniforms.uTenderness!.value = tenderSmooth.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
