@@ -45,6 +45,8 @@ const VOCAL_WARMTH_MIX = 0.34;
  *  - echo → one reverse swirl in post-phrase gaps
  *  - tenderness → calms swirl/jitter (gentle vocal hush)
  *  - vocalActivity → soft-warms particle tint (alive cohesion)
+ *  - holdBreath / deep silence → suspend mid-orbit (velocity hang, size ticks
+ *    held); thaw on the music's return — distinct from tenderness calm
  */
 export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
@@ -76,11 +78,16 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
   const tenderSmooth = useRef(0);
   const vocalSmooth = useRef(0);
 
+  // Hold-breath stillness — freeze continuous orbit; kit/echo stay ungated.
+  const stillnessSmooth = useRef(0);
+
   // Low tier keeps the gestures readable without strobing sparse points.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   // Vocal tint softens on lower tiers so sparse points don't bloom muddy.
   const vocalAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  // Stillness amp: full hang on high; slightly softer on mid/low.
+  const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const { positions, velocities, phases, bands } = useMemo(() => {
     const p = new Float32Array(baseCount * 3);
@@ -125,6 +132,28 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     const spd = mods.current.speed ?? speed;
     const dtClamped = Math.min(delta, 0.05);
 
+    // Hold-breath stillness: the swarm listens instead of blowing through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so kit / echo accents still fire.
+    const stillnessTarget =
+      Math.min(
+        1,
+        Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+      ) * stillAmp;
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dtClamped,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous orbit / advection / spin; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
+    // Size ticks held: hat sparkle contribution eases off under stillness
+    // (distinct from kit punch envelopes, which stay ungated for thaw hits).
+    const hatMul = 1 - stillness * 0.95;
+
     // Tenderness calm + vocal warmth (alive cohesion). Soft rise/fall so
     // the swarm eases into hush / warm tint instead of stepping.
     tenderSmooth.current = smoothToward(
@@ -145,18 +174,21 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     const vocal = vocalSmooth.current;
     // Gentle vocal passages hush swirl/jitter; kit punches stay on their own
     // envelopes so kick/snare/hat whip remain readable when drums speak.
+    // Tenderness gentles — holdBreath freezes (motionMul); keep them distinct.
     const calm = 1 - tender * 0.58;
 
     // The storm's rage follows the song's arc: valleys drift, peaks tear.
     // Live drums whip the wind beyond what raw band energy reports.
     // Tenderness eases section pace so intimate moments feel held, not torn.
+    // motionMul suspends continuous drive during holdBreath (kit stays ungated).
     const sectionPace = (0.7 + m.sectionLevel * 0.5) * (1 - tender * 0.32);
     const drive =
       delta *
       spd *
       (0.15 + m.energy * 2.4 + m.impact * 3 + m.drumActivity * 0.8) *
       sectionPace *
-      calm;
+      calm *
+      motionMul;
     const pulse = 1 + m.bass * 0.8 + m.impact * 0.55;
     const activeRatio = 0.35 + m.flow * 0.65;
 
@@ -208,23 +240,36 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     const flowSign = 1 - reverseAmt * 2;
 
     // Shared flow current — same math as the Flow Field flagship.
-    flowTimeRef.current += dtClamped * spd * (0.5 + Math.min(m.energy, 1.5) * 0.4) * flowSign;
+    // Continuous curl clock freezes with the swarm; echo reverse still flips sign.
+    flowTimeRef.current +=
+      dtClamped * spd * (0.5 + Math.min(m.energy, 1.5) * 0.4) * flowSign * motionMul;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
     // Tenderness softens fine curl detail + swirl (the storm hushes).
     fp.turbulence *= 1 - tender * 0.72;
     fp.swirl *= 1 - tender * 0.48;
     const flowAmount =
-      dtClamped * (0.45 + m.swell * 0.7 + m.dropEvent * 1.2) * flowSign * (0.72 + 0.28 * calm);
+      dtClamped *
+      (0.45 + m.swell * 0.7 + m.dropEvent * 1.2) *
+      flowSign *
+      (0.72 + 0.28 * calm) *
+      motionMul;
     // Pre-beat gather: the swarm contracts toward center in the breath
     // before each predicted beat, then the hit flings it back out.
     const gatherPull = 1 - m.gather * dtClamped * 1.6;
     const fv = flowScratch.current;
 
     // Hat sparkle: sharp size ticks on top of swell/impact body size.
-    mat.size = 0.045 + m.swell * 0.05 + m.impact * 0.04 + hatSmooth.current * 0.055;
+    // hatMul holds ticks mid-air during holdBreath (thaw restores sparkle).
+    const hatTick = hatSmooth.current * hatMul;
+    mat.size = 0.045 + m.swell * 0.05 + m.impact * 0.04 + hatTick * 0.055;
     // Afterglow keeps the swarm faintly incandescent after big moments.
-    mat.opacity = Math.min(1, 0.55 + m.swell * 0.4 + m.afterglow * 0.15 + hatSmooth.current * 0.12);
+    // Soft hush dim under stillness — cool hang, distinct from tenderness warm.
+    const hushDim = 1 - stillness * 0.28;
+    mat.opacity = Math.min(
+      1,
+      (0.55 + m.swell * 0.4 + m.afterglow * 0.15 + hatTick * 0.12) * hushDim,
+    );
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
@@ -247,7 +292,8 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     }
     const bassGain = 1 + m.impact * 0.35 + kickSmooth.current * 0.25;
     const midGain = 1 + m.mid * 0.25 + snareSmooth.current * 0.3;
-    const highGain = 1 + m.shimmer * 0.45 + hatSmooth.current * 0.55;
+    // Hat gain also holds under stillness so sparkle doesn't strobe mid-hang.
+    const highGain = 1 + m.shimmer * 0.45 + hatTick * 0.55;
 
     // Kit punches: kick floors Y, snare cracks X — distinct axes.
     const kickY = kickSmooth.current * dtClamped * 5.2;
@@ -291,6 +337,7 @@ export function ParticleStormScene({ analyser, palette, tier, speed = 1 }: Visua
     colorAttr.needsUpdate = true;
     // Echo reverse also flips the whole-cloud spin so the reverse swirl reads.
     // Tenderness already hushes via `drive * calm`; mid spin softens further.
+    // Continuous Y spin rides `drive` (already × motionMul); kit X/Z tilts stay ungated.
     points.rotation.y += drive * (0.5 + m.mid * (1 - tender * 0.4)) * flowSign;
     points.rotation.x += m.impact * 0.05 + m.dropEvent * 0.02 + kickSmooth.current * 0.012;
     // Snare briefly tilts the storm on Z so the lateral crack owns the frame.
