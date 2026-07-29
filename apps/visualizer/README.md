@@ -36,6 +36,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `opal_slick`          | Opal Slick          | Dark rain puddle — thin-film rainbow sheen; kick ripples bend the film, snare shears, hats glint, gather pulls center |
 | `paper_lanterns`      | Paper Lanterns      | Night flotilla over dark water — buoyant rise, kick flame/lift, snare gust, hat ticks, gather center, honey tenderness |
 | `jellyfish_bloom`     | Jellyfish Bloom     | Bioluminescent jellies — gather contract, kick thrust, lagged tentacles, snare gust, hat plankton, tender moonlight  |
+| `murmuration`         | Murmuration         | Starling flock at dusk — banked curl-noise ribbon; gather tightens, kick wave, snare shear, hat glints, golden hush  |
 | `rainforest_reverie`  | Rainforest Reverie  | iq's Rainforest (ported with permission) — audio breathes the fog, wind, clouds, and sun                             |
 | `alien_planet`        | Alien Planet        | Raymarched valley of alien tree crowns with breathing mist banks, wind, and sun bursts                               |
 | `tidal_sanctuary`     | Tidal Sanctuary     | Audio-reactive ocean with low-band depth, mid-band water, and high-band foam                                         |
@@ -59,7 +60,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 | Feature                       | Free                   | Full ($10 one-time)                             |
 | ----------------------------- | ---------------------- | ----------------------------------------------- |
-| All 25 presets + live preview | Yes                    | Yes                                             |
+| All 26 presets + live preview | Yes                    | Yes                                             |
 | Export length                 | Unlimited              | Unlimited                                       |
 | Export resolution             | 720p                   | Up to 4K                                        |
 | Export FPS                    | 30                     | Up to 240                                       |

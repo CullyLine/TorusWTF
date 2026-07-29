@@ -39,6 +39,11 @@ import type { VisualImpulses } from './impulse';
  *    saturation — a single unified chord that relaxes as parts diverge.
  *    Distinct from gather/leanIn cyan casts, hush crawl-freeze, and
  *    echo's one-shot glint
+ *  - tension coil: as `tension` climbs before a drop, deepen value contrast
+ *    and pull lightness toward the palette's darkest base anchor with hue
+ *    held steady — the scene coils dark, then springs back through the
+ *    existing dropEvent bloom. Value-only; distinct from leanIn cyan (#84),
+ *    hush crawl (#57), echo glint (#94), and convergence hue pull (#106)
  *  - saturation and brightness swell with loudness and land with beat
  *    impacts — choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
@@ -136,6 +141,8 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
   const echoGlintSign = useRef(1);
   /** Smoothed convergence — chord lock pulls hues together + deepens sat. */
   const chordSmooth = useRef(0);
+  /** Smoothed tension coil — value darken + contrast; springs loose on drop. */
+  const tensionCoilRef = useRef(0);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
@@ -158,6 +165,7 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       leanCoolRef.current *= Math.exp(-dt / 0.2);
       echoSmooth.current *= Math.exp(-dt / 0.28);
       chordSmooth.current *= Math.exp(-dt / 0.28);
+      tensionCoilRef.current *= Math.exp(-dt / 0.18);
       if (echoTravel.current < 1) echoTravel.current = Math.min(1, echoTravel.current + dt * 1.2);
       if (out.bass !== base.bass) out.bass = base.bass;
       if (out.mid !== base.mid) out.mid = base.mid;
@@ -286,6 +294,23 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     // Collapse the tiny mid/high orbit offsets as the chord locks.
     const bandSpread = 1 - chord * 0.92;
 
+    // Tension coil — value/contrast only (hue untouched). Slow coil-in as
+    // tension climbs; spring loose on dropEvent/release so the existing
+    // drop bloom reclaims the scene without a snap. Distinct from leanIn
+    // cyan+sat, hush crawl, echo glint, and convergence hue pull.
+    const releasing = m.dropEvent > 0.12 || m.release > 0.18;
+    const coilTarget = releasing ? 0 : clamp(m.tension, 0, 1);
+    tensionCoilRef.current = smoothToward(
+      tensionCoilRef.current,
+      coilTarget,
+      dt,
+      // Slow build anticipation (~0.4s) — matches SceneRig coil timescale feel.
+      0.4,
+      // Faster spring-loose into the drop bloom.
+      0.12,
+    );
+    const coil = life * tensionCoilRef.current;
+
     // Signed hue cast: + → amber (~+14°), − → cyan (~−14°). Independent of
     // the slow orbit and additive with drop kicks so drops still punch.
     // Extra hush cyan lean (~−8°) so quiet bars cool even when mood was warm.
@@ -322,21 +347,38 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
 
     // Chord center = circular mean of the three base hues. Each band walks
     // toward it by chordPull; sparse verses leave bandSpread open.
+    // Also capture raw lightness for the tension-coil dark anchor.
     scratchColor.set(base.bass);
     scratchColor.getHSL(scratchHSL);
     const hBass = scratchHSL.h;
+    const lBass = scratchHSL.l;
     scratchColor.set(base.mid);
     scratchColor.getHSL(scratchHSL);
     const hMid = scratchHSL.h;
+    const lMid = scratchHSL.l;
     scratchColor.set(base.high);
     scratchColor.getHSL(scratchHSL);
     const hHigh = scratchHSL.h;
+    const lHigh = scratchHSL.l;
     const chordHue = meanHue3(hBass, hMid, hHigh);
     const bassChord = hueDelta(hBass, chordHue) * chordPull;
     const midChord = hueDelta(hMid, chordHue) * chordPull;
     const highChord = hueDelta(hHigh, chordHue) * chordPull;
+    // Darkest base L is the coil anchor; mean L is the contrast pivot.
+    const coilAnchorL = Math.min(lBass, lMid, lHigh);
+    const coilMeanL = (lBass + lMid + lHigh) / 3;
 
-    applyLife(out, 'bass', base.bass, hueShift + bassChord, satBoost, lightBoost * 0.96);
+    applyLife(
+      out,
+      'bass',
+      base.bass,
+      hueShift + bassChord,
+      satBoost,
+      lightBoost * 0.96,
+      coil,
+      coilAnchorL,
+      coilMeanL,
+    );
     applyLife(
       out,
       'mid',
@@ -344,6 +386,9 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       hueShift + life * 0.006 * bandSpread + midChord,
       satBoost,
       lightBoost,
+      coil,
+      coilAnchorL,
+      coilMeanL,
     );
     // Highs shimmer a touch further around the wheel and catch the sparkle.
     applyLife(
@@ -353,6 +398,9 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       hueShift + life * (0.012 + m.shimmer * 0.015) * bandSpread + highChord,
       satBoost,
       lightBoost * (1 + m.shimmer * 0.1 * bandSpread),
+      coil,
+      coilAnchorL,
+      coilMeanL,
     );
   });
 
@@ -366,14 +414,28 @@ function applyLife(
   hueShift: number,
   satBoost: number,
   lightBoost: number,
+  coil = 0,
+  coilAnchorL = 0,
+  coilMeanL = 0.5,
 ): void {
   scratchColor.set(baseHex);
   scratchColor.getHSL(scratchHSL);
+  // Tension coil runs in base-L space (hue untouched) before lightBoost so
+  // the dark-anchor pull and contrast deepen stay consistent across bands.
+  let l = scratchHSL.l;
+  if (coil > 0.001) {
+    // Pull lightness toward the darkest palette anchor.
+    l += (coilAnchorL - l) * coil * 0.55;
+    // Deepen value contrast around the three-band mean.
+    l = coilMeanL + (l - coilMeanL) * (1 + coil * 0.45);
+    // Overall dark coil — the scene densifies before the drop.
+    l *= 1 - coil * 0.18;
+  }
   scratchColor.setHSL(
     wrap01(scratchHSL.h + hueShift),
     clamp(scratchHSL.s * satBoost, 0, 1),
     // Ceiling below pure white so bloom has color to bleed, not blowout.
-    clamp(scratchHSL.l * lightBoost, 0.02, 0.86),
+    clamp(l * lightBoost, 0.02, 0.86),
   );
   out[band] = `#${scratchColor.getHexString()}`;
 }
