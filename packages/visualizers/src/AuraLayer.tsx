@@ -16,6 +16,7 @@ import { useMetricsRef } from './metrics';
  *  - gather → wisps drift inward (the inhale before the kick)
  *  - impact / release → burst outward
  *  - shimmer / hat → glitter ticks on size + opacity
+ *  - kick → soul-glow core pulse + brief inward-downward wisp dip (heartbeat)
  *  - snare → brief lateral scatter flick (backbeat sideways, not radial/Z)
  *  - leanIn → mild approach toward camera/center (anticipation, pre-drop)
  *  - echo → one-shot counter-drift swirl + rhythmic glint replay in phrase gaps
@@ -101,6 +102,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const gatherSmooth = useRef(0);
   const burstSmooth = useRef(0);
   const glitterSmooth = useRef(0);
+  // Kick heartbeat: core pulse + inward-downward dip — distinct from snare X flick.
+  const kickSmooth = useRef(0);
   // Snare backbeat: brief lateral scatter — distinct from gather/lean/echo.
   const snareSmooth = useRef(0);
   // Smoothed lean-in so anticipation eases toward the viewer, not snaps.
@@ -125,7 +128,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     tier === 'high' ? WISP_COUNT_HIGH : tier === 'mid' ? WISP_COUNT_MID : WISP_COUNT_LOW;
   // Soften reply on mid/low so the overlay never strobes under the preset.
   const echoAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
-  // Kit + ember amp: mid/low keep the flick/warmth readable without fighting presets.
+  // Kit + ember amp: mid/low keep the kick/flick/warmth readable without fighting presets.
   const kitAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
   const warmthMix =
     (tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75) * AFTERGLOW_WARMTH_MIX;
@@ -208,6 +211,14 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     burstSmooth.current = smoothToward(burstSmooth.current, burstTarget, dt, 0.03, 0.14);
     const glitterTarget = Math.min(1.3, m.hat * 0.95 + m.shimmer * 0.55);
     glitterSmooth.current = smoothToward(glitterSmooth.current, glitterTarget, dt, 0.025, 0.11);
+    // Kick rises fast (heartbeat thump), eases out — kit ungated by stillness.
+    kickSmooth.current = smoothToward(
+      kickSmooth.current,
+      Math.min(1.2, m.kick) * kitAmp,
+      dt,
+      0.025,
+      0.14,
+    );
     // Snare rises fast (backbeat flick), eases out — kit ungated by stillness.
     snareSmooth.current = smoothToward(
       snareSmooth.current,
@@ -270,6 +281,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const gather = gatherSmooth.current;
     const burst = burstSmooth.current;
     const glitter = glitterSmooth.current;
+    const kick = kickSmooth.current;
     const snare = snareSmooth.current;
     const lean = leanSmooth.current;
     const stillness = stillnessSmooth.current;
@@ -313,6 +325,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       const swirlSpeed = swirlAmt * 2.6 * echoMul;
       // Lateral scatter speed — world-X flick with per-wisp sign (not echo swirl).
       const snareFlick = snare * 3.4;
+      // Kick dip speed — brief inward + downward thump (not snare X, not gather inhale).
+      const kickDip = kick * 2.6;
       const emberMix = Math.max(0, Math.min(1, warmthLinger)) * warmthMix;
       const emberR = AFTERGLOW_EMBER.r;
       const emberG = AFTERGLOW_EMBER.g;
@@ -370,6 +384,19 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           const yKick = 0.28 * Math.sin(seedPhase * 1.4 + i * 0.23);
           x += sign * snareFlick * scatter * dt;
           y += sign * snareFlick * yKick * dt;
+        }
+
+        // Kick inward-downward dip: chest thump — brief radial tuck plus a
+        // floor-bound Y drop. Vertical/radial answer to snare's lateral flick;
+        // weaker and shorter than gather inhale, ungated by hush.
+        if (kickDip > 0.01) {
+          const seedPhase = seeds[i * 4 + 3]!;
+          const dipPhase = 0.7 + 0.3 * Math.sin(seedPhase * 2.1 + i * 0.19);
+          const inward = kickDip * dipPhase * dt * 0.55;
+          const down = kickDip * dipPhase * dt * 1.15;
+          x -= dx * invR * inward;
+          y -= dy * invR * inward * 0.35 + down;
+          z -= dz * invR * inward;
         }
 
         // Lean approach: bias toward the camera (+Z) with per-wisp phase so
@@ -469,6 +496,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       const tenderExpand = 1 + m.tenderness * 0.7;
       const silenceMute = 1 - m.silence * 0.6;
       // Inhale dims slightly; burst + glitter lift intensity with the flock.
+      // Kick punches the soul-glow core — the heartbeat thump (not snare/hat).
       // Lean adds a soft presence lift (anticipation), weaker than burst.
       // Echo lifts the halo briefly during the reply, then eases with travel.
       glowMat.uniforms.uIntensity!.value =
@@ -476,6 +504,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           m.bass * 0.5 +
           m.beat * 0.3 +
           m.release * 0.5 +
+          kick * 0.42 +
           burst * 0.22 +
           glitter * 0.18 +
           lean * 0.1 * leanMul +
@@ -500,12 +529,14 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // from echo cool and from tenderness soft expand.
       applyAfterglowEmber(glowColor, warmthLinger, scratchEmber.current, warmthMix);
       // Soft radius inhale / release so the halo flocks with the wisps.
+      // Kick briefly opens the core (chest swell) then rides the kick envelope out.
       // Stillness tucks the halo in slightly while listening.
       // Lean gently enlarges toward the viewer — presence approaches.
       glowMat.uniforms.uRadius!.value =
         1 -
         gather * 0.12 +
-        burst * 0.08 -
+        burst * 0.08 +
+        kick * 0.07 -
         stillness * 0.1 +
         lean * 0.05 * leanMul +
         echoVis * echoMul * 0.04;
@@ -513,7 +544,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         const s =
           1 -
           gather * 0.06 +
-          burst * 0.05 -
+          burst * 0.05 +
+          kick * 0.045 -
           stillness * 0.04 +
           lean * 0.035 * leanMul +
           echoVis * echoMul * 0.025;
