@@ -18,6 +18,8 @@
  *  - hat   → corner-rail sparkle ticks
  *  - holdBreath / deep silence → nearly freeze rush + ease wall punch
  *    so the tunnel listens, then resumes when the music returns
+ *  - tenderness → ease the rush + warm walls candlelit-soft (gentle vocals)
+ *  - afterglow → lingering warm heat trace on the walls after big moments
  *
  * Plus ~3k "existential particles" advected by the shared curl-noise flow
  * field while the conveyor sweeps them past the camera.
@@ -39,7 +41,7 @@ import {
 
 /**
  * Smooth toward a target with asymmetric rise/fall (seconds).
- * Keeps kit accents and holdBreath stillness fluid — no linear snaps.
+ * Keeps kit / holdBreath / tenderness / afterglow fluid — no linear snaps.
  */
 function smoothToward(
   current: number,
@@ -57,6 +59,11 @@ function smoothToward(
 const HALF = 2.2; // half width/height of the square bore
 const DEPTH = 3; // depth of one segment
 const RESET_Z = 8; // recycle plane behind the camera
+
+/** Candlelit soft — tender passages warm the bore without blowing it out. */
+const CANDLE_WARM = new THREE.Color(1.0, 0.72, 0.42);
+/** Residual heat after peaks — amber linger, distinct from white drop flash. */
+const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.58, 0.28);
 
 // ---------------------------------------------------------------------------
 // Tunnel segment shader — one template geometry shared by every segment.
@@ -111,10 +118,13 @@ const tunnelFragment = /* glsl */ `
 uniform vec3 uWallColor;
 uniform vec3 uPyrColor;
 uniform vec3 uAccentColor;
+uniform vec3 uWarmColor;
 uniform float uHigh;
 uniform float uFlash;
 uniform float uFar;
 uniform float uSnare;
+uniform float uTenderness;
+uniform float uAfterglow;
 
 varying float vKind;
 varying float vViewZ;
@@ -140,6 +150,14 @@ void main() {
   // shockwave arriving from the far end.
   float depthBias = smoothstep(4.0, 24.0, vViewZ);
   col += vec3(1.0) * uFlash * (0.12 + depthBias * 0.5);
+
+  // Tenderness: candlelit soft wash (near walls read warmer, not brighter).
+  // Afterglow: residual heat lingering deeper in the throat after peaks —
+  // distinct from the white drop flash and from holdBreath hush.
+  float tenderHeat = uTenderness * (0.55 - depthBias * 0.2);
+  float glowHeat = uAfterglow * (0.22 + depthBias * 0.55);
+  col = mix(col, uWarmColor, clamp(tenderHeat * 0.55 + glowHeat * 0.42, 0.0, 0.72));
+  col += uWarmColor * glowHeat * 0.28;
 
   // Depth fog into black — the infinite throat.
   float fog = 1.0 - smoothstep(10.0, uFar, vViewZ);
@@ -335,8 +353,14 @@ export function InfiniteTunnelScene({
   const hatSmooth = useRef(0);
   // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
+  // Tenderness hush — eases rush + candlelit walls (still breathes).
+  const tenderSmooth = useRef(0);
+  // Afterglow linger — warm wall heat after peaks.
+  const afterglowSmooth = useRef(0);
 
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const glowAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   // ---- Tunnel materials (even/odd alternating two-tone) ----
   const evenMaterial = useMemo(
@@ -354,9 +378,12 @@ export function InfiniteTunnelScene({
           uHigh: { value: 0 },
           uFlash: { value: 0 },
           uFar: { value: tunnelLength * 0.9 },
+          uTenderness: { value: 0 },
+          uAfterglow: { value: 0 },
           uWallColor: { value: new THREE.Color(palette.bass) },
           uPyrColor: { value: new THREE.Color(palette.mid) },
           uAccentColor: { value: new THREE.Color(palette.high) },
+          uWarmColor: { value: new THREE.Color(CANDLE_WARM) },
         },
       }),
     // Palette and length are re-set every frame in useFrame.
@@ -483,6 +510,9 @@ export function InfiniteTunnelScene({
     mid: new THREE.Color(),
     high: new THREE.Color(),
     dim: new THREE.Color(),
+    warm: new THREE.Color(),
+    candle: new THREE.Color().copy(CANDLE_WARM),
+    amber: new THREE.Color().copy(AFTERGLOW_AMBER),
   });
 
   useFrame((state, delta) => {
@@ -516,11 +546,35 @@ export function InfiniteTunnelScene({
     // Ease sustained wall punch / kick punch while listening.
     const punchMul = 1 - stillness * 0.88;
 
+    // Tenderness: damp the rush without freezing (holdBreath owns freeze).
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness) * tenderAmp,
+      dt,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmooth.current;
+    const tenderRushMul = 1 - tender * 0.45;
+
+    // Afterglow: slow rise / slower fall so wall heat lingers after peaks.
+    afterglowSmooth.current = smoothToward(
+      afterglowSmooth.current,
+      Math.min(1, m.afterglow) * glowAmp,
+      dt,
+      0.18,
+      0.8,
+    );
+    const afterglow = afterglowSmooth.current;
+
     // ---- The throttle: audio drives the conveyor (the original's soul) ----
     const silenceDamp = 1 - m.silence * 0.88;
     const tunnelSpeed =
-      ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) * silenceDamp * rushMul +
-        0.12 * (1 - stillness * 0.9)) *
+      ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) *
+        silenceDamp *
+        rushMul *
+        tenderRushMul +
+        0.12 * (1 - stillness * 0.9) * (1 - tender * 0.35)) *
       spd;
 
     // ---- Kit accents: kick wall punch / snare lateral / hat rail sparkle ----
@@ -549,7 +603,9 @@ export function InfiniteTunnelScene({
     );
 
     // ---- Segment conveyor + counter-roll ----
-    const rollRate = (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt * (1 - stillness * 0.7);
+    // Tenderness gentles the counter-roll so intimate passages feel held.
+    const rollRate =
+      (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt * (1 - stillness * 0.7) * (1 - tender * 0.4);
     for (let i = 0; i < tunnel.segments.length; i++) {
       const seg = tunnel.segments[i]!;
       seg.position.z += tunnelSpeed * dt;
@@ -568,8 +624,11 @@ export function InfiniteTunnelScene({
     // Transient-driven so the bore stays intact between hits — sustained
     // bass only swells it slightly; beats and drops blow it open.
     // punchMul eases the bore open during holdBreath so walls listen too.
+    // Soften sustained wall aggression under tenderness (kit punch stays).
     const explodeTarget =
-      Math.min(1.3, m.bass * 0.18 + m.impact * 0.55 + m.dropEvent * 0.9) * punchMul;
+      Math.min(1.3, m.bass * 0.18 + m.impact * 0.55 + m.dropEvent * 0.9) *
+      punchMul *
+      (1 - tender * 0.28);
     explodeRef.current += (explodeTarget - explodeRef.current) * Math.min(1, dt * 10);
     // Teeth bite hardest when the drum section is actually playing — the
     // heuristic drum-activity signal, not just any mid-band energy.
@@ -582,6 +641,8 @@ export function InfiniteTunnelScene({
     cs.bass.set(palette.bass);
     cs.mid.set(palette.mid);
     cs.high.set(palette.high);
+    // Blend candle (tenderness) + amber (afterglow) into one warm driver.
+    cs.warm.copy(cs.candle).lerp(cs.amber, Math.min(1, afterglow * 0.85));
 
     const eu = evenMaterial.uniforms;
     const ou = oddMaterial.uniforms;
@@ -594,23 +655,39 @@ export function InfiniteTunnelScene({
       u.uHigh!.value = m.high;
       u.uFlash!.value = flashRef.current;
       u.uFar!.value = tunnelLength * 0.9;
+      u.uTenderness!.value = tender;
+      u.uAfterglow!.value = afterglow;
       (u.uAccentColor!.value as THREE.Color).copy(cs.high);
+      (u.uWarmColor!.value as THREE.Color).copy(cs.warm);
     }
     // Even segments: dim wall in the bass color (brightness breathes with
-    // the bass), pyramids in mid.
-    const wallPulse = 0.16 + m.bass * 0.14;
-    (eu.uWallColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(wallPulse);
-    (eu.uPyrColor!.value as THREE.Color).copy(cs.mid).multiplyScalar(0.45);
+    // the bass), pyramids in mid. Afterglow lifts residual heat; tenderness
+    // milks slightly toward candlelit soft without a white flash.
+    const wallPulse =
+      (0.16 + m.bass * 0.14) * (1 - tender * 0.1) * (1 + afterglow * 0.28);
+    const wallC = (eu.uWallColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(wallPulse);
+    wallC.lerp(cs.warm, Math.min(0.62, tender * 0.42 + afterglow * 0.38));
+    const pyrC = (eu.uPyrColor!.value as THREE.Color).copy(cs.mid).multiplyScalar(0.45);
+    pyrC.lerp(cs.warm, Math.min(0.5, tender * 0.28 + afterglow * 0.22));
     // Odd segments: near-black walls (your hsl(278,5%,5%)), bass-tinted pyramids.
-    (ou.uWallColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(0.045);
-    (ou.uPyrColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(0.2);
+    const oddWall = (ou.uWallColor!.value as THREE.Color)
+      .copy(cs.bass)
+      .multiplyScalar(0.045 * (1 + afterglow * 0.9));
+    oddWall.lerp(cs.warm, Math.min(0.55, tender * 0.35 + afterglow * 0.4));
+    const oddPyr = (ou.uPyrColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(0.2);
+    oddPyr.lerp(cs.warm, Math.min(0.45, tender * 0.22 + afterglow * 0.28));
 
     // High band lights the corner rails; hats glitter them with sharp ticks
     // distinct from the slower shimmer wash and from bass wall explode.
-    railMaterial.color.copy(cs.high);
+    // Afterglow leaves a brief warm ember on the rails; tenderness softens glitter.
+    railMaterial.color.copy(cs.high).lerp(cs.warm, Math.min(0.55, tender * 0.25 + afterglow * 0.4));
     railMaterial.opacity = Math.min(
       1,
-      0.1 + m.high * 0.55 + m.shimmer * 0.25 + hatSmooth.current * 0.7,
+      0.1 +
+        m.high * 0.55 * (1 - tender * 0.35) +
+        m.shimmer * 0.25 * (1 - tender * 0.45) +
+        hatSmooth.current * 0.7 +
+        afterglow * 0.12,
     );
 
     // ---- Echo rings: phrase memory rushing back up the tunnel ----
@@ -643,8 +720,10 @@ export function InfiniteTunnelScene({
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
     fp.turbulence *= turbulenceNow;
-    const drift = dt * (0.35 + m.energy * 0.65 + m.dropEvent * 1.2);
-    const swirl = vortexNow * dt * (0.6 + m.mid * 1.2);
+    // Tenderness gentles particle advection; afterglow keeps a faint warm drift.
+    const drift =
+      dt * (0.35 + m.energy * 0.65 + m.dropEvent * 1.2 + afterglow * 0.12) * (1 - tender * 0.4);
+    const swirl = vortexNow * dt * (0.6 + m.mid * 1.2) * (1 - tender * 0.35);
     const sweep = tunnelSpeed * dt * 0.85;
     const fv = flowScratch.current;
     const arr = particles.positions;
@@ -695,9 +774,10 @@ export function InfiniteTunnelScene({
     pu.uHigh!.value = m.high;
     pu.uBeat!.value = m.impact;
     pu.uHat!.value = hatSmooth.current;
-    (pu.uColorBass!.value as THREE.Color).copy(cs.bass);
-    (pu.uColorMid!.value as THREE.Color).copy(cs.mid);
-    (pu.uColorHigh!.value as THREE.Color).copy(cs.high);
+    const warmMix = Math.min(0.5, tender * 0.28 + afterglow * 0.32);
+    (pu.uColorBass!.value as THREE.Color).copy(cs.bass).lerp(cs.warm, warmMix);
+    (pu.uColorMid!.value as THREE.Color).copy(cs.mid).lerp(cs.warm, warmMix * 0.85);
+    (pu.uColorHigh!.value as THREE.Color).copy(cs.high).lerp(cs.warm, warmMix * 0.55);
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
