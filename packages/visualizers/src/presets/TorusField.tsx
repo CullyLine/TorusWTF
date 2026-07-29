@@ -59,6 +59,8 @@ function applyAfterglowWarmth(
  *  - hat → outer point-cloud size ticks
  *  - echo → one reverse of flow drift in post-phrase gaps
  *  - afterglow → residual amber color temperature on tube emissive
+ *  - holdBreath / deep silence → suspend flow + rotation to a hang; dim the
+ *    particle tube toward a still ember ring; thaw on the music's return
  */
 export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
@@ -90,11 +92,15 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   // Lean-in anticipation: ease inward so pre-drop tension reads as a held pull.
   // Slower fall than rise so the approach lingers into the drop (Aura-style).
   const leanSmooth = useRef(0);
+  // Hold-breath stillness — freeze continuous flow/spin; kit/echo stay ungated.
+  const stillnessSmooth = useRef(0);
 
   const particleCount = tier === 'high' ? 6000 : tier === 'mid' ? 2500 : 800;
   // Low tier keeps gestures readable without strobing sparse points.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Stillness amp: full hang on high; slightly softer on mid/low.
+  const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   // Soften amber mix on sparse low tier so bloom doesn’t blow out.
   const warmthMix =
     (tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1) * AFTERGLOW_WARMTH_MIX;
@@ -139,7 +145,31 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const spd = mods.current.speed ?? speed;
     const dtClamped = Math.min(delta, 0.05);
 
+    // Hold-breath stillness: the field listens instead of spinning through quiet.
+    // Rise a touch slower than fall so the freeze feels attentive; thaw
+    // promptly when music returns so kit / echo accents still fire.
+    const stillnessTarget =
+      Math.min(
+        1,
+        Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
+      ) * stillAmp;
+    stillnessSmooth.current = smoothToward(
+      stillnessSmooth.current,
+      stillnessTarget,
+      dtClamped,
+      0.14,
+      0.08,
+    );
+    const stillness = stillnessSmooth.current;
+    // Nearly freeze continuous flow / rotation; leave a whisper so thaw never pops.
+    const motionMul = 1 - stillness * 0.92;
+    // Hat ticks held mid-hang (distinct from ungated kick/snare punches).
+    const hatMul = 1 - stillness * 0.95;
+    // Soft hush dim — cool ember ring, distinct from afterglow amber warmth.
+    const emberDim = 1 - stillness * 0.42;
+
     // Smooth kit envelopes so punches feel fluid, not gated snaps.
+    // Kick/snare stay ungated so the heartbeat/crack still land through hush.
     kickSmooth.current = smoothToward(
       kickSmooth.current,
       Math.min(1.2, m.kick) * kitAmp,
@@ -162,8 +192,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       0.055,
     );
     // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soft under stillness so the hang owns quiet bars (approach ≠ freeze).
     leanSmooth.current = smoothToward(leanSmooth.current, m.leanIn, dtClamped, 0.06, 0.18);
-    const lean = leanSmooth.current;
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // One reverse drift per echo impulse — arm on quiet, fire on rise.
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dtClamped, 0.05, 0.3);
@@ -190,9 +221,10 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Section pacing: the field turns with the song's arc — near-still in
     // valleys, flying at peaks. Tenderness (vocal-led soft passages) eases
     // the pace further so intimate moments feel held, not spun.
+    // motionMul suspends continuous drive during holdBreath (kit stays ungated).
     const sectionPace = (0.65 + m.sectionLevel * 0.55) * (1 - m.tenderness * 0.25);
     const flowSpeed =
-      delta * spd * (0.35 + m.mid * 3 + m.impact * 2) * sectionPace * flowSign;
+      delta * spd * (0.35 + m.mid * 3 + m.impact * 2) * sectionPace * flowSign * motionMul;
     const activeRatio = 0.45 + m.flow * 0.55;
 
     // Gather: the pre-beat inhale pulls the shell in a breath before each
@@ -207,8 +239,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       shellBase + kickTube,
       shellBase + kickTube * 0.35,
     );
+    // Continuous spin hangs under stillness; kit snare Z roll stays ungated.
     torus.rotation.y += flowSpeed * 0.4;
-    torus.rotation.x += delta * spd * (0.03 + m.high * 0.2);
+    torus.rotation.x += delta * spd * (0.03 + m.high * 0.2) * motionMul;
     // Snare: brief lateral roll on the wire shell.
     torus.rotation.z = snareSmooth.current * 0.09 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
 
@@ -225,6 +258,8 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       // Afterglow holds the shell warm for seconds after a peak — the room
       // still ringing after the chorus ends. Kick blooms the tube; snare
       // flashes mid laterally via a short emissive kick.
+      // emberDim hushes the shell toward a still coal under holdBreath
+      // (distinct from afterglow amber color temperature).
       sm.emissiveIntensity =
         (0.35 +
           m.swell * 0.7 +
@@ -234,7 +269,8 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
           m.afterglow * 0.4 +
           kickSmooth.current * 0.55 +
           snareSmooth.current * 0.4) *
-        silenceMute;
+        silenceMute *
+        emberDim;
       // Follow the living palette so the shell breathes color too.
       // After peaks: bias toward amber while afterglow decays (intensity
       // afterglow above stays; this is residual color temperature).
@@ -242,15 +278,18 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       sm.emissive.set(palette.mid);
       applyAfterglowWarmth(sm.color, warmthLingerRef.current, scratchAmber.current, warmthMix);
       applyAfterglowWarmth(sm.emissive, warmthLingerRef.current, scratchAmber.current, warmthMix);
-      sm.opacity = 0.2 + m.swell * 0.2 + m.afterglow * 0.06 + kickSmooth.current * 0.06;
+      sm.opacity =
+        (0.2 + m.swell * 0.2 + m.afterglow * 0.06 + kickSmooth.current * 0.06) * emberDim;
     }
 
     // Hat ticks: sharp size glitter on the outer point cloud.
-    pointsMat.size =
-      0.05 + m.swell * 0.05 + m.impact * 0.04 + hatSmooth.current * 0.055;
+    // hatMul holds ticks mid-air during holdBreath (thaw restores sparkle).
+    const hatTick = hatSmooth.current * hatMul;
+    pointsMat.size = 0.05 + m.swell * 0.05 + m.impact * 0.04 + hatTick * 0.055;
+    // Dim the particle tube toward a still ember ring under hush.
     pointsMat.opacity = Math.min(
       1,
-      0.75 + m.swell * 0.25 + hatSmooth.current * 0.18,
+      (0.75 + m.swell * 0.25 + hatTick * 0.18) * emberDim,
     );
 
     // Re-tint particle bands from the living palette (mutates in place, so
@@ -264,9 +303,10 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     applyAfterglowWarmth(bassC, warmthLingerRef.current, scratchAmber.current, warmthMix);
     applyAfterglowWarmth(midC, warmthLingerRef.current, scratchAmber.current, warmthMix);
     applyAfterglowWarmth(highC, warmthLingerRef.current, scratchAmber.current, warmthMix);
-    const bassGain = 1 + m.impact * 0.2 + kickSmooth.current * 0.35;
-    const midGain = 1 + m.mid * 0.2 + snareSmooth.current * 0.4;
-    const highGain = 1 + m.shimmer * 0.35 + hatSmooth.current * 0.55;
+    const bassGain = (1 + m.impact * 0.2 + kickSmooth.current * 0.35) * emberDim;
+    const midGain = (1 + m.mid * 0.2 + snareSmooth.current * 0.4) * emberDim;
+    // Hat gain also holds under stillness so sparkle doesn't strobe mid-hang.
+    const highGain = (1 + m.shimmer * 0.35 + hatTick * 0.55) * emberDim;
     for (let i = 0; i < particleCount; i++) {
       const t = (i / particleCount) % 1;
       const color = t < 0.33 ? bassC : t < 0.66 ? midC : highC;
@@ -284,12 +324,15 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Shared flow current: off-surface drift that grows with the music and
     // vanishes at rest, so the sacred geometry stays clean when calm.
     // Echo reverses the curl once in post-phrase gaps, then resumes.
+    // Continuous curl clock freezes with the field; echo reverse still flips sign.
     flowTimeRef.current +=
-      dtClamped * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4) * flowSign;
+      dtClamped * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4) * flowSign * motionMul;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
     const flowLift =
-      (0.05 + m.swell * 0.22 + m.dropEvent * 0.45 + m.afterglow * 0.06) * flowSign;
+      (0.05 + m.swell * 0.22 + m.dropEvent * 0.45 + m.afterglow * 0.06) *
+      flowSign *
+      motionMul;
     const fv = flowScratch.current;
 
     // Snare lateral crack amplitude (phase-split L/R across the cloud).
@@ -305,7 +348,8 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       if (i / particleCount > activeRatio) continue;
       basePhi[i] = (basePhi[i]! + flowSpeed) % (Math.PI * 2);
       baseTheta[i] =
-        (baseTheta[i]! + delta * spd * (0.15 + m.high * 1.2 + m.impact) * flowSign) %
+        (baseTheta[i]! +
+          delta * spd * (0.15 + m.high * 1.2 + m.impact) * flowSign * motionMul) %
         (Math.PI * 2);
       const radius =
         1.4 + m.bass * 0.25 + Math.sin(basePhi[i]! * 3) * m.mid * 0.08 - leanRadius;
