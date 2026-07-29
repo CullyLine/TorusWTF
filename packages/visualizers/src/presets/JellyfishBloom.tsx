@@ -4,11 +4,13 @@
  * Jellyfish Bloom — bioluminescent jellies drifting in dark water.
  * Musical anatomy:
  *  - gather → bells contract (anticipate) before the beat
+ *  - leanIn → bloom drifts nearer; bells tip up expectantly (pre-drop pull)
  *  - kick → pulse-propulsion thrust; bells flare open after the contract
  *  - snare → lateral current gust that shears the bloom
  *  - hat → sparse plankton glints on selected tentacle tips
  *  - tenderness → milky moonlit haze (softer glow, gentler swim)
  *  - holdBreath / deep silence → still propulsion; jellies hang mid-water
+ *  - echo → one-shot bioluminescent pulse train rippling jelly-to-jelly
  *
  * Tentacles are follow-the-leader chains: each segment SmoothDamps toward
  * the previous, so trails carry lagged inertia instead of straight lines.
@@ -63,6 +65,7 @@ const _bellColor = /* @__PURE__ */ new THREE.Color();
 
 export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
+  const rootRef = useRef<THREE.Group>(null);
   const bellRef = useRef<THREE.InstancedMesh>(null);
   const tentRef = useRef<THREE.Points>(null);
   const tentMatRef = useRef<THREE.PointsMaterial>(null);
@@ -81,12 +84,16 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
   const scratchMilk = useRef(new THREE.Color(0.78, 0.88, 1.0));
   const scratchGlow = useRef(new THREE.Color(0.55, 0.95, 0.92));
+  // Cool aqua reply — cooler than kick cyan flare, distinct from milk tenderness.
+  const scratchEcho = useRef(new THREE.Color(0.42, 0.92, 1.0));
   const scratchMix = useRef(new THREE.Color());
   const scratchWater = useRef(new THREE.Color(0.01, 0.03, 0.07));
 
@@ -98,6 +105,13 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
   const afterglowSmooth = useRef(0);
   const stillnessSmooth = useRef(0);
   const tenderSmooth = useRef(0);
+  // LeanIn anticipation: eager climb, slower release into the drop.
+  const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one jelly-to-jelly pulse train.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const timeRef = useRef(0);
 
   // Per-jelly kinematics — thrust lives in velocity, not position snaps.
@@ -287,6 +301,43 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
     );
     afterglowSmooth.current = smoothToward(afterglowSmooth.current, m.afterglow, dt, 0.18, 0.8);
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - still * 0.35);
+
+    // Phrase-echo: arm on quiet, fire one jelly-to-jelly pulse train per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(1, echoTravel.current + dt * echoPace * (0.85 + bpm / 180));
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     const gather = gatherSmooth.current;
     const kick = kickSmooth.current;
     const snare = snareSmooth.current;
@@ -295,6 +346,15 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
     const tender = tenderSmooth.current;
     const afterglow = afterglowSmooth.current;
     const t = timeRef.current;
+
+    // Draw nearer on leanIn — mild camera-ward pull (CosmicMandala pattern),
+    // distinct from gather's per-bell contract. Soft scale so the bloom fills.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      const leanScale = 1 + lean * 0.08;
+      root.scale.setScalar(leanScale);
+    }
 
     tentMat.size =
       (0.055 + swell * 0.02 + kick * 0.018) * (0.9 + kitAmp * 0.1) * (1 - tender * 0.08);
@@ -314,6 +374,7 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
     const highC = scratchHigh.current.set(palette.high);
     const milkC = scratchMilk.current.setRGB(0.78, 0.88, 1.0);
     const glowC = scratchGlow.current.setRGB(0.55, 0.95, 0.92);
+    const echoC = scratchEcho.current.setRGB(0.42, 0.92, 1.0);
     const mixC = scratchMix.current;
 
     const jp = jellyPos.current;
@@ -405,13 +466,36 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
       jp[i3 + 1] = y;
       jp[i3 + 2] = z;
 
+      // Phrase-echo crest: sweep jelly-to-jelly by phase order so the bloom
+      // answers once in the gap as a traveling bioluminescent pulse train.
+      const jellySlot = ((phase + i * 0.07) % 1 + 1) % 1;
+      const crestDist = Math.abs(jellySlot - echoTravel.current);
+      const crestWrap = Math.min(crestDist, 1 - crestDist);
+      const crestEnv = traveling
+        ? Math.exp(-crestWrap * crestWrap * 55) *
+          (0.4 +
+            0.6 *
+              Math.max(
+                0,
+                Math.sin(echoTravel.current * Math.PI * 10 + phase * 18.0),
+              ))
+        : 0;
+      const echoPulse = echoVis * crestEnv * (1 - still * 0.55);
+
       // Flattened bell — contracts taller/narrower on gather, flares open on kick.
-      const bellSX = 0.85 * sizeMul * scale * (1 + kick * 0.12);
-      const bellSY = 0.55 * sizeMul * (1.15 - (scale - 1) * 0.55 + contract * 0.2);
-      const bellSZ = 0.85 * sizeMul * scale * (1 + kick * 0.12);
+      // LeanIn: tip the bell mouth up/toward camera (expectant), not a gather squeeze.
+      const bellSX = 0.85 * sizeMul * scale * (1 + kick * 0.12 + echoPulse * 0.1);
+      const bellSY =
+        0.55 * sizeMul * (1.15 - (scale - 1) * 0.55 + contract * 0.2) * (1 + echoPulse * 0.18);
+      const bellSZ = 0.85 * sizeMul * scale * (1 + kick * 0.12 + echoPulse * 0.1);
+      const tipUp = lean * (0.32 + phase * 0.12);
       _dummy.position.set(x, y, z);
       _dummy.scale.set(bellSX, bellSY, bellSZ);
-      _dummy.rotation.set(0, heading * 0.35, Math.sin(t * 0.4 + phase * 6) * 0.12 * motionMul);
+      _dummy.rotation.set(
+        -tipUp,
+        heading * 0.35,
+        Math.sin(t * 0.4 + phase * 6) * 0.12 * motionMul,
+      );
       _dummy.updateMatrix();
       bells.setMatrixAt(i, _dummy.matrix);
 
@@ -419,8 +503,10 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
       mixC.copy(baseCol).lerp(glowC, 0.28 + phase * 0.15 + kick * 0.25 + afterglow * 0.2);
       // Tenderness → milky moonlight (cool, soft) — distinct from kick cyan flare.
       mixC.lerp(milkC, tender * 0.55 + still * 0.2);
+      // Echo reply → cool aqua bioluminescence crest (cooler than kick glow).
+      mixC.lerp(echoC, echoPulse * 0.72);
 
-      const pulseGain = 0.75 + scale * 0.45 + kick * 0.35 + swell * 0.18;
+      const pulseGain = 0.75 + scale * 0.45 + kick * 0.35 + swell * 0.18 + echoPulse * 0.85;
       const hush = (1 - tender * 0.18) * (1 - still * 0.28);
       _bellColor.setRGB(
         Math.min(1, mixC.r * pulseGain * hush),
@@ -489,8 +575,10 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
           mixC
             .copy(baseCol)
             .lerp(glowC, 0.15 + (1 - along) * 0.25 + kick * 0.12)
-            .lerp(milkC, tender * 0.5 + still * 0.18);
-          const fade = (1 - along * 0.55) * (0.7 + swell * 0.25) * tipSpark * hush;
+            .lerp(milkC, tender * 0.5 + still * 0.18)
+            .lerp(echoC, echoPulse * (0.55 + along * 0.25));
+          const fade =
+            (1 - along * 0.55) * (0.7 + swell * 0.25) * tipSpark * hush * (1 + echoPulse * 0.55);
           tentCol[pi] = Math.min(1, mixC.r * fade);
           tentCol[pi + 1] = Math.min(1, mixC.g * fade);
           tentCol[pi + 2] = Math.min(1, mixC.b * fade);
@@ -550,7 +638,7 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
   });
 
   return (
-    <group>
+    <group ref={rootRef}>
       {/* Deep water volume — dark so bioluminescence reads. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, Y_MIN - 0.15, 0]}>
         <planeGeometry args={[14, 14, 1, 1]} />

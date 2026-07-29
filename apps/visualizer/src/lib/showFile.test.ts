@@ -103,6 +103,7 @@ describe('showFile', () => {
       'opal_slick',
       'paper_lanterns',
       'jellyfish_bloom',
+      'murmuration',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',
