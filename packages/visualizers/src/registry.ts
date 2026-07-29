@@ -24,6 +24,7 @@ import { InkBloomScene } from './presets/InkBloom';
 import { OpalSlickScene } from './presets/OpalSlick';
 import { PaperLanternsScene } from './presets/PaperLanterns';
 import { JellyfishBloomScene } from './presets/JellyfishBloom';
+import { MurmurationScene } from './presets/Murmuration';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -50,6 +51,7 @@ export type VisualizerId =
   | 'opal_slick'
   | 'paper_lanterns'
   | 'jellyfish_bloom'
+  | 'murmuration'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -581,6 +583,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       aura: 0.38,
       cameraMode: 'drift',
       bloomIntensity: 1.1,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  murmuration: {
+    id: 'murmuration',
+    label: 'Murmuration',
+    hint: 'Starling flock at dusk — curl-noise ribbon with banked turns; gather banks tighter, kick pulses a contract-expand wave, snare shears, hats glint wingtips, tenderness golden-hour, holdBreath still wings.',
+    Scene: MurmurationScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.72,
+      scale: 1.05,
+      bassShake: 0.32,
+      anima: 0.55,
+      aura: 0.28,
+      cameraMode: 'drift',
+      bloomIntensity: 0.85,
       cameraDistance: 1,
       lightLevel: 1.05,
     },
