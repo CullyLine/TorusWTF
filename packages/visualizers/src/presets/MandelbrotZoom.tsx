@@ -34,6 +34,10 @@ import { useModulation } from '../modulation';
  *  - `holdBreath` / deep `silence` nearly freeze morph + orbit so the
  *    bulb listens, then thaw on the music's return (kit/gather/echo stay
  *    on their own envelopes so hits still fire)
+ *  - `tenderness` softens lighting contrast, warms the color wash candlelit,
+ *    and gentles the orbit — intimate passages, not a freeze
+ *  - `leanIn` draws the bulb nearer with slow anticipation, releasing back
+ *    after the drop (distinct from gather's outward inhale + kick dive)
  *  - orbit-trap coloring rides the living palette; mids scroll the ramp
  *  - `impact` flashes the surface glow, `shimmer` lights the rim
  *  - `afterglow` holds a warm emissive floor for seconds after a peak
@@ -71,6 +75,7 @@ uniform float uGlow;       // impact-driven surface flash
 uniform float uRim;        // shimmer-driven fresnel rim
 uniform float uAfterglow;  // lingering emissive floor
 uniform float uSnareShear; // snare lateral domain crack (X sheared by Y)
+uniform float uTenderness; // soft contrast on gentle vocals (warm wash is CPU)
 uniform vec3 uBassColor;
 uniform vec3 uMidColor;
 uniform vec3 uHighColor;
@@ -193,22 +198,27 @@ void main() {
   vec3 albedo = paletteRamp(trapT);
 
   // Two colored lights that agree with the SceneRig point lights.
+  // Tenderness lifts ambient and eases key punch so crevice contrast softens
+  // without freezing the morph (holdBreath owns that).
+  float soft = clamp(uTenderness, 0.0, 1.0);
   vec3 keyDir = normalize(vec3(0.55, 0.65, 0.5));
   vec3 fillDir = normalize(vec3(-0.6, -0.15, -0.35));
   float key = max(dot(n, keyDir), 0.0);
-  float fill = max(dot(n, fillDir), 0.0) * 0.45;
+  float fill = max(dot(n, fillDir), 0.0) * mix(0.45, 0.62, soft);
   vec3 halfV = normalize(keyDir - rd);
-  float spec = pow(max(dot(n, halfV), 0.0), 24.0);
+  float spec = pow(max(dot(n, halfV), 0.0), mix(24.0, 14.0, soft));
 
   // Iteration-count AO: deep crevices stay shadowed, tips catch light.
   float ao = 1.0 - float(steps) / float(MARCH_STEPS);
-  ao = 0.25 + 0.75 * ao * ao;
+  ao = mix(0.25, 0.42, soft) + mix(0.75, 0.55, soft) * ao * ao;
 
-  float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+  float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), mix(3.0, 2.2, soft));
 
+  float amb = mix(0.22, 0.38, soft);
+  float keyAmt = mix(0.95, 0.55, soft);
   vec3 col =
-    albedo * (0.22 + key * 0.95 + fill) * ao +
-    uHighColor * spec * 0.7 +
+    albedo * (amb + key * keyAmt + fill) * ao +
+    uHighColor * spec * mix(0.7, 0.38, soft) +
     albedo * uGlow * 0.85 +
     uHighColor * fresnel * uRim +
     albedo * uAfterglow * 0.22;
@@ -227,10 +237,14 @@ void main() {
 }
 `;
 
+// Candlelit warmth for tender passages — soft amber, not afterglow ember punch.
+const CANDLE_WARM = new THREE.Color(1.0, 0.72, 0.42);
+
 export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const meshRef = useRef<THREE.Mesh>(null);
+  const rootRef = useRef<THREE.Group>(null);
   const metricsRef = useMetricsRef();
   const yawRef = useRef(0);
   const pitchRef = useRef(0);
@@ -246,6 +260,14 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
   const tensionSmooth = useRef(0);
   // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
+  // Tenderness hush — warm wash + soft contrast + gentle orbit (not a freeze).
+  const tenderSmooth = useRef(0);
+  // LeanIn anticipation: draw the bulb nearer, release after the drop.
+  const leanSmooth = useRef(0);
+  const scratchBass = useRef(new THREE.Color());
+  const scratchMid = useRef(new THREE.Color());
+  const scratchHigh = useRef(new THREE.Color());
+  const scratchMean = useRef(new THREE.Color());
   const worldScale = useRef(new THREE.Vector3());
 
   const reducedMotion = useMemo(() => {
@@ -259,6 +281,8 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
   const gatherAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const diveAmp = tier === 'low' ? 0.8 : tier === 'mid' ? 0.92 : 1;
   const tensionAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.85 : 1;
+  const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const [marchSteps, deIters] =
     tier === 'high' ? [96, 9] : tier === 'mid' ? [72, 8] : [48, 7];
   const fragmentShader = useMemo(
@@ -278,6 +302,7 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
       uRim: { value: 0.3 },
       uAfterglow: { value: 0 },
       uSnareShear: { value: 0 },
+      uTenderness: { value: 0 },
       uBassColor: { value: new THREE.Color(palette.bass) },
       uMidColor: { value: new THREE.Color(palette.mid) },
       uHighColor: { value: new THREE.Color(palette.high) },
@@ -312,6 +337,30 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
     const stillness = stillnessSmooth.current;
     // Nearly freeze continuous morph/orbit; leave a whisper so thaw never pops.
     const motionMul = 1 - stillness * 0.92;
+
+    // Tenderness: soft rise/fall — gentles without the holdBreath freeze.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness) * tenderAmp,
+      dt,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmooth.current;
+    // Orbit eases on intimate passages; kit/gather/echo stay on full dt.
+    const tenderOrbit = 1 - tender * 0.45;
+
+    // LeanIn anticipation: eager climb, slower release so the pull lingers
+    // into the drop. Soften only a little under holdBreath so approach still
+    // reads through partial hush (Aura / Cosmic Mandala pattern).
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // Snare: fast attack, short fall — a crack, not a sustained warp.
     // Kit/gather/echo stay on full dt so hits still fire when music returns.
@@ -351,8 +400,9 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
       pace *
       (0.05 + m.energy * 0.07 + m.sectionLevel * 0.04) *
       orbitDir *
-      motionMul;
-    pitchRef.current += dt * spd * pace * 0.017 * motionMul;
+      motionMul *
+      tenderOrbit;
+    pitchRef.current += dt * spd * pace * 0.017 * motionMul * tenderOrbit;
 
     // Pre-beat gather + hit dive, smoothed so the zoom never stairs.
     gatherSmooth.current = smoothToward(
@@ -389,10 +439,15 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
       m.dropEvent * 0.7;
 
     // Vocals gently accelerate the color ramp — sung passages iridesce.
-    // hush the crawl with stillness so the surface stops iridescing mid-listen.
+    // hush the crawl with stillness so the surface stops iridescing mid-listen;
+    // tenderness also eases the crawl so intimate passages feel softer.
     paletteShiftRef.current =
       (paletteShiftRef.current +
-        dt * (0.03 + m.mid * 0.14 + m.vocalActivity * 0.05) * pace * motionMul) %
+        dt *
+          (0.03 + m.mid * 0.14 + m.vocalActivity * 0.05) *
+          pace *
+          motionMul *
+          (1 - tender * 0.35)) %
       1;
 
     // The fractal domain tracks the proxy mesh's real world scale, so both
@@ -415,9 +470,34 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
     mat.uniforms.uAfterglow!.value = m.afterglow;
     // Peak shear ~0.28 — readable crack without collapsing the DE.
     mat.uniforms.uSnareShear!.value = snareSmooth.current * 0.28 * pace;
-    (mat.uniforms.uBassColor!.value as THREE.Color).set(palette.bass);
-    (mat.uniforms.uMidColor!.value as THREE.Color).set(palette.mid);
-    (mat.uniforms.uHighColor!.value as THREE.Color).set(palette.high);
+    mat.uniforms.uTenderness!.value = tender;
+
+    // Warm candle wash + pull stops toward their mean so contrast softens
+    // without the holdBreath freeze or afterglow's amber punch.
+    const bassC = scratchBass.current.set(palette.bass);
+    const midC = scratchMid.current.set(palette.mid);
+    const highC = scratchHigh.current.set(palette.high);
+    const meanC = scratchMean.current
+      .copy(bassC)
+      .add(midC)
+      .add(highC)
+      .multiplyScalar(1 / 3);
+    const contrastPull = tender * 0.38;
+    bassC.lerp(meanC, contrastPull).lerp(CANDLE_WARM, tender * 0.42);
+    midC.lerp(meanC, contrastPull).lerp(CANDLE_WARM, tender * 0.36);
+    highC.lerp(meanC, contrastPull * 0.85).lerp(CANDLE_WARM, tender * 0.28);
+    (mat.uniforms.uBassColor!.value as THREE.Color).copy(bassC);
+    (mat.uniforms.uMidColor!.value as THREE.Color).copy(midC);
+    (mat.uniforms.uHighColor!.value as THREE.Color).copy(highC);
+
+    // LeanIn: approach along camera look (negative Z) + slight presence scale.
+    // Distinct from gather's domain inhale and kick/impact dive on uScale.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      const presence = 1 + lean * 0.08;
+      root.scale.setScalar(presence);
+    }
   });
 
   // Proxy sphere at the DE bound: BackSide so the march still runs when the
@@ -425,17 +505,19 @@ export function MandelbrotZoomScene({ palette, tier, scale: _scale = 1, speed = 
   // NOTE: `scale` reaches this mesh through the modulated scale group that
   // wraps every preset, so we don't re-apply it here.
   return (
-    <mesh ref={meshRef} frustumCulled={false}>
-      <sphereGeometry args={[BULB_BOUND, 48, 32]} />
-      <shaderMaterial
-        ref={matRef}
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={uniforms}
-        side={THREE.BackSide}
-        depthWrite
-        depthTest
-      />
-    </mesh>
+    <group ref={rootRef}>
+      <mesh ref={meshRef} frustumCulled={false}>
+        <sphereGeometry args={[BULB_BOUND, 48, 32]} />
+        <shaderMaterial
+          ref={matRef}
+          vertexShader={vertexShader}
+          fragmentShader={fragmentShader}
+          uniforms={uniforms}
+          side={THREE.BackSide}
+          depthWrite
+          depthTest
+        />
+      </mesh>
+    </group>
   );
 }
