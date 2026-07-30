@@ -276,8 +276,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       shellBase + kickTube * 0.35,
     );
     // Continuous spin hangs under stillness; kit snare Z roll stays ungated.
+    // lockPace steadies the continuous X roll when bands lock.
     torus.rotation.y += flowSpeed * 0.4;
-    torus.rotation.x += delta * spd * (0.03 + m.high * 0.2) * motionMul;
+    torus.rotation.x += delta * spd * (0.03 + m.high * 0.2) * motionMul * lockPace;
     // Snare: brief lateral roll on the wire shell.
     torus.rotation.z = snareSmooth.current * 0.09 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
 
