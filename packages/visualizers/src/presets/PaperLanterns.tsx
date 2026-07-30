@@ -11,6 +11,8 @@
  *  - tenderness → honey-warm soften (gentler bob, milkier glow)
  *  - holdBreath / deep silence → hang mid-rise, dim flames to embers,
  *    calm water toward glass; thaw upward on the music's return
+ *  - echo → one-shot train of cool drifting embers from one lantern,
+ *    mirrored in the dark water, replaying the phrase gap then fading
  */
 
 import { useMemo, useRef } from 'react';
@@ -24,6 +26,11 @@ import { getDotTexture } from '../dotTexture';
 const COUNT_HIGH = 160;
 const COUNT_MID = 90;
 const COUNT_LOW = 48;
+
+/** Phrase-echo ember train — small dedicated pool, not lantern body ticks. */
+const EMBER_HIGH = 42;
+const EMBER_MID = 28;
+const EMBER_LOW = 16;
 
 const WATER_Y = -1.85;
 const Y_MIN = WATER_Y + 0.35;
@@ -53,6 +60,10 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   const lanternMatRef = useRef<THREE.PointsMaterial>(null);
   const mirrorRef = useRef<THREE.Points>(null);
   const mirrorMatRef = useRef<THREE.PointsMaterial>(null);
+  const emberRef = useRef<THREE.Points>(null);
+  const emberMatRef = useRef<THREE.PointsMaterial>(null);
+  const emberMirrorRef = useRef<THREE.Points>(null);
+  const emberMirrorMatRef = useRef<THREE.PointsMaterial>(null);
   const waterMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
@@ -61,8 +72,10 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   // Mid keeps every reflection; low keeps every other — simpler water glow.
   const mirrorStride = tier === 'low' ? 2 : 1;
   const mirrorCount = Math.ceil(baseCount / mirrorStride);
+  const emberCount = tier === 'high' ? EMBER_HIGH : tier === 'mid' ? EMBER_MID : EMBER_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -71,6 +84,8 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   const scratchFlame = useRef(new THREE.Color(1, 0.88, 0.55));
   // Residual ember heat — holdBreath milks flames toward quiet coals.
   const scratchEmber = useRef(new THREE.Color(0.22, 0.1, 0.05));
+  // Cool silver ghost-embers — phrase memory, cooler than kick flame / honey.
+  const scratchEcho = useRef(new THREE.Color(0.78, 0.88, 1.0));
   // Cool glass bed under the flotilla when the water hushes.
   const scratchGlass = useRef(new THREE.Color(0.03, 0.05, 0.08));
   const scratchMix = useRef(new THREE.Color());
@@ -85,6 +100,12 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   const afterglowSmooth = useRef(0);
   // Hold-breath / deep-silence listen gate — hang/thaw without pops.
   const stillnessSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one ember train per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  const echoSource = useRef({ x: 0, y: 1.1, z: 0, seed: 0.37 });
   const timeRef = useRef(0);
 
   // Per-lantern buoyant vertical velocity — inertia lives here.
@@ -143,6 +164,38 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
 
   const mirrorPositions = useMemo(() => new Float32Array(mirrorCount * 3), [mirrorCount]);
   const mirrorColors = useMemo(() => new Float32Array(mirrorCount * 3), [mirrorCount]);
+
+  // Phrase-echo ember train + water mirror — parked offscreen until a gap fires.
+  const { emberPositions, emberColors, emberPhases, emberMirrorPositions, emberMirrorColors } =
+    useMemo(() => {
+      const p = new Float32Array(emberCount * 3);
+      const c = new Float32Array(emberCount * 3);
+      const ph = new Float32Array(emberCount);
+      const mp = new Float32Array(emberCount * 3);
+      const mc = new Float32Array(emberCount * 3);
+      for (let i = 0; i < emberCount; i++) {
+        p[i * 3] = 0;
+        p[i * 3 + 1] = -40;
+        p[i * 3 + 2] = 0;
+        mp[i * 3] = 0;
+        mp[i * 3 + 1] = -40;
+        mp[i * 3 + 2] = 0;
+        ph[i] = hash01(i * 1.6180339887 + 4.7);
+        c[i * 3] = 0;
+        c[i * 3 + 1] = 0;
+        c[i * 3 + 2] = 0;
+        mc[i * 3] = 0;
+        mc[i * 3 + 1] = 0;
+        mc[i * 3 + 2] = 0;
+      }
+      return {
+        emberPositions: p,
+        emberColors: c,
+        emberPhases: ph,
+        emberMirrorPositions: mp,
+        emberMirrorColors: mc,
+      };
+    }, [emberCount]);
 
   useFrame((_state, delta) => {
     const lanterns = lanternRef.current;
@@ -205,6 +258,67 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
     // Tenderness gentles — slow rise, softer fall so honey linger reads.
     tenderSmooth.current = smoothToward(tenderSmooth.current, m.tenderness, dt, 0.12, 0.22);
     afterglowSmooth.current = smoothToward(afterglowSmooth.current, m.afterglow, dt, 0.18, 0.8);
+
+    // Phrase-echo: arm on quiet, fire one drifting-ember train per gap —
+    // call-response in the night air (and its water mirror), not a kit scrub.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      // Release from one lantern — prefer a lofted, mid-ring speaker so the
+      // train reads against dark water rather than the horizon edge.
+      const lanternsNow = lanternRef.current;
+      const posNow = lanternsNow
+        ? ((lanternsNow.geometry.getAttribute('position') as THREE.BufferAttribute)
+            .array as Float32Array)
+        : null;
+      let best = 0;
+      let bestScore = -1;
+      const pickSeed = hash01(timeRef.current * 0.37 + echoNow * 11.3);
+      for (let i = 0; i < baseCount; i++) {
+        const y = posNow?.[i * 3 + 1] ?? Y_MIN + 0.5;
+        const r = homeR[i] ?? 1;
+        const score =
+          (y - Y_MIN) / Y_SPAN +
+          (1 - Math.abs(r - 1.35) * 0.35) +
+          hash01(i * 0.71 + pickSeed) * 0.45;
+        if (score > bestScore) {
+          bestScore = score;
+          best = i;
+        }
+      }
+      const sx = posNow?.[best * 3] ?? 0;
+      const sy = posNow?.[best * 3 + 1] ?? 1.1;
+      const sz = posNow?.[best * 3 + 2] ?? 0;
+      echoSource.current = {
+        x: sx,
+        y: sy,
+        z: sz,
+        seed: hash01(best * 1.91 + timeRef.current * 0.13),
+      };
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
 
     const gather = gatherSmooth.current;
     const kick = kickSmooth.current;
@@ -411,6 +525,115 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       (mirrors.geometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
     }
 
+    // Phrase-echo ember train: one lantern releases cool drifting motes that
+    // crest bird-to-bird (ember-to-ember) with the gap's rhythm, mirrored below.
+    const embers = emberRef.current;
+    const emberMat = emberMatRef.current;
+    const emberMirrors = emberMirrorRef.current;
+    const emberMirrorMat = emberMirrorMatRef.current;
+    if (embers && emberMat) {
+      const ePosAttr = embers.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const eColAttr = embers.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const eArr = ePosAttr.array as Float32Array;
+      const eCol = eColAttr.array as Float32Array;
+      const eMirPosAttr = emberMirrors
+        ? (emberMirrors.geometry.getAttribute('position') as THREE.BufferAttribute)
+        : null;
+      const eMirColAttr = emberMirrors
+        ? (emberMirrors.geometry.getAttribute('color') as THREE.BufferAttribute)
+        : null;
+      const eMirArr = eMirPosAttr ? (eMirPosAttr.array as Float32Array) : null;
+      const eMirCol = eMirColAttr ? (eMirColAttr.array as Float32Array) : null;
+
+      const src = echoSource.current;
+      const echoC = scratchEcho.current.setRGB(0.78, 0.88, 1.0);
+      const travel = echoTravel.current;
+      // Soft under stillness so holdBreath still owns the hush.
+      const echoPulse = echoVis * (1 - stillness * 0.55);
+
+      emberMat.size = (0.055 + echoPulse * 0.04) * (0.9 + kitAmp * 0.1);
+      emberMat.opacity = traveling ? Math.min(1, 0.15 + echoPulse * 0.85) : 0.02;
+      if (emberMirrorMat) {
+        emberMirrorMat.size = emberMat.size * 0.72;
+        emberMirrorMat.opacity = Math.min(0.45, emberMat.opacity * 0.55);
+      }
+
+      for (let i = 0; i < emberCount; i++) {
+        const i3 = i * 3;
+        const phase = emberPhases[i]!;
+        const slot = ((phase + i * 0.07) % 1 + 1) % 1;
+        const crestDist = Math.abs(slot - travel);
+        const crestWrap = Math.min(crestDist, 1 - crestDist);
+        const crestEnv = traveling
+          ? Math.exp(-crestWrap * crestWrap * 55) *
+            (0.4 +
+              0.6 *
+                Math.max(0, Math.sin(travel * Math.PI * 10 + phase * 18.0)))
+          : 0;
+        const pulse = echoPulse * crestEnv;
+
+        if (!traveling || pulse < 0.004) {
+          // Park offscreen when idle / before crest so draw stays cheap.
+          eArr[i3] = 0;
+          eArr[i3 + 1] = -40;
+          eArr[i3 + 2] = 0;
+          eCol[i3] = 0;
+          eCol[i3 + 1] = 0;
+          eCol[i3 + 2] = 0;
+          if (eMirArr && eMirCol) {
+            eMirArr[i3] = 0;
+            eMirArr[i3 + 1] = -40;
+            eMirArr[i3 + 2] = 0;
+            eMirCol[i3] = 0;
+            eMirCol[i3 + 1] = 0;
+            eMirCol[i3 + 2] = 0;
+          }
+          continue;
+        }
+
+        // Drift outward + slightly up from the releasing lantern; stagger by slot
+        // so the train retraces the gap as a traveling ribbon, not a burst.
+        const along = travel * (0.85 + phase * 0.45) + slot * 0.55;
+        const ang =
+          src.seed * Math.PI * 2 +
+          phase * 5.2 +
+          Math.sin(travel * 4.2 + phase * 9.0) * 0.35;
+        const radius = 0.12 + along * (1.55 + src.seed * 0.55);
+        const lift = along * (0.55 + phase * 0.35) + Math.sin(travel * 6.0 + phase * 12.0) * 0.08;
+        const ex = src.x + Math.cos(ang) * radius;
+        const ey = src.y + lift;
+        const ez = src.z + Math.sin(ang) * radius * 0.88;
+
+        eArr[i3] = ex;
+        eArr[i3 + 1] = ey;
+        eArr[i3 + 2] = ez;
+
+        const fade = (1 - travel * 0.72) * (0.55 + pulse * 0.9);
+        eCol[i3] = Math.min(1, echoC.r * fade * (0.75 + pulse));
+        eCol[i3 + 1] = Math.min(1, echoC.g * fade * (0.75 + pulse));
+        eCol[i3 + 2] = Math.min(1, echoC.b * fade * (0.85 + pulse * 0.2));
+
+        if (eMirArr && eMirCol) {
+          const ripple =
+            Math.sin(t * (0.7 + phase) + ex * 1.4 + ez * 1.1) * (0.03 + swell * 0.04) * motionMul;
+          eMirArr[i3] = ex + ripple;
+          eMirArr[i3 + 1] = WATER_Y - (ey - WATER_Y) * 0.55 - 0.08;
+          eMirArr[i3 + 2] = ez + ripple * 0.6;
+          const dim = 0.4 * (1 - stillness * 0.25);
+          eMirCol[i3] = Math.min(1, eCol[i3]! * dim);
+          eMirCol[i3 + 1] = Math.min(1, eCol[i3 + 1]! * dim * 0.92);
+          eMirCol[i3 + 2] = Math.min(1, eCol[i3 + 2]! * dim * 0.85);
+        }
+      }
+
+      ePosAttr.needsUpdate = true;
+      eColAttr.needsUpdate = true;
+      if (eMirPosAttr && eMirColAttr) {
+        eMirPosAttr.needsUpdate = true;
+        eMirColAttr.needsUpdate = true;
+      }
+    }
+
     // Slow flotilla yaw — alive without spinning like a storm; freezes with holdBreath.
     lanterns.rotation.y +=
       dt *
@@ -420,6 +643,8 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       (0.03 + m.mid * 0.025 + swell * 0.015) *
       (1 - tender * 0.35);
     if (mirrors) mirrors.rotation.y = lanterns.rotation.y;
+    if (embers) embers.rotation.y = lanterns.rotation.y;
+    if (emberMirrors) emberMirrors.rotation.y = lanterns.rotation.y;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
@@ -477,6 +702,59 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
           vertexColors
           depthWrite={false}
           blending={THREE.AdditiveBlending}
+        />
+      </points>
+
+      {/* Phrase-echo ember train — cool ghost motes + water mirror. */}
+      <points ref={emberRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[emberPositions, 3]}
+            count={emberCount}
+          />
+          <bufferAttribute
+            attach="attributes-color"
+            args={[emberColors, 3]}
+            count={emberCount}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          ref={emberMatRef}
+          size={0.06}
+          map={sprite}
+          sizeAttenuation
+          transparent
+          vertexColors
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          opacity={0.02}
+        />
+      </points>
+
+      <points ref={emberMirrorRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[emberMirrorPositions, 3]}
+            count={emberCount}
+          />
+          <bufferAttribute
+            attach="attributes-color"
+            args={[emberMirrorColors, 3]}
+            count={emberCount}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          ref={emberMirrorMatRef}
+          size={0.045}
+          map={sprite}
+          sizeAttenuation
+          transparent
+          vertexColors
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          opacity={0.01}
         />
       </points>
     </group>
