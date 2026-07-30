@@ -104,3 +104,122 @@ describe('bubble bursts', () => {
     expect(pool.emittedTotal).toBe(pool.capacity);
   });
 });
+
+describe('bubble kit accents', () => {
+  it('fires a small kick burst and lifts particles on a kick hit', () => {
+    const pool = createBubblePool({ capacity: 64, burstLimit: 16, seed: 99 });
+    const settings: EmitterContinuousSettings = {
+      ...BASE_SETTINGS,
+      rate: 0,
+      lift: 1,
+      turbulence: 0,
+    };
+    emitBubbleParticles(pool, 8, settings);
+    const beforeY = Array.from({ length: 8 }, (_, i) => pool.velocities[i * 3 + 1]!);
+    const beforeCount = pool.emittedTotal;
+
+    const quiet = { ...DEFAULT_METRICS };
+    for (let i = 0; i < 4; i++) stepBubblePool(pool, 1 / 60, settings, quiet);
+
+    const kicked = { ...DEFAULT_METRICS, kick: 1 };
+    stepBubblePool(pool, 1 / 60, settings, kicked);
+
+    expect(pool.emittedTotal).toBeGreaterThan(beforeCount);
+    expect(pool.emittedTotal - beforeCount).toBeLessThanOrEqual(pool.burstLimit);
+    // Surviving original bubbles get a buoyant Y impulse.
+    let lifted = 0;
+    for (let i = 0; i < 8; i++) {
+      if (pool.active[i] === 1 && pool.velocities[i * 3 + 1]! > beforeY[i]!) lifted++;
+    }
+    expect(lifted).toBeGreaterThan(0);
+  });
+
+  it('pulls the column inward on gather and suspends motion on holdBreath', () => {
+    const pool = createBubblePool({ capacity: 24, burstLimit: 4, seed: 3 });
+    const settings: EmitterContinuousSettings = {
+      ...BASE_SETTINGS,
+      rate: 0,
+      lift: 0.4,
+      turbulence: 0,
+      spread: 1.2,
+    };
+    emitBubbleParticles(pool, 10, settings);
+
+    // Park bubbles away from the axis so gather is visible.
+    for (let i = 0; i < 10; i++) {
+      const i3 = i * 3;
+      pool.positions[i3] = 2.2;
+      pool.positions[i3 + 2] = 1.6;
+      pool.velocities[i3] = 0;
+      pool.velocities[i3 + 1] = 0.15;
+      pool.velocities[i3 + 2] = 0;
+    }
+
+    const startRadius = Math.hypot(2.2, 1.6);
+    const gathering = { ...DEFAULT_METRICS, gather: 1 };
+    for (let i = 0; i < 45; i++) stepBubblePool(pool, 1 / 60, settings, gathering);
+
+    let radiusSum = 0;
+    let active = 0;
+    for (let i = 0; i < pool.capacity; i++) {
+      if (pool.active[i] !== 1) continue;
+      const x = pool.positions[i * 3]!;
+      const z = pool.positions[i * 3 + 2]!;
+      radiusSum += Math.hypot(x, z);
+      active++;
+    }
+    expect(active).toBeGreaterThan(0);
+    expect(radiusSum / active).toBeLessThan(startRadius * 0.72);
+
+    // HoldBreath: velocities collapse toward suspension (mid-water hush).
+    for (let i = 0; i < pool.capacity; i++) {
+      if (pool.active[i] !== 1) continue;
+      pool.velocities[i * 3] = 0.8;
+      pool.velocities[i * 3 + 1] = 0.9;
+      pool.velocities[i * 3 + 2] = 0.7;
+    }
+    const hush = { ...DEFAULT_METRICS, holdBreath: 1, silence: 1 };
+    for (let i = 0; i < 45; i++) stepBubblePool(pool, 1 / 60, settings, hush);
+
+    let speedSum = 0;
+    active = 0;
+    for (let i = 0; i < pool.capacity; i++) {
+      if (pool.active[i] !== 1) continue;
+      const vx = pool.velocities[i * 3]!;
+      const vy = pool.velocities[i * 3 + 1]!;
+      const vz = pool.velocities[i * 3 + 2]!;
+      speedSum += Math.hypot(vx, vy, vz);
+      active++;
+    }
+    expect(active).toBeGreaterThan(0);
+    expect(speedSum / active).toBeLessThan(0.35);
+  });
+
+  it('exposes a smoothed hat glint envelope for young-bubble catch-lights', () => {
+    const pool = createBubblePool({ capacity: 8, burstLimit: 2, seed: 11 });
+    expect(pool.hatGlint).toBe(0);
+
+    const ticking = { ...DEFAULT_METRICS, hat: 1 };
+    for (let i = 0; i < 8; i++) stepBubblePool(pool, 1 / 60, BASE_SETTINGS, ticking);
+    expect(pool.hatGlint).toBeGreaterThan(0.4);
+
+    const quiet = { ...DEFAULT_METRICS };
+    for (let i = 0; i < 40; i++) stepBubblePool(pool, 1 / 60, BASE_SETTINGS, quiet);
+    expect(pool.hatGlint).toBeLessThan(0.08);
+  });
+
+  it('leaves breath/flow drift intact when the kit is quiet', () => {
+    const config = { capacity: 16, burstLimit: 4, seed: 0x5111e07 };
+    const a = createBubblePool(config);
+    const b = createBubblePool(config);
+    const flowing = { ...DEFAULT_METRICS, breath: 0.8, flow: 0.7, shimmer: 0.5 };
+    const settings: EmitterContinuousSettings = { ...BASE_SETTINGS, rate: 8, turbulence: 0.6 };
+
+    for (let i = 0; i < 20; i++) {
+      stepBubblePool(a, 1 / 60, settings, flowing);
+      stepBubblePool(b, 1 / 60, settings, flowing);
+    }
+    expect(snapshot(a)).toEqual(snapshot(b));
+    expect(a.activeCount).toBeGreaterThan(0);
+  });
+});
