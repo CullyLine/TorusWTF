@@ -9,7 +9,7 @@ import { useModulation } from '../modulation';
 
 /**
  * Outrun Grid — synthwave drive with build-and-drop cinema + kit road ticks
- * + phrase-echo ghost road + holdBreath stillness:
+ * + phrase-echo ghost road + holdBreath stillness + leanIn approach:
  *  - tension → sun swells + stretches (charges the horizon)
  *  - gather → horizon dips (pre-drop inhale)
  *  - drop / afterglow → grid heat wash that eases back
@@ -19,6 +19,8 @@ import { useModulation } from '../modulation';
  *  - echo → one-shot ghost dash/lane shimmer + brief road reverse in phrase gaps
  *  - holdBreath / deep silence → ease road rush to a crawl, dim the sun a
  *    notch, and hold dash ticks; thaw when the music returns
+ *  - leanIn → pull horizon/sun nearer + isotropic sun swell + tighten road
+ *    perspective (approach, not tension's stretch deformation)
  */
 
 const terrainVertex = /* glsl */ `
@@ -86,6 +88,7 @@ uniform float uSnare;
 uniform float uEcho;
 uniform float uEchoTravel;
 uniform float uStillness;
+uniform float uLean;
 
 varying vec2 vUv;
 varying float vHeight;
@@ -93,14 +96,19 @@ varying float vDist;
 
 void main() {
   float stillness = clamp(uStillness, 0.0, 1.0);
-  vec2 grid = abs(fract(vUv * 40.0) - 0.5);
+  float lean = clamp(uLean, 0.0, 1.0);
+  // LeanIn tightens lane spacing toward the valley — perspective coils
+  // expectant without changing scroll / heat / kit language.
+  vec2 gUv = vUv;
+  gUv.x = mix(vUv.x, 0.5, lean * 0.14);
+  vec2 grid = abs(fract(gUv * 40.0) - 0.5);
   // Crisp neon lines: a tight core stroke plus a faint halo. The previous
   // wide smoothstep made every cell glow edge-to-edge and the whole floor
   // washed out into a white carpet on loud passages.
   float d = min(grid.x, grid.y);
   float line = smoothstep(0.1, 0.0, d) + smoothstep(0.3, 0.0, d) * 0.25;
   float glow = exp(-vDist * 0.11);
-  vec3 gridCol = mix(uColorA, uColorB, sin(vUv.y * 12.0 + uTime) * 0.5 + 0.5);
+  vec3 gridCol = mix(uColorA, uColorB, sin(gUv.y * 12.0 + uTime) * 0.5 + 0.5);
   // Drop heat wash: afterglow + impact bleed warm magenta into the grid,
   // then ease back — cinema after the drop, not a permanent tint.
   float heat = clamp(uHeat, 0.0, 1.4);
@@ -109,7 +117,7 @@ void main() {
   // Hat dash ticks: short segments on the depth-axis grid lines only —
   // sparse so hats glitter the road dashes instead of flooding the floor.
   // holdBreath nearly freezes dash scroll (uTime crawls) and gates uHat.
-  float dashCell = fract(vUv.y * 22.0 + uTime * 0.35);
+  float dashCell = fract(gUv.y * 22.0 + uTime * 0.35);
   float dashMask = step(0.52, dashCell) * step(dashCell, 0.78);
   float depthLine = smoothstep(0.12, 0.0, grid.x);
   float hatTick = dashMask * depthLine * clamp(uHat, 0.0, 1.2) * (1.0 - stillness * 0.92);
@@ -174,6 +182,7 @@ uniform float uDropWash;
 uniform float uKick;
 uniform float uSnare;
 uniform float uStillness;
+uniform float uLean;
 uniform vec3 uSunColor;
 uniform vec3 uSkyColor;
 
@@ -182,20 +191,23 @@ varying vec2 vUv;
 void main() {
   vec2 uv = vUv;
   float stillness = clamp(uStillness, 0.0, 1.0);
+  float lean = clamp(uLean, 0.0, 1.0);
   // Horizon dips on gather — the whole dusk plane inhales before the drop.
   float horizonDip = uGather * 0.085;
-  float sunY = 0.62 - horizonDip;
+  // LeanIn lifts the sun slightly as if approaching — not a gather dip.
+  float sunY = 0.62 - horizonDip + lean * 0.035;
   // Tension charges: sun swells outward and stretches vertically.
   // Kick adds a short core punch — radius + brightness stay local to the disc.
+  // LeanIn swells the disc isotropically (approach), never owns stretchX/Y.
   float kick = clamp(uKick, 0.0, 1.2);
-  float sunRadius = 0.14 + uBass * 0.05 + uTension * 0.11 + kick * 0.05;
+  float sunRadius = 0.14 + uBass * 0.05 + uTension * 0.11 + kick * 0.05 + lean * 0.07;
   float stretchY = 1.0 + uTension * 0.55;
   float stretchX = 1.0 - uTension * 0.12;
 
   // Horizon gradient tinted by the bass color so the sky follows the palette.
   vec3 duskLow = uSkyColor * 0.08;
   vec3 duskHigh = uSkyColor * 0.55;
-  float skyY = uv.y + horizonDip * 0.35;
+  float skyY = uv.y + horizonDip * 0.35 - lean * 0.04;
   vec3 sky = mix(duskLow, duskHigh, skyY);
   sky = mix(sky, uSkyColor * 0.16, smoothstep(0.0, 0.35, skyY));
   // Build heat in the lower sky as tension climbs.
@@ -208,7 +220,7 @@ void main() {
   float sunDist = length(sunUv);
   float sun = smoothstep(sunRadius, 0.0, sunDist);
   vec3 sunCol = mix(uSunColor, vec3(1.0, 0.9, 0.7), 0.25 + uBass * 0.3 + uTension * 0.2) * sun;
-  sunCol *= 1.0 + uTension * 0.65 + kick * 0.75;
+  sunCol *= 1.0 + uTension * 0.65 + kick * 0.75 + lean * 0.28;
   // Hotter inner core on kick — reads as a punch, not a fullscreen strobe.
   float sunCore = smoothstep(sunRadius * 0.42, 0.0, sunDist);
   sunCol += mix(uSunColor, vec3(1.0, 0.95, 0.82), 0.55) * sunCore * kick * 0.95;
@@ -223,15 +235,16 @@ void main() {
 
   vec3 col = sky + sunCol;
   col += uSunColor * (uBeat * 0.3 + uDropWash * 0.45);
-  // Faint horizon glow line that dips with gather.
-  float horizonLine = exp(-abs(uv.y - (0.28 - horizonDip)) * 48.0);
-  col += uSunColor * horizonLine * (0.12 + uTension * 0.35 + uGather * 0.25);
+  // Horizon climbs toward the viewer on leanIn — approach, not gather dip.
+  float horizonY = 0.28 - horizonDip + lean * 0.055;
+  float horizonLine = exp(-abs(uv.y - horizonY) * 48.0);
+  col += uSunColor * horizonLine * (0.12 + uTension * 0.35 + uGather * 0.25 + lean * 0.22);
 
   // Snare: thin roadside sky winks at the horizon flanks — never a full wash.
   float snare = clamp(uSnare, 0.0, 1.2);
   float flankL = exp(-pow((uv.x - 0.12) * 14.0, 2.0));
   float flankR = exp(-pow((uv.x - 0.88) * 14.0, 2.0));
-  float flankY = exp(-pow((uv.y - (0.30 - horizonDip)) * 22.0, 2.0));
+  float flankY = exp(-pow((uv.y - horizonY) * 22.0, 2.0));
   col += uSunColor * max(flankL, flankR) * flankY * snare * 0.55;
 
   gl_FragColor = vec4(col, 1.0);
@@ -254,6 +267,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const mods = useModulation();
   const terrainMatRef = useRef<THREE.ShaderMaterial>(null);
   const skyMatRef = useRef<THREE.ShaderMaterial>(null);
+  const terrainMeshRef = useRef<THREE.Mesh>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const scrollRef = useRef(0);
@@ -270,6 +284,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
   const stillnessSmooth = useRef(0);
+  // LeanIn anticipation: horizon/sun approach — eager climb, slower release.
+  const leanSmooth = useRef(0);
   const timeRef = useRef(0);
   const heatColorScratch = useRef(new THREE.Color());
   const heatHighScratch = useRef(new THREE.Color());
@@ -283,6 +299,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   // holdBreath crawl amp — low tier still crawls, just a touch softer.
   const stillAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const terrainUniforms = useMemo(
     () => ({
@@ -301,6 +318,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
       uStillness: { value: 0 },
+      uLean: { value: 0 },
     }),
     [palette.mid, palette.high, palette.bass, bloom],
   );
@@ -319,6 +337,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uStillness: { value: 0 },
+      uLean: { value: 0 },
       uSunColor: { value: new THREE.Color(palette.bass) },
       uSkyColor: { value: new THREE.Color(palette.bass) },
     }),
@@ -354,6 +373,17 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const rushMul = 1 - stillness * 0.94;
     // Local clock crawls with stillness so dash ticks + sun bands hold.
     timeRef.current += dt * (0.08 + rushMul * 0.92);
+
+    // LeanIn: eager climb into anticipation, slower release into the drop.
+    // Soft under stillness so the hang owns quiet bars (approach ≠ freeze).
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // Phrase-echo ghost road: arm on quiet, fire one travel per echo rise
     // so the road answers once in a gap — not while the drums keep speaking.
@@ -467,6 +497,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     terrainMat.uniforms.uEcho!.value = echoVis;
     terrainMat.uniforms.uEchoTravel!.value = echoTravel.current;
     terrainMat.uniforms.uStillness!.value = stillness;
+    terrainMat.uniforms.uLean!.value = lean;
     (terrainMat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (terrainMat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (terrainMat.uniforms.uHeatColor!.value as THREE.Color)
@@ -483,15 +514,26 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     skyMat.uniforms.uKick!.value = kickSmooth.current;
     skyMat.uniforms.uSnare!.value = snareSmooth.current;
     skyMat.uniforms.uStillness!.value = stillness;
+    skyMat.uniforms.uLean!.value = lean;
     (skyMat.uniforms.uSunColor!.value as THREE.Color).set(palette.bass);
     (skyMat.uniforms.uSkyColor!.value as THREE.Color).set(palette.bass);
 
     // Camera: slight dip on gather, push in on drop wash — cinema not snap.
+    // LeanIn dollies toward the horizon (approach), distinct from drop wash.
     const gatherCam = gatherSmooth.current * 0.12;
     const washCam = dropWashSmooth.current * 0.18;
-    camera.position.z = 3.2 + beatDollyRef.current * 0.35 - washCam;
+    const leanCam = lean * 0.48;
+    camera.position.z = 3.2 + beatDollyRef.current * 0.35 - washCam - leanCam;
     camera.position.y = 1.4 + m.mid * 0.15 - gatherCam + tensionSmooth.current * 0.08;
-    camera.lookAt(0, 0.2 - gatherCam * 0.5, -6);
+    camera.lookAt(0, 0.2 - gatherCam * 0.5 + lean * 0.04, -6 + lean * 1.1);
+
+    // Road mesh: tighten width + drift nearer — perspective coil, not scroll.
+    const terrain = terrainMeshRef.current;
+    if (terrain) {
+      const roadNarrow = 1 - lean * 0.1;
+      terrain.scale.set(roadNarrow, 1, 1);
+      terrain.position.set(0, -0.8, -2 + lean * 0.55);
+    }
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
@@ -508,7 +550,11 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
           depthWrite={false}
         />
       </mesh>
-      <mesh rotation={[-Math.PI / 2.35, 0, 0]} position={[0, -0.8, -2]}>
+      <mesh
+        ref={terrainMeshRef}
+        rotation={[-Math.PI / 2.35, 0, 0]}
+        position={[0, -0.8, -2]}
+      >
         <planeGeometry args={[28, 36, segments, segments]} />
         <shaderMaterial
           ref={terrainMatRef}
