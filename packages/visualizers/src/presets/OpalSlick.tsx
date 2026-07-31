@@ -8,6 +8,8 @@
  *  - gather → swirl pulls toward center (pre-beat inhale)
  *  - tenderness → film milkens toward pearl
  *  - swell / afterglow → soft residual spectral wash
+ *  - echo → one-shot silver interference ripple train across the slick
+ *    (phrase-gap replay that bends the thin-film rainbow as it passes)
  * Hold-breath listen:
  *  - holdBreath / deep silence → ease swirl + ripples to stillness and
  *    flatten the film toward a dark glass mirror; rainbow sheen barely
@@ -59,6 +61,8 @@ uniform float uEnergy;
 uniform float uBarPhase;
 uniform float uBgAlpha;
 uniform float uStillness;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec4 uRipples[RIPPLE_COUNT];
 uniform float uRippleAge[RIPPLE_COUNT];
 uniform vec3 uColorBass;
@@ -155,6 +159,33 @@ void main() {
   // Held rings hang as frozen refraction; crest flash stays available for kit.
   crest *= mix(1.0, 0.55, still);
 
+  // Phrase-echo: one-shot silver interference train — expanding rings that bend
+  // the thin-film path (memory at a cooler temperature than kick rainbow crests).
+  float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+  echoPulse *= mix(1.0, 0.45, still);
+  float echoCrest = 0.0;
+  if (echoPulse > 0.01) {
+    float travel = clamp(uEchoTravel, 0.0, 1.0);
+    vec2 echoBend = vec2(0.0);
+    for (int i = 0; i < 6; i++) {
+      float fi = float(i);
+      float slot = (fi + 0.5) / 6.0;
+      // Crest by phase slot so the train replays the gap as sequential rings.
+      float along = fract(travel * 1.18 + slot);
+      float crestEnv =
+        smoothstep(0.0, 0.1, along) * (1.0 - smoothstep(0.42, 0.92, along));
+      float radius = along * (0.88 + fi * 0.07) + 0.03;
+      float rEcho = length(uv) + 1e-4;
+      float width = 0.032 + along * 0.028;
+      float ring = exp(-pow((rEcho - radius) / max(width, 1e-4), 2.0));
+      float amp = ring * crestEnv * echoPulse;
+      echoBend += (uv / rEcho) * amp * 0.05;
+      echoCrest += amp;
+    }
+    echoCrest = clamp(echoCrest, 0.0, 1.8);
+    uv += echoBend;
+  }
+
   float r = length(uv);
 
   // Slow oil-film swirl — living thickness field; holdBreath eases it still.
@@ -171,6 +202,8 @@ void main() {
   filmLive = mix(filmLive, fbm(flow * 2.4 - swirlT * 0.15 * motion), 0.45);
   // Kick crest locally thickens the film (refraction bend reads as rainbow warp).
   filmLive += crest * (0.35 + kick * 0.2);
+  // Echo crests also warp optical path — silver rings bend the rainbow as they pass.
+  filmLive += echoCrest * 0.32;
   filmLive += uBass * 0.06 + uMid * 0.04;
   // Flatten toward a dark glass sheet — even thickness, barely breathing.
   float filmGlass = 0.28 + r * 0.06 + fbm(uv * 1.1) * 0.04 * motion;
@@ -213,6 +246,13 @@ void main() {
   col = mix(col, iridescence * (0.55 + film * 0.55), cover * (0.72 + uAfterglow * 0.15));
   // Kick crest flash — rainbow ridge brightens without strobing.
   col += iridescence * crest * (0.28 + kick * 0.22);
+  // Phrase-echo silver catch-light — cooler than kick rainbow / pearl tenderness.
+  if (echoCrest > 0.01) {
+    vec3 silver = mix(vec3(0.72, 0.84, 1.0), uColorHigh, 0.22);
+    col += silver * echoCrest * 0.55;
+    // Softly pull the warped film toward silver at the ring crest.
+    col = mix(col, mix(iridescence, silver, 0.55), clamp(echoCrest * 0.22, 0.0, 0.4));
+  }
   // Snare flank flash on sheared sides.
   float flank = smoothstep(0.2, 0.85, abs(uv.x)) * (1.0 - smoothstep(0.5, 1.2, abs(uv.y)));
   col += mix(uColorMid, pearl, 0.4) * flank * snare * 0.38;
@@ -302,12 +342,18 @@ export function OpalSlickScene({
   const stillnessSmooth = useRef(0);
   const prevKickRef = useRef(0);
   const spawnSeedRef = useRef(0.41);
+  // Phrase-echo one-shot: arm on quiet, fire one silver ripple train per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   const rippleCount =
     tier === 'high' ? RIPPLES_HIGH : tier === 'mid' ? RIPPLES_MID : RIPPLES_LOW;
   const octaveCount =
     tier === 'high' ? OCTAVES_HIGH : tier === 'mid' ? OCTAVES_MID : OCTAVES_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const ripplesRef = useRef<Ripple[]>(makeRipples(rippleCount));
 
   const reducedMotion = useMemo(() => {
@@ -340,6 +386,8 @@ export function OpalSlickScene({
       uBarPhase: { value: 0 },
       uBgAlpha: { value: 1 },
       uStillness: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uRipples: { value: rippleVecs },
       uRippleAge: { value: rippleAges },
       uColorBass: { value: new THREE.Color(palette.bass) },
@@ -413,6 +461,35 @@ export function OpalSlickScene({
       0.14,
     );
 
+    // Phrase-echo silver ripple replay: arm on quiet, fire one travel per echo
+    // rise — call-response in the gaps, not a scrub of kick/snare/hat.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     // One-shot ripple spawn on kick rise — each kick drops a distinct ring.
     // Kit stays ungated so a kick through quiet still lands a new ring.
     const kick = kickSmooth.current;
@@ -483,6 +560,8 @@ export function OpalSlickScene({
     mat.uniforms.uEnergy!.value = m.energy + afterglowSmooth.current * 0.25;
     mat.uniforms.uBarPhase!.value = m.barPhase;
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
