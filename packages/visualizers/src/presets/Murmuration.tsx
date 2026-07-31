@@ -4,11 +4,13 @@
  * Murmuration — a starling flock at dusk.
  * Musical anatomy:
  *  - gather → banks the flock tighter with pre-beat anticipation
+ *  - leanIn → flocks nearer the camera; ribbon tightens expectantly (pre-drop)
  *  - kick → contraction–expansion wave through the body
  *  - snare → shears heading laterally (world X)
  *  - hat → wingtip glints on selected birds
  *  - tenderness → golden-hour warm wash + gentler flight
  *  - holdBreath / deep silence → hang on still wings; thaw on return
+ *  - echo → one-shot wing-glint ripple traveling bird-to-bird through the body
  *
  * Birds ride shared curl-noise currents with trailing velocity inertia and
  * banked turns — the flock is never a straight line, always a ribbon folding
@@ -40,6 +42,8 @@ const GLINT_LOW = 0;
 
 const GOLDEN = /* @__PURE__ */ new THREE.Color(1.0, 0.72, 0.38);
 const DUSK = /* @__PURE__ */ new THREE.Color(0.08, 0.05, 0.12);
+/** Cool catch-light for phrase-echo — cooler than golden-hour / hat sparks. */
+const ECHO_GLINT = /* @__PURE__ */ new THREE.Color(0.78, 0.92, 1.0);
 
 function smoothToward(
   current: number,
@@ -68,6 +72,7 @@ const _color = /* @__PURE__ */ new THREE.Color();
 
 export function MurmurationScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
+  const rootRef = useRef<THREE.Group>(null);
   const flockRef = useRef<THREE.InstancedMesh>(null);
   const glintRef = useRef<THREE.Points>(null);
   const glintMatRef = useRef<THREE.PointsMaterial>(null);
@@ -82,6 +87,8 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
   const flowTimeRef = useRef(0);
@@ -91,6 +98,7 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   const scratchMid = useRef(new THREE.Color());
   const scratchHigh = useRef(new THREE.Color());
   const scratchMix = useRef(new THREE.Color());
+  const scratchEcho = useRef(new THREE.Color().copy(ECHO_GLINT));
   const scratchHaze = useRef(new THREE.Color().copy(DUSK));
 
   const gatherSmooth = useRef(0);
@@ -100,6 +108,13 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   const tenderSmooth = useRef(0);
   const stillnessSmooth = useRef(0);
   const afterglowSmooth = useRef(0);
+  // LeanIn anticipation: eager climb, slower release into the drop.
+  const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one bird-to-bird glint ripple.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   // Per-bird state: position, velocity, heading, bank (trailing inertia).
   const pos = useRef(new Float32Array(birdCount * 3));
@@ -262,6 +277,43 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       0.45,
     );
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Phrase-echo: arm on quiet, fire one bird-to-bird wing-glint ripple per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + spd * 0.15;
+      echoTravel.current = Math.min(1, echoTravel.current + dt * echoPace * (0.85 + bpm / 180));
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     const gather = gatherSmooth.current;
     const kick = kickSmooth.current;
     const snare = snareSmooth.current;
@@ -269,6 +321,15 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     const tender = tenderSmooth.current;
     const afterglow = afterglowSmooth.current;
     const calm = 1 - tender * 0.55;
+
+    // Draw nearer on leanIn — mild camera-ward pull, distinct from gather's
+    // centroid bank. Soft scale so the ribbon fills the frame expectantly.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      const leanScale = 1 + lean * 0.08;
+      root.scale.setScalar(leanScale);
+    }
 
     // Curl clock — freezes with the flock under holdBreath.
     flowTimeRef.current +=
@@ -278,8 +339,9 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     fp.turbulence *= 1 - tender * 0.65;
     fp.swirl *= (1 - tender * 0.4) * (0.85 + gather * 0.35);
     // Gather banks tighter: more vortex cohesion, less band spread scatter.
-    fp.vortex = (fp.vortex + gather * 0.85) * (0.7 + calm * 0.3);
-    fp.bandSpread *= 1 - gather * 0.85;
+    // LeanIn coils the ribbon a touch more (expectant) without stealing gather.
+    fp.vortex = (fp.vortex + gather * 0.85 + lean * 0.45) * (0.7 + calm * 0.3);
+    fp.bandSpread *= 1 - gather * 0.85 - lean * 0.35;
 
     const flowAmount =
       dt *
@@ -291,6 +353,8 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     const inertia = 1 - Math.exp(-dt / (0.11 + tender * 0.08)); // trailing turn lag
     const bankInertia = 1 - Math.exp(-dt / 0.09);
     const gatherPull = 1 - gather * dt * 1.35;
+    // LeanIn: gentle ribbon coil toward center — softer and slower than gather.
+    const leanPull = 1 - lean * dt * 0.55;
     const snareShear = snare * dt * 4.6;
     const kickWave = kick;
     const fv = flowScratch.current;
@@ -298,6 +362,7 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     const bassC = scratchBass.current.set(palette.bass);
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
+    const echoC = scratchEcho.current.copy(ECHO_GLINT);
     // Golden-hour wash on tenderness — distinct from holdBreath hush dim.
     if (tender > 0.001) {
       const warm = GOLDEN;
@@ -357,6 +422,12 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         dy += (cy - y) * gather * 1.4;
         dz += (cz - z) * gather * 1.8;
       }
+      // LeanIn: softer inward coil — expectant tighten, not gather's inhale.
+      if (lean > 0.01) {
+        dx += (cx - x) * lean * 0.75;
+        dy += (cy - y) * lean * 0.55;
+        dz += (cz - z) * lean * 0.75;
+      }
       // Soft keep-alive so the ribbon never stalls into a straight coast.
       const breath = 0.15 + phases[i]! * 0.1;
       dx += Math.sin(flowTimeRef.current * 0.7 + phases[i]! * 12.0) * breath * 0.08;
@@ -401,13 +472,14 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         vz *= inv;
       }
 
-      // Integrate + gather spatial bank.
-      x = (x + vx * flowAmount * 1.15) * gatherPull;
-      y = (y + vy * flowAmount * 1.15) * gatherPull;
-      z = (z + vz * flowAmount * 1.15) * gatherPull;
+      // Integrate + gather spatial bank + leanIn ribbon coil.
+      x = (x + vx * flowAmount * 1.15) * gatherPull * leanPull;
+      y = (y + vy * flowAmount * 1.15) * gatherPull * leanPull;
+      z = (z + vz * flowAmount * 1.15) * gatherPull * leanPull;
 
       // Soft bounds — flock folds back as a ribbon, never hard walls.
-      const bound = 3.6;
+      // LeanIn gently shrinks the play volume (expectant coil).
+      const bound = 3.6 * (1 - lean * 0.12);
       if (x > bound || x < -bound) vx *= -0.35;
       if (y > 2.6 || y < -2.6) vy *= -0.35;
       if (z > bound || z < -bound) vz *= -0.35;
@@ -427,16 +499,37 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       const pitch = -Math.asin(Math.max(-1, Math.min(1, vy / spdNow)));
       const turn = wrapPi(yaw - hArr[i]!) / Math.max(dt, 1e-4);
       hArr[i] = yaw;
-      // Bank into the turn; gather tightens max bank slightly (coiled ribbon).
-      const bankTarget = Math.max(-1.15, Math.min(1.15, -turn * 0.22 * (1 + gather * 0.35)));
+      // Bank into the turn; gather + leanIn tighten max bank (coiled ribbon).
+      const bankTarget = Math.max(
+        -1.15,
+        Math.min(1.15, -turn * 0.22 * (1 + gather * 0.35 + lean * 0.28)),
+      );
       bArr[i] = bArr[i]! + (bankTarget - bArr[i]!) * bankInertia;
       // Still wings: ease bank toward level under holdBreath.
       if (stillness > 0.01) {
         bArr[i] = bArr[i]! * (1 - stillness * 0.08);
       }
 
+      // Phrase-echo crest: sweep bird-to-bird by phase so one cool catch-light
+      // ripple answers the gap — memory traveling through the flock body.
+      const birdSlot = ((phases[i]! + i * 0.07) % 1 + 1) % 1;
+      const crestDist = Math.abs(birdSlot - echoTravel.current);
+      const crestWrap = Math.min(crestDist, 1 - crestDist);
+      const crestEnv = traveling
+        ? Math.exp(-crestWrap * crestWrap * 55) *
+          (0.4 +
+            0.6 *
+              Math.max(
+                0,
+                Math.sin(echoTravel.current * Math.PI * 10 + phases[i]! * 18.0),
+              ))
+        : 0;
+      const echoPulse = echoVis * crestEnv * (1 - stillness * 0.55);
+
       const birdScale =
-        (0.85 + sizes[i]! * 0.35) * (1 + kick * 0.08 * Math.sin((phases[i]! + kick) * Math.PI));
+        (0.85 + sizes[i]! * 0.35) *
+        (1 + kick * 0.08 * Math.sin((phases[i]! + kick) * Math.PI)) *
+        (1 + echoPulse * 0.12);
       _dummy.position.set(x, y, z);
       _dummy.rotation.set(pitch, yaw, bArr[i]!, 'YXZ');
       _dummy.scale.setScalar(birdScale);
@@ -445,10 +538,14 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
 
       const base = band === 0 ? bassC : band === 1 ? midC : highC;
       const gain =
-        (0.72 + m.swell * 0.28 + hat * 0.12 + afterglow * 0.1) *
+        (0.72 + m.swell * 0.28 + hat * 0.12 + afterglow * 0.1 + echoPulse * 0.85) *
         hushDim *
         (band === 2 ? 1 + hat * 0.35 : 1);
       _color.copy(base).multiplyScalar(gain);
+      // Echo reply → cool silver catch-light (cooler than golden tenderness).
+      if (echoPulse > 0.001) {
+        _color.lerp(echoC, echoPulse * 0.72);
+      }
       mesh.setColorAt(i, _color);
     }
 
@@ -456,7 +553,8 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     birdMat.opacity = Math.min(1, (0.82 + m.swell * 0.12 + afterglow * 0.08) * hushDim);
 
-    // Wingtip glints — hat ticks spark selected tips (high/mid).
+    // Wingtip glints — hat ticks spark selected tips (high/mid); echo crest
+    // rides the same tips as cool catch-lights so the ripple reads on wings.
     if (glintCount > 0) {
       const gPos = glintPositions;
       const gCol = glintColors;
@@ -474,8 +572,29 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         gPos[g3 + 1] = pArr[i3 + 1]! + bk * 0.03;
         gPos[g3 + 2] = pArr[i3 + 2]! - Math.sin(yaw) * wing * (g % 2 === 0 ? 1 : -1);
 
-        const spark = 0.25 + hat * 1.4 + (phases[bi]! < 0.08 + hat * 0.2 ? 0.55 : 0);
-        const gc = scratchMix.current.copy(highC).lerp(GOLDEN, tender * 0.4);
+        const birdSlot = ((phases[bi]! + bi * 0.07) % 1 + 1) % 1;
+        const crestDist = Math.abs(birdSlot - echoTravel.current);
+        const crestWrap = Math.min(crestDist, 1 - crestDist);
+        const crestEnv = traveling
+          ? Math.exp(-crestWrap * crestWrap * 55) *
+            (0.4 +
+              0.6 *
+                Math.max(
+                  0,
+                  Math.sin(echoTravel.current * Math.PI * 10 + phases[bi]! * 18.0),
+                ))
+          : 0;
+        const echoPulse = echoVis * crestEnv * (1 - stillness * 0.55);
+
+        const spark =
+          0.25 +
+          hat * 1.4 +
+          echoPulse * 1.8 +
+          (phases[bi]! < 0.08 + hat * 0.2 ? 0.55 : 0);
+        const gc = scratchMix.current
+          .copy(highC)
+          .lerp(GOLDEN, tender * 0.4)
+          .lerp(ECHO_GLINT, echoPulse * 0.85);
         gCol[g3] = Math.min(1, gc.r * spark);
         gCol[g3 + 1] = Math.min(1, gc.g * spark);
         gCol[g3 + 2] = Math.min(1, gc.b * spark);
@@ -487,8 +606,11 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         colAttr.needsUpdate = true;
       }
       if (gMat) {
-        gMat.size = 0.035 + hat * 0.055 + m.shimmer * 0.02;
-        gMat.opacity = Math.min(1, (0.35 + hat * 0.55 + m.shimmer * 0.15) * hushDim);
+        gMat.size = 0.035 + hat * 0.055 + m.shimmer * 0.02 + echoVis * 0.03;
+        gMat.opacity = Math.min(
+          1,
+          (0.35 + hat * 0.55 + m.shimmer * 0.15 + echoVis * 0.45) * hushDim,
+        );
       }
     }
 
@@ -500,7 +622,7 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   });
 
   return (
-    <group>
+    <group ref={rootRef}>
       {/* Soft dusk haze disc — atmosphere under the ribbon, not a card. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.85, 0]}>
         <circleGeometry args={[6.5, 48]} />
