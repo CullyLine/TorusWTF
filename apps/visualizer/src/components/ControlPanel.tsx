@@ -70,6 +70,7 @@ const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'ink_bloom',
   'opal_slick',
   'anima',
+  'thunderhead',
 ]);
 
 export function ControlPanel({
