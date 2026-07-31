@@ -26,6 +26,7 @@ import { PaperLanternsScene } from './presets/PaperLanterns';
 import { JellyfishBloomScene } from './presets/JellyfishBloom';
 import { MurmurationScene } from './presets/Murmuration';
 import { ThunderheadScene } from './presets/Thunderhead';
+import { GlowwormGrottoScene } from './presets/GlowwormGrotto';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -54,6 +55,7 @@ export type VisualizerId =
   | 'jellyfish_bloom'
   | 'murmuration'
   | 'thunderhead'
+  | 'glowworm_grotto'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -623,6 +625,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       aura: 0.28,
       cameraMode: 'still',
       bloomIntensity: 0.9,
+      cameraDistance: 1,
+      lightLevel: 1.0,
+    },
+  },
+  glowworm_grotto: {
+    id: 'glowworm_grotto',
+    label: 'Glowworm Grotto',
+    hint: 'Dark limestone cavern of bioluminescent silk threads — kick cascades light down varying clusters, snare sways with lagged inertia, hats wink, gather inhales, tension lengthens, drop blazes, tender amber, holdBreath embers.',
+    Scene: GlowwormGrottoScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.72,
+      scale: 1.05,
+      bassShake: 0.32,
+      anima: 0.5,
+      aura: 0.35,
+      cameraMode: 'drift',
+      bloomIntensity: 1.05,
       cameraDistance: 1,
       lightLevel: 1.0,
     },
