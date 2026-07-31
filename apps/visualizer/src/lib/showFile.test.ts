@@ -104,6 +104,7 @@ describe('showFile', () => {
       'paper_lanterns',
       'jellyfish_bloom',
       'murmuration',
+      'thunderhead',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',
