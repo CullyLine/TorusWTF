@@ -12,6 +12,9 @@
  *  - holdBreath / deep silence → freeze mid-air + dim toward coals; thaw upward
  *  - tenderness → slow the rise, gentle the drift, warm toward rosy soft coals
  *    (a gentling, not a stop — distinct from holdBreath freeze)
+ *  - echo → one-shot train of cool blue-white sparks that climbs through the
+ *    warm ash, replaying the phrase gap then cooling/fading (memory at a
+ *    different temperature)
  */
 
 import { useMemo, useRef } from 'react';
@@ -25,6 +28,11 @@ import { getDotTexture } from '../dotTexture';
 const COUNT_HIGH = 4800;
 const COUNT_MID = 2200;
 const COUNT_LOW = 900;
+
+/** Phrase-echo spark train — cool blue-white memory, not warm ash ticks. */
+const SPARK_HIGH = 42;
+const SPARK_MID = 28;
+const SPARK_LOW = 16;
 
 const Y_MIN = -2.8;
 const Y_MAX = 2.9;
@@ -51,11 +59,15 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const mods = useModulation();
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
+  const sparkRef = useRef<THREE.Points>(null);
+  const sparkMatRef = useRef<THREE.PointsMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   const baseCount = tier === 'high' ? COUNT_HIGH : tier === 'mid' ? COUNT_MID : COUNT_LOW;
+  const sparkCount = tier === 'high' ? SPARK_HIGH : tier === 'mid' ? SPARK_MID : SPARK_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -64,6 +76,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const scratchCoal = useRef(new THREE.Color(0.18, 0.08, 0.04));
   // Rosy soft coals — tender passages milk toward honey-rose, not dark hush.
   const scratchRosy = useRef(new THREE.Color(1.0, 0.48, 0.42));
+  // Cool blue-white phrase memory — distinct temperature from warm ash / rosy coals.
+  const scratchEcho = useRef(new THREE.Color(0.55, 0.82, 1.0));
   const scratchMix = useRef(new THREE.Color());
 
   const gatherSmooth = useRef(0);
@@ -77,6 +91,12 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const stillnessSmooth = useRef(0);
   // Tenderness hush — gentles rise/drift + warms glow (still breathes).
   const tenderSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one cool spark train per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  const echoSource = useRef({ x: 0, y: Y_MIN + 0.55, z: 0, seed: 0.37 });
   const timeRef = useRef(0);
 
   const sprite = useMemo(() => getDotTexture(), []);
@@ -126,6 +146,23 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     }
     return c;
   }, [baseCount, palette, bands, phases]);
+
+  // Phrase-echo spark train — parked offscreen until a gap fires.
+  const { sparkPositions, sparkColors, sparkPhases } = useMemo(() => {
+    const p = new Float32Array(sparkCount * 3);
+    const c = new Float32Array(sparkCount * 3);
+    const ph = new Float32Array(sparkCount);
+    for (let i = 0; i < sparkCount; i++) {
+      p[i * 3] = 0;
+      p[i * 3 + 1] = -40;
+      p[i * 3 + 2] = 0;
+      ph[i] = hash01(i * 1.6180339887 + 4.7);
+      c[i * 3] = 0;
+      c[i * 3 + 1] = 0;
+      c[i * 3 + 2] = 0;
+    }
+    return { sparkPositions: p, sparkColors: c, sparkPhases: ph };
+  }, [sparkCount]);
 
   useFrame((_state, delta) => {
     const points = ref.current;
@@ -208,6 +245,62 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       0.1,
     );
     afterglowSmooth.current = smoothToward(afterglowSmooth.current, m.afterglow, dt, 0.18, 0.8);
+
+    // Phrase-echo: arm on quiet, fire one cool blue-white spark train per gap —
+    // memory at a different temperature from the warm ash column.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      // Seed the climb near the hearth / mid-column so the train reads
+      // upward through warm ash rather than at the horizon edge.
+      const ash = ref.current;
+      const posNow = ash
+        ? ((ash.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array)
+        : null;
+      let best = 0;
+      let bestScore = -1;
+      const pickSeed = hash01(timeRef.current * 0.37 + echoNow * 11.3);
+      const sample = Math.min(baseCount, 240);
+      for (let i = 0; i < sample; i++) {
+        const idx = Math.floor(hash01(i * 0.91 + pickSeed) * baseCount) % baseCount;
+        const x = posNow?.[idx * 3] ?? 0;
+        const y = posNow?.[idx * 3 + 1] ?? Y_MIN + 0.5;
+        const z = posNow?.[idx * 3 + 2] ?? 0;
+        const r = Math.hypot(x, z);
+        const heightScore = 1 - Math.abs((y - Y_MIN) / Y_SPAN - 0.22) * 1.6;
+        const score = heightScore + (1 - Math.min(1, r / 2.4)) * 0.55 + hash01(idx * 0.71 + pickSeed) * 0.35;
+        if (score > bestScore) {
+          bestScore = score;
+          best = idx;
+        }
+      }
+      echoSource.current = {
+        x: posNow?.[best * 3] ?? 0,
+        y: posNow?.[best * 3 + 1] ?? Y_MIN + 0.55,
+        z: posNow?.[best * 3 + 2] ?? 0,
+        seed: hash01(best * 1.91 + timeRef.current * 0.13),
+      };
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(1, echoTravel.current + dt * echoPace * (0.85 + bpm / 180));
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
 
     const gather = gatherSmooth.current;
     const impact = impactSmooth.current;
@@ -352,30 +445,125 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     posAttr.needsUpdate = true;
     colorAttr.needsUpdate = true;
 
+    // Phrase-echo spark train: cool blue-white motes climb through warm ash,
+    // cresting spark-to-spark with the gap's rhythm, then cool and fade.
+    const sparks = sparkRef.current;
+    const sparkMat = sparkMatRef.current;
+    if (sparks && sparkMat) {
+      const sPosAttr = sparks.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const sColAttr = sparks.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const sArr = sPosAttr.array as Float32Array;
+      const sCol = sColAttr.array as Float32Array;
+
+      const src = echoSource.current;
+      const echoC = scratchEcho.current.setRGB(0.55, 0.82, 1.0);
+      const travel = echoTravel.current;
+      // Soft under stillness so holdBreath coals still own the hush.
+      const echoPulse = echoVis * (1 - stillness * 0.55);
+
+      sparkMat.size = (0.042 + echoPulse * 0.038) * (0.9 + kitAmp * 0.1);
+      sparkMat.opacity = traveling ? Math.min(1, 0.12 + echoPulse * 0.88) : 0.02;
+
+      for (let i = 0; i < sparkCount; i++) {
+        const i3 = i * 3;
+        const phase = sparkPhases[i]!;
+        const slot = ((phase + i * 0.07) % 1 + 1) % 1;
+        const crestDist = Math.abs(slot - travel);
+        const crestWrap = Math.min(crestDist, 1 - crestDist);
+        const crestEnv = traveling
+          ? Math.exp(-crestWrap * crestWrap * 55) *
+            (0.4 + 0.6 * Math.max(0, Math.sin(travel * Math.PI * 10 + phase * 18.0)))
+          : 0;
+        const pulse = echoPulse * crestEnv;
+
+        if (!traveling || pulse < 0.004) {
+          // Park offscreen when idle / before crest so draw stays cheap.
+          sArr[i3] = 0;
+          sArr[i3 + 1] = -40;
+          sArr[i3 + 2] = 0;
+          sCol[i3] = 0;
+          sCol[i3 + 1] = 0;
+          sCol[i3 + 2] = 0;
+          continue;
+        }
+
+        // Climb the ash column from the hearth seed; stagger by slot so the
+        // train retraces the gap as a rising ribbon, not a burst.
+        const along = travel * (0.95 + phase * 0.4) + slot * 0.5;
+        const ang =
+          src.seed * Math.PI * 2 +
+          phase * 5.2 +
+          Math.sin(travel * 4.2 + phase * 9.0) * 0.28;
+        const radius = 0.08 + along * (0.55 + src.seed * 0.35) * (0.55 + phase * 0.5);
+        const climb = along * (Y_SPAN * 0.72 + phase * 0.55) + Math.sin(travel * 6.0 + phase * 12.0) * 0.1;
+        const sx = src.x + Math.cos(ang) * radius;
+        const sy = src.y + climb;
+        const sz = src.z + Math.sin(ang) * radius * 0.88;
+
+        sArr[i3] = sx;
+        sArr[i3 + 1] = sy;
+        sArr[i3 + 2] = sz;
+
+        // Cool + fade as the train climbs — memory at a different temperature.
+        const cool = 1 - travel * 0.55;
+        const fade = (1 - travel * 0.68) * (0.55 + pulse * 0.9) * cool;
+        sCol[i3] = Math.min(1, echoC.r * fade * (0.7 + pulse * 0.35));
+        sCol[i3 + 1] = Math.min(1, echoC.g * fade * (0.78 + pulse * 0.25));
+        sCol[i3 + 2] = Math.min(1, echoC.b * fade * (0.9 + pulse * 0.15));
+      }
+
+      sPosAttr.needsUpdate = true;
+      sColAttr.needsUpdate = true;
+    }
+
     // Very slow column sway — alive, never storm-spin; freezes with holdBreath,
     // gentles under tenderness so intimate passages feel held.
     points.rotation.y +=
       dt * pace * calm * motionMul * (1 - tender * 0.5) * (0.04 + m.mid * 0.03 + swell * 0.02);
+    if (sparks) sparks.rotation.y = points.rotation.y;
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
   return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} count={baseCount} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} count={baseCount} />
-      </bufferGeometry>
-      <pointsMaterial
-        ref={matRef}
-        size={0.055}
-        map={sprite}
-        sizeAttenuation
-        transparent
-        vertexColors
-        depthWrite={false}
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
+    <group>
+      <points ref={ref}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[positions, 3]} count={baseCount} />
+          <bufferAttribute attach="attributes-color" args={[colors, 3]} count={baseCount} />
+        </bufferGeometry>
+        <pointsMaterial
+          ref={matRef}
+          size={0.055}
+          map={sprite}
+          sizeAttenuation
+          transparent
+          vertexColors
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
+      <points ref={sparkRef}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[sparkPositions, 3]}
+            count={sparkCount}
+          />
+          <bufferAttribute attach="attributes-color" args={[sparkColors, 3]} count={sparkCount} />
+        </bufferGeometry>
+        <pointsMaterial
+          ref={sparkMatRef}
+          size={0.045}
+          map={sprite}
+          sizeAttenuation
+          transparent
+          vertexColors
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          opacity={0.02}
+        />
+      </points>
+    </group>
   );
 }

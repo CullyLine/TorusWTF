@@ -25,6 +25,7 @@ import { OpalSlickScene } from './presets/OpalSlick';
 import { PaperLanternsScene } from './presets/PaperLanterns';
 import { JellyfishBloomScene } from './presets/JellyfishBloom';
 import { MurmurationScene } from './presets/Murmuration';
+import { ThunderheadScene } from './presets/Thunderhead';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -52,6 +53,7 @@ export type VisualizerId =
   | 'paper_lanterns'
   | 'jellyfish_bloom'
   | 'murmuration'
+  | 'thunderhead'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -603,6 +605,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 0.85,
       cameraDistance: 1,
       lightLevel: 1.05,
+    },
+  },
+  thunderhead: {
+    id: 'thunderhead',
+    label: 'Thunderhead',
+    hint: 'Night cumulonimbus lit from within — kick lightning pockets, snare rain shear, hat static, gather swell, tension tower, drop sky-split, tender moon rim, holdBreath stillness.',
+    Scene: ThunderheadScene,
+    // Fullscreen storm owns the frame via clip-space quad; still camera
+    // keeps the horizon stable while the shader does the weather.
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1,
+      bassShake: 0.4,
+      anima: 0.55,
+      aura: 0.28,
+      cameraMode: 'still',
+      bloomIntensity: 0.9,
+      cameraDistance: 1,
+      lightLevel: 1.0,
     },
   },
   rainforest_reverie: {

@@ -20,6 +20,7 @@
  *    so the tunnel listens, then resumes when the music returns
  *  - tenderness → ease the rush + warm walls candlelit-soft (gentle vocals)
  *  - afterglow → lingering warm heat trace on the walls after big moments
+ *  - leanIn → draw deeper into the throat + narrow the walls (pre-drop coil)
  *
  * Plus ~3k "existential particles" advected by the shared curl-noise flow
  * field while the conveyor sweeps them past the camera.
@@ -41,7 +42,7 @@ import {
 
 /**
  * Smooth toward a target with asymmetric rise/fall (seconds).
- * Keeps kit / holdBreath / tenderness / afterglow fluid — no linear snaps.
+ * Keeps kit / holdBreath / tenderness / afterglow / leanIn fluid — no snaps.
  */
 function smoothToward(
   current: number,
@@ -357,10 +358,13 @@ export function InfiniteTunnelScene({
   const tenderSmooth = useRef(0);
   // Afterglow linger — warm wall heat after peaks.
   const afterglowSmooth = useRef(0);
+  // LeanIn anticipation — deeper throat + narrower walls (pre-drop coil).
+  const leanSmooth = useRef(0);
 
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const glowAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   // ---- Tunnel materials (even/odd alternating two-tone) ----
   const evenMaterial = useMemo(
@@ -566,6 +570,27 @@ export function InfiniteTunnelScene({
       0.8,
     );
     const afterglow = afterglowSmooth.current;
+
+    // LeanIn: draw deeper into the throat + narrow the bore — expectant
+    // build-up coil, distinct from gather's brief wall inhale. Soft under
+    // stillness so holdBreath hush still owns the freeze.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+    // Camera-ward depth pull (shared leanIn vocabulary) + XY bore tighten.
+    // Z scale stays 1 so segment spacing / conveyor math stay honest.
+    const leanNarrow = 1 - lean * 0.1;
+    tunnel.root.position.z = -lean * 0.55;
+    tunnel.root.scale.set(leanNarrow, leanNarrow, 1);
+    echoRings.root.position.z = -lean * 0.55;
+    echoRings.root.scale.set(leanNarrow, leanNarrow, 1);
+    particles.points.position.z = -lean * 0.55;
+    particles.points.scale.set(leanNarrow, leanNarrow, 1);
 
     // ---- The throttle: audio drives the conveyor (the original's soul) ----
     const silenceDamp = 1 - m.silence * 0.88;
