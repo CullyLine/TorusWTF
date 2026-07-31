@@ -9,6 +9,7 @@
  *  - mids / swell → surface roll
  *  - high / shimmer / hat → foam + micro-crests
  *  - gather → calms / draws the sea inward before a hit
+ *  - leanIn → raise swell + draw horizon nearer (pre-drop approach; not gather calm)
  *  - release / drop → surges the sea
  *  - silence / holdBreath → glassy resting surface
  *  - tenderness → ease chop/swell + milky pearlescent sheen (still moves)
@@ -51,6 +52,7 @@ uniform float uKick;
 uniform float uKickTravel;
 uniform float uSnare;
 uniform float uGather;
+uniform float uLean;
 uniform float uSurge;
 uniform float uStillness;
 uniform float uTenderness;
@@ -105,6 +107,7 @@ float heightField(vec2 xz) {
   float t = uPhase;
   float stillness = clamp01(uStillness);
   float gather = clamp01(uGather);
+  float lean = clamp01(uLean);
   float surge = clamp01(uSurge);
   float tender = clamp01(uTenderness);
   float chop = clamp(uTurbulence, 0.0, 2.0);
@@ -118,7 +121,9 @@ float heightField(vec2 xz) {
   float pull = 1.0 + gather * 0.55;
   float ampScale = glass * (1.0 - gather * 0.62) * (1.0 + surge * 0.85);
   ampScale *= 0.55 + uSwell * 0.55 + uBass * 0.35 + uBassAct * 0.4;
-  ampScale = clamp(ampScale, 0.08, 1.65);
+  // LeanIn raises the swell — water gathers itself for the drop (opposite of gather calm).
+  ampScale *= 1.0 + lean * 0.48;
+  ampScale = clamp(ampScale, 0.08, 1.85);
 
   float h = 0.0;
   // Broad swells — deep movement from bass / bassActivity.
@@ -323,16 +328,18 @@ void main() {
   // Perspective ocean camera of our own design — readable horizon, scale as zoom.
   float s = clamp(uScale, 0.35, 2.4);
   float zoom = mix(1.55, 0.72, clamp01((s - 0.35) / 2.05));
-  float eyeH = 1.15 + zoom * 0.55;
-  float eyeZ = -3.2 - zoom * 1.1;
+  float leanCam = clamp01(uLean);
+  float eyeH = 1.15 + zoom * 0.55 - leanCam * 0.1;
+  // LeanIn dollys toward +Z so the horizon climbs nearer (not gather's wavelength pull).
+  float eyeZ = -3.2 - zoom * 1.1 + leanCam * 0.95;
   vec3 ro = vec3(0.0, eyeH, eyeZ);
 
   // Look toward the sanctuary horizon (+Z), slight downward pitch.
-  vec3 lookAt = vec3(0.0, 0.12 + (1.0 - zoom) * 0.08, 6.5);
+  vec3 lookAt = vec3(0.0, 0.12 + (1.0 - zoom) * 0.08 - leanCam * 0.04, 6.5 - leanCam * 0.55);
   vec3 ww = safeNorm(lookAt - ro);
   vec3 uu = safeNorm(cross(ww, vec3(0.0, 1.0, 0.0)));
   vec3 vv = cross(uu, ww);
-  float fov = mix(1.05, 0.78, clamp01((s - 0.35) / 2.05));
+  float fov = mix(1.05, 0.78, clamp01((s - 0.35) / 2.05)) * (1.0 - leanCam * 0.07);
   vec3 rd = safeNorm(uu * uv.x * fov + vv * uv.y * fov + ww);
 
   float tHit;
@@ -523,6 +530,7 @@ export function TidalSanctuaryScene({
   const phaseRef = useRef(0);
   const stillnessSmooth = useRef(0);
   const tenderSmooth = useRef(0);
+  const leanSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const surgeSmooth = useRef(0);
@@ -546,6 +554,7 @@ export function TidalSanctuaryScene({
   );
   const kitAmp = tier === 'low' ? 0.78 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -563,6 +572,7 @@ export function TidalSanctuaryScene({
       uKickTravel: { value: 28 },
       uSnare: { value: 0 },
       uGather: { value: 0 },
+      uLean: { value: 0 },
       uSurge: { value: 0 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
@@ -612,6 +622,15 @@ export function TidalSanctuaryScene({
       0.12,
       0.22,
     );
+
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
     // Forward-only accumulated phase — never reverses when energy drops.
@@ -716,6 +735,7 @@ export function TidalSanctuaryScene({
     mat.uniforms.uKickTravel!.value = kickTravel.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
+    mat.uniforms.uLean!.value = lean;
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
