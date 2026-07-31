@@ -22,10 +22,25 @@ const MAX_TURBULENCE = 2;
 /** Large frame gaps are intentionally not replayed as a burst of catch-up work. */
 export const MAX_BUBBLE_STEP_SECONDS = 0.1;
 
+/** Soft kit amp when the caller does not pass a tier scale (tests, headless). */
+const DEFAULT_KIT_AMP = 1;
+
 export interface BubblePoolConfig {
   capacity: number;
   seed: number;
   burstLimit: number;
+}
+
+/**
+ * Smoothed drum / macro envelopes kept on the pool so stepBubblePool stays
+ * allocation-free and deterministic across identical metric streams.
+ */
+export interface BubbleKitState {
+  kickSmooth: number;
+  prevKick: number;
+  hatSmooth: number;
+  gatherSmooth: number;
+  stillnessSmooth: number;
 }
 
 /**
@@ -50,6 +65,9 @@ export interface BubblePool {
   emittedTotal: number;
   spawnRevision: number;
   flowTime: number;
+  /** Last-frame hat envelope for the shader (young-bubble micro-pop glints). */
+  hatGlint: number;
+  readonly kit: BubbleKitState;
   readonly flowParams: FlowParams;
   readonly flowOptions: { turbulence: number; vortex: number };
   readonly flowScratch: Vec3Like;
@@ -61,6 +79,26 @@ function finiteOr(value: number, fallback: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
+}
+
+/** Asymmetric SmoothDamp-style ease — fast attack, slower release. */
+function smoothToward(
+  current: number,
+  target: number,
+  dt: number,
+  riseTau: number,
+  fallTau: number,
+): number {
+  const tau = target > current ? riseTau : fallTau;
+  return current + (target - current) * (1 - Math.exp(-dt / Math.max(1e-4, tau)));
+}
+
+/** holdBreath + deep silence → mid-water listen (same blend as Aura / presets). */
+function stillnessFromMetrics(holdBreath: number, silence: number): number {
+  return Math.min(
+    1,
+    Math.max(holdBreath, silence * 0.92) + Math.min(holdBreath, silence) * 0.15,
+  );
 }
 
 function normalizeCapacity(value: number): number {
@@ -100,6 +138,14 @@ export function createBubblePool(config: BubblePoolConfig): BubblePool {
     emittedTotal: 0,
     spawnRevision: 0,
     flowTime: 0,
+    hatGlint: 0,
+    kit: {
+      kickSmooth: 0,
+      prevKick: 0,
+      hatSmooth: 0,
+      gatherSmooth: 0,
+      stillnessSmooth: 0,
+    },
     flowParams: { ...DEFAULT_FLOW_PARAMS },
     flowOptions: { turbulence: 0, vortex: 0 },
     flowScratch: { x: 0, y: 0, z: 0 },
@@ -118,6 +164,12 @@ export function resetBubblePool(pool: BubblePool, seed = pool.seed): void {
   pool.emittedTotal = 0;
   pool.spawnRevision++;
   pool.flowTime = 0;
+  pool.hatGlint = 0;
+  pool.kit.kickSmooth = 0;
+  pool.kit.prevKick = 0;
+  pool.kit.hatSmooth = 0;
+  pool.kit.gatherSmooth = 0;
+  pool.kit.stillnessSmooth = 0;
   pool.positions.fill(0);
   pool.velocities.fill(0);
   pool.ages.fill(-1);
@@ -227,24 +279,86 @@ export function emitBubbleBurst(
 /**
  * Advance lifecycle, buoyancy, and the shared curl-flow current, then perform
  * continuous rate emission. The pool and all scratch data are mutated in
- * place; the numeric return value is the continuous count emitted this step.
+ * place; the numeric return value is the continuous count emitted this step
+ * (kick burst particles are counted separately via `emittedTotal`).
+ *
+ * Kit / macro accents (supporting texture — never fireworks):
+ * - `kick` → buoyant upward surge + small `emitBubbleBurst`
+ * - `hat` → smoothed glint envelope (`pool.hatGlint` for the shader)
+ * - `gather` → gentle inward pull toward the column core
+ * - `holdBreath` / deep silence → mid-water suspension that thaws on return
+ *
+ * Existing breath / flow / shimmer drift and manual burst impulses are unchanged.
+ *
+ * `kitAmp` (0..1) softens accents on mid/low tiers; defaults to 1.
  */
 export function stepBubblePool(
   pool: BubblePool,
   deltaSeconds: number,
   settings: EmitterContinuousSettings,
   metrics: AudioMetrics,
+  kitAmp = DEFAULT_KIT_AMP,
 ): number {
   const dt = clamp(finiteOr(deltaSeconds, 0), 0, MAX_BUBBLE_STEP_SECONDS);
   if (dt <= 0) return 0;
 
+  const amp = clamp(finiteOr(kitAmp, DEFAULT_KIT_AMP), 0, 1);
   const turbulence = clamp(finiteOr(settings.turbulence, 0), 0, MAX_TURBULENCE);
   const lift = clamp(finiteOr(settings.lift, 1), 0, MAX_LIFT);
   const flowLevel = clamp(finiteOr(metrics.flow, 0), 0, 2);
   const shimmer = clamp(finiteOr(metrics.shimmer, 0), 0, 2);
   const breath = clamp(finiteOr(metrics.breath, 0), 0, 2);
 
-  pool.flowTime += dt * (0.45 + flowLevel * 0.35);
+  const kit = pool.kit;
+  kit.kickSmooth = smoothToward(
+    kit.kickSmooth,
+    Math.min(1.2, Math.max(0, metrics.kick)) * amp,
+    dt,
+    0.045,
+    0.14,
+  );
+  kit.hatSmooth = smoothToward(
+    kit.hatSmooth,
+    Math.min(1.2, Math.max(0, metrics.hat) * 0.95 + shimmer * 0.2) * amp,
+    dt,
+    0.03,
+    0.1,
+  );
+  kit.gatherSmooth = smoothToward(
+    kit.gatherSmooth,
+    Math.min(1, Math.max(0, metrics.gather)),
+    dt,
+    0.05,
+    0.16,
+  );
+  kit.stillnessSmooth = smoothToward(
+    kit.stillnessSmooth,
+    stillnessFromMetrics(
+      Math.min(1, Math.max(0, metrics.holdBreath)),
+      Math.min(1, Math.max(0, metrics.silence)),
+    ),
+    dt,
+    0.14,
+    0.08,
+  );
+
+  const kick = kit.kickSmooth;
+  const gather = kit.gatherSmooth;
+  const stillness = kit.stillnessSmooth;
+  // Soft under hush so thaw still breathes; never a hard freeze-dead.
+  const motionMul = 1 - stillness * 0.9;
+  const ageMul = 1 - stillness * 0.85;
+  pool.hatGlint = kit.hatSmooth;
+
+  // Kick buoyant surge burst — rising-edge only, capped so it stays a texture.
+  const kickRise = kick - kit.prevKick;
+  if (kickRise > 0.07 && kick > 0.28) {
+    const burstStrength = Math.min(0.28, kick * 0.2 + kickRise * 0.35);
+    emitBubbleBurst(pool, burstStrength, settings);
+  }
+  kit.prevKick = kick;
+
+  pool.flowTime += dt * (0.45 + flowLevel * 0.35) * (0.22 + motionMul * 0.78);
   pool.flowOptions.turbulence = turbulence * 0.5;
   const flowParams = flowParamsFromMetrics(metrics, pool.flowParams, pool.flowOptions);
   flowParams.time = pool.flowTime;
@@ -252,13 +366,20 @@ export function stepBubblePool(
 
   const flowAcceleration = turbulence * (0.05 + flowLevel * 0.045 + shimmer * 0.02);
   const liftAcceleration = lift * (0.018 + breath * 0.012);
-  const damping = Math.exp(-dt * (0.055 + turbulence * 0.025));
+  // Kick: brief upward buoyant pulse — accents, not a rocket.
+  const kickLiftAccel = kick * lift * 0.55;
+  // Gather: pull toward the column core (XZ → 0), distinct from kick Y surge.
+  const gatherPull = gather * (1.55 + amp * 0.55) * (1 - stillness * 0.35);
+  const damping = Math.exp(
+    -dt * (0.055 + turbulence * 0.025 + stillness * 3.6 + gather * 0.06),
+  );
   const flow = pool.flowScratch;
+  const integrateDt = dt * motionMul;
 
   for (let index = 0; index < pool.capacity; index++) {
     if (pool.active[index] !== 1) continue;
 
-    const age = pool.ages[index]! + dt;
+    const age = pool.ages[index]! + dt * ageMul;
     if (age >= pool.lifetimes[index]!) {
       deactivateBubble(pool, index);
       continue;
@@ -271,14 +392,27 @@ export function stepBubblePool(
     const z = pool.positions[i3 + 2]!;
     sampleFlow(flow, x, y, z, index % 3, flowParams);
 
-    const vx = (pool.velocities[i3]! + flow.x * flowAcceleration * dt) * damping;
-    const vy =
-      (pool.velocities[i3 + 1]! + (liftAcceleration + flow.y * flowAcceleration * 0.55) * dt) *
+    let vx = (pool.velocities[i3]! + flow.x * flowAcceleration * integrateDt) * damping;
+    let vy =
+      (pool.velocities[i3 + 1]! +
+        (liftAcceleration + kickLiftAccel + flow.y * flowAcceleration * 0.55) * integrateDt) *
       damping;
-    const vz = (pool.velocities[i3 + 2]! + flow.z * flowAcceleration * dt) * damping;
-    const nextX = x + vx * dt;
-    const nextY = y + vy * dt;
-    const nextZ = z + vz * dt;
+    let vz = (pool.velocities[i3 + 2]! + flow.z * flowAcceleration * integrateDt) * damping;
+
+    // Gentle inward gather — radial XZ only, leaves vertical buoyancy alone.
+    if (gatherPull > 0.001) {
+      vx -= x * gatherPull * integrateDt;
+      vz -= z * gatherPull * integrateDt;
+    }
+
+    // Rising-edge kick impulse: a one-frame buoyant pop on the hit.
+    if (kickRise > 0.07 && kick > 0.28) {
+      vy += kickRise * lift * 0.42;
+    }
+
+    const nextX = x + vx * integrateDt;
+    const nextY = y + vy * integrateDt;
+    const nextZ = z + vz * integrateDt;
 
     if (
       nextY > MAX_WORLD_Y ||
@@ -296,7 +430,8 @@ export function stepBubblePool(
     pool.positions[i3 + 2] = nextZ;
   }
 
-  const rate = clamp(finiteOr(settings.rate, 0), 0, MAX_RATE);
+  const rate =
+    clamp(finiteOr(settings.rate, 0), 0, MAX_RATE) * (1 - stillness * 0.88);
   pool.emissionCarry = Math.min(pool.capacity, pool.emissionCarry + rate * dt);
   const requested = Math.floor(pool.emissionCarry);
   if (requested <= 0) return 0;
