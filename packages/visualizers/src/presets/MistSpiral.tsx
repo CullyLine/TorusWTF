@@ -11,6 +11,7 @@
  *  - hat → sparse mote glitter on selected coils
  *  - holdBreath / deep silence → suspend coils mid-turn + hang motes; thaw on return
  *  - tenderness → gentle swirl + warm mist toward rosy dusk — gentling, not a freeze
+ *  - leanIn → tighten coil radius + drift nearer (pre-drop anticipation; not gather inhale)
  */
 
 import { useMemo, useRef } from 'react';
@@ -51,6 +52,7 @@ uniform float uBarPhase;
 uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uLean;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -109,6 +111,7 @@ void main() {
   float snare = clamp(uSnare, 0.0, 1.2);
   float soft = clamp(uTenderness, 0.0, 1.0);
   float stillness = clamp(uStillness, 0.0, 1.0);
+  float lean = clamp(uLean, 0.0, 1.0);
 
   // Gather inhale: coils pull toward the vertical axis.
   float fold = uGather * 0.6;
@@ -116,6 +119,8 @@ void main() {
   uv *= 1.0 - fold * (0.5 + 0.5 * smoothstep(0.12, 1.15, r0));
   // Soft vertical settle so the column listens before the beat.
   uv.y += (0.0 - uv.y) * fold * 0.28;
+  // LeanIn: isotropic approach zoom — spiral drifts nearer (not gather's axis fold).
+  uv *= 1.0 - lean * 0.13;
   // Kick: brief upward swirl thrust — column surges up, not a fullscreen wash.
   uv.y -= kick * 0.055;
   // Snare: lateral coil shear before spiral sampling (backbeat crack).
@@ -138,7 +143,8 @@ void main() {
   float width = 0.14 + uBass * 0.04 + uImpact * 0.05 + kick * 0.03;
   width *= mix(1.0, 1.38, soft);
   // Tenderness gentles helix pitch so the swirl eases without freezing.
-  float pitch = (1.55 + uSwell * 0.35 + kick * 0.18) * mix(1.0, 0.82, soft);
+  // LeanIn winds the helix a touch tighter — radius anticipation, not dusk soften.
+  float pitch = (1.55 + uSwell * 0.35 + kick * 0.18) * mix(1.0, 0.82, soft) * (1.0 + lean * 0.16);
 
   float coils = 0.0;
   float moteTick = 0.0;
@@ -153,10 +159,11 @@ void main() {
       + seed * 0.4
       + snare * (seed - 0.5) * 0.28;
     float line = coilLine(ang, target, width * (0.75 + seed * 0.45));
-    // Outer mist thinner so the axis owns the frame.
-    float weight = mix(1.2, 0.45, smoothstep(0.1, 1.2, r));
+    // Outer mist thinner so the axis owns the frame; leanIn hugs the column tighter.
+    float weight = mix(1.2 + lean * 0.22, 0.45 - lean * 0.12, smoothstep(0.1, 1.2 * (1.0 - lean * 0.12), r));
     // Soft radial falloff keeps coils readable as a column.
-    float radial = exp(-r * r * (1.1 - uSwell * 0.25 - kick * 0.08));
+    // LeanIn tightens coil radius toward the axis (distinct from gather inhale).
+    float radial = exp(-r * r * (1.1 - uSwell * 0.25 - kick * 0.08 + lean * 0.55));
     coils += line * weight * radial;
 
     // Hat motes: sparse glitter on every ~3rd coil sample.
@@ -281,6 +288,8 @@ export function MistSpiralScene({
   const stillnessSmooth = useRef(0);
   // Tenderness hush — rosy dusk gentles swirl on soft vocals.
   const tenderSmooth = useRef(0);
+  // LeanIn anticipation — coil tighten + nearer drift before the drop.
+  const leanSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -294,6 +303,7 @@ export function MistSpiralScene({
   // Soft-metric amps: full on high, gentle mid, restrained low.
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(
     () => buildFragmentShader(coilCount, mistOctaves),
     [coilCount, mistOctaves],
@@ -319,6 +329,7 @@ export function MistSpiralScene({
       uBgAlpha: { value: 1 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uLean: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -361,6 +372,16 @@ export function MistSpiralScene({
       0.12,
       0.22,
     );
+
+    // LeanIn: fast approach, slower release; soft under holdBreath so hush still owns freeze.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // Tenderness eases section pace so intimate moments feel held, not torn.
     const sectionPace =
@@ -438,6 +459,7 @@ export function MistSpiralScene({
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uLean!.value = lean;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
