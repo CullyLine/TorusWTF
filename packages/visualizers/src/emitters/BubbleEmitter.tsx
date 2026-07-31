@@ -15,6 +15,7 @@ function clamp(value: number, min: number, max: number): number {
 export function BubbleEmitter({
   settings,
   palette,
+  tier,
   metricsRef,
   modulationRef,
   impulses,
@@ -30,6 +31,8 @@ export function BubbleEmitter({
     opacity: settings.opacity,
   });
   const lastSpawnRevisionRef = useRef(-1);
+  // Soften kit accents on mid/low so the overlay stays a texture over the preset.
+  const kitAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.65;
 
   const pool = useMemo(
     () =>
@@ -66,6 +69,7 @@ export function BubbleEmitter({
       uPixelRatio: { value: pixelRatio },
       uOpacity: { value: settings.opacity },
       uAudioGlow: { value: 1 },
+      uHatGlint: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -116,7 +120,7 @@ export function BubbleEmitter({
     }
 
     const metrics = metricsRef.current;
-    stepBubblePool(pool, delta, runtime, metrics);
+    stepBubblePool(pool, delta, runtime, metrics, kitAmp);
 
     buffers.position.needsUpdate = true;
     buffers.age.needsUpdate = true;
@@ -129,6 +133,7 @@ export function BubbleEmitter({
     uniforms.uPointScale.value = runtime.size * (1 + clamp(metrics.impact, 0, 1.2) * 0.08);
     uniforms.uPixelRatio.value = pixelRatio;
     uniforms.uOpacity.value = runtime.opacity;
+    uniforms.uHatGlint.value = pool.hatGlint;
     uniforms.uAudioGlow.value = clamp(
       0.78 +
         clamp(metrics.swell, 0, 1.5) * 0.2 +

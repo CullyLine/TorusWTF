@@ -9,6 +9,7 @@ uniform float uPixelRatio;
 
 varying float vAlpha;
 varying float vSeed;
+varying float vLife;
 
 void main() {
   float alive = step(0.0, aAge) * (1.0 - step(aLifetime, aAge));
@@ -25,6 +26,7 @@ void main() {
   gl_PointSize = clamp(diameter * fade, 0.0, 180.0);
   vAlpha = fade;
   vSeed = aSeed;
+  vLife = life;
 }
 `;
 
@@ -32,12 +34,14 @@ export const BUBBLE_FRAGMENT_SHADER = /* glsl */ `
 uniform float uTime;
 uniform float uOpacity;
 uniform float uAudioGlow;
+uniform float uHatGlint;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
 
 varying float vAlpha;
 varying float vSeed;
+varying float vLife;
 
 const float TAU = 6.28318530718;
 
@@ -71,14 +75,25 @@ void main() {
   vec3 lightDirection = normalize(vec3(-0.35, 0.48, 1.0));
   float highlight = pow(max(0.0, dot(normal, lightDirection)), 28.0);
   float body = 0.035 + (1.0 - radius) * 0.045;
+
+  // Hat micro-pop: catch-lights on the youngest bubbles only — supporting
+  // texture over the film, not a full-column flash.
+  float young = 1.0 - smoothstep(0.0, 0.2, vLife);
+  float hatPop =
+    uHatGlint *
+    young *
+    (0.5 + 0.5 * fract(vSeed * 19.13)) *
+    softEdge;
+
   float alpha =
-    (body + fresnel * 0.5 + rim * 0.3 + highlight * 0.22) *
+    (body + fresnel * 0.5 + rim * 0.3 + highlight * 0.22 + hatPop * 0.18) *
     softEdge *
     uOpacity *
     vAlpha;
   vec3 color =
     filmColor * (0.28 + fresnel * 1.05 + rim * 0.45) * uAudioGlow +
-    vec3(highlight * 0.7);
+    vec3(highlight * 0.7) +
+    vec3(hatPop * 0.85);
 
   gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0));
 }
