@@ -9,6 +9,7 @@
  *  - kick → radial petal pulse (local outward surge + bass-warm core)
  *  - snare → lateral petal shear + flank flash (backbeat crack)
  *  - hat → sparse mote glitter on petal tips
+ *  - echo → one-shot cool moonlit ghost bloom center→tips (phrase-gap replay)
  *  - holdBreath / deep silence → pause petals mid-open + hang tip motes; thaw on return
  *  - tenderness → warm moonlit soften (wider lobes, honey light) — gentling, not a freeze
  */
@@ -51,6 +52,8 @@ uniform float uBarPhase;
 uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -221,6 +224,39 @@ void main() {
   col += tipGold * tipMotes * stillness * 0.22;
   col += tipGold * uAfterglow * (0.07 + petals * 0.09);
 
+  // Phrase-echo: one-shot cool moonlit ghost bloom — re-opens from center and
+  // travels to the tips replaying the gap's rhythm (distinct from warm petals /
+  // honey tenderness / kick radial pulse / hat tip motes).
+  float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+  if (echoPulse > 0.01) {
+    float crestR = mix(0.06, 1.18, clamp(uEchoTravel, 0.0, 1.0));
+    float ghostPetals = 0.0;
+    float ghostOpen = 0.55 + echoPulse * 0.55;
+    float ghostWidth = width * (1.05 + echoPulse * 0.2);
+    for (int gi = 0; gi < LAYER_COUNT; gi++) {
+      float fi = float(gi);
+      float seed = fract(sin(fi * 23.91 + 5.1) * 43758.5453);
+      float layerOpen = ghostOpen * (0.72 + seed * 0.35);
+      float baseR = (0.2 + fi * 0.2) * (0.55 + layerOpen * 0.72);
+      float angShift = ang + fi * 0.18 + seed * 0.35;
+      float lobe = petalLobe(angShift, clamp(layerOpen, 0.0, 1.0), 0.35);
+      float target = baseR * (0.38 + 0.62 * lobe);
+      float line = petalRibbon(r, target, ghostWidth * (0.85 + seed * 0.4));
+      float weight = mix(1.15, 0.5, smoothstep(0.08, 1.2, r));
+      float crest = exp(-pow((r - crestR) * 5.8, 2.0));
+      // Crest-by-slot blink so the reply reads as rhythmic, not a wash.
+      float blink =
+        0.3 + 0.7 * crest * (0.5 + 0.5 * sin(uEchoTravel * 22.0 + seed * 36.0));
+      ghostPetals += line * weight * blink;
+    }
+    ghostPetals = clamp(ghostPetals * echoPulse, 0.0, 2.2);
+    // Cool silver-blue — distinct from dusk-rose petals and moon-honey tenderness.
+    vec3 moonCol = mix(vec3(0.62, 0.78, 1.0), uColorHigh, 0.22);
+    float ghostAmt = ghostPetals * (1.0 - stillness * 0.45);
+    col += moonCol * ghostAmt * 0.82;
+    col = mix(col, moonCol, clamp(ghostAmt * 0.1, 0.0, 0.3));
+  }
+
   float barFlash = pow(1.0 - uBarPhase, 9.0) * (0.05 + uImpact * 0.1);
   col += tipGold * barFlash;
 
@@ -283,6 +319,11 @@ export function NightBloomScene({
   const stillnessSmooth = useRef(0);
   // Tenderness hush — moonlit softens petal bite on gentle vocals.
   const tenderSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one center→tips travel per rise.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -296,6 +337,7 @@ export function NightBloomScene({
   // Soft-metric amps: full on high, gentle mid, restrained low.
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(
     () => buildFragmentShader(petalCount, layerCount),
     [petalCount, layerCount],
@@ -321,6 +363,8 @@ export function NightBloomScene({
       uBgAlpha: { value: 1 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -405,6 +449,36 @@ export function NightBloomScene({
     );
     afterglowSmooth.current = smoothToward(afterglowSmooth.current, m.afterglow, dt, 0.18, 0.8);
 
+    // Phrase-echo ghost bloom: arm on quiet, fire one travel per echo rise
+    // so the flower answers once in a gap — not while the drums keep speaking.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      m.echo * echoAmp,
+      dt,
+      0.05,
+      0.3,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+
+    if (echoTravel.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     // Petal open: swell + energy open the bloom; gather keeps a floor so it never snaps shut.
     // During holdBreath, hold mid-open (blend target toward current) so petals pause open.
     const openTargetLive =
@@ -435,6 +509,8 @@ export function NightBloomScene({
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
