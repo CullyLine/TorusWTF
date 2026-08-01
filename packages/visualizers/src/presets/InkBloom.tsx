@@ -6,6 +6,8 @@
  *  - snare → lateral shear across the plumes (backbeat crack)
  *  - hat → sparse surface mote sparkles
  *  - gather → ink draws toward center (pre-beat inhale)
+ *  - leanIn → coil plumes tighter + drift nearer the glass (pre-drop approach)
+ *  - dropEvent → one full-water ink burst — every plume billows at once, then settles
  *  - tenderness → ink pales toward milk on gentle vocals
  *  - swell / afterglow → soft residual bloom in the water body
  *  - echo → one-shot cooler/paler ghost-plume replay in phrase gaps
@@ -80,6 +82,8 @@ uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uEcho;
 uniform float uEchoTravel;
+uniform float uLean;
+uniform float uDrop;
 uniform vec4 uPlumes[PLUME_COUNT];
 uniform float uPlumeAge[PLUME_COUNT];
 uniform float uPlumeSpin[PLUME_COUNT];
@@ -129,19 +133,27 @@ float plumeDensity(vec2 uv, vec4 plume, float age, float spin) {
   float str = clamp(plume.z, 0.0, 1.4);
   if (str < 0.004) return 0.0;
 
+  float lean = clamp(uLean, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
   float seed = plume.w;
   vec2 center = plume.xy;
   vec2 d = uv - center;
 
   // Spiral curl: rotate sample space as the plume ages so ink coils.
-  float ang = atan(d.y, d.x) + spin + age * (0.55 + seed * 0.45);
+  // leanIn winds the coil faster (tighter spiral); dropEvent billows age spin.
+  float ang = atan(d.y, d.x) + spin + age * (0.55 + seed * 0.45 + lean * 0.85 + drop * 0.35);
   float r = length(d);
+  // leanIn shrinks the bloom envelope (coiled tighter); drop swells it once.
   float bloom = 0.08 + age * (0.22 + seed * 0.12) + str * 0.06;
+  bloom *= 1.0 - lean * 0.38;
+  bloom *= 1.0 + drop * 0.55;
   vec2 polar = vec2(cos(ang), sin(ang)) * r;
 
   // Domain warp — ink filaments billow instead of sitting as soft blobs.
-  vec2 warped = polar + curlOffset(polar * (2.4 + seed) + seed * 6.0, uTime + age) * (0.12 + age * 0.18);
-  float filaments = fbm(warped * (3.2 - age * 0.55) + vec2(seed * 3.1, age * 0.4));
+  // Drop briefly amps the curl so the whole tank reads as one eruption.
+  float warpAmt = (0.12 + age * 0.18) * (1.0 + drop * 0.7) * (1.0 - lean * 0.22);
+  vec2 warped = polar + curlOffset(polar * (2.4 + seed) + seed * 6.0, uTime + age) * warpAmt;
+  float filaments = fbm(warped * (3.2 - age * 0.55 + lean * 0.55) + vec2(seed * 3.1, age * 0.4));
   filaments = smoothstep(0.28, 0.82, filaments);
 
   // Soft radial envelope that expands then thins with age.
@@ -162,21 +174,27 @@ void main() {
   float gather = clamp(uGather, 0.0, 1.0);
   float tender = clamp(uTenderness, 0.0, 1.0);
   float still = clamp(uStillness, 0.0, 1.0);
+  float lean = clamp(uLean, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
 
   // Gather inhale: water draws toward the still center.
   float r0 = length(uv) + 1e-4;
   uv *= 1.0 - gather * (0.42 + 0.38 * smoothstep(0.08, 1.15, r0));
+  // LeanIn: isotropic approach zoom — plumes drift nearer the glass (not gather fold).
+  uv *= 1.0 - lean * 0.12;
   // Snare: lateral shear across the surface (plume crack).
   uv.x += snare * 0.055 * sign(uv.x + 1e-4);
+  // Drop: brief outward billow so the eruption reads as filling the tank.
+  uv *= 1.0 + drop * 0.06;
 
   float r = length(uv);
 
   // Still dark water body — barely alive idle shimmer.
   // holdBreath glasses the surface: hush grain drift, polish toward mirror.
   vec2 waterUv = uv * 1.35;
-  waterUv += curlOffset(waterUv * 1.1, uTime * 0.08) * (0.04 + uSwell * 0.05) * (1.0 - still * 0.88);
+  waterUv += curlOffset(waterUv * 1.1, uTime * 0.08) * (0.04 + uSwell * 0.05 + drop * 0.08) * (1.0 - still * 0.88);
   float waterGrain = fbm(waterUv * 1.6 + uTime * 0.04 * (1.0 - still * 0.9));
-  float sheen = smoothstep(0.35, 0.75, waterGrain) * (0.04 + uSwell * 0.06 + uMid * 0.03);
+  float sheen = smoothstep(0.35, 0.75, waterGrain) * (0.04 + uSwell * 0.06 + uMid * 0.03 + drop * 0.05);
   sheen *= exp(-r * r * 0.55);
   // Cool glass highlight — listens as a quiet mirror, not dead black.
   float glassRim = pow(clamp(1.0 - r * 0.85, 0.0, 1.0), 2.2) * (0.05 + 0.07 * (1.0 - waterGrain));
@@ -263,6 +281,9 @@ void main() {
   // Hat mote glitter — cool high-band ticks on the surface.
   col += mix(uColorHigh, milk, 0.4) * moteField * uHat * 1.15;
   col += inkHigh * uAfterglow * (0.04 + ink * 0.06);
+  // Drop eruption wash: brief luminous fill across the whole tank (not a single kick).
+  col += mix(inkMid, inkHigh, 0.55) * drop * (0.14 + ink * 0.22);
+  col += milk * drop * edge * 0.28;
 
   float barFlash = pow(1.0 - uBarPhase, 9.0) * (0.03 + ink * 0.04);
   col += milk * barFlash;
@@ -333,7 +354,10 @@ export function InkBloomScene({
   const afterglowSmooth = useRef(0);
   const kickSmooth = useRef(0);
   const stillnessSmooth = useRef(0);
+  const leanSmooth = useRef(0);
+  const dropSmooth = useRef(0);
   const prevKickRef = useRef(0);
+  const prevDropRef = useRef(0);
   const spawnSeedRef = useRef(0.37);
   // Phrase-echo one-shot: arm on quiet, fire one ghost-plume replay per gap.
   const echoSmooth = useRef(0);
@@ -350,6 +374,8 @@ export function InkBloomScene({
     tier === 'high' ? OCTAVES_HIGH : tier === 'mid' ? OCTAVES_MID : OCTAVES_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const plumesRef = useRef<Plume[]>(makePlumes(plumeCount));
 
   const reducedMotion = useMemo(() => {
@@ -387,6 +413,8 @@ export function InkBloomScene({
       uStillness: { value: 0 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
+      uLean: { value: 0 },
+      uDrop: { value: 0 },
       uPlumes: { value: plumeVecs },
       uPlumeAge: { value: plumeAges },
       uPlumeSpin: { value: plumeSpins },
@@ -426,13 +454,30 @@ export function InkBloomScene({
     // Nearly freeze billow clock + plume drift; a whisper remains so thaw never pops.
     const motionMul = 1 - stillness * 0.9;
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Drop eruption envelope — fast attack, lingering settle across the tank.
+    const dropTarget =
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp;
+    dropSmooth.current = smoothToward(dropSmooth.current, dropTarget, dt, 0.03, 0.55);
+    const drop = dropSmooth.current;
+
     timeRef.current +=
       dt *
       pace *
       sectionPace *
       calm *
       motionMul *
-      (0.45 + m.swell * 0.55 + m.impact * 0.15);
+      (0.45 + m.swell * 0.55 + m.impact * 0.15 + drop * 0.25);
 
     if (plumesRef.current.length !== plumeCount) {
       plumesRef.current = makePlumes(plumeCount);
@@ -502,6 +547,34 @@ export function InkBloomScene({
     }
     prevKickRef.current = kick;
 
+    // DropEvent: one full-water ink burst — every plume slot billows at once.
+    // Rising edge only so sustained drop doesn't keep re-erupting; settles via fade.
+    const prevDrop = prevDropRef.current;
+    if (drop > 0.4 && prevDrop < 0.28) {
+      const plumes = plumesRef.current;
+      const mem = kickMemoryRef.current;
+      for (let i = 0; i < plumes.length; i++) {
+        spawnSeedRef.current = (spawnSeedRef.current * 1.6180339887 + 0.37) % 1;
+        const seed = (spawnSeedRef.current + i * 0.137) % 1;
+        const ang = (i / Math.max(plumes.length, 1)) * Math.PI * 2 + seed * 0.55;
+        const rad = 0.1 + ((seed * 5.91) % 1) * 0.48;
+        const nx = Math.cos(ang) * rad;
+        const ny = Math.sin(ang) * rad;
+        const nSpin = (seed - 0.5) * 3.2;
+        plumes[i] = {
+          x: nx,
+          y: ny,
+          strength: Math.min(1.4, 1.05 + drop * 0.35),
+          seed,
+          age: 0,
+          spin: nSpin,
+        };
+        mem.push({ x: nx, y: ny, seed, spin: nSpin });
+        if (mem.length > KICK_MEMORY) mem.shift();
+      }
+    }
+    prevDropRef.current = drop;
+
     // Phrase-echo ghost-plume replay: arm on quiet, fire one travel per echo
     // rise — cooler/paler curls remembering the last kicks, not a kit scrub.
     echoSmooth.current = smoothToward(
@@ -563,6 +636,7 @@ export function InkBloomScene({
 
     // Drift / billow / gather-pull each plume in CPU so the shader stays cheap.
     // holdBreath gates age/drift/spin/fade so curls suspend mid-coil; gather still reels.
+    // leanIn gently coils toward center + winds spin (approach, not gather inhale).
     const plumes = plumesRef.current;
     const gather = gatherSmooth.current;
     for (let i = 0; i < plumes.length; i++) {
@@ -571,18 +645,24 @@ export function InkBloomScene({
         p.strength = 0;
         continue;
       }
-      p.age += dt * pace * calm * motionMul;
+      p.age += dt * pace * calm * motionMul * (1 + drop * 0.35);
       // Soft outward drift + swirl; gather gently reels toward center.
-      const swirl = 0.18 + p.seed * 0.12;
+      const swirl = 0.18 + p.seed * 0.12 + lean * 0.22;
       const ox = -p.y * swirl * dt * motionMul;
       const oy = p.x * swirl * dt * motionMul;
       p.x += ox + (p.seed - 0.5) * 0.04 * dt * motionMul;
       p.y += oy + (0.5 - p.seed) * 0.03 * dt * motionMul;
       p.x *= 1 - gather * 0.55 * dt * 4;
       p.y *= 1 - gather * 0.55 * dt * 4;
-      p.spin += dt * (0.35 + p.seed * 0.45) * pace * motionMul;
+      // leanIn coil: mild radial tighten distinct from gather's stronger reel.
+      p.x *= 1 - lean * 0.28 * dt * 3;
+      p.y *= 1 - lean * 0.28 * dt * 3;
+      p.spin +=
+        dt * (0.35 + p.seed * 0.45 + lean * 0.95 + drop * 0.55) * pace * motionMul;
       // Strength fade nearly freezes while listening so plumes don't evaporate mid-hold.
-      p.strength *= Math.exp((-dt * motionMul) / (1.35 + p.seed * 0.4));
+      // Drop linger: slightly slower fade so the eruption settles, not evaporates.
+      const fadeTau = (1.35 + p.seed * 0.4) * (1 + drop * 0.45);
+      p.strength *= Math.exp((-dt * motionMul) / fadeTau);
     }
 
     // Ghost plumes billow only while the phrase-echo travel is live.
@@ -638,6 +718,8 @@ export function InkBloomScene({
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
+    mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uDrop!.value = drop;
     mat.uniforms.uBass!.value = m.bass;
     mat.uniforms.uMid!.value = m.mid;
     mat.uniforms.uHigh!.value = m.high;
