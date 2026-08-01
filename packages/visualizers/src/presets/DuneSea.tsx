@@ -162,7 +162,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     crestScores.current = Array.from({ length: crestCount }, (_, i) => ({ i, s: 0 }));
 
     for (let c = 0; c < crestCount; c++) {
-      const t = crestCount === 1 ? 0.5 : c / (crestCount - 1);
+      const t = c / Math.max(1, crestCount - 1);
       cz[c] = -Z_SPAN * 0.48 + t * Z_SPAN * 0.96;
       ca[c] = 0.55 + hash01(c * 1.7 + 0.3) * 0.85;
       cs[c] = 0.38 + hash01(c * 2.3 + 1.1) * 0.42;
