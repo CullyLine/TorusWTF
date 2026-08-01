@@ -70,6 +70,7 @@ export function BubbleEmitter({
       uOpacity: { value: settings.opacity },
       uAudioGlow: { value: 1 },
       uHatGlint: { value: 0 },
+      uTenderness: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -134,10 +135,11 @@ export function BubbleEmitter({
     uniforms.uPixelRatio.value = pixelRatio;
     uniforms.uOpacity.value = runtime.opacity;
     uniforms.uHatGlint.value = pool.hatGlint;
+    uniforms.uTenderness.value = pool.tenderSoft;
     uniforms.uAudioGlow.value = clamp(
       0.78 +
         clamp(metrics.swell, 0, 1.5) * 0.2 +
-        clamp(metrics.shimmer, 0, 1.5) * 0.28 +
+        clamp(metrics.shimmer, 0, 1.5) * 0.28 * (1 - pool.tenderSoft * 0.55) +
         clamp(metrics.afterglow, 0, 1) * 0.1,
       0.55,
       1.35,
