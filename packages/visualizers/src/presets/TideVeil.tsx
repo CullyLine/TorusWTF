@@ -12,6 +12,7 @@
  *  - afterglow → warm residual light holds after peaks
  *  - holdBreath / deep silence → nearly still the caustic roll + ease ridge contrast
  *  - tenderness → soften caustic sharpness so gentle vocals read as a softer sheet
+ *  - leanIn → raise the sheet toward camera + tighten caustic folds (pre-drop approach)
  *  - echo → one-shot cool moonlit glint train across the veil (phrase-gap replay)
  */
 
@@ -45,6 +46,7 @@ uniform float uBarPhase;
 uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uLean;
 uniform float uKick;
 uniform float uSnare;
 uniform float uHat;
@@ -127,12 +129,15 @@ void main() {
   float kick = clamp(uKick, 0.0, 1.2);
   float snare = clamp(uSnare, 0.0, 1.2);
   float hat = clamp(uHat, 0.0, 1.2);
+  float lean = clamp(uLean, 0.0, 1.0);
 
   // Gather folds the sheet toward center — anticipation crease.
   float fold = uGather * 0.55;
   float r0 = length(uv) + 1e-4;
   // Kick: brief center-born surge (local UV inhale, not a fullscreen wash).
   uv *= 1.0 - fold * (0.55 + 0.45 * smoothstep(0.15, 1.1, r0)) + kick * 0.05;
+  // LeanIn: isotropic approach zoom — sheet drifts nearer (not gather crease).
+  uv *= 1.0 - lean * 0.12;
   // Snare: lateral fold crack before caustic sampling (backbeat shear).
   uv.x += snare * 0.052 * sign(uv.x + 1e-4);
   // Slight angular squeeze so the fold reads as a living membrane.
@@ -141,7 +146,8 @@ void main() {
   // Snare also twists the membrane phase so the crack reads sideways.
   ang += snare * 0.11 * sign(sin(ang * 3.0 + 0.35));
   float rr = length(uv);
-  uv = vec2(cos(ang), sin(ang)) * rr;
+  // LeanIn mildly hugs space toward the axis so folds gather presence.
+  uv = vec2(cos(ang), sin(ang)) * rr * (1.0 - lean * 0.08 * smoothstep(0.12, 1.05, rr));
 
   // Swell rolls the veil: scroll + wave amplitude.
   // holdBreath gates uTime advance in JS so the roll nearly freezes while listening.
@@ -153,6 +159,8 @@ void main() {
   flow.x += snare * 0.085 * sign(uv.x + 1e-4);
   flow.y += sin(uv.x * 2.4 + t * 0.7) * (0.08 + uSwell * 0.14);
   flow += (fbm(flow * 1.6 + t * 0.15) - 0.5) * (0.22 + uSwell * 0.28);
+  // LeanIn densifies caustic folds — water gathering itself for the drop.
+  flow *= 1.0 + lean * 0.42;
 
   float caust = causticField(flow, t, uTenderness);
   // Impact flashes the ridges; shimmer adds fine continuous glitter.
@@ -276,6 +284,8 @@ export function TideVeilScene({
   const afterglowSmooth = useRef(0);
   const stillnessSmooth = useRef(0);
   const tenderSmooth = useRef(0);
+  // LeanIn anticipation — approach + caustic-fold tighten before the drop.
+  const leanSmooth = useRef(0);
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
@@ -295,6 +305,7 @@ export function TideVeilScene({
   const flashAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(octaves), [octaves]);
 
   const uniforms = useMemo(
@@ -314,6 +325,7 @@ export function TideVeilScene({
       uBgAlpha: { value: 1 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uLean: { value: 0 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uHat: { value: 0 },
@@ -359,6 +371,17 @@ export function TideVeilScene({
       0.12,
       0.22,
     );
+
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     timeRef.current +=
       dt *
@@ -453,6 +476,7 @@ export function TideVeilScene({
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uLean!.value = lean;
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
