@@ -34,6 +34,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   jellyfish_bloom: '#5EEAD4',
   murmuration: '#C4A484',
   thunderhead: '#7B8DB8',
+  glowworm_grotto: '#3DDC97',
   rainforest_reverie: '#4ADE80',
   alien_planet: '#C084FC',
   tidal_sanctuary: '#22D3EE',
