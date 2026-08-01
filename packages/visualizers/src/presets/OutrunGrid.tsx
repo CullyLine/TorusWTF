@@ -9,7 +9,8 @@ import { useModulation } from '../modulation';
 
 /**
  * Outrun Grid — synthwave drive with build-and-drop cinema + kit road ticks
- * + phrase-echo ghost road + holdBreath stillness + leanIn approach:
+ * + phrase-echo ghost road + holdBreath stillness + leanIn approach
+ * + tenderness dusk hush + vocal sun-rim:
  *  - tension → sun swells + stretches (charges the horizon)
  *  - gather → horizon dips (pre-drop inhale)
  *  - drop / afterglow → grid heat wash that eases back
@@ -21,6 +22,10 @@ import { useModulation } from '../modulation';
  *    notch, and hold dash ticks; thaw when the music returns
  *  - leanIn → pull horizon/sun nearer + isotropic sun swell + tighten road
  *    perspective (approach, not tension's stretch deformation)
+ *  - tenderness → rose dusk hush: sun melts toward rose, grid glow softens,
+ *    road speed relaxes (still moves — not holdBreath's crawl/freeze)
+ *  - vocalActivity → warm rim of light around the sun core that breathes
+ *    with the voice (alive, distinct from kick core punch)
  */
 
 const terrainVertex = /* glsl */ `
@@ -89,6 +94,7 @@ uniform float uEcho;
 uniform float uEchoTravel;
 uniform float uStillness;
 uniform float uLean;
+uniform float uTenderness;
 
 varying vec2 vUv;
 varying float vHeight;
@@ -97,6 +103,7 @@ varying float vDist;
 void main() {
   float stillness = clamp(uStillness, 0.0, 1.0);
   float lean = clamp(uLean, 0.0, 1.0);
+  float tender = clamp(uTenderness, 0.0, 1.0);
   // LeanIn tightens lane spacing toward the valley — perspective coils
   // expectant without changing scroll / heat / kit language.
   vec2 gUv = vUv;
@@ -109,6 +116,11 @@ void main() {
   float line = smoothstep(0.1, 0.0, d) + smoothstep(0.3, 0.0, d) * 0.25;
   float glow = exp(-vDist * 0.11);
   vec3 gridCol = mix(uColorA, uColorB, sin(gUv.y * 12.0 + uTime) * 0.5 + 0.5);
+  // Tenderness: milk neon toward rose dusk + soften floor glow — gentling,
+  // not holdBreath's hush-dim freeze.
+  vec3 roseDusk = vec3(1.0, 0.48, 0.42);
+  gridCol = mix(gridCol, roseDusk, tender * 0.55);
+  glow *= mix(1.0, 0.72, tender);
   // Drop heat wash: afterglow + impact bleed warm magenta into the grid,
   // then ease back — cinema after the drop, not a permanent tint.
   float heat = clamp(uHeat, 0.0, 1.4);
@@ -142,7 +154,8 @@ void main() {
   float ghostCrest = exp(-pow((vUv.y - mix(0.08, 0.92, clamp(uEchoTravel, 0.0, 1.0))) * 9.0, 2.0));
 
   vec3 col = gridCol * line * glow * (0.4 + uMid * 0.5 + vHeight * 0.3);
-  col *= 1.0 + uBloom * 0.4 + heat * 0.55;
+  // Tenderness eases bloom so the road reads as soft dusk, not neon glare.
+  col *= 1.0 + uBloom * 0.4 * mix(1.0, 0.55, tender) + heat * 0.55;
   // Soft traveling crest so the wash feels like a wave over the floor.
   float crest = sin(vUv.y * 18.0 - uTime * 2.4 + heat * 4.0) * 0.5 + 0.5;
   col += uHeatColor * crest * heat * 0.35 * line * glow;
@@ -183,6 +196,8 @@ uniform float uKick;
 uniform float uSnare;
 uniform float uStillness;
 uniform float uLean;
+uniform float uTenderness;
+uniform float uVocal;
 uniform vec3 uSunColor;
 uniform vec3 uSkyColor;
 
@@ -192,6 +207,8 @@ void main() {
   vec2 uv = vUv;
   float stillness = clamp(uStillness, 0.0, 1.0);
   float lean = clamp(uLean, 0.0, 1.0);
+  float tender = clamp(uTenderness, 0.0, 1.0);
+  float vocal = clamp(uVocal, 0.0, 1.0);
   // Horizon dips on gather — the whole dusk plane inhales before the drop.
   float horizonDip = uGather * 0.085;
   // LeanIn lifts the sun slightly as if approaching — not a gather dip.
@@ -212,6 +229,9 @@ void main() {
   sky = mix(sky, uSkyColor * 0.16, smoothstep(0.0, 0.35, skyY));
   // Build heat in the lower sky as tension climbs.
   sky = mix(sky, uSunColor * 0.45, uTension * 0.28 * (1.0 - skyY));
+  // Tenderness milks the sky toward rose dusk — honey hush, not holdBreath dim.
+  vec3 roseSky = vec3(0.95, 0.42, 0.38);
+  sky = mix(sky, mix(uSkyColor, roseSky, 0.7) * 0.22, tender * 0.55);
   // holdBreath dims the dusk a notch — listening sky, not a blackout.
   sky *= mix(1.0, 0.78, stillness);
 
@@ -224,6 +244,10 @@ void main() {
   // Hotter inner core on kick — reads as a punch, not a fullscreen strobe.
   float sunCore = smoothstep(sunRadius * 0.42, 0.0, sunDist);
   sunCol += mix(uSunColor, vec3(1.0, 0.95, 0.82), 0.55) * sunCore * kick * 0.95;
+  // Tenderness melts the disc toward rose and softens glare (still lit).
+  vec3 roseSun = vec3(1.0, 0.52, 0.44);
+  sunCol = mix(sunCol, roseSun * sun * (0.85 + uBass * 0.2), tender * 0.72);
+  sunCol *= mix(1.0, 0.82, tender);
   // Dim the sun on holdBreath; tension stretch shape stays intact.
   sunCol *= mix(1.0, 0.52, stillness);
 
@@ -234,6 +258,16 @@ void main() {
   uv.x += shimmer;
 
   vec3 col = sky + sunCol;
+  // Vocal rim: warm annular glow around the disc that breathes with voice —
+  // outside the core (kick owns the punch), inside a soft halo.
+  float rimInner = sunRadius * (0.92 + vocal * 0.04);
+  float rimPeak = sunRadius * (1.12 + vocal * 0.18);
+  float rimOuter = sunRadius * (1.55 + vocal * 0.55);
+  float vocalRim =
+    smoothstep(rimInner, rimPeak, sunDist) * smoothstep(rimOuter, rimPeak, sunDist);
+  vec3 rimCol = mix(uSunColor, mix(vec3(1.0, 0.72, 0.48), roseSun, tender * 0.45), 0.5);
+  col += rimCol * vocalRim * vocal * (0.95 + tender * 0.25);
+
   col += uSunColor * (uBeat * 0.3 + uDropWash * 0.45);
   // Horizon climbs toward the viewer on leanIn — approach, not gather dip.
   float horizonY = 0.28 - horizonDip + lean * 0.055;
@@ -286,9 +320,13 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const stillnessSmooth = useRef(0);
   // LeanIn anticipation: horizon/sun approach — eager climb, slower release.
   const leanSmooth = useRef(0);
+  // Tenderness dusk hush + vocal sun-rim — soft climb, slower fall.
+  const tenderSmooth = useRef(0);
+  const vocalSmooth = useRef(0);
   const timeRef = useRef(0);
   const heatColorScratch = useRef(new THREE.Color());
   const heatHighScratch = useRef(new THREE.Color());
+  const roseScratch = useRef(new THREE.Color(1, 0.48, 0.42));
   const { camera } = useThree();
 
   const segments = tier === 'high' ? 160 : tier === 'mid' ? 96 : 64;
@@ -300,6 +338,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
   // holdBreath crawl amp — low tier still crawls, just a touch softer.
   const stillAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const tenderAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const vocalAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const terrainUniforms = useMemo(
     () => ({
@@ -319,6 +359,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uEchoTravel: { value: 1 },
       uStillness: { value: 0 },
       uLean: { value: 0 },
+      uTenderness: { value: 0 },
     }),
     [palette.mid, palette.high, palette.bass, bloom],
   );
@@ -338,6 +379,8 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
       uSnare: { value: 0 },
       uStillness: { value: 0 },
       uLean: { value: 0 },
+      uTenderness: { value: 0 },
+      uVocal: { value: 0 },
       uSunColor: { value: new THREE.Color(palette.bass) },
       uSkyColor: { value: new THREE.Color(palette.bass) },
     }),
@@ -385,6 +428,28 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
+    // Tenderness: soft dusk hush — still rolls, just gentler. Rise/fall
+    // matched to other tender presets; soft under stillness so hang owns quiet.
+    tenderSmooth.current = smoothToward(
+      tenderSmooth.current,
+      Math.min(1, m.tenderness) * tenderAmp,
+      dt,
+      0.12,
+      0.22,
+    );
+    const tender = tenderSmooth.current * (1 - stillness * 0.28);
+
+    // Vocal rim: voice presence swells a warm halo around the sun core.
+    vocalSmooth.current = smoothToward(
+      vocalSmooth.current,
+      Math.min(1, m.vocalActivity) * vocalAmp,
+      dt,
+      0.1,
+      0.28,
+    );
+    // Soft under stillness so hush dim isn't fighting a bright rim.
+    const vocal = vocalSmooth.current * (1 - stillness * 0.3);
+
     // Phrase-echo ghost road: arm on quiet, fire one travel per echo rise
     // so the road answers once in a gap — not while the drums keep speaking.
     echoSmooth.current = smoothToward(
@@ -418,14 +483,17 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Drive speed follows the song's arc: valleys cruise, peaks floor it.
     // Tension adds a cinematic charge (not only "scroll faster").
     // rushMul eases the conveyor to a crawl during holdBreath.
+    // tenderPace relaxes road speed on gentle passages (still moves).
     const sectionPace = 0.7 + m.sectionLevel * 0.55;
     const tensionPace = 1 + tensionSmooth.current * 0.22;
+    const tenderPace = 1 - tender * 0.38;
     scrollRef.current +=
       dt *
       spd *
       (0.45 + m.energy * 1.4 + m.impact * 0.8) *
       sectionPace *
       tensionPace *
+      tenderPace *
       scrollDir *
       rushMul;
     beatDollyRef.current = Math.max(0, beatDollyRef.current - dt * 4);
@@ -498,6 +566,7 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     terrainMat.uniforms.uEchoTravel!.value = echoTravel.current;
     terrainMat.uniforms.uStillness!.value = stillness;
     terrainMat.uniforms.uLean!.value = lean;
+    terrainMat.uniforms.uTenderness!.value = tender;
     (terrainMat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (terrainMat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
     (terrainMat.uniforms.uHeatColor!.value as THREE.Color)
@@ -515,8 +584,17 @@ export function OutrunGridScene({ analyser, palette, tier, speed = 1 }: Visualiz
     skyMat.uniforms.uSnare!.value = snareSmooth.current;
     skyMat.uniforms.uStillness!.value = stillness;
     skyMat.uniforms.uLean!.value = lean;
-    (skyMat.uniforms.uSunColor!.value as THREE.Color).set(palette.bass);
-    (skyMat.uniforms.uSkyColor!.value as THREE.Color).set(palette.bass);
+    skyMat.uniforms.uTenderness!.value = tender;
+    skyMat.uniforms.uVocal!.value = vocal;
+    // Tenderness melts palette sun/sky toward rose on the CPU so the
+    // shader's rose mix starts from an already-warmed base.
+    const rose = roseScratch.current;
+    (skyMat.uniforms.uSunColor!.value as THREE.Color)
+      .set(palette.bass)
+      .lerp(rose, tender * 0.62);
+    (skyMat.uniforms.uSkyColor!.value as THREE.Color)
+      .set(palette.bass)
+      .lerp(rose, tender * 0.4);
 
     // Camera: slight dip on gather, push in on drop wash — cinema not snap.
     // LeanIn dollies toward the horizon (approach), distinct from drop wash.
