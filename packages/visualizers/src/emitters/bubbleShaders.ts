@@ -3,13 +3,16 @@ attribute float aAge;
 attribute float aLifetime;
 attribute float aSeed;
 attribute float aSize;
+attribute float aEcho;
 
 uniform float uPointScale;
 uniform float uPixelRatio;
+uniform float uEchoGlint;
 
 varying float vAlpha;
 varying float vSeed;
 varying float vLife;
+varying float vEcho;
 
 void main() {
   float alive = step(0.0, aAge) * (1.0 - step(aLifetime, aAge));
@@ -18,15 +21,20 @@ void main() {
   float fadeOut = 1.0 - smoothstep(0.72, 1.0, life);
   float fade = alive * fadeIn * fadeOut;
 
+  // Phrase-echo glints: slightly brighter early life, then climb-and-fade.
+  float echoBoost = aEcho * (0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.55, life)));
+
   vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
   float perspective = clamp(2.2 / max(0.45, -viewPosition.z), 0.38, 3.2);
   float diameter = aSize * uPointScale * uPixelRatio * 32.0 * perspective;
+  diameter *= 1.0 + echoBoost * uEchoGlint * 0.35;
 
   gl_Position = projectionMatrix * viewPosition;
   gl_PointSize = clamp(diameter * fade, 0.0, 180.0);
-  vAlpha = fade;
+  vAlpha = fade * (1.0 + echoBoost * uEchoGlint * 0.55);
   vSeed = aSeed;
   vLife = life;
+  vEcho = aEcho;
 }
 `;
 
@@ -36,6 +44,7 @@ uniform float uOpacity;
 uniform float uAudioGlow;
 uniform float uHatGlint;
 uniform float uTenderness;
+uniform float uEchoGlint;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -43,9 +52,12 @@ uniform vec3 uColorHigh;
 varying float vAlpha;
 varying float vSeed;
 varying float vLife;
+varying float vEcho;
 
 const float TAU = 6.28318530718;
 const vec3 MILK = vec3(0.92, 0.94, 0.98);
+// Cool silver-blue — phrase memory, cooler than hat pops / milk tenderness.
+const vec3 ECHO_SILVER = vec3(0.72, 0.84, 1.0);
 
 vec3 paletteRamp(float phase) {
   float p = fract(phase) * 3.0;
@@ -75,6 +87,8 @@ void main() {
   vec3 filmColor = mix(paletteColor, paletteColor * 0.55 + spectrum * 0.6, 0.48);
   // Tenderness: milkier film — pull toward pearl, soften spectrum chatter.
   filmColor = mix(filmColor, mix(filmColor, MILK, 0.55), uTenderness * 0.62);
+  // Phrase-echo: cool silver catch-light, distinct from hat micro-pops.
+  filmColor = mix(filmColor, ECHO_SILVER, vEcho * (0.62 + uEchoGlint * 0.28));
 
   vec3 lightDirection = normalize(vec3(-0.35, 0.48, 1.0));
   float highlight = pow(max(0.0, dot(normal, lightDirection)), 28.0);
@@ -88,10 +102,19 @@ void main() {
     young *
     (0.5 + 0.5 * fract(vSeed * 19.13)) *
     softEdge *
-    (1.0 - uTenderness * 0.72);
+    (1.0 - uTenderness * 0.72) *
+    (1.0 - vEcho * 0.85);
+
+  // Echo glint rim: bright cool rim on flagged particles while the train lives.
+  float echoPop =
+    vEcho *
+    uEchoGlint *
+    (0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.65, vLife))) *
+    softEdge *
+    (0.55 + 0.45 * fract(vSeed * 31.7));
 
   float alpha =
-    (body + fresnel * 0.5 + rim * 0.3 + highlight * 0.22 + hatPop * 0.18) *
+    (body + fresnel * 0.5 + rim * 0.3 + highlight * 0.22 + hatPop * 0.18 + echoPop * 0.28) *
     softEdge *
     uOpacity *
     vAlpha *
@@ -100,7 +123,8 @@ void main() {
     filmColor * (0.28 + fresnel * 1.05 + rim * 0.45) *
       mix(uAudioGlow, uAudioGlow * 0.88 + 0.08, uTenderness) +
     vec3(highlight * (0.7 - uTenderness * 0.28)) +
-    vec3(hatPop * 0.85);
+    vec3(hatPop * 0.85) +
+    ECHO_SILVER * echoPop * 1.15;
 
   gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0));
 }
