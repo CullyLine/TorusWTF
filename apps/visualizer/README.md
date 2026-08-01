@@ -12,7 +12,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 
-### Presets (27)
+### Presets (28)
 
 | ID                    | Name                | Vibe                                                                                                                 |
 | --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -38,6 +38,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `jellyfish_bloom`     | Jellyfish Bloom     | Bioluminescent jellies — gather contract, kick thrust, lagged tentacles, snare gust, hat plankton, tender moonlight  |
 | `murmuration`         | Murmuration         | Starling flock at dusk — banked curl-noise ribbon; gather tightens, kick wave, snare shear, hat glints, golden hush  |
 | `thunderhead`         | Thunderhead         | Night cumulonimbus — kick lightning pockets, snare rain shear, hat static, gather swell, tension tower, drop sky-split |
+| `glowworm_grotto`     | Glowworm Grotto     | Dark limestone cavern of bioluminescent silk threads — kick cascades, snare sway, hat winks, gather inhale, tension lengthens, drop blaze |
 | `rainforest_reverie`  | Rainforest Reverie  | iq's Rainforest (ported with permission) — audio breathes the fog, wind, clouds, and sun                             |
 | `alien_planet`        | Alien Planet        | Raymarched valley of alien tree crowns with breathing mist banks, wind, and sun bursts                               |
 | `tidal_sanctuary`     | Tidal Sanctuary     | Audio-reactive ocean with low-band depth, mid-band water, and high-band foam                                         |
@@ -61,7 +62,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 | Feature                       | Free                   | Full ($10 one-time)                             |
 | ----------------------------- | ---------------------- | ----------------------------------------------- |
-| All 27 presets + live preview | Yes                    | Yes                                             |
+| All 28 presets + live preview | Yes                    | Yes                                             |
 | Export length                 | Unlimited              | Unlimited                                       |
 | Export resolution             | 720p                   | Up to 4K                                        |
 | Export FPS                    | 30                     | Up to 240                                       |
