@@ -208,6 +208,103 @@ describe('bubble kit accents', () => {
     expect(pool.hatGlint).toBeLessThan(0.08);
   });
 
+  it('shears the column sideways on snare while kicks still lift upward', () => {
+    const pool = createBubblePool({ capacity: 32, burstLimit: 4, seed: 77 });
+    const settings: EmitterContinuousSettings = {
+      ...BASE_SETTINGS,
+      rate: 0,
+      lift: 1,
+      turbulence: 0,
+      spread: 0.8,
+    };
+    emitBubbleParticles(pool, 10, settings);
+    for (let i = 0; i < 10; i++) {
+      const i3 = i * 3;
+      pool.positions[i3] = 0.4;
+      pool.positions[i3 + 1] = -1.2;
+      pool.positions[i3 + 2] = 0.2;
+      pool.velocities[i3] = 0;
+      pool.velocities[i3 + 1] = 0.2;
+      pool.velocities[i3 + 2] = 0;
+    }
+
+    const quiet = { ...DEFAULT_METRICS };
+    for (let i = 0; i < 4; i++) stepBubblePool(pool, 1 / 60, settings, quiet);
+
+    const beforeX = Array.from({ length: 10 }, (_, i) => pool.velocities[i * 3]!);
+    const beforeY = Array.from({ length: 10 }, (_, i) => pool.velocities[i * 3 + 1]!);
+
+    const snared = { ...DEFAULT_METRICS, snare: 1 };
+    stepBubblePool(pool, 1 / 60, settings, snared);
+
+    let sheared = 0;
+    for (let i = 0; i < 10; i++) {
+      if (pool.active[i] !== 1) continue;
+      if (Math.abs(pool.velocities[i * 3]! - beforeX[i]!) > 0.05) sheared++;
+    }
+    expect(sheared).toBeGreaterThan(0);
+
+    // Kick still owns the vertical surge — snare should not dominate Y.
+    for (let i = 0; i < 10; i++) {
+      if (pool.active[i] !== 1) continue;
+      pool.velocities[i * 3] = 0;
+      pool.velocities[i * 3 + 1] = 0.2;
+      pool.velocities[i * 3 + 2] = 0;
+    }
+    for (let i = 0; i < 6; i++) stepBubblePool(pool, 1 / 60, settings, quiet);
+    const midY = Array.from({ length: 10 }, (_, i) => pool.velocities[i * 3 + 1]!);
+    const kicked = { ...DEFAULT_METRICS, kick: 1 };
+    stepBubblePool(pool, 1 / 60, settings, kicked);
+    let lifted = 0;
+    for (let i = 0; i < 10; i++) {
+      if (pool.active[i] === 1 && pool.velocities[i * 3 + 1]! > midY[i]!) lifted++;
+    }
+    expect(lifted).toBeGreaterThan(0);
+    // Snare hit left lateral energy; kick hit prefers Y over further X spike.
+    void beforeY;
+  });
+
+  it('slows and softens the drift on tenderness without freezing', () => {
+    const pool = createBubblePool({ capacity: 24, burstLimit: 4, seed: 19 });
+    const settings: EmitterContinuousSettings = {
+      ...BASE_SETTINGS,
+      rate: 0,
+      lift: 1.2,
+      turbulence: 0,
+    };
+    emitBubbleParticles(pool, 8, settings);
+    for (let i = 0; i < 8; i++) {
+      pool.velocities[i * 3] = 0;
+      pool.velocities[i * 3 + 1] = 0.55;
+      pool.velocities[i * 3 + 2] = 0;
+    }
+
+    const tender = { ...DEFAULT_METRICS, tenderness: 1 };
+    for (let i = 0; i < 50; i++) stepBubblePool(pool, 1 / 60, settings, tender);
+
+    expect(pool.tenderSoft).toBeGreaterThan(0.7);
+    let speedSum = 0;
+    let active = 0;
+    for (let i = 0; i < pool.capacity; i++) {
+      if (pool.active[i] !== 1) continue;
+      speedSum += Math.hypot(
+        pool.velocities[i * 3]!,
+        pool.velocities[i * 3 + 1]!,
+        pool.velocities[i * 3 + 2]!,
+      );
+      active++;
+    }
+    expect(active).toBeGreaterThan(0);
+    // Slower than the seeded rise, but still drifting (not holdBreath-dead).
+    expect(speedSum / active).toBeLessThan(0.45);
+    expect(speedSum / active).toBeGreaterThan(0.02);
+
+    // Hat glints soft under tenderness.
+    const hatty = { ...DEFAULT_METRICS, tenderness: 1, hat: 1 };
+    for (let i = 0; i < 10; i++) stepBubblePool(pool, 1 / 60, settings, hatty);
+    expect(pool.hatGlint).toBeLessThan(0.45);
+  });
+
   it('leaves breath/flow drift intact when the kit is quiet', () => {
     const config = { capacity: 16, burstLimit: 4, seed: 0x5111e07 };
     const a = createBubblePool(config);
