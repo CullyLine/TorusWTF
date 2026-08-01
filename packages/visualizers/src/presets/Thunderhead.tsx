@@ -7,10 +7,12 @@
  *  - snare → lateral rain-curtain shear beneath the cloud base
  *  - hat → faint high-altitude static filaments
  *  - gather → pre-beat inhale swell of the mass
+ *  - leanIn → storm looms nearer; cloud base darkens expectantly (pre-drop approach)
  *  - tension → towers taller and darker as the build climbs
  *  - dropEvent → full sky discharge + rolling shudder
  *  - tenderness → silver moonlit cloud edges
  *  - holdBreath / deep silence → pregnant stillness before the strike; thaw on return
+ *  - echo → one-shot distant sheet-lightning flicker train in phrase gaps (cooler, no shudder)
  *
  * Tier: high marches denser; mid fewer steps; low uses a soft billboard cloud.
  */
@@ -58,6 +60,9 @@ uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
 uniform float uTension;
+uniform float uLean;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform float uDrop;
 uniform float uShudder;
 uniform float uStrikeSeed;
@@ -194,6 +199,7 @@ void main() {
   float soft = clamp(uTenderness, 0.0, 1.0);
   float still = clamp(uStillness, 0.0, 1.0);
   float tower = clamp(uTension, 0.0, 1.2);
+  float lean = clamp(uLean, 0.0, 1.0);
   float swell = clamp(uGather * 0.85 + uSwell * 0.35, 0.0, 1.35);
   float drop = clamp(uDrop, 0.0, 1.4);
 
@@ -201,9 +207,13 @@ void main() {
   uv.x += sin(uTime * 28.0 + uStrikeSeed) * uShudder * 0.035;
   uv.y += cos(uTime * 21.0) * uShudder * 0.02;
   uv *= 1.0 - uGather * 0.08;
+  // LeanIn: isotropic approach zoom — storm drifts nearer (not tension's tower).
+  uv *= 1.0 - lean * 0.12;
   uv.y -= tower * 0.06;
 
   vec3 sky = skyGradient(uv, tower, soft);
+  // Expectant base darkening under lean — horizon hushes as the mass looms.
+  sky *= mix(1.0, 0.78, lean * 0.55);
   vec3 col = sky;
 
   float densityAccum = 0.0;
@@ -222,7 +232,8 @@ void main() {
   lightAccum = densityAccum * (0.35 + kick * 0.55 + drop * 0.7);
 #else
   // Volume march through a stacked cumulonimbus slab.
-  vec3 ro = vec3(0.0, 0.15, -2.4);
+  // LeanIn pulls the camera slightly into the storm (approach, not tower growth).
+  vec3 ro = vec3(0.0, 0.15, -2.4 + lean * 0.38);
   vec3 rd = normalize(vec3(uv * 1.15, 1.55));
   float t = 1.35;
   float dt = 2.2 / float(MARCH_STEPS);
@@ -251,7 +262,10 @@ void main() {
 
   // Cloud body: cool night greys pulled toward living palette.
   vec3 deep = mix(uColorBass, vec3(0.08, 0.1, 0.16), 0.55) * (0.42 - tower * 0.12);
+  // Lean darkens the belly — expectant loom, distinct from tension's height stretch.
+  deep *= mix(1.0, 0.62, lean * 0.7);
   vec3 body = mix(uColorMid, vec3(0.28, 0.32, 0.4), 0.4) * (0.7 - tower * 0.18);
+  body *= mix(1.0, 0.78, lean * 0.45);
   vec3 rim = mix(uColorHigh, vec3(0.72, 0.8, 0.92), 0.35);
   rim = mix(rim, vec3(0.82, 0.88, 1.0), soft * 0.55);
   vec3 cloudCol = mix(deep, body, smoothstep(0.1, 0.75, densityAccum));
@@ -273,6 +287,34 @@ void main() {
   // Soft belly fill so strikes read as interior light, not surface sticks.
   float belly = densityAccum * exp(-length(uv - pocket) * 2.4);
   col += flashCol * belly * (kick * 0.55 + drop * 0.85);
+
+  // Phrase-echo: one-shot distant sheet-lightning — faint diffuse interior
+  // flickers cresting across the belly by travel slot. Cooler + dimmer than
+  // kick pocket strikes; never drives shudder.
+  float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+  echoPulse *= mix(1.0, 0.45, still);
+  float sheet = 0.0;
+  if (echoPulse > 0.01) {
+    float travel = clamp(uEchoTravel, 0.0, 1.0);
+    for (int i = 0; i < 5; i++) {
+      float fi = float(i);
+      float slot = (fi + 0.5) / 5.0;
+      float crestDist = abs(slot - travel);
+      float crestWrap = min(crestDist, 1.0 - crestDist);
+      float crestEnv =
+        exp(-crestWrap * crestWrap * 55.0) *
+        (0.4 + 0.6 * max(0.0, sin(travel * 3.14159265 * 10.0 + fi * 2.7)));
+      vec2 ep =
+        vec2((hash21(vec2(fi + 1.3, 4.7)) - 0.5) * 0.95, 0.02 + hash21(vec2(fi, 9.1)) * 0.48);
+      float diffuse = densityAccum * exp(-length(uv - ep) * 1.55);
+      // Soft bloom — sheet glow, not a hard bolt core.
+      float bloom = exp(-length(uv - ep) * 0.55) * 0.35;
+      sheet += (diffuse * 0.85 + bloom) * crestEnv;
+    }
+  }
+  // Cool silver-blue reply — colder than kick flash white / drop discharge.
+  vec3 echoCol = mix(vec3(0.48, 0.68, 0.95), uColorHigh, 0.18);
+  col += echoCol * sheet * echoPulse * 0.55;
 
   // Rain curtain under the base — snare shears it.
   float rain = rainCurtain(uv, snare, still);
@@ -353,6 +395,12 @@ export function ThunderheadScene({
   const stillnessSmooth = useRef(0);
   const tenderSmooth = useRef(0);
   const tensionSmooth = useRef(0);
+  const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one sheet-lightning flicker train.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const dropSmooth = useRef(0);
   const shudderSmooth = useRef(0);
   const strikeSeed = useRef(1.7);
@@ -373,6 +421,8 @@ export function ThunderheadScene({
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const fragmentShader = useMemo(
     () => buildFragmentShader(marchSteps, noiseOctaves, billboard),
@@ -399,6 +449,9 @@ export function ThunderheadScene({
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
       uTension: { value: 0 },
+      uLean: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uDrop: { value: 0 },
       uShudder: { value: 0 },
       uStrikeSeed: { value: 1.7 },
@@ -448,6 +501,45 @@ export function ThunderheadScene({
       0.12,
       0.45,
     );
+
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Phrase-echo: arm on quiet, fire one cool sheet-lightning train per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
 
     // Drop springs loose tension tower and fires the sky-split discharge.
     const dropTarget =
@@ -536,6 +628,9 @@ export function ThunderheadScene({
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uTension!.value = tensionSmooth.current;
+    mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uDrop!.value = dropSmooth.current;
     mat.uniforms.uShudder!.value = shudderSmooth.current;
     mat.uniforms.uStrikeSeed!.value = strikeSeed.current;

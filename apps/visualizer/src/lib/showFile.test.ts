@@ -105,6 +105,7 @@ describe('showFile', () => {
       'jellyfish_bloom',
       'murmuration',
       'thunderhead',
+      'glowworm_grotto',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',
