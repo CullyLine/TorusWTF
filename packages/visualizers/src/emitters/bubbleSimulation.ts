@@ -38,9 +38,14 @@ export interface BubblePoolConfig {
 export interface BubbleKitState {
   kickSmooth: number;
   prevKick: number;
+  snareSmooth: number;
+  prevSnare: number;
+  /** Alternating ±1 lateral flick direction; flips on each snare rising edge. */
+  snareDir: number;
   hatSmooth: number;
   gatherSmooth: number;
   stillnessSmooth: number;
+  tenderSmooth: number;
 }
 
 /**
@@ -67,6 +72,8 @@ export interface BubblePool {
   flowTime: number;
   /** Last-frame hat envelope for the shader (young-bubble micro-pop glints). */
   hatGlint: number;
+  /** Last-frame tenderness envelope for milkier rise / softer glints. */
+  tenderSoft: number;
   readonly kit: BubbleKitState;
   readonly flowParams: FlowParams;
   readonly flowOptions: { turbulence: number; vortex: number };
@@ -139,12 +146,17 @@ export function createBubblePool(config: BubblePoolConfig): BubblePool {
     spawnRevision: 0,
     flowTime: 0,
     hatGlint: 0,
+    tenderSoft: 0,
     kit: {
       kickSmooth: 0,
       prevKick: 0,
+      snareSmooth: 0,
+      prevSnare: 0,
+      snareDir: 1,
       hatSmooth: 0,
       gatherSmooth: 0,
       stillnessSmooth: 0,
+      tenderSmooth: 0,
     },
     flowParams: { ...DEFAULT_FLOW_PARAMS },
     flowOptions: { turbulence: 0, vortex: 0 },
@@ -165,11 +177,16 @@ export function resetBubblePool(pool: BubblePool, seed = pool.seed): void {
   pool.spawnRevision++;
   pool.flowTime = 0;
   pool.hatGlint = 0;
+  pool.tenderSoft = 0;
   pool.kit.kickSmooth = 0;
   pool.kit.prevKick = 0;
+  pool.kit.snareSmooth = 0;
+  pool.kit.prevSnare = 0;
+  pool.kit.snareDir = 1;
   pool.kit.hatSmooth = 0;
   pool.kit.gatherSmooth = 0;
   pool.kit.stillnessSmooth = 0;
+  pool.kit.tenderSmooth = 0;
   pool.positions.fill(0);
   pool.velocities.fill(0);
   pool.ages.fill(-1);
@@ -284,8 +301,10 @@ export function emitBubbleBurst(
  *
  * Kit / macro accents (supporting texture — never fireworks):
  * - `kick` → buoyant upward surge + small `emitBubbleBurst`
+ * - `snare` → brief lateral current flick that shears the column sideways
  * - `hat` → smoothed glint envelope (`pool.hatGlint` for the shader)
  * - `gather` → gentle inward pull toward the column core
+ * - `tenderness` → slower milkier rise with softer glints (`pool.tenderSoft`)
  * - `holdBreath` / deep silence → mid-water suspension that thaws on return
  *
  * Existing breath / flow / shimmer drift and manual burst impulses are unchanged.
@@ -317,6 +336,13 @@ export function stepBubblePool(
     0.045,
     0.14,
   );
+  kit.snareSmooth = smoothToward(
+    kit.snareSmooth,
+    Math.min(1.2, Math.max(0, metrics.snare)) * amp,
+    dt,
+    0.04,
+    0.12,
+  );
   kit.hatSmooth = smoothToward(
     kit.hatSmooth,
     Math.min(1.2, Math.max(0, metrics.hat) * 0.95 + shimmer * 0.2) * amp,
@@ -341,14 +367,26 @@ export function stepBubblePool(
     0.14,
     0.08,
   );
+  kit.tenderSmooth = smoothToward(
+    kit.tenderSmooth,
+    Math.min(1, Math.max(0, metrics.tenderness)),
+    dt,
+    0.12,
+    0.22,
+  );
 
   const kick = kit.kickSmooth;
+  const snare = kit.snareSmooth;
   const gather = kit.gatherSmooth;
   const stillness = kit.stillnessSmooth;
+  const tender = kit.tenderSmooth;
   // Soft under hush so thaw still breathes; never a hard freeze-dead.
-  const motionMul = 1 - stillness * 0.9;
+  // Tenderness slows without freezing — distinct from holdBreath suspension.
+  const motionMul = (1 - stillness * 0.9) * (1 - tender * 0.28);
   const ageMul = 1 - stillness * 0.85;
-  pool.hatGlint = kit.hatSmooth;
+  // Soften hat micro-pops under tenderness — milkier, not sparkly.
+  pool.hatGlint = kit.hatSmooth * (1 - tender * 0.7);
+  pool.tenderSoft = tender;
 
   // Kick buoyant surge burst — rising-edge only, capped so it stays a texture.
   const kickRise = kick - kit.prevKick;
@@ -358,20 +396,36 @@ export function stepBubblePool(
   }
   kit.prevKick = kick;
 
+  // Snare lateral flick — rising-edge flips direction; soft under hush.
+  const snareRise = snare - kit.prevSnare;
+  const snareHit = snareRise > 0.07 && snare > 0.28 && stillness < 0.55;
+  if (snareHit) {
+    kit.snareDir = -kit.snareDir;
+  }
+  kit.prevSnare = snare;
+  const snareDir = kit.snareDir;
+  // Soft under hush so a quiet bar does not keep shearing the column.
+  const snareAmp = snare * (1 - stillness * 0.85) * (1 - tender * 0.35);
+
   pool.flowTime += dt * (0.45 + flowLevel * 0.35) * (0.22 + motionMul * 0.78);
   pool.flowOptions.turbulence = turbulence * 0.5;
   const flowParams = flowParamsFromMetrics(metrics, pool.flowParams, pool.flowOptions);
   flowParams.time = pool.flowTime;
   flowParams.seed = (pool.seed % 65521) * 0.001;
 
-  const flowAcceleration = turbulence * (0.05 + flowLevel * 0.045 + shimmer * 0.02);
-  const liftAcceleration = lift * (0.018 + breath * 0.012);
+  const flowAcceleration =
+    turbulence * (0.05 + flowLevel * 0.045 + shimmer * 0.02) * (1 - tender * 0.4);
+  // Tenderness: slower, milkier rise — damp buoyancy without freezing.
+  const liftAcceleration = lift * (0.018 + breath * 0.012) * (1 - tender * 0.48);
   // Kick: brief upward buoyant pulse — accents, not a rocket.
   const kickLiftAccel = kick * lift * 0.55;
+  // Snare: brief lateral current across the column (X primary, slight Z).
+  const snareLateralAccel = snareAmp * (1.35 + amp * 0.45);
   // Gather: pull toward the column core (XZ → 0), distinct from kick Y surge.
   const gatherPull = gather * (1.55 + amp * 0.55) * (1 - stillness * 0.35);
   const damping = Math.exp(
-    -dt * (0.055 + turbulence * 0.025 + stillness * 3.6 + gather * 0.06),
+    -dt *
+      (0.055 + turbulence * 0.025 + stillness * 3.6 + gather * 0.06 + tender * 0.35),
   );
   const flow = pool.flowScratch;
   const integrateDt = dt * motionMul;
@@ -405,9 +459,21 @@ export function stepBubblePool(
       vz -= z * gatherPull * integrateDt;
     }
 
+    // Snare lateral current — shears the whole column sideways (not a Y surge).
+    if (snareLateralAccel > 0.001) {
+      vx += snareDir * snareLateralAccel * integrateDt;
+      vz += snareDir * snareLateralAccel * 0.38 * integrateDt;
+    }
+
     // Rising-edge kick impulse: a one-frame buoyant pop on the hit.
     if (kickRise > 0.07 && kick > 0.28) {
       vy += kickRise * lift * 0.42;
+    }
+
+    // Rising-edge snare impulse: a one-frame lateral flick on the hit.
+    if (snareHit) {
+      vx += snareDir * snareRise * (0.55 + amp * 0.25);
+      vz += snareDir * snareRise * 0.22;
     }
 
     const nextX = x + vx * integrateDt;
@@ -431,7 +497,9 @@ export function stepBubblePool(
   }
 
   const rate =
-    clamp(finiteOr(settings.rate, 0), 0, MAX_RATE) * (1 - stillness * 0.88);
+    clamp(finiteOr(settings.rate, 0), 0, MAX_RATE) *
+    (1 - stillness * 0.88) *
+    (1 - tender * 0.22);
   pool.emissionCarry = Math.min(pool.capacity, pool.emissionCarry + rate * dt);
   const requested = Math.floor(pool.emissionCarry);
   if (requested <= 0) return 0;

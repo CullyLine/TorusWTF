@@ -11,10 +11,12 @@
  *  - tenderness → golden-hour warm wash + gentler flight
  *  - holdBreath / deep silence → hang on still wings; thaw on return
  *  - echo → one-shot wing-glint ripple traveling bird-to-bird through the body
+ *  - convergence → headings align + ribbon collapses into one sharp sheet;
+ *    soft release as lock fades (alive cohesion with the band)
  *
  * Birds ride shared curl-noise currents with trailing velocity inertia and
  * banked turns — the flock is never a straight line, always a ribbon folding
- * over itself.
+ * over itself. When bands lock, that ribbon snaps into one coherent sheet.
  */
 
 import { useMemo, useRef } from 'react';
@@ -89,6 +91,8 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Lock amp: full sheet snap on high; slightly softer on mid/low.
+  const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
   const flowTimeRef = useRef(0);
@@ -115,6 +119,8 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  // Convergence lock — headings align into one sharp ribbon sheet.
+  const lockSmooth = useRef(0);
 
   // Per-bird state: position, velocity, heading, bank (trailing inertia).
   const pos = useRef(new Float32Array(birdCount * 3));
@@ -314,6 +320,22 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
 
+    // Convergence lock: eager into the chord (~0.1s), softer release (~0.18s)
+    // so the sheet dissolves without a snap. Soft under stillness so the hang
+    // owns quiet (lock ≠ freeze); gather/leanIn/kit/echo stay distinct.
+    lockSmooth.current = smoothToward(
+      lockSmooth.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      0.1,
+      0.18,
+    );
+    const lock = lockSmooth.current * (1 - stillness * 0.3);
+    // Power curve: early lock stays loose; choruses snap into one sheet.
+    const lockSnap = lock * lock;
+    // Steadier continuous drive when locked — not frozen (holdBreath owns that).
+    const lockPace = 1 - lock * 0.38;
+
     const gather = gatherSmooth.current;
     const kick = kickSmooth.current;
     const snare = snareSmooth.current;
@@ -331,17 +353,25 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       root.scale.setScalar(leanScale);
     }
 
-    // Curl clock — freezes with the flock under holdBreath.
+    // Curl clock — freezes with the flock under holdBreath; lockPace steadies
+    // (does not freeze) when bands lock so the sheet holds without hush.
     flowTimeRef.current +=
-      dt * spd * (0.45 + Math.min(m.energy, 1.5) * 0.35) * motionMul * motionScale;
+      dt *
+      spd *
+      (0.45 + Math.min(m.energy, 1.5) * 0.35) *
+      motionMul *
+      motionScale *
+      lockPace;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    fp.turbulence *= 1 - tender * 0.65;
-    fp.swirl *= (1 - tender * 0.4) * (0.85 + gather * 0.35);
+    fp.turbulence *= (1 - tender * 0.65) * (1 - lock * 0.7);
+    fp.swirl *= (1 - tender * 0.4) * (0.85 + gather * 0.35) * (1 - lock * 0.25);
     // Gather banks tighter: more vortex cohesion, less band spread scatter.
     // LeanIn coils the ribbon a touch more (expectant) without stealing gather.
-    fp.vortex = (fp.vortex + gather * 0.85 + lean * 0.45) * (0.7 + calm * 0.3);
-    fp.bandSpread *= 1 - gather * 0.85 - lean * 0.35;
+    // Convergence power-locks bandSpread so choruses read as one sheet
+    // (stronger than the linear map in flowParamsFromMetrics).
+    fp.vortex = (fp.vortex + gather * 0.85 + lean * 0.45 + lock * 0.55) * (0.7 + calm * 0.3);
+    fp.bandSpread = Math.pow(1 - lock, 2.25) * fp.bandSpread * (1 - gather * 0.85 - lean * 0.35);
 
     const flowAmount =
       dt *
@@ -349,12 +379,15 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       (0.55 + m.swell * 0.55 + m.dropEvent * 0.9) *
       calm *
       motionMul *
-      motionScale;
-    const inertia = 1 - Math.exp(-dt / (0.11 + tender * 0.08)); // trailing turn lag
+      motionScale *
+      lockPace;
+    const inertia = 1 - Math.exp(-dt / Math.max(0.04, 0.11 + tender * 0.08 - lock * 0.045)); // trailing turn lag; snappier under lock
     const bankInertia = 1 - Math.exp(-dt / 0.09);
     const gatherPull = 1 - gather * dt * 1.35;
     // LeanIn: gentle ribbon coil toward center — softer and slower than gather.
     const leanPull = 1 - lean * dt * 0.55;
+    // Convergence: soft planar coil so the sheet draws tight without gather's inhale.
+    const lockPull = 1 - lockSnap * dt * 0.4;
     const snareShear = snare * dt * 4.6;
     const kickWave = kick;
     const fv = flowScratch.current;
@@ -383,22 +416,36 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     const hArr = heading.current;
     const bArr = bank.current;
 
-    // Soft centroid for gather anticipation (cheap every-N sample).
+    // Soft centroid + mean heading for gather anticipation / convergence lock
+    // (cheap every-N sample). Mean velocity gives the shared sheet direction.
     let cx = 0;
     let cy = 0;
     let cz = 0;
+    let mvx = 0;
+    let mvy = 0;
+    let mvz = 0;
     const stride = birdCount > 2400 ? 4 : birdCount > 1200 ? 2 : 1;
     let samples = 0;
     for (let i = 0; i < birdCount; i += stride) {
       cx += pArr[i * 3]!;
       cy += pArr[i * 3 + 1]!;
       cz += pArr[i * 3 + 2]!;
+      mvx += vArr[i * 3]!;
+      mvy += vArr[i * 3 + 1]!;
+      mvz += vArr[i * 3 + 2]!;
       samples++;
     }
     const invS = 1 / Math.max(1, samples);
     cx *= invS;
     cy *= invS;
     cz *= invS;
+    mvx *= invS;
+    mvy *= invS;
+    mvz *= invS;
+    const meanSp = Math.sqrt(mvx * mvx + mvy * mvy + mvz * mvz) + 1e-5;
+    const meanHx = mvx / meanSp;
+    const meanHy = mvy / meanSp;
+    const meanHz = mvz / meanSp;
 
     for (let i = 0; i < birdCount; i++) {
       const i3 = i * 3;
@@ -428,8 +475,22 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         dy += (cy - y) * lean * 0.55;
         dz += (cz - z) * lean * 0.75;
       }
+      // Convergence: align headings toward flock mean — the sheet locks in.
+      // Distinct from gather/leanIn (those pull position; this steers heading).
+      if (lock > 0.01) {
+        const align = lockSnap * 2.4;
+        dx += meanHx * align;
+        dy += meanHy * align * 0.7;
+        dz += meanHz * align;
+        // Flatten into one coherent ribbon plane (alive sheet, not a ball).
+        dy += (cy - y) * lockSnap * 1.6;
+        // Soft lateral draw so the ribbon reads as one sharply-drawn line.
+        dx += (cx - x) * lockSnap * 0.55;
+        dz += (cz - z) * lockSnap * 0.55;
+      }
       // Soft keep-alive so the ribbon never stalls into a straight coast.
-      const breath = 0.15 + phases[i]! * 0.1;
+      // Under lock, breathe less — the sheet holds stiller without freezing.
+      const breath = (0.15 + phases[i]! * 0.1) * (1 - lock * 0.72);
       dx += Math.sin(flowTimeRef.current * 0.7 + phases[i]! * 12.0) * breath * 0.08;
       dy += Math.cos(flowTimeRef.current * 0.55 + phases[i]! * 9.0) * breath * 0.05;
 
@@ -472,19 +533,21 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         vz *= inv;
       }
 
-      // Integrate + gather spatial bank + leanIn ribbon coil.
-      x = (x + vx * flowAmount * 1.15) * gatherPull * leanPull;
-      y = (y + vy * flowAmount * 1.15) * gatherPull * leanPull;
-      z = (z + vz * flowAmount * 1.15) * gatherPull * leanPull;
+      // Integrate + gather spatial bank + leanIn ribbon coil + lock sheet draw.
+      x = (x + vx * flowAmount * 1.15) * gatherPull * leanPull * lockPull;
+      y = (y + vy * flowAmount * 1.15) * gatherPull * leanPull * lockPull;
+      z = (z + vz * flowAmount * 1.15) * gatherPull * leanPull * lockPull;
 
       // Soft bounds — flock folds back as a ribbon, never hard walls.
       // LeanIn gently shrinks the play volume (expectant coil).
-      const bound = 3.6 * (1 - lean * 0.12);
+      // Lock flattens the Y bound so the sheet reads as one plane.
+      const bound = 3.6 * (1 - lean * 0.12 - lock * 0.08);
+      const yBound = 2.6 * (1 - lockSnap * 0.35);
       if (x > bound || x < -bound) vx *= -0.35;
-      if (y > 2.6 || y < -2.6) vy *= -0.35;
+      if (y > yBound || y < -yBound) vy *= -0.35;
       if (z > bound || z < -bound) vz *= -0.35;
       x = Math.max(-bound * 1.05, Math.min(bound * 1.05, x));
-      y = Math.max(-2.75, Math.min(2.75, y));
+      y = Math.max(-yBound * 1.06, Math.min(yBound * 1.06, y));
       z = Math.max(-bound * 1.05, Math.min(bound * 1.05, z));
 
       pArr[i3] = x;
@@ -500,14 +563,22 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       const turn = wrapPi(yaw - hArr[i]!) / Math.max(dt, 1e-4);
       hArr[i] = yaw;
       // Bank into the turn; gather + leanIn tighten max bank (coiled ribbon).
+      // Convergence steadies bank toward a clean sheet (distinct from hush).
       const bankTarget = Math.max(
         -1.15,
-        Math.min(1.15, -turn * 0.22 * (1 + gather * 0.35 + lean * 0.28)),
+        Math.min(
+          1.15,
+          -turn * 0.22 * (1 + gather * 0.35 + lean * 0.28) * (1 - lock * 0.55),
+        ),
       );
       bArr[i] = bArr[i]! + (bankTarget - bArr[i]!) * bankInertia;
       // Still wings: ease bank toward level under holdBreath.
       if (stillness > 0.01) {
         bArr[i] = bArr[i]! * (1 - stillness * 0.08);
+      }
+      // Lock: gently level the sheet without freezing (holdBreath owns hang).
+      if (lock > 0.01) {
+        bArr[i] = bArr[i]! * (1 - lockSnap * 0.06);
       }
 
       // Phrase-echo crest: sweep bird-to-bird by phase so one cool catch-light
@@ -551,7 +622,11 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    birdMat.opacity = Math.min(1, (0.82 + m.swell * 0.12 + afterglow * 0.08) * hushDim);
+    // Lock slightly sharpens opacity so the sheet reads as one clean ribbon.
+    birdMat.opacity = Math.min(
+      1,
+      (0.82 + m.swell * 0.12 + afterglow * 0.08 + lock * 0.1) * hushDim,
+    );
 
     // Wingtip glints — hat ticks spark selected tips (high/mid); echo crest
     // rides the same tips as cool catch-lights so the ripple reads on wings.

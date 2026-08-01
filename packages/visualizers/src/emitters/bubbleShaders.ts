@@ -35,6 +35,7 @@ uniform float uTime;
 uniform float uOpacity;
 uniform float uAudioGlow;
 uniform float uHatGlint;
+uniform float uTenderness;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -44,6 +45,7 @@ varying float vSeed;
 varying float vLife;
 
 const float TAU = 6.28318530718;
+const vec3 MILK = vec3(0.92, 0.94, 0.98);
 
 vec3 paletteRamp(float phase) {
   float p = fract(phase) * 3.0;
@@ -71,28 +73,33 @@ void main() {
   vec3 paletteColor = paletteRamp(filmPhase);
   vec3 spectrum = 0.52 + 0.48 * cos(TAU * (filmPhase + vec3(0.0, 0.333, 0.667)));
   vec3 filmColor = mix(paletteColor, paletteColor * 0.55 + spectrum * 0.6, 0.48);
+  // Tenderness: milkier film — pull toward pearl, soften spectrum chatter.
+  filmColor = mix(filmColor, mix(filmColor, MILK, 0.55), uTenderness * 0.62);
 
   vec3 lightDirection = normalize(vec3(-0.35, 0.48, 1.0));
   float highlight = pow(max(0.0, dot(normal, lightDirection)), 28.0);
   float body = 0.035 + (1.0 - radius) * 0.045;
 
   // Hat micro-pop: catch-lights on the youngest bubbles only — supporting
-  // texture over the film, not a full-column flash.
+  // texture over the film, not a full-column flash. Soften under tenderness.
   float young = 1.0 - smoothstep(0.0, 0.2, vLife);
   float hatPop =
     uHatGlint *
     young *
     (0.5 + 0.5 * fract(vSeed * 19.13)) *
-    softEdge;
+    softEdge *
+    (1.0 - uTenderness * 0.72);
 
   float alpha =
     (body + fresnel * 0.5 + rim * 0.3 + highlight * 0.22 + hatPop * 0.18) *
     softEdge *
     uOpacity *
-    vAlpha;
+    vAlpha *
+    (1.0 + uTenderness * 0.06);
   vec3 color =
-    filmColor * (0.28 + fresnel * 1.05 + rim * 0.45) * uAudioGlow +
-    vec3(highlight * 0.7) +
+    filmColor * (0.28 + fresnel * 1.05 + rim * 0.45) *
+      mix(uAudioGlow, uAudioGlow * 0.88 + 0.08, uTenderness) +
+    vec3(highlight * (0.7 - uTenderness * 0.28)) +
     vec3(hatPop * 0.85);
 
   gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0));
