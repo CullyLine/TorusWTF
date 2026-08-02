@@ -418,7 +418,9 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       echoTravel.current = 0;
       echoArmed.current = false;
       // Prefer a crest that isn't the last kick plume source.
-      let pick = Math.floor(hash01(timeRef.current * 0.53 + echoNow * 11.3 + m.barPhase * 2.7) * crestCount);
+      let pick = Math.floor(
+        hash01(timeRef.current * 0.53 + echoNow * 11.3 + (m.barPhase ?? 0) * 2.7) * crestCount,
+      );
       pick = ((pick % crestCount) + crestCount) % crestCount;
       if (pick === lastCrest.current && crestCount > 1) {
         pick = (pick + 1 + Math.floor(hash01(echoNow * 7.1) * (crestCount - 1))) % crestCount;
