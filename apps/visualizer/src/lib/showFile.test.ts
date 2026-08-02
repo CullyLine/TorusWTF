@@ -106,6 +106,7 @@ describe('showFile', () => {
       'murmuration',
       'thunderhead',
       'glowworm_grotto',
+      'dune_sea',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',
