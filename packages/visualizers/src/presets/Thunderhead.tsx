@@ -13,6 +13,8 @@
  *  - tenderness → silver moonlit cloud edges
  *  - holdBreath / deep silence → pregnant stillness before the strike; thaw on return
  *  - echo → one-shot distant sheet-lightning flicker train in phrase gaps (cooler, no shudder)
+ *  - convergence → interior flicker settles into one bar-locked heartbeat cell;
+ *    loosens back into scattered pockets as the lock fades (no snap)
  *
  * Tier: high marches denser; mid fewer steps; low uses a soft billboard cloud.
  */
@@ -63,6 +65,7 @@ uniform float uTension;
 uniform float uLean;
 uniform float uEcho;
 uniform float uEchoTravel;
+uniform float uLock;
 uniform float uDrop;
 uniform float uShudder;
 uniform float uStrikeSeed;
@@ -200,8 +203,15 @@ void main() {
   float still = clamp(uStillness, 0.0, 1.0);
   float tower = clamp(uTension, 0.0, 1.2);
   float lean = clamp(uLean, 0.0, 1.0);
+  float lock = clamp(uLock, 0.0, 1.0);
+  float lockSnap = lock * lock;
   float swell = clamp(uGather * 0.85 + uSwell * 0.35, 0.0, 1.35);
   float drop = clamp(uDrop, 0.0, 1.4);
+
+  // Shared bar-locked heartbeat — soft swell + sharper attack at bar open.
+  float heart = 0.5 + 0.5 * cos(uBarPhase * 6.2831853);
+  float beat = pow(1.0 - uBarPhase, 3.5);
+  float pulse = mix(heart, beat, 0.45);
 
   // Drop shudder + soft gather settle so the sky feels physical.
   uv.x += sin(uTime * 28.0 + uStrikeSeed) * uShudder * 0.035;
@@ -259,6 +269,9 @@ void main() {
   densityAccum = clamp(densityAccum, 0.0, 1.0);
   edgeAccum = clamp(edgeAccum, 0.0, 1.2);
   lightAccum = clamp(lightAccum, 0.0, 1.6);
+  // Convergence: sync interior scatter to the shared bar pulse so scattered
+  // pocket flicker consolidates into one rhythmic glow (kit strikes stay).
+  lightAccum *= mix(1.0, 0.32 + pulse * 0.95, lockSnap);
 
   // Cloud body: cool night greys pulled toward living palette.
   vec3 deep = mix(uColorBass, vec3(0.08, 0.1, 0.16), 0.55) * (0.42 - tower * 0.12);
@@ -316,6 +329,18 @@ void main() {
   vec3 echoCol = mix(vec3(0.48, 0.68, 0.95), uColorHigh, 0.18);
   col += echoCol * sheet * echoPulse * 0.55;
 
+  // Convergence: one bar-locked heartbeat cell — the whole storm glows and
+  // dims with the band's shared groove. Warmer than echo sheet-lightning;
+  // never writes shudder. Softens between beats so organization reads.
+  vec2 cell = vec2(0.0, 0.18);
+  float cellFall = exp(-length(uv - cell) * mix(1.35, 0.52, lockSnap));
+  vec3 lockCol = mix(vec3(0.62, 0.76, 0.96), uColorHigh, 0.28);
+  float lockGlow =
+    densityAccum * pulse * lockSnap * (0.2 + cellFall * 0.5) +
+    cellFall * pulse * lockSnap * 0.2;
+  col += lockCol * lockGlow;
+  col *= mix(1.0, 0.9 + pulse * 0.12, lockSnap * 0.55);
+
   // Rain curtain under the base — snare shears it.
   float rain = rainCurtain(uv, snare, still);
   col += mix(uColorMid, vec3(0.55, 0.65, 0.8), 0.4) * rain * 0.55;
@@ -330,7 +355,9 @@ void main() {
   vec3 hush = mix(deep, vec3(0.12, 0.14, 0.2), 0.4);
   col = mix(col, mix(col, hush, 0.35), still * 0.4);
 
-  float barFlash = pow(1.0 - uBarPhase, 9.0) * (0.04 + drop * 0.08);
+  // Ambient bar tick — under lock the heartbeat cell owns the groove pulse.
+  float barFlash =
+    pow(1.0 - uBarPhase, 9.0) * (0.04 + drop * 0.08) * mix(1.0, 0.25, lockSnap);
   col += uColorHigh * barFlash;
 
   float vig = 1.0 - smoothstep(0.95, 1.75, length(uv * vec2(0.85, 1.0)));
@@ -401,6 +428,8 @@ export function ThunderheadScene({
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  // Convergence: settle interior flicker into one bar-locked heartbeat cell.
+  const lockSmooth = useRef(0);
   const dropSmooth = useRef(0);
   const shudderSmooth = useRef(0);
   const strikeSeed = useRef(1.7);
@@ -423,6 +452,7 @@ export function ThunderheadScene({
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const fragmentShader = useMemo(
     () => buildFragmentShader(marchSteps, noiseOctaves, billboard),
@@ -452,6 +482,7 @@ export function ThunderheadScene({
       uLean: { value: 0 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
+      uLock: { value: 0 },
       uDrop: { value: 0 },
       uShudder: { value: 0 },
       uStrikeSeed: { value: 1.7 },
@@ -485,6 +516,18 @@ export function ThunderheadScene({
     );
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.92;
+
+    // Convergence envelope early so lockPace can steady the storm clock.
+    lockSmooth.current = smoothToward(
+      lockSmooth.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      0.1,
+      0.18,
+    );
+    const lock = lockSmooth.current * (1 - stillness * 0.3);
+    // Steadier continuous drive when locked — not frozen (holdBreath owns that).
+    const lockPace = 1 - lock * 0.38;
 
     tenderSmooth.current = smoothToward(
       tenderSmooth.current,
@@ -557,7 +600,13 @@ export function ThunderheadScene({
       (0.75 + m.sectionLevel * 0.45) * (1 - tenderSmooth.current * 0.22);
 
     timeRef.current +=
-      dt * pace * sectionPace * calm * motionMul * (0.5 + m.swell * 0.55 + m.impact * 0.15);
+      dt *
+      pace *
+      sectionPace *
+      calm *
+      motionMul *
+      lockPace *
+      (0.5 + m.swell * 0.55 + m.impact * 0.15);
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
@@ -601,13 +650,15 @@ export function ThunderheadScene({
     prevKick.current = kickNow;
     prevDrop.current = dropNow;
 
-    // Continuous turbulence crawl — nearly freezes under holdBreath.
+    // Continuous turbulence crawl — nearly freezes under holdBreath;
+    // lockPace steadies the mass so flicker reads as one organized cell.
     turbRef.current +=
       dt *
       pace *
       sectionPace *
       calm *
       motionMul *
+      lockPace *
       (0.35 + swellSmooth.current * 0.55 + m.energy * 0.25 + tensionSmooth.current * 0.2);
 
     mat.uniforms.uResolution!.value.set(size.width, size.height);
@@ -631,6 +682,7 @@ export function ThunderheadScene({
     mat.uniforms.uLean!.value = lean;
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
+    mat.uniforms.uLock!.value = lock;
     mat.uniforms.uDrop!.value = dropSmooth.current;
     mat.uniforms.uShudder!.value = shudderSmooth.current;
     mat.uniforms.uStrikeSeed!.value = strikeSeed.current;
