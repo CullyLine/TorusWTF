@@ -319,4 +319,54 @@ describe('bubble kit accents', () => {
     expect(snapshot(a)).toEqual(snapshot(b));
     expect(a.activeCount).toBeGreaterThan(0);
   });
+
+  it('fires one BPM-paced echo glint train per phrase gap without pile-up', () => {
+    const pool = createBubblePool({ capacity: 96, burstLimit: 8, seed: 0xec07 });
+    const settings: EmitterContinuousSettings = {
+      ...BASE_SETTINGS,
+      rate: 0,
+      lift: 1,
+      turbulence: 0,
+      lifetime: 6,
+    };
+
+    // Arm: quiet frames so echoSmooth stays under the arm threshold.
+    const quiet = { ...DEFAULT_METRICS, bpm: 120 };
+    for (let i = 0; i < 6; i++) stepBubblePool(pool, 1 / 60, settings, quiet);
+    expect(pool.kit.echoArmed).toBe(1);
+    expect(pool.echoGlint).toBeLessThan(0.05);
+
+    const before = pool.emittedTotal;
+    // Rising edge past 0.22 fires the train; hold echo while travel advances.
+    const echoing = { ...DEFAULT_METRICS, echo: 1, bpm: 120 };
+    for (let i = 0; i < 90; i++) stepBubblePool(pool, 1 / 60, settings, echoing);
+
+    expect(pool.emittedTotal).toBeGreaterThan(before);
+    // 5 slots × ~3 glints ≈ 15; allow soft rounding / amp variance.
+    expect(pool.emittedTotal - before).toBeGreaterThanOrEqual(8);
+    expect(pool.emittedTotal - before).toBeLessThanOrEqual(20);
+    expect(pool.kit.echoArmed).toBe(0);
+    expect(pool.kit.echoTravel).toBeGreaterThanOrEqual(1);
+    expect(pool.kit.echoEmitCursor).toBe(5);
+
+    let echoCount = 0;
+    let echoSizeSum = 0;
+    for (let i = 0; i < pool.capacity; i++) {
+      if (pool.active[i] !== 1 || pool.echoFlags[i] !== 1) continue;
+      echoCount++;
+      echoSizeSum += pool.sizes[i]!;
+    }
+    expect(echoCount).toBeGreaterThan(0);
+    expect(echoSizeSum / echoCount).toBeLessThan(0.65);
+
+    // Second gap while still echoing must not re-fire (armed stays 0 until quiet).
+    const midEmit = pool.emittedTotal;
+    for (let i = 0; i < 10; i++) stepBubblePool(pool, 1 / 60, settings, echoing);
+    expect(pool.emittedTotal).toBe(midEmit);
+
+    // Quiet re-arms for the next phrase gap.
+    for (let i = 0; i < 50; i++) stepBubblePool(pool, 1 / 60, settings, quiet);
+    expect(pool.kit.echoArmed).toBe(1);
+    expect(pool.echoGlint).toBeLessThan(0.08);
+  });
 });

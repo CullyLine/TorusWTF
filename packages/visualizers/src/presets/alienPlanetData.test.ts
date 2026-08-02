@@ -43,6 +43,7 @@ describe('alien planet tier budgets', () => {
     expect(low.detailOctaves).toBeGreaterThan(0);
     expect(low.mistSamples).toBeGreaterThan(0);
     expect(low.cloudOctaves).toBeGreaterThan(0);
+    expect(low.echoSporeCount).toBeGreaterThan(0);
     expect(low.shadowSteps).toBeGreaterThanOrEqual(0);
   });
 
