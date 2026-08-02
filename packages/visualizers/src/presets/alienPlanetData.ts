@@ -26,6 +26,8 @@ export interface AlienPlanetBudgets {
   mistSamples: number;
   /** Sky cloud fbm octaves. */
   cloudOctaves: number;
+  /** Phrase-echo bioluminescent spore glint count (compiled loop bound). */
+  echoSporeCount: number;
 }
 
 /**
@@ -42,6 +44,7 @@ export const ALIEN_PLANET_TIER_BUDGETS: Readonly<Record<AlienPlanetTier, AlienPl
       shadowSteps: 6,
       mistSamples: 4,
       cloudOctaves: 4,
+      echoSporeCount: 20,
     }),
     mid: Object.freeze({
       traceSteps: 60,
@@ -51,6 +54,7 @@ export const ALIEN_PLANET_TIER_BUDGETS: Readonly<Record<AlienPlanetTier, AlienPl
       shadowSteps: 3,
       mistSamples: 2,
       cloudOctaves: 3,
+      echoSporeCount: 12,
     }),
     low: Object.freeze({
       traceSteps: 38,
@@ -60,6 +64,7 @@ export const ALIEN_PLANET_TIER_BUDGETS: Readonly<Record<AlienPlanetTier, AlienPl
       shadowSteps: 0,
       mistSamples: 1,
       cloudOctaves: 2,
+      echoSporeCount: 8,
     }),
   });
 
@@ -138,6 +143,7 @@ export function budgetsAreValid(budgets: AlienPlanetBudgets): boolean {
     Number.isFinite(budgets.shadowSteps) &&
     Number.isFinite(budgets.mistSamples) &&
     Number.isFinite(budgets.cloudOctaves) &&
+    Number.isFinite(budgets.echoSporeCount) &&
     budgets.traceSteps >= 16 &&
     budgets.traceSteps <= 160 &&
     budgets.refineSteps >= 2 &&
@@ -151,6 +157,8 @@ export function budgetsAreValid(budgets: AlienPlanetBudgets): boolean {
     budgets.mistSamples >= 1 &&
     budgets.mistSamples <= 12 &&
     budgets.cloudOctaves >= 1 &&
-    budgets.cloudOctaves <= 8
+    budgets.cloudOctaves <= 8 &&
+    budgets.echoSporeCount >= 4 &&
+    budgets.echoSporeCount <= 32
   );
 }
