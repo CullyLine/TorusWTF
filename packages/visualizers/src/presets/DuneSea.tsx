@@ -10,6 +10,8 @@
  *  - gather → wind stills, dunes swell on the pre-beat inhale
  *  - tension → wind rises, low sand-haze thickens through the build
  *  - dropEvent → one full sandstorm veil sweeps the scene
+ *  - leanIn → dunes drift nearer; wind stills expectantly; ripples tighten
+ *  - echo → one-shot cool silver glint train along a single ridgeline crest
  *  - tenderness → moonlight warms toward honey
  *  - holdBreath / deep silence → air goes dead-calm; drifting grains hang
  */
@@ -80,6 +82,9 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const dropAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  // LeanIn / echo amp — low tier still approaches and ghosts, just softer.
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -89,6 +94,8 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const scratchHoney = useRef(new THREE.Color(1.0, 0.78, 0.48));
   const scratchMica = useRef(new THREE.Color(0.92, 0.95, 1.0));
   const scratchStorm = useRef(new THREE.Color(0.55, 0.48, 0.38));
+  // Cool silver-blue moonlit echo — cooler/fainter than kick mica plumes.
+  const scratchEcho = useRef(new THREE.Color(0.62, 0.78, 1.0));
   const scratchMix = useRef(new THREE.Color());
 
   const gatherSmooth = useRef(0);
@@ -102,6 +109,14 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const dropSmooth = useRef(0);
   const stillnessSmooth = useRef(0);
   const windSmooth = useRef(0.35);
+  // LeanIn anticipation: eager climb, slower release into the drop.
+  const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one cool glint train per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const echoCrest = useRef(0);
+  const prevEcho = useRef(0);
   const prevKick = useRef(0);
   const prevSnare = useRef(0);
   const timeRef = useRef(0);
@@ -140,6 +155,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     airVel,
     airLife,
     airActive,
+    airKind,
     hazePositions,
     hazeColors,
     hazePhases,
@@ -190,12 +206,14 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     const av = new Float32Array(airCount * 3);
     const al = new Float32Array(airCount);
     const aa = new Uint8Array(airCount);
+    const ak = new Uint8Array(airCount);
     for (let i = 0; i < airCount; i++) {
       ap[i * 3] = 0;
       ap[i * 3 + 1] = -40;
       ap[i * 3 + 2] = 0;
       al[i] = 0;
       aa[i] = 0;
+      ak[i] = 0;
     }
 
     const hp = new Float32Array(hazeCount * 3);
@@ -228,6 +246,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       airVel: av,
       airLife: al,
       airActive: aa,
+      airKind: ak,
       hazePositions: hp,
       hazeColors: hc,
       hazePhases: hph,
@@ -242,8 +261,13 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     gather: number,
     wind: number,
     snareShear: number,
+    lean = 0,
   ) => {
     let h = 0;
+    // LeanIn tightens ripple spacing (higher spatial freq, lower amp) —
+    // distinct from gather's inhale swell of the whole dune profile.
+    const rippleFreq = 7.2 + lean * 5.5;
+    const rippleAmp = 0.045 * (1 - lean * 0.55);
     for (let c = 0; c < crestCount; c++) {
       const ridgeZ = crestCenterZ[c]!;
       const dist = z - ridgeZ;
@@ -253,8 +277,8 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const profile = Math.exp((-dist * dist * lee) / (2 * sigma * sigma));
       const undulation = 1 + 0.14 * Math.sin(x * 1.35 + crestPhase[c]! + t * 0.08);
       const ripple =
-        0.045 *
-        Math.sin(x * 7.2 + ripplePhase.current + z * 2.4 + snareShear * 3.5) *
+        rippleAmp *
+        Math.sin(x * rippleFreq + ripplePhase.current + z * 2.4 + snareShear * 3.5) *
         profile *
         (0.55 + wind * 0.7);
       h += crestAmp[c]! * profile * undulation + ripple;
@@ -273,6 +297,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     vy: number,
     vz: number,
     life: number,
+    kind = 0,
   ) => {
     // Ring-buffer reuse — no alloc, no scan past one full pass.
     for (let n = 0; n < airCount; n++) {
@@ -288,6 +313,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       airVel[i3 + 2] = vz;
       airLife[i] = life;
       airActive[i] = 1;
+      airKind[i] = kind;
       return;
     }
   };
@@ -366,6 +392,54 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       0.22,
     );
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soft under holdBreath so approach still reads through hush.
+    // Distinct from gather (inhale swell) — this is nearer + ripple tighten + wind hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Phrase-echo: arm on quiet, fire one cool silver glint train per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      // Prefer a crest that isn't the last kick plume source.
+      let pick = Math.floor(hash01(timeRef.current * 0.53 + echoNow * 11.3 + m.barPhase * 2.7) * crestCount);
+      pick = ((pick % crestCount) + crestCount) % crestCount;
+      if (pick === lastCrest.current && crestCount > 1) {
+        pick = (pick + 1 + Math.floor(hash01(echoNow * 7.1) * (crestCount - 1))) % crestCount;
+      }
+      echoCrest.current = pick;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpmEcho / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     const gather = gatherSmooth.current;
     const kick = kickSmooth.current;
     const snare = snareSmooth.current;
@@ -375,12 +449,21 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     const drop = dropSmooth.current;
     const afterglow = afterglowSmooth.current;
 
-    // Wind: base breeze + tension climb − gather stillness − holdBreath dead-calm.
+    // Draw nearer on leanIn — mild camera-ward pull, distinct from gather swell.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      const leanScale = 1 + lean * 0.06;
+      root.scale.setScalar(leanScale);
+    }
+
+    // Wind: base breeze + tension climb − gather stillness − lean expectant hush − holdBreath.
     const windTarget = Math.max(
       0,
       (0.28 + m.energy * 0.25 + tension * 0.85 + snare * 0.35 - gather * 0.55) *
         (1 - stillness * 0.95) *
-        (1 - tender * 0.35),
+        (1 - tender * 0.35) *
+        (1 - lean * 0.55),
     );
     windSmooth.current = smoothToward(windSmooth.current, windTarget, dt, 0.08, 0.18);
     const wind = windSmooth.current;
@@ -388,7 +471,9 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     // Continuous clock freezes with the air; kit envelopes stay on full dt.
     timeRef.current += dt * pace * sectionPace * calm * motionMul * (1 - tender * 0.3);
     const t = timeRef.current;
-    ripplePhase.current += dt * pace * calm * motionMul * (0.55 + wind * 2.4) * (1 - gather * 0.7);
+    // Ripple crawl slows with lean (expectant still) and gather inhale.
+    ripplePhase.current +=
+      dt * pace * calm * motionMul * (0.55 + wind * 2.4) * (1 - gather * 0.7) * (1 - lean * 0.65);
 
     // Snare edge flips gust direction so successive cracks alternate.
     if (m.snare > 0.22 && prevSnare.current <= 0.22) {
@@ -403,7 +488,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const x =
         Math.sin(t * 0.07 + crestPhase[c]! + c * 1.7) * X_SPAN * 0.28 +
         Math.sin(t * 0.031 + c) * 0.45;
-      const y = duneHeightAt(x, z, t, swell, gather, wind, snare * snareGustDir.current);
+      const y = duneHeightAt(x, z, t, swell, gather, wind, snare * snareGustDir.current, lean);
       crestX.current[c] = x;
       crestY.current[c] = y;
       crestZ.current[c] = z;
@@ -443,6 +528,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
           up,
           Math.sin(ang) * speedR * 0.85,
           0.85 + hash01(seed + 6) * 0.55,
+          0,
         );
       }
     }
@@ -452,7 +538,8 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const ci = Math.floor(hash01(t * 9.1) * crestCount) % crestCount;
       const sx = crestX.current[ci]! + (hash01(t * 3.3) - 0.5) * 1.2;
       const sz = crestZ.current[ci]! + (hash01(t * 5.1) - 0.5) * 0.35;
-      const sy = duneHeightAt(sx, sz, t, swell, gather, wind, snare * snareGustDir.current) + 0.02;
+      const sy =
+        duneHeightAt(sx, sz, t, swell, gather, wind, snare * snareGustDir.current, lean) + 0.02;
       emitGrain(
         sx,
         sy,
@@ -461,7 +548,37 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
         0.15 + hash01(t * 4.4) * 0.35,
         (hash01(t * 6.2) - 0.5) * 0.25,
         0.55 + hash01(t * 8.8) * 0.4,
+        0,
       );
+    }
+
+    // Phrase-echo: sparse cool silver motes skating along the chosen crest —
+    // low arc, cooler than kick plumes, never a sandstorm sheet.
+    if (traveling && stillness < 0.65 && echoVis > 0.08) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const beatPulse = Math.sin(echoTravel.current * Math.PI * Math.max(2, Math.round(bpmEcho / 45)));
+      if (beatPulse > 0.55 || hash01(t * 61.3 + echoTravel.current * 9) < 0.18 * calm) {
+        const ci = echoCrest.current;
+        const along = echoTravel.current;
+        const sx = -X_SPAN * 0.42 + along * X_SPAN * 0.84 + (hash01(t * 13.7) - 0.5) * 0.18;
+        const sz = crestZ.current[ci]! + (hash01(t * 17.1) - 0.5) * 0.12;
+        const sy =
+          duneHeightAt(sx, sz, t, swell, gather, wind, snare * snareGustDir.current, lean) + 0.05;
+        const moteN = Math.max(1, Math.floor(2 + kitAmp * 2));
+        for (let n = 0; n < moteN; n++) {
+          const seed = n * 2.17 + t * 29.1 + along * 11;
+          emitGrain(
+            sx + (hash01(seed) - 0.5) * 0.14,
+            sy + hash01(seed + 1) * 0.04,
+            sz + (hash01(seed + 2) - 0.5) * 0.1,
+            (0.15 + hash01(seed + 3) * 0.35) * (along > 0.5 ? 1 : -0.35),
+            0.08 + hash01(seed + 4) * 0.22,
+            (hash01(seed + 5) - 0.5) * 0.12,
+            0.45 + hash01(seed + 6) * 0.35,
+            1,
+          );
+        }
+      }
     }
 
     // Drop → arm a full sandstorm veil that sweeps once across +X.
@@ -489,11 +606,16 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     const sand = scratchSand.current;
     const honey = scratchHoney.current;
     const mica = scratchMica.current;
+    const echoC = scratchEcho.current;
     const mix = scratchMix.current;
 
     // Soft under stillness so holdBreath owns the hush; tender warms moonlight.
     const moonWarm = tender * 0.72;
     const hushDim = 1 - stillness * 0.35;
+    const echoCi = echoCrest.current;
+    const echoCz = crestZ.current[echoCi] ?? 0;
+    const echoSigma = crestSigma[echoCi] ?? 0.5;
+    const echoCrestTravel = echoTravel.current;
 
     for (let i = 0; i < surfCount; i++) {
       const i3 = i * 3;
@@ -503,7 +625,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const shear = snare * snareGustDir.current * 0.22;
       const x = x0 + shear * Math.sin(z0 * 2.1 + t * 0.5);
       const z = z0;
-      const y = duneHeightAt(x, z, t, swell, gather, wind, shear * 4);
+      const y = duneHeightAt(x, z, t, swell, gather, wind, shear * 4, lean);
       sArr[i3] = x;
       sArr[i3 + 1] = y;
       sArr[i3 + 2] = z;
@@ -530,7 +652,25 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
         mix.lerp(mica, near * kick * 0.35);
       }
 
-      const lum = hushDim * (0.72 + swell * 0.12 + gather * 0.1 + afterglow * 0.08);
+      // Phrase-echo: cool silver shimmer crest traveling along one ridgeline.
+      let echoPulse = 0;
+      if (traveling || echoVis > 0.02) {
+        const dz = z - echoCz;
+        const ridge = Math.exp((-dz * dz) / (2 * echoSigma * echoSigma * 0.85));
+        const alongX = (x + X_SPAN * 0.5) / Math.max(1e-3, X_SPAN);
+        const dist = Math.abs(alongX - echoCrestTravel);
+        const crestGlint =
+          Math.exp((-dist * dist) / 0.012) *
+          (0.55 + 0.45 * Math.max(0, Math.sin(echoCrestTravel * Math.PI * 8 + phase * 14)));
+        echoPulse = echoVis * ridge * crestGlint * (1 - stillness * 0.55);
+        if (echoPulse > 0.02) mix.lerp(echoC, Math.min(0.85, echoPulse * 0.78));
+      }
+
+      // LeanIn: faint expectant brighten across the field (presence, not gather swell).
+      const leanTip = lean * (0.06 + phase * 0.05);
+
+      const lum =
+        hushDim * (0.72 + swell * 0.12 + gather * 0.1 + afterglow * 0.08 + leanTip + echoPulse * 0.15);
       sColArr[i3] = Math.min(1, mix.r * lum);
       sColArr[i3 + 1] = Math.min(1, mix.g * lum);
       sColArr[i3 + 2] = Math.min(1, mix.b * lum);
@@ -579,12 +719,13 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const gx = aArr[i3]!;
       const gy = aArr[i3 + 1]!;
       const gz = aArr[i3 + 2]!;
-      const ground = duneHeightAt(gx, gz, t, swell, gather, wind, snare * snareGustDir.current);
+      const ground = duneHeightAt(gx, gz, t, swell, gather, wind, snare * snareGustDir.current, lean);
 
       // Settle into the slip face; hang mid-air never settles.
       if (airLife[i]! <= 0 || gy < ground - 0.02 || gy > 4.5 || Math.abs(gx) > X_SPAN * 0.72) {
         if (stillness < 0.5 || airLife[i]! <= 0) {
           airActive[i] = 0;
+          airKind[i] = 0;
           aArr[i3 + 1] = -40;
           continue;
         }
@@ -592,11 +733,20 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
 
       liveAir++;
       const lifeFade = Math.max(0, Math.min(1, airLife[i]!));
-      mix.copy(sand).lerp(moon, 0.35).lerp(honey, moonWarm * 0.55);
-      const bright = (0.55 + kick * 0.25 + lifeFade * 0.45) * hushDim;
-      aColArr[i3] = Math.min(1, mix.r * bright);
-      aColArr[i3 + 1] = Math.min(1, mix.g * bright);
-      aColArr[i3 + 2] = Math.min(1, mix.b * bright);
+      if (airKind[i] === 1) {
+        // Echo motes: cool silver, fainter, never warm kick sand.
+        mix.copy(echoC).lerp(moon, 0.2);
+        const bright = (0.35 + lifeFade * 0.4) * hushDim * (0.55 + echoVis * 0.45);
+        aColArr[i3] = Math.min(1, mix.r * bright);
+        aColArr[i3 + 1] = Math.min(1, mix.g * bright);
+        aColArr[i3 + 2] = Math.min(1, mix.b * bright);
+      } else {
+        mix.copy(sand).lerp(moon, 0.35).lerp(honey, moonWarm * 0.55);
+        const bright = (0.55 + kick * 0.25 + lifeFade * 0.45) * hushDim;
+        aColArr[i3] = Math.min(1, mix.r * bright);
+        aColArr[i3 + 1] = Math.min(1, mix.g * bright);
+        aColArr[i3 + 2] = Math.min(1, mix.b * bright);
+      }
     }
     aPos.needsUpdate = true;
     aCol.needsUpdate = true;
@@ -662,9 +812,16 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     hazeMat.opacity = Math.min(0.85, 0.08 + hazeAmt * 0.72);
 
     // Slow desert turn — alive, never a carnival spin; freezes on holdBreath.
-    if (rootRef.current) {
-      rootRef.current.rotation.y +=
-        dt * pace * calm * motionMul * (1 - tender * 0.45) * (0.025 + m.mid * 0.02 + wind * 0.015);
+    // Position/scale owned by leanIn above.
+    if (root) {
+      root.rotation.y +=
+        dt *
+        pace *
+        calm *
+        motionMul *
+        (1 - tender * 0.45) *
+        (1 - lean * 0.25) *
+        (0.025 + m.mid * 0.02 + wind * 0.015);
     }
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
