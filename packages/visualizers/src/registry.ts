@@ -28,6 +28,7 @@ import { MurmurationScene } from './presets/Murmuration';
 import { ThunderheadScene } from './presets/Thunderhead';
 import { GlowwormGrottoScene } from './presets/GlowwormGrotto';
 import { DuneSeaScene } from './presets/DuneSea';
+import { MothBalletScene } from './presets/MothBallet';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -58,6 +59,7 @@ export type VisualizerId =
   | 'thunderhead'
   | 'glowworm_grotto'
   | 'dune_sea'
+  | 'moth_ballet'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -663,6 +665,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       aura: 0.32,
       cameraMode: 'drift',
       bloomIntensity: 0.95,
+      cameraDistance: 1,
+      lightLevel: 1.05,
+    },
+  },
+  moth_ballet: {
+    id: 'moth_ballet',
+    label: 'Moth Ballet',
+    hint: 'Lone candle in darkness — moths spiral in lagged banked orbits; kick flares and surges inward, snare scatters, hats wink wing glints, gather tightens, tension gutters taller, drop bursts then re-gathers, tenderness honey-slows, holdBreath hangs mid-wingbeat.',
+    Scene: MothBalletScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.72,
+      scale: 1.05,
+      bassShake: 0.3,
+      anima: 0.55,
+      aura: 0.28,
+      cameraMode: 'drift',
+      bloomIntensity: 1.1,
       cameraDistance: 1,
       lightLevel: 1.05,
     },
