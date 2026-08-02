@@ -5,6 +5,7 @@
  * and Cosmic Mandala geometry. Musical anatomy:
  *  - idle → rings drift downward like celestial rain
  *  - gather → reverse-inhale: drift flips upward and radii tighten to center
+ *  - leanIn → tighten ring spacing + drift nearer (pre-drop anticipation; not gather inhale)
  *  - impact → rings flare bright (soft flash, not a strobe)
  *  - kick → center-born ring pulse (radial outward surge + bass-warm core)
  *  - snare → lateral ring shear + flank flash (backbeat crack)
@@ -49,6 +50,7 @@ uniform float uEcho;
 uniform float uEchoTravel;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uLean;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -82,12 +84,15 @@ void main() {
   float snare = clamp(uSnare, 0.0, 1.2);
   float soft = clamp(uTenderness, 0.0, 1.0);
   float stillness = clamp(uStillness, 0.0, 1.0);
+  float lean = clamp(uLean, 0.0, 1.0);
 
   // Gather reverse-inhale: pull space toward center before the beat.
   float fold = uGather * 0.62;
   float r0 = length(uv) + 1e-4;
   // Kick: brief radial zoom punch so a new ring is born at the core.
   uv *= 1.0 - fold * (0.5 + 0.5 * smoothstep(0.12, 1.15, r0)) + kick * 0.055;
+  // LeanIn: isotropic approach zoom — rings drift nearer (not gather's radial fold).
+  uv *= 1.0 - lean * 0.12;
   // Snare: lateral ring shear before radius sampling (backbeat crack).
   uv.x += snare * 0.048 * sign(uv.x + 1e-4);
 
@@ -107,7 +112,8 @@ void main() {
   // Downward rain = positive drift; gather flips sign and slows the fall.
   // Echo reverse is applied in JS to uDrift itself (brief upward reply).
   float rain = uDrift * (1.0 - uGather * 1.35);
-  float spacing = 0.115 + uSwell * 0.018;
+  // LeanIn tightens ring spacing — denser field, expectant (not gather fold).
+  float spacing = (0.115 + uSwell * 0.018) * (1.0 - lean * 0.42);
   // Kick thickens the ring line at the core; impact width path stays separate.
   // Tenderness widens rings (softer candle edge); kit width paths stay intact.
   float width = 0.012 + uBass * 0.006 + uImpact * 0.01 + kick * 0.008;
@@ -128,8 +134,9 @@ void main() {
     float target = fract(fi * spacing + phase * 0.55 + seed * 0.08) * 1.45;
     target *= 1.0 + kick * 0.12 * (1.0 - smoothstep(0.05, 0.85, target));
     float line = ringLine(r, target, width * (0.85 + seed * 0.4));
-    // Outer rings slightly thinner so the core owns the frame.
-    float weight = mix(1.15, 0.55, smoothstep(0.15, 1.25, target));
+    // Outer rings slightly thinner so the core owns the frame;
+    // leanIn hugs weight toward the nearer core (presence, not gather reverse).
+    float weight = mix(1.15 + lean * 0.18, 0.55 - lean * 0.1, smoothstep(0.15, 1.25, target));
     rings += line * weight;
 
     // Hat ticks sparse rings (every ~3rd) — sparkle without washing the flare.
@@ -262,6 +269,8 @@ export function HaloRainScene({
   const stillnessSmooth = useRef(0);
   // Tenderness hush — candlelit softens ring bite on gentle vocals.
   const tenderSmooth = useRef(0);
+  // LeanIn anticipation — approach + ring-spacing tighten before the drop.
+  const leanSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -274,6 +283,7 @@ export function HaloRainScene({
   // Soft-metric amps: full on high, gentle mid, restrained low.
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(ringCount), [ringCount]);
 
   const uniforms = useMemo(
@@ -298,6 +308,7 @@ export function HaloRainScene({
       uEchoTravel: { value: 1 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uLean: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -340,6 +351,17 @@ export function HaloRainScene({
       0.12,
       0.22,
     );
+
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // Tenderness eases section pace so intimate moments feel held, not torn.
     const sectionPace =
@@ -448,6 +470,7 @@ export function HaloRainScene({
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
+    mat.uniforms.uLean!.value = lean;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);

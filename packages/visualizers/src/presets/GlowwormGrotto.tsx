@@ -9,6 +9,8 @@
  *  - gather → brighten + draw lights inward on the pre-beat inhale
  *  - tension → deepen the dark and lengthen threads as the build climbs
  *  - dropEvent → blaze the entire ceiling constellation at once
+ *  - leanIn → ceiling drifts nearer; thread tips brighten faintly (expectant)
+ *  - echo → one-shot cool silver-blue ghost cascade down a single cluster
  *  - tenderness → warm points toward candle-amber
  *  - holdBreath / deep silence → dim to a few still embers; threads freeze
  */
@@ -78,6 +80,9 @@ export function GlowwormGrottoScene({
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const dropAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  // LeanIn / echo amp — low tier still approaches and ghosts, just softer.
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -86,6 +91,8 @@ export function GlowwormGrottoScene({
   const scratchAmber = useRef(new THREE.Color(1, 0.72, 0.38));
   const scratchEmber = useRef(new THREE.Color(0.18, 0.12, 0.05));
   const scratchDrop = useRef(new THREE.Color(0.85, 1.0, 0.95));
+  // Cool silver-blue ghost cascade — cooler/fainter than kick cyan-green.
+  const scratchEcho = useRef(new THREE.Color(0.55, 0.78, 1.0));
   const scratchMix = useRef(new THREE.Color());
   const scratchPool = useRef(new THREE.Color(0.015, 0.03, 0.04));
   const scratchGlass = useRef(new THREE.Color(0.02, 0.04, 0.055));
@@ -100,12 +107,21 @@ export function GlowwormGrottoScene({
   const tensionSmooth = useRef(0);
   const dropSmooth = useRef(0);
   const stillnessSmooth = useRef(0);
+  // LeanIn anticipation: eager climb, slower release into the drop.
+  const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one ghost cascade per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const prevKick = useRef(0);
   const timeRef = useRef(0);
 
   // Per-thread cascade travel (0..1 active; >=1 idle) + cluster membership.
   const pulseTravel = useRef(new Float32Array(threadCount));
   const pulseActive = useRef(new Uint8Array(threadCount));
+  // Echo cluster membership (separate from kick pulses — cooler ghost replay).
+  const echoActive = useRef(new Uint8Array(threadCount));
   // Follow-the-leader lateral sway (X/Z) with per-thread lag chain.
   const swayX = useRef(new Float32Array(threadCount));
   const swayZ = useRef(new Float32Array(threadCount));
@@ -115,7 +131,7 @@ export function GlowwormGrottoScene({
   const tipX = useRef(new Float32Array(threadCount));
   const tipY = useRef(new Float32Array(threadCount));
   const tipZ = useRef(new Float32Array(threadCount));
-  // Scratch scores for kick cluster pick (reused, sorted in place).
+  // Scratch scores for kick / echo cluster pick (reused, sorted in place).
   const clusterScores = useRef<{ i: number; s: number }[]>([]);
 
   const sprite = useMemo(() => getDotTexture(), []);
@@ -156,6 +172,7 @@ export function GlowwormGrottoScene({
 
     pulseTravel.current = new Float32Array(threadCount);
     pulseActive.current = new Uint8Array(threadCount);
+    echoActive.current = new Uint8Array(threadCount);
     swayX.current = new Float32Array(threadCount);
     swayZ.current = new Float32Array(threadCount);
     tipX.current = new Float32Array(threadCount);
@@ -174,6 +191,7 @@ export function GlowwormGrottoScene({
       tBand[t] = t % 3;
       pulseTravel.current[t] = 1;
       pulseActive.current[t] = 0;
+      echoActive.current[t] = 0;
 
       // Silk: ceiling anchor → tip (updated each frame).
       silk[t * 6] = ax[t]!;
@@ -290,6 +308,72 @@ export function GlowwormGrottoScene({
     }
     dropSmooth.current = smoothToward(dropSmooth.current, dropTarget, dt, 0.03, 0.22);
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    // Distinct from tension (darken + lengthen) — this is nearer + tip brighten.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Phrase-echo: arm on quiet, fire one cool ghost cascade per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      // Pick a single thread cluster — ghost replay of a kick cascade shape.
+      const pickSeed = hash01(timeRef.current * 0.53 + echoNow * 11.3 + m.barPhase * 2.7);
+      const clusterAng = pickSeed * Math.PI * 2;
+      const clusterR = 0.35 + hash01(pickSeed + 2.1) * 1.9;
+      const cx = Math.cos(clusterAng) * clusterR;
+      const cz = Math.sin(clusterAng) * clusterR * 0.82;
+      const clusterSize = Math.max(3, Math.round(threadCount * (0.1 + kitAmp * 0.05)));
+      const scores = clusterScores.current;
+      for (let i = 0; i < threadCount; i++) {
+        echoActive.current[i] = 0;
+        const dx = (threadAnchorX[i] ?? 0) - cx;
+        const dz = (threadAnchorZ[i] ?? 0) - cz;
+        const dist = Math.hypot(dx, dz);
+        const jitter = hash01(i * 1.17 + pickSeed) * 0.5;
+        const slot = scores[i]!;
+        slot.i = i;
+        slot.s = dist - jitter;
+      }
+      scores.sort((a, b) => a.s - b.s);
+      for (let k = 0; k < clusterSize && k < scores.length; k++) {
+        echoActive.current[scores[k]!.i] = 1;
+      }
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpmEcho / 180),
+      );
+      if (echoTravel.current >= 1) {
+        for (let i = 0; i < threadCount; i++) echoActive.current[i] = 0;
+      }
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     const gather = gatherSmooth.current;
     const kick = kickSmooth.current;
     const snare = snareSmooth.current;
@@ -300,6 +384,15 @@ export function GlowwormGrottoScene({
     const tension = tensionSmooth.current;
     const drop = dropSmooth.current;
     const t = timeRef.current;
+
+    // Draw nearer on leanIn — mild camera-ward pull (CosmicMandala pattern),
+    // distinct from gather's center inhale and tension's lengthen/darken.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      const leanScale = 1 + lean * 0.06;
+      root.scale.setScalar(leanScale);
+    }
 
     // Kick rising edge → cascade a fresh cluster (never the same threads twice in a row).
     if (kick > 0.28 && prevKick.current <= 0.28) {
@@ -427,6 +520,7 @@ export function GlowwormGrottoScene({
     const amberC = scratchAmber.current.setRGB(1, 0.72, 0.38);
     const emberC = scratchEmber.current.setRGB(0.18, 0.12, 0.05);
     const dropC = scratchDrop.current.setRGB(0.85, 1.0, 0.95);
+    const echoC = scratchEcho.current.setRGB(0.55, 0.78, 1.0);
     const mixC = scratchMix.current;
 
     let mirrorIdx = 0;
@@ -532,6 +626,18 @@ export function GlowwormGrottoScene({
         cascade = Math.exp((-dist * dist) / 0.018) * (1 - travel * 0.25);
       }
 
+      // Phrase-echo ghost cascade: cooler/fainter silver-blue crest on one cluster.
+      let echoCascade = 0;
+      if (traveling && (echoActive.current[ti] ?? 0)) {
+        const crest = echoTravel.current;
+        const dist = Math.abs(along - crest);
+        echoCascade =
+          Math.exp((-dist * dist) / 0.022) *
+          (0.55 + 0.45 * Math.max(0, Math.sin(crest * Math.PI * 8 + phase * 14.0))) *
+          (1 - crest * 0.2);
+      }
+      const echoPulse = echoVis * echoCascade * (1 - stillness * 0.55);
+
       // Hat: sparse single-glowworm winks.
       const winkSelect = hash01(phase * 19.7 + i * 0.27 + Math.floor(t * 2.5)) > 0.82 ? 1 : 0;
       const wink = winkSelect * hat * (1.05 + m.shimmer * 0.3);
@@ -544,13 +650,24 @@ export function GlowwormGrottoScene({
         mixC.lerp(emberC, stillness * 0.35);
         mixC.lerp(amberC, stillness * 0.15);
       }
+      // Echo reply → cool silver-blue (cooler than kick cyan-green / drop blaze).
+      mixC.lerp(echoC, echoPulse * 0.78);
 
       const gatherBright = 1 + gather * 0.45;
       const tensionDim = 1 - tension * 0.22;
+      // LeanIn tip brighten: beads nearer the tip (high along) glow expectantly.
+      const tipBright = 1 + lean * along * along * 0.55;
       const gain =
-        (0.55 + swell * 0.25 + cascade * 1.35 + wink * 0.95 + drop * 0.55 + kick * 0.08) *
+        (0.55 +
+          swell * 0.25 +
+          cascade * 1.35 +
+          echoPulse * 0.95 +
+          wink * 0.95 +
+          drop * 0.55 +
+          kick * 0.08) *
         gatherBright *
         tensionDim *
+        tipBright *
         (0.92 + afterglow * 0.12) *
         (1 - tender * 0.08) *
         emberGate;
@@ -568,7 +685,9 @@ export function GlowwormGrottoScene({
         mirrorArr[mi3] = x + ripple;
         mirrorArr[mi3 + 1] = POOL_Y - (y - POOL_Y) * 0.42 - 0.06;
         mirrorArr[mi3 + 2] = z + ripple * 0.55;
-        const dim = (0.38 + swell * 0.1 + cascade * 0.2 + drop * 0.12) * (1 - stillness * 0.3);
+        const dim =
+          (0.38 + swell * 0.1 + cascade * 0.2 + echoPulse * 0.18 + drop * 0.12) *
+          (1 - stillness * 0.3);
         mirrorColArr[mi3] = Math.min(1, colArr[i3]! * dim * (0.8 + tender * 0.2));
         mirrorColArr[mi3 + 1] = Math.min(1, colArr[i3 + 1]! * dim * 0.95);
         mirrorColArr[mi3 + 2] = Math.min(1, colArr[i3 + 2]! * dim * 0.85);
@@ -595,8 +714,7 @@ export function GlowwormGrottoScene({
       (mirrors.geometry.getAttribute('color') as THREE.BufferAttribute).needsUpdate = true;
     }
 
-    // Slow cavern yaw — freezes with holdBreath.
-    const root = rootRef.current;
+    // Slow cavern yaw — freezes with holdBreath. Position/scale owned by leanIn above.
     if (root) {
       root.rotation.y +=
         dt *
@@ -605,7 +723,8 @@ export function GlowwormGrottoScene({
         motionMul *
         (0.025 + m.mid * 0.02 + swell * 0.012) *
         (1 - tender * 0.35) *
-        (1 - tension * 0.2);
+        (1 - tension * 0.2) *
+        (1 - lean * 0.25);
     }
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);

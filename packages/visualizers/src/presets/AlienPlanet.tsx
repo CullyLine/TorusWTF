@@ -18,6 +18,8 @@
  *  - silence / holdBreath → windless, mist-heavy held breath
  *  - tenderness → ease canopy sway + warm-soften bioluminescent glow
  *    (still breathes; distinct from holdBreath freeze)
+ *  - echo → one-shot cool bioluminescent spore glints drift the crowns
+ *    (phrase-gap memory; alien cousin of Rainforest firefly echo)
  *  - afterglow → warm light lingering on slopes and haze
  *
  * Controls (existing storage keys only):
@@ -49,6 +51,7 @@ function buildFragmentShader(budgets: AlienPlanetBudgets): string {
 #define SHADOW_STEPS ${budgets.shadowSteps}
 #define MIST_SAMPLES ${budgets.mistSamples}
 #define CLOUD_OCTAVES ${budgets.cloudOctaves}
+#define ECHO_SPORES ${budgets.echoSporeCount}
 
 uniform vec2 uResolution;
 uniform float uPhase;
@@ -67,6 +70,8 @@ uniform float uGather;
 uniform float uSurge;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform float uAfterglow;
 uniform float uEnergy;
 uniform float uTurbulence;
@@ -394,6 +399,8 @@ void main() {
 
   vec3 col = vec3(0.0);
   float alpha = 0.0;
+  // Canopy weight for phrase-echo spores (sky/mist keeps a soft floor).
+  float crownEcho = 0.42;
 
   if (hit) {
     vec3 pHit = ro + rd * tHit;
@@ -403,6 +410,7 @@ void main() {
     vec3 crown = cover > 0.003 ? crownField(xz) : vec3(0.0, 0.5, 1.0);
     // How tree-ish this sample reads (crown height above the ground).
     float crownAmt = clamp01(crown.x * cover * 2.2);
+    crownEcho = mix(0.35, 1.0, crownAmt);
 
     vec3 n = terrainNormal(xz, tHit);
     n = leafBump(xz, n, tHit, 0.12 + 0.5 * crownAmt);
@@ -507,6 +515,44 @@ void main() {
     }
   }
 
+  // Phrase-echo: one-shot cool bioluminescent spore glints drift the crowns
+  // replaying the gap's rhythm. Alien cousin of Rainforest's lime fireflies —
+  // cooler cyan-silver, crest-blinked, soft under holdBreath. Distinct from
+  // kick light rings, snare mist shear, hat wet-leaf sparkle, and tenderness bio hush.
+  float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+  echoPulse *= 1.0 - clamp01(uStillness) * 0.45;
+  if (echoPulse > 0.001) {
+    vec2 ep = gl_FragCoord.xy / res;
+    float aspect = res.x / max(res.y, 1.0);
+    float spores = 0.0;
+    float crestX = mix(-0.08, 1.08, clamp(uEchoTravel, 0.0, 1.0));
+    for (int i = 0; i < ECHO_SPORES; i++) {
+      float fi = float(i);
+      float seed = hash12(vec2(fi * 17.13 + 3.7, fi * 0.71 + 1.1));
+      float seed2 = hash12(vec2(fi * 91.7 + 11.3, fi * 2.3 + 5.9));
+      // Sparse select so the reply reads as discrete spores, not a wash.
+      float select = step(0.34, fract(seed * 5.17 + fi * 0.31));
+      float baseX = fract(seed * 1.37 + 0.07);
+      // Prefer mid-to-upper canopy band (crowns), with a little vertical scatter.
+      float baseY = 0.32 + seed2 * 0.48;
+      float px = fract(baseX + uEchoTravel * (0.42 + seed * 0.38) + seed2 * 0.04);
+      float py = baseY + sin(uEchoTravel * 6.28318 + seed * 12.0) * 0.018;
+      vec2 d = (ep - vec2(px, py)) * vec2(aspect, 1.0);
+      float glow = exp(-dot(d, d) * mix(2400.0, 4200.0, seed));
+      // Rhythm blink: crest-weighted so the train pulses as it replays.
+      float crest = exp(-pow((px - crestX) * 3.4, 2.0));
+      float blink =
+        0.32 + 0.68 * crest * (0.55 + 0.45 * sin(uEchoTravel * 22.0 + seed * 40.0));
+      float canopyW = smoothstep(0.26, 0.7, py);
+      spores += glow * blink * select * (0.4 + canopyW * 0.75);
+    }
+    spores = clamp(spores * echoPulse * crownEcho, 0.0, 2.2);
+    // Cool cyan-silver bioluminescence — colder than tenderness honey bio.
+    vec3 sporeCol = mix(vec3(0.42, 0.78, 1.0), uColorHigh, 0.22);
+    sporeCol = mix(sporeCol, vec3(0.68, 0.92, 1.0), 0.28);
+    col += sporeCol * spores * 1.35;
+  }
+
   // Soft filmic-ish finish: compress peaks, gentle S-curve, hue-preserving.
   col *= 1.06;
   col = col / (1.0 + max(max(col.r, col.g), col.b) * 0.18);
@@ -570,11 +616,17 @@ export function AlienPlanetScene({
   const kickTravel = useRef(30);
   const kickArmed = useRef(true);
   const prevKick = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one crown spore drift per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   const budgets = useMemo(() => getAlienPlanetBudgets(tier as AlienPlanetTier), [tier]);
   const fragmentShader = useMemo(() => buildFragmentShader(budgets), [budgets]);
   const kitAmp = tier === 'low' ? 0.78 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -595,6 +647,8 @@ export function AlienPlanetScene({
       uSurge: { value: 0 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uAfterglow: { value: 0 },
       uEnergy: { value: 0 },
       uTurbulence: { value: 1 },
@@ -715,6 +769,35 @@ export function AlienPlanetScene({
       );
     }
 
+    // Phrase-echo spore train: arm on quiet, fire one travel per echo rise —
+    // call-response in the gaps, not a scrub of kick/snare/hat.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.3,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     mat.uniforms.uResolution!.value.set(size.width * viewport.dpr, size.height * viewport.dpr);
     mat.uniforms.uPhase!.value = phaseRef.current;
     mat.uniforms.uCamDist!.value = camDistRef.current;
@@ -732,6 +815,8 @@ export function AlienPlanetScene({
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tender;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uAfterglow!.value = afterglowSmooth.current;
     mat.uniforms.uEnergy!.value = clamp(m.energy + afterglowSmooth.current * 0.25, 0, 2);
     mat.uniforms.uTurbulence!.value = clamp(mv.turbulence ?? turbulence, 0, 2);
