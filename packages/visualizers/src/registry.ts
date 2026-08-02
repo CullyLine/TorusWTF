@@ -27,6 +27,7 @@ import { JellyfishBloomScene } from './presets/JellyfishBloom';
 import { MurmurationScene } from './presets/Murmuration';
 import { ThunderheadScene } from './presets/Thunderhead';
 import { GlowwormGrottoScene } from './presets/GlowwormGrotto';
+import { DuneSeaScene } from './presets/DuneSea';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -56,6 +57,7 @@ export type VisualizerId =
   | 'murmuration'
   | 'thunderhead'
   | 'glowworm_grotto'
+  | 'dune_sea'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -645,6 +647,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 1.05,
       cameraDistance: 1,
       lightLevel: 1.0,
+    },
+  },
+  dune_sea: {
+    id: 'dune_sea',
+    label: 'Dune Sea',
+    hint: 'Moonlit desert — kick sand plumes off varying crests, snare wind shear, hat mica glints, gather dune swell, tension haze, drop sandstorm, tender honey moonlight, holdBreath hangs grains mid-air.',
+    Scene: DuneSeaScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.7,
+      scale: 1.05,
+      bassShake: 0.38,
+      anima: 0.5,
+      aura: 0.32,
+      cameraMode: 'drift',
+      bloomIntensity: 0.95,
+      cameraDistance: 1,
+      lightLevel: 1.05,
     },
   },
   rainforest_reverie: {
