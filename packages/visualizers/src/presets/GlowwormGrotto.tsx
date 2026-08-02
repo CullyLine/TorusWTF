@@ -11,6 +11,8 @@
  *  - dropEvent → blaze the entire ceiling constellation at once
  *  - leanIn → ceiling drifts nearer; thread tips brighten faintly (expectant)
  *  - echo → one-shot cool silver-blue ghost cascade down a single cluster
+ *  - convergence → scattered thread glows settle into one bar-locked wave
+ *    rolling across the cavern; soft desync as the lock fades (no snap)
  *  - tenderness → warm points toward candle-amber
  *  - holdBreath / deep silence → dim to a few still embers; threads freeze
  */
@@ -83,6 +85,8 @@ export function GlowwormGrottoScene({
   // LeanIn / echo amp — low tier still approaches and ghosts, just softer.
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Convergence amp — full sync on high; slightly softer on mid/low.
+  const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -114,6 +118,8 @@ export function GlowwormGrottoScene({
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  // Convergence lock — scattered glows settle into one bar-locked wave.
+  const lockSmooth = useRef(0);
   const prevKick = useRef(0);
   const timeRef = useRef(0);
 
@@ -266,7 +272,21 @@ export function GlowwormGrottoScene({
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.92;
 
-    timeRef.current += dt * pace * sectionPace * calm * motionMul;
+    // Convergence envelope early so lockPace can steady the shared clock.
+    lockSmooth.current = smoothToward(
+      lockSmooth.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      0.1,
+      0.18,
+    );
+    const lock = lockSmooth.current * (1 - stillness * 0.3);
+    // Power curve: early lock stays loose; choruses snap into one wave.
+    const lockSnap = lock * lock;
+    // Steadier continuous drive when locked — not frozen (holdBreath owns that).
+    const lockPace = 1 - lock * 0.38;
+
+    timeRef.current += dt * pace * sectionPace * calm * motionMul * lockPace;
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
@@ -384,6 +404,9 @@ export function GlowwormGrottoScene({
     const tension = tensionSmooth.current;
     const drop = dropSmooth.current;
     const t = timeRef.current;
+    // Shared bar clock for the convergence wave — continuous, no bar-boundary snap.
+    const barDrive = m.bpm && m.bpm > 30 ? m.barPhase : (t * 0.18) % 1;
+    const sharedBarAngle = barDrive * Math.PI * 2;
 
     // Draw nearer on leanIn — mild camera-ward pull (CosmicMandala pattern),
     // distinct from gather's center inhale and tension's lengthen/darken.
@@ -551,16 +574,25 @@ export function GlowwormGrottoScene({
         az += (az0 * (1 - gather * 0.5) - az) * homePull;
       }
 
-      // Idle breath sway — nearly frozen on holdBreath.
+      // Idle breath sway — nearly frozen on holdBreath. Under lock, stagger
+      // collapses so the vault breathes as one without freezing sway amp.
+      const breathPhase =
+        phase * 8.0 * (1 - lockSnap) + lockSnap * (ax0 * 0.55 + az0 * 0.4);
       const breath =
-        Math.sin(t * (0.45 + phase * 0.35) + phase * 8.0) *
+        Math.sin(t * (0.45 + phase * 0.35 * (1 - lockSnap) + lockSnap * 0.5) + breathPhase) *
         (0.04 + swell * 0.03) *
         (1 - tender * 0.4) *
-        motionMul;
+        motionMul *
+        (1 - lock * 0.28);
       const breathZ =
-        Math.cos(t * (0.38 + phase * 0.3) + phase * 5.5) *
+        Math.cos(
+          t * (0.38 + phase * 0.3 * (1 - lockSnap) + lockSnap * 0.42) +
+            phase * 5.5 * (1 - lockSnap) +
+            lockSnap * (ax0 * 0.4 - az0 * 0.35),
+        ) *
         (0.03 + swell * 0.025) *
-        motionMul;
+        motionMul *
+        (1 - lock * 0.28);
 
       const sx = (swayX.current[ti] ?? 0) * dt * 0.85 + breath * pace * calm;
       const sz = (swayZ.current[ti] ?? 0) * dt * 0.85 + breathZ * pace * calm;
@@ -638,6 +670,20 @@ export function GlowwormGrottoScene({
       }
       const echoPulse = echoVis * echoCascade * (1 - stillness * 0.55);
 
+      // Convergence: blend independent per-thread glow into one bar-locked
+      // wave rolling across the vault (spatial phase from anchor X/Z). Soft
+      // desync as lock fades — never snaps. Distinct from kick cascade / echo
+      // ghost / drop blaze (those are one-shots; this is sustained lock-in).
+      const ax0 = threadAnchorX[ti] ?? 0;
+      const az0 = threadAnchorZ[ti] ?? 0;
+      const spatialPhase = ax0 * 0.72 + az0 * 0.48;
+      const personalGlow =
+        0.5 + 0.5 * Math.sin(t * (0.7 + phase * 0.5) + phase * 12.5 + along * 1.2);
+      const sharedGlow = 0.5 + 0.5 * Math.sin(sharedBarAngle - spatialPhase);
+      const glowMix = personalGlow * (1 - lockSnap) + sharedGlow * lockSnap;
+      // Strength rises with lock; mid-fade still shows personal pulses dispersing.
+      const lockGlow = glowMix * (0.22 * lock + 0.7 * lockSnap);
+
       // Hat: sparse single-glowworm winks.
       const winkSelect = hash01(phase * 19.7 + i * 0.27 + Math.floor(t * 2.5)) > 0.82 ? 1 : 0;
       const wink = winkSelect * hat * (1.05 + m.shimmer * 0.3);
@@ -662,6 +708,7 @@ export function GlowwormGrottoScene({
           swell * 0.25 +
           cascade * 1.35 +
           echoPulse * 0.95 +
+          lockGlow * 1.05 +
           wink * 0.95 +
           drop * 0.55 +
           kick * 0.08) *
