@@ -495,7 +495,7 @@ export function GlowwormGrottoScene({
     const silkMat = silkMatRef.current;
     if (silkMat) {
       silkMat.opacity =
-        (0.12 + swell * 0.06 + gather * 0.08 + tension * 0.05) *
+        (0.12 + swell * 0.06 + gather * 0.08 + tension * 0.05 + lockSnap * 0.05) *
         (1 - stillness * 0.55) *
         (1 - tender * 0.15);
     }
@@ -771,7 +771,8 @@ export function GlowwormGrottoScene({
         (0.025 + m.mid * 0.02 + swell * 0.012) *
         (1 - tender * 0.35) *
         (1 - tension * 0.2) *
-        (1 - lean * 0.25);
+        (1 - lean * 0.25) *
+        (1 - lock * 0.2);
     }
 
     if (analyser) analyser.getFrequencyData(freqBuf.current);
