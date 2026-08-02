@@ -33,6 +33,8 @@ export function BubbleEmitter({
   const lastSpawnRevisionRef = useRef(-1);
   // Soften kit accents on mid/low so the overlay stays a texture over the preset.
   const kitAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.65;
+  // Phrase-echo train amp — same tier curve as preset echoes (0.7 / 0.9 / 1).
+  const echoAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
 
   const pool = useMemo(
     () =>
@@ -51,15 +53,20 @@ export function BubbleEmitter({
     const lifetime = new THREE.BufferAttribute(pool.lifetimes, 1);
     const seed = new THREE.BufferAttribute(pool.seeds, 1);
     const size = new THREE.BufferAttribute(pool.sizes, 1);
+    // Float attribute so the shader gets a clean 0/1 without int attribute quirks.
+    const echo = new THREE.BufferAttribute(new Float32Array(pool.capacity), 1);
     position.setUsage(THREE.DynamicDrawUsage);
     age.setUsage(THREE.DynamicDrawUsage);
     lifetime.setUsage(THREE.DynamicDrawUsage);
+    size.setUsage(THREE.DynamicDrawUsage);
+    echo.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute('position', position);
     geometry.setAttribute('aAge', age);
     geometry.setAttribute('aLifetime', lifetime);
     geometry.setAttribute('aSeed', seed);
     geometry.setAttribute('aSize', size);
-    return { geometry, position, age, lifetime };
+    geometry.setAttribute('aEcho', echo);
+    return { geometry, position, age, lifetime, size, echo };
   }, [pool]);
 
   const uniforms = useMemo(
@@ -71,6 +78,7 @@ export function BubbleEmitter({
       uAudioGlow: { value: 1 },
       uHatGlint: { value: 0 },
       uTenderness: { value: 0 },
+      uEchoGlint: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -121,12 +129,18 @@ export function BubbleEmitter({
     }
 
     const metrics = metricsRef.current;
-    stepBubblePool(pool, delta, runtime, metrics, kitAmp);
+    stepBubblePool(pool, delta, runtime, metrics, kitAmp, echoAmp);
 
     buffers.position.needsUpdate = true;
     buffers.age.needsUpdate = true;
     if (lastSpawnRevisionRef.current !== pool.spawnRevision) {
       buffers.lifetime.needsUpdate = true;
+      buffers.size.needsUpdate = true;
+      const echoArr = buffers.echo.array as Float32Array;
+      for (let i = 0; i < pool.capacity; i++) {
+        echoArr[i] = pool.echoFlags[i]!;
+      }
+      buffers.echo.needsUpdate = true;
       lastSpawnRevisionRef.current = pool.spawnRevision;
     }
 
@@ -136,6 +150,7 @@ export function BubbleEmitter({
     uniforms.uOpacity.value = runtime.opacity;
     uniforms.uHatGlint.value = pool.hatGlint;
     uniforms.uTenderness.value = pool.tenderSoft;
+    uniforms.uEchoGlint.value = pool.echoGlint;
     uniforms.uAudioGlow.value = clamp(
       0.78 +
         clamp(metrics.swell, 0, 1.5) * 0.2 +

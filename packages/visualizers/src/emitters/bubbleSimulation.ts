@@ -24,6 +24,12 @@ export const MAX_BUBBLE_STEP_SECONDS = 0.1;
 
 /** Soft kit amp when the caller does not pass a tier scale (tests, headless). */
 const DEFAULT_KIT_AMP = 1;
+/** Soft echo amp when the caller does not pass a tier scale (tests, headless). */
+const DEFAULT_ECHO_AMP = 1;
+/** Phrase-echo train: pulses spaced along BPM-paced travel (no pile-up). */
+const ECHO_TRAIN_SLOTS = 5;
+/** Bubbles emitted per echo pulse — small bright glints, not a kick surge. */
+const ECHO_PULSE_COUNT = 3;
 
 export interface BubblePoolConfig {
   capacity: number;
@@ -46,6 +52,14 @@ export interface BubbleKitState {
   gatherSmooth: number;
   stillnessSmooth: number;
   tenderSmooth: number;
+  echoSmooth: number;
+  prevEcho: number;
+  /** 1 while waiting for the next phrase gap; 0 once a train has fired. */
+  echoArmed: number;
+  /** 0..1 traveling crest; >=1 idle. */
+  echoTravel: number;
+  /** How many of the ECHO_TRAIN_SLOTS pulses have been emitted this travel. */
+  echoEmitCursor: number;
 }
 
 /**
@@ -62,6 +76,8 @@ export interface BubblePool {
   readonly seeds: Float32Array;
   readonly sizes: Float32Array;
   readonly active: Uint8Array;
+  /** 1 = phrase-echo glint bubble (cool silver, smaller); 0 = normal film. */
+  readonly echoFlags: Uint8Array;
   seed: number;
   rngState: number;
   activeCount: number;
@@ -74,6 +90,8 @@ export interface BubblePool {
   hatGlint: number;
   /** Last-frame tenderness envelope for milkier rise / softer glints. */
   tenderSoft: number;
+  /** Last-frame phrase-echo envelope for cool silver catch-lights. */
+  echoGlint: number;
   readonly kit: BubbleKitState;
   readonly flowParams: FlowParams;
   readonly flowOptions: { turbulence: number; vortex: number };
@@ -137,6 +155,7 @@ export function createBubblePool(config: BubblePoolConfig): BubblePool {
     seeds: new Float32Array(capacity),
     sizes: new Float32Array(capacity),
     active: new Uint8Array(capacity),
+    echoFlags: new Uint8Array(capacity),
     seed: 0,
     rngState: 0,
     activeCount: 0,
@@ -147,6 +166,7 @@ export function createBubblePool(config: BubblePoolConfig): BubblePool {
     flowTime: 0,
     hatGlint: 0,
     tenderSoft: 0,
+    echoGlint: 0,
     kit: {
       kickSmooth: 0,
       prevKick: 0,
@@ -157,6 +177,11 @@ export function createBubblePool(config: BubblePoolConfig): BubblePool {
       gatherSmooth: 0,
       stillnessSmooth: 0,
       tenderSmooth: 0,
+      echoSmooth: 0,
+      prevEcho: 0,
+      echoArmed: 1,
+      echoTravel: 1,
+      echoEmitCursor: 0,
     },
     flowParams: { ...DEFAULT_FLOW_PARAMS },
     flowOptions: { turbulence: 0, vortex: 0 },
@@ -178,6 +203,7 @@ export function resetBubblePool(pool: BubblePool, seed = pool.seed): void {
   pool.flowTime = 0;
   pool.hatGlint = 0;
   pool.tenderSoft = 0;
+  pool.echoGlint = 0;
   pool.kit.kickSmooth = 0;
   pool.kit.prevKick = 0;
   pool.kit.snareSmooth = 0;
@@ -187,11 +213,17 @@ export function resetBubblePool(pool: BubblePool, seed = pool.seed): void {
   pool.kit.gatherSmooth = 0;
   pool.kit.stillnessSmooth = 0;
   pool.kit.tenderSmooth = 0;
+  pool.kit.echoSmooth = 0;
+  pool.kit.prevEcho = 0;
+  pool.kit.echoArmed = 1;
+  pool.kit.echoTravel = 1;
+  pool.kit.echoEmitCursor = 0;
   pool.positions.fill(0);
   pool.velocities.fill(0);
   pool.ages.fill(-1);
   pool.lifetimes.fill(0);
   pool.active.fill(0);
+  pool.echoFlags.fill(0);
 
   for (let index = 0; index < pool.capacity; index++) {
     pool.seeds[index] = nextRandom(pool);
@@ -208,6 +240,7 @@ function deactivateBubble(pool: BubblePool, index: number): void {
   pool.activeCount--;
   pool.ages[index] = -1;
   pool.lifetimes[index] = 0;
+  pool.echoFlags[index] = 0;
   const i3 = index * 3;
   pool.positions[i3] = 0;
   pool.positions[i3 + 1] = 0;
@@ -233,25 +266,36 @@ function activateBubble(
   pool: BubblePool,
   index: number,
   settings: EmitterContinuousSettings,
+  echo = false,
 ): void {
   const spread = clamp(finiteOr(settings.spread, 1), 0, MAX_SPREAD);
   const lift = clamp(finiteOr(settings.lift, 1), 0, MAX_LIFT);
   const meanLifetime = clamp(finiteOr(settings.lifetime, 8), 0.01, MAX_LIFETIME);
 
+  // Echo glints: tighter base spawn, smaller size, shorter life, brisker climb.
+  const echoSpread = echo ? spread * 0.42 : spread;
   const angle = nextRandom(pool) * TAU;
-  const radius = Math.sqrt(nextRandom(pool)) * spread * 1.75;
-  const lateralSpeed = spread * (0.025 + nextRandom(pool) * 0.1);
+  const radius = Math.sqrt(nextRandom(pool)) * echoSpread * (echo ? 0.95 : 1.75);
+  const lateralSpeed = echoSpread * (0.025 + nextRandom(pool) * (echo ? 0.06 : 0.1));
   const i3 = index * 3;
 
   pool.positions[i3] = Math.cos(angle) * radius;
-  pool.positions[i3 + 1] = -2.65 - nextRandom(pool) * 0.65;
+  pool.positions[i3 + 1] = -2.65 - nextRandom(pool) * (echo ? 0.35 : 0.65);
   pool.positions[i3 + 2] = Math.sin(angle) * radius * 0.72;
-  pool.velocities[i3] = Math.cos(angle) * lateralSpeed + (nextRandom(pool) - 0.5) * spread * 0.055;
-  pool.velocities[i3 + 1] = lift * (0.38 + nextRandom(pool) * 0.28);
+  pool.velocities[i3] =
+    Math.cos(angle) * lateralSpeed + (nextRandom(pool) - 0.5) * echoSpread * 0.055;
+  pool.velocities[i3 + 1] = lift * (echo ? 0.52 + nextRandom(pool) * 0.22 : 0.38 + nextRandom(pool) * 0.28);
   pool.velocities[i3 + 2] =
-    Math.sin(angle) * lateralSpeed * 0.72 + (nextRandom(pool) - 0.5) * spread * 0.04;
+    Math.sin(angle) * lateralSpeed * 0.72 + (nextRandom(pool) - 0.5) * echoSpread * 0.04;
   pool.ages[index] = 0;
-  pool.lifetimes[index] = meanLifetime * (0.75 + nextRandom(pool) * 0.5);
+  pool.lifetimes[index] = echo
+    ? meanLifetime * (0.42 + nextRandom(pool) * 0.28)
+    : meanLifetime * (0.75 + nextRandom(pool) * 0.5);
+  // Always rewrite size so echo glints don't permanently shrink recycled slots.
+  pool.sizes[index] = echo
+    ? 0.32 + nextRandom(pool) * 0.28
+    : 0.68 + nextRandom(pool) * 0.68;
+  pool.echoFlags[index] = echo ? 1 : 0;
   pool.active[index] = 1;
   pool.activeCount++;
   pool.emittedTotal++;
@@ -266,6 +310,7 @@ export function emitBubbleParticles(
   pool: BubblePool,
   requested: number,
   settings: EmitterContinuousSettings,
+  echo = false,
 ): number {
   if (!Number.isFinite(requested) || requested <= 0) return 0;
   const count = Math.min(pool.capacity - pool.activeCount, pool.capacity, Math.floor(requested));
@@ -273,7 +318,7 @@ export function emitBubbleParticles(
   while (emitted < count) {
     const index = findInactiveIndex(pool);
     if (index < 0) break;
-    activateBubble(pool, index, settings);
+    activateBubble(pool, index, settings, echo);
     emitted++;
   }
   return emitted;
@@ -306,10 +351,12 @@ export function emitBubbleBurst(
  * - `gather` → gentle inward pull toward the column core
  * - `tenderness` → slower milkier rise with softer glints (`pool.tenderSoft`)
  * - `holdBreath` / deep silence → mid-water suspension that thaws on return
+ * - `echo` → one-shot BPM-paced train of small cool glint-bubbles from the base
  *
  * Existing breath / flow / shimmer drift and manual burst impulses are unchanged.
  *
  * `kitAmp` (0..1) softens accents on mid/low tiers; defaults to 1.
+ * `echoAmp` (0..1) softens the phrase-echo train on mid/low; defaults to 1.
  */
 export function stepBubblePool(
   pool: BubblePool,
@@ -317,11 +364,13 @@ export function stepBubblePool(
   settings: EmitterContinuousSettings,
   metrics: AudioMetrics,
   kitAmp = DEFAULT_KIT_AMP,
+  echoAmp = DEFAULT_ECHO_AMP,
 ): number {
   const dt = clamp(finiteOr(deltaSeconds, 0), 0, MAX_BUBBLE_STEP_SECONDS);
   if (dt <= 0) return 0;
 
   const amp = clamp(finiteOr(kitAmp, DEFAULT_KIT_AMP), 0, 1);
+  const eAmp = clamp(finiteOr(echoAmp, DEFAULT_ECHO_AMP), 0, 1);
   const turbulence = clamp(finiteOr(settings.turbulence, 0), 0, MAX_TURBULENCE);
   const lift = clamp(finiteOr(settings.lift, 1), 0, MAX_LIFT);
   const flowLevel = clamp(finiteOr(metrics.flow, 0), 0, 2);
@@ -374,12 +423,20 @@ export function stepBubblePool(
     0.12,
     0.22,
   );
+  kit.echoSmooth = smoothToward(
+    kit.echoSmooth,
+    Math.min(1, Math.max(0, metrics.echo)) * eAmp,
+    dt,
+    0.05,
+    0.32,
+  );
 
   const kick = kit.kickSmooth;
   const snare = kit.snareSmooth;
   const gather = kit.gatherSmooth;
   const stillness = kit.stillnessSmooth;
   const tender = kit.tenderSmooth;
+  const echoNow = kit.echoSmooth;
   // Soft under hush so thaw still breathes; never a hard freeze-dead.
   // Tenderness slows without freezing — distinct from holdBreath suspension.
   const motionMul = (1 - stillness * 0.9) * (1 - tender * 0.28);
@@ -387,6 +444,43 @@ export function stepBubblePool(
   // Soften hat micro-pops under tenderness — milkier, not sparkly.
   pool.hatGlint = kit.hatSmooth * (1 - tender * 0.7);
   pool.tenderSoft = tender;
+
+  // Phrase-echo: arm on quiet, fire one BPM-paced glint train per gap.
+  if (echoNow < 0.08) kit.echoArmed = 1;
+  if (kit.echoArmed === 1 && echoNow > 0.22 && kit.prevEcho <= 0.22) {
+    kit.echoTravel = 0;
+    kit.echoArmed = 0;
+    kit.echoEmitCursor = 0;
+  }
+  kit.prevEcho = echoNow;
+  if (kit.echoTravel < 1) {
+    const bpm = metrics.bpm && metrics.bpm > 30 ? metrics.bpm : 120;
+    const echoPace = 0.9 + amp * 0.15;
+    kit.echoTravel = Math.min(1, kit.echoTravel + dt * echoPace * (0.85 + bpm / 180));
+  }
+  const traveling = kit.echoTravel < 1;
+  // Soft under stillness so holdBreath still owns the hush.
+  const echoVis = traveling
+    ? echoNow * (1 - kit.echoTravel * 0.3) * (1 - stillness * 0.55)
+    : echoNow * 0.04 * (1 - stillness * 0.55);
+  pool.echoGlint = echoVis;
+
+  // Emit crest-by-slot pulses while the train climbs — spaced to the gap's BPM.
+  if (traveling && echoVis > 0.02) {
+    const slot = Math.min(
+      ECHO_TRAIN_SLOTS - 1,
+      Math.floor(kit.echoTravel * ECHO_TRAIN_SLOTS),
+    );
+    while (kit.echoEmitCursor <= slot && kit.echoEmitCursor < ECHO_TRAIN_SLOTS) {
+      const pulseStrength = 0.55 + (1 - kit.echoEmitCursor / ECHO_TRAIN_SLOTS) * 0.35;
+      const count = Math.max(
+        1,
+        Math.round(ECHO_PULSE_COUNT * pulseStrength * (0.75 + eAmp * 0.25)),
+      );
+      emitBubbleParticles(pool, count, settings, true);
+      kit.echoEmitCursor++;
+    }
+  }
 
   // Kick buoyant surge burst — rising-edge only, capped so it stays a texture.
   const kickRise = kick - kit.prevKick;
