@@ -8,6 +8,8 @@
  *  - snare → lateral gust that sways the flotilla
  *  - hat → sparse ember ticks on selected lanterns
  *  - gather → draw lanterns toward center before the beat
+ *  - leanIn → drift nearer + lift glow with expectation (not gather inhale)
+ *  - barPhase → lock lantern + mirror bobbing to the bar swell (continuous)
  *  - tenderness → honey-warm soften (gentler bob, milkier glow)
  *  - holdBreath / deep silence → hang mid-rise, dim flames to embers,
  *    calm water toward glass; thaw upward on the music's return
@@ -56,6 +58,7 @@ function hash01(n: number) {
 
 export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
+  const rootRef = useRef<THREE.Group>(null);
   const lanternRef = useRef<THREE.Points>(null);
   const lanternMatRef = useRef<THREE.PointsMaterial>(null);
   const mirrorRef = useRef<THREE.Points>(null);
@@ -76,6 +79,9 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // LeanIn / bar-lock amp — mid/low still approach and ride the bar, just softer.
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const barAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -106,6 +112,13 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
   const echoSource = useRef({ x: 0, y: 1.1, z: 0, seed: 0.37 });
+  // LeanIn anticipation: eager climb, slower release into the drop.
+  const leanSmooth = useRef(0);
+  // Bar-locked bob: unwrap turns so the flotilla rides the swell without stepping.
+  const barTurnsRef = useRef(0);
+  const prevBarPhaseRef = useRef(0);
+  const hadBpmRef = useRef(false);
+  const barBobSmooth = useRef(0);
   const timeRef = useRef(0);
 
   // Per-lantern buoyant vertical velocity — inertia lives here.
@@ -229,6 +242,44 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
     // Nearly freeze continuous loft / bob / drift / yaw; leave a whisper so thaw never pops.
     const motionMul = 1 - stillness * 0.9;
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    // Distinct from gather's center inhale — this is nearer + glow lift.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Continuous bar unwrap for bob lock (no 0→1 step at bar boundaries).
+    const bpmKnown = Boolean(m.bpm && m.bpm > 30);
+    const barPhase = bpmKnown ? Math.min(1, Math.max(0, m.barPhase)) : 0;
+    if (bpmKnown) {
+      if (prevBarPhaseRef.current - barPhase > 0.5) {
+        barTurnsRef.current += 1;
+      }
+      prevBarPhaseRef.current = barPhase;
+      if (!hadBpmRef.current) {
+        barTurnsRef.current = 0;
+        hadBpmRef.current = true;
+      }
+    } else if (hadBpmRef.current) {
+      hadBpmRef.current = false;
+    }
+    const continuousBar = bpmKnown ? barTurnsRef.current + barPhase : 0;
+    // Amp eases in/out with BPM so enter/exit never snaps the bob.
+    barBobSmooth.current = smoothToward(
+      barBobSmooth.current,
+      bpmKnown ? barAmp * (1 - stillness * 0.4) : 0,
+      dt,
+      0.16,
+      0.22,
+    );
+    const barBobAmp = barBobSmooth.current;
+
     // Continuous clock freezes with the hang; kit envelopes stay on full dt.
     timeRef.current += dt * pace * sectionPace * calm * motionMul;
 
@@ -328,6 +379,14 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
     const tender = tenderSmooth.current;
     const afterglow = afterglowSmooth.current;
 
+    // Draw nearer on leanIn — mild camera-ward pull + soft presence (Glowworm pattern),
+    // distinct from gather's center inhale.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      root.scale.setScalar(1 + lean * 0.06);
+    }
+
     // Continuous loft: swell sustains — motionMul hangs the flotilla mid-rise.
     // Kick surge stays ungated so drum hits still punch through the thaw.
     const targetLift =
@@ -341,15 +400,18 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
     const kickLift = kick * 0.95 * pace * sectionPace * calm;
 
     // Embers dim: size + opacity ease down while suspended, then rekindle on thaw.
+    // LeanIn lifts glow with expectation (faint brighten, not a kick flare).
     const emberDim = 1 - stillness * 0.48;
+    const leanGlow = 1 + lean * 0.12;
     lanternMat.size =
       (0.095 + swell * 0.035 + kick * 0.055 + afterglow * 0.02) *
       (0.92 + kitAmp * 0.08) *
       (1 - tender * 0.12) *
-      (0.72 + emberDim * 0.28);
+      (0.72 + emberDim * 0.28) *
+      leanGlow;
     lanternMat.opacity = Math.min(
       1,
-      (0.72 + swell * 0.18 + kick * 0.14 + afterglow * 0.1) * emberDim,
+      (0.72 + swell * 0.18 + kick * 0.14 + afterglow * 0.1 + lean * 0.08) * emberDim,
     );
 
     if (mirrorMat) {
@@ -418,10 +480,17 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       y += (vy[i] ?? 0) * dt * 1.15;
 
       // Soft bob — tenderness gentles amplitude; holdBreath nearly freezes it.
+      // With BPM, bar-lock the primary swell so lanterns + mirrors ride the bar
+      // (continuous unwrap — no step at boundaries); free bob softens under lock.
       const bobAmp = (0.035 + swell * 0.02) * (1 - tender * 0.55) * motionMul;
-      const bob =
+      const freeBob =
         Math.sin(t * (0.85 + phase * 1.1) + phase * 14.0) * bobAmp +
         Math.sin(t * (1.35 + phase * 0.6) + phase * 6.2) * bobAmp * 0.45;
+      const barSwell =
+        barBobAmp > 0.01
+          ? Math.sin(continuousBar * Math.PI * 2 + phase * Math.PI * 2) * bobAmp * 1.35
+          : 0;
+      const bob = freeBob * (1 - barBobAmp * 0.72) + barSwell * barBobAmp;
       y += bob * dt * 8;
 
       // Snare lateral gust — inertial sway vel, not a hard displace (ungated).
@@ -432,19 +501,22 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       x += (sway[i * 2] ?? 0) * dt;
       z += (sway[i * 2 + 1] ?? 0) * dt;
 
-      // Idle drift — living, never thrash; hangs with holdBreath.
+      // Idle drift — living, never thrash; hangs with holdBreath; hushes on leanIn.
+      const leanDriftMul = 1 - lean * 0.38;
       const drift =
         Math.sin(t * (0.35 + phase * 0.4) + phase * 9.0) *
         (0.008 + m.mid * 0.01) *
         (1 - tender * 0.4) *
-        motionMul;
+        motionMul *
+        leanDriftMul;
       x += drift * pace * calm;
       z +=
         Math.cos(t * (0.28 + phase * 0.35) + phase * 5.0) *
         (0.006 + m.mid * 0.008) *
         pace *
         calm *
-        motionMul;
+        motionMul *
+        leanDriftMul;
 
       // Gather inhale toward flotilla center.
       x *= gatherPull;
@@ -487,10 +559,13 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       const tickSelect = hash01(phase * 17.13 + i * 0.31) > 0.68 ? 1 : 0;
       const sparkle = 1 + tickSelect * hat * (1.15 + m.shimmer * 0.35);
       const flameGain = 1 + kick * (0.35 + (band === 0 ? 0.2 : 0.05));
+      // LeanIn faint brighten — expectation, not a kick flare.
+      const leanBright = 1 + lean * 0.22;
       const gain =
         heightGlow *
         sparkle *
         flameGain *
+        leanBright *
         (0.88 + swell * 0.22) *
         (1 - tender * 0.12) *
         (0.95 + afterglow * 0.12) *
@@ -500,17 +575,32 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       colArr[i3 + 1] = Math.min(1, mixC.g * gain);
       colArr[i3 + 2] = Math.min(1, mixC.b * gain);
 
-      // Mirrored water glow — rippled by swell, calmed to glass on holdBreath.
+      // Mirrored water glow — rippled by swell, calmed to glass on holdBreath;
+      // bar swell locks the reflection bob to the same clock as the lanterns.
       if (mirrorArr && mirrorColArr && i % mirrorStride === 0 && mirrorIdx < mirrorCount) {
         const mi3 = mirrorIdx * 3;
+        const freeRipple =
+          Math.sin(t * (0.7 + phase) + x * 1.4 + z * 1.1) * (0.04 + swell * 0.06) +
+          Math.sin(t * 1.1 + z * 1.8) * snare * 0.05;
+        const barRipple =
+          barBobAmp > 0.01
+            ? Math.sin(continuousBar * Math.PI * 2 + phase * Math.PI * 2 + 0.35) *
+              (0.035 + swell * 0.04)
+            : 0;
         const ripple =
-          (Math.sin(t * (0.7 + phase) + x * 1.4 + z * 1.1) * (0.04 + swell * 0.06) +
-            Math.sin(t * 1.1 + z * 1.8) * snare * 0.05) *
-          motionMul;
+          (freeRipple * (1 - barBobAmp * 0.65) + barRipple * barBobAmp) * motionMul;
+        // Mirror Y also rides the bar swell so water reflections clock with lanterns.
+        const barMirrorY =
+          barBobAmp > 0.01
+            ? Math.sin(continuousBar * Math.PI * 2 + phase * Math.PI * 2) *
+              0.04 *
+              barBobAmp *
+              motionMul
+            : 0;
         mirrorArr[mi3] = x + ripple;
-        mirrorArr[mi3 + 1] = WATER_Y - (y - WATER_Y) * 0.55 - 0.08;
+        mirrorArr[mi3 + 1] = WATER_Y - (y - WATER_Y) * 0.55 - 0.08 + barMirrorY;
         mirrorArr[mi3 + 2] = z + ripple * 0.6;
-        const dim = (0.42 + swell * 0.12 + kick * 0.1) * (1 - stillness * 0.28);
+        const dim = (0.42 + swell * 0.12 + kick * 0.1 + lean * 0.06) * (1 - stillness * 0.28);
         mirrorColArr[mi3] = Math.min(1, colArr[i3]! * dim * (0.85 + tender * 0.2));
         mirrorColArr[mi3 + 1] = Math.min(1, colArr[i3 + 1]! * dim * 0.9);
         mirrorColArr[mi3 + 2] = Math.min(1, colArr[i3 + 2]! * dim * 0.75);
@@ -650,7 +740,7 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   });
 
   return (
-    <group>
+    <group ref={rootRef}>
       {/* Dark water plane — reflections read against it. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, WATER_Y, 0]}>
         <planeGeometry args={[12, 12, 1, 1]} />

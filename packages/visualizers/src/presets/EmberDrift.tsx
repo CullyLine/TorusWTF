@@ -15,6 +15,10 @@
  *  - echo → one-shot train of cool blue-white sparks that climbs through the
  *    warm ash, replaying the phrase gap then cooling/fading (memory at a
  *    different temperature)
+ *  - leanIn → densify the ash column + drift nearer with faint brightening
+ *    (pre-drop anticipation; distinct from gather's pulsed inhale)
+ *  - barPhase → slow bar-locked coal flicker so the field glows on the music's
+ *    clock (continuous unwrap, no stepping)
  */
 
 import { useMemo, useRef } from 'react';
@@ -57,6 +61,7 @@ function hash01(n: number) {
 
 export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
   const mods = useModulation();
+  const rootRef = useRef<THREE.Group>(null);
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const sparkRef = useRef<THREE.Points>(null);
@@ -68,6 +73,9 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // LeanIn / bar-clock amps — mid/low still approach and breathe, just softer.
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const barAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -97,6 +105,13 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
   const echoSource = useRef({ x: 0, y: Y_MIN + 0.55, z: 0, seed: 0.37 });
+  // LeanIn anticipation: densify + near approach before the drop.
+  const leanSmooth = useRef(0);
+  // Continuous unwrapped bar phase for coal flicker (no 0→1 step).
+  const barTurnsRef = useRef(0);
+  const prevBarPhaseRef = useRef(0);
+  const hadBpmRef = useRef(false);
+  const barFlickerSmooth = useRef(0);
   const timeRef = useRef(0);
 
   const sprite = useMemo(() => getDotTexture(), []);
@@ -302,6 +317,43 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Continuous bar unwrap for coal flicker (no 0→1 step).
+    const bpmKnown = Boolean(m.bpm && m.bpm > 30);
+    const barPhase = bpmKnown ? Math.min(1, Math.max(0, m.barPhase)) : 0;
+    if (bpmKnown) {
+      if (prevBarPhaseRef.current - barPhase > 0.5) {
+        barTurnsRef.current += 1;
+      }
+      prevBarPhaseRef.current = barPhase;
+      if (!hadBpmRef.current) {
+        barTurnsRef.current = 0;
+        hadBpmRef.current = true;
+      }
+    } else if (hadBpmRef.current) {
+      hadBpmRef.current = false;
+    }
+    const continuousBar = bpmKnown ? barTurnsRef.current + barPhase : 0;
+    // Soft amp follow so enter/exit BPM doesn't pop the flicker.
+    barFlickerSmooth.current = smoothToward(
+      barFlickerSmooth.current,
+      bpmKnown ? barAmp * (1 - stillness * 0.4) : 0,
+      dt,
+      0.16,
+      0.22,
+    );
+    const barFlickerAmp = barFlickerSmooth.current;
+
     const gather = gatherSmooth.current;
     const impact = impactSmooth.current;
     const kick = kickSmooth.current;
@@ -332,16 +384,21 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const flare = 1 + impact * 0.85 + afterglow * 0.2;
     // Coals dim: size + opacity ease down while suspended, then rekindle on thaw.
     // Tenderness softens into slightly larger, milkier glow (rosy soft coals).
+    // LeanIn brightens faintly with expectation (not impact's hit flare).
     const coalDim = 1 - stillness * 0.48;
     const softGlow = 1 + tender * 0.14;
+    const leanGlow = 1 + lean * 0.12;
     mat.size =
       (0.048 + swell * 0.028 + impact * 0.04 + kick * 0.018) *
       (0.92 + kitAmp * 0.08) *
       (0.72 + coalDim * 0.28) *
-      softGlow;
+      softGlow *
+      leanGlow;
     mat.opacity = Math.min(
       1,
-      (0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12) * coalDim * (1 - tender * 0.06),
+      (0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12 + lean * 0.08) *
+        coalDim *
+        (1 - tender * 0.06),
     );
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -361,6 +418,10 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Inhale toward center on gather — stronger on outer embers.
     // Gather stays ungated so pre-beat inhale still reads under thaw.
     const gatherPull = 1 - gather * dt * 2.1;
+    // LeanIn densify: sustained column hug (milder than gather's pulsed inhale).
+    const leanDensify = 1 - lean * dt * 1.15;
+    // Expectation stills lateral drift a notch — not a freeze (holdBreath owns that).
+    const leanDriftMul = 1 - lean * 0.38;
 
     for (let i = 0; i < baseCount; i++) {
       const i3 = i * 3;
@@ -373,11 +434,15 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       let z = arr[i3 + 2] ?? 0;
 
       const wobble =
-        Math.sin(t * (1.1 + phase * 1.8) + phase * 12.0) * (0.01 + m.mid * 0.012) * tenderDriftMul;
-      const driftX = ((velocities[i3] ?? 0) + wobble) * tenderDriftMul;
+        Math.sin(t * (1.1 + phase * 1.8) + phase * 12.0) *
+        (0.01 + m.mid * 0.012) *
+        tenderDriftMul *
+        leanDriftMul;
+      const driftX = ((velocities[i3] ?? 0) + wobble) * tenderDriftMul * leanDriftMul;
       const driftZ =
         ((velocities[i3 + 2] ?? 0) + Math.cos(t * (0.9 + phase) + phase * 7.0) * 0.008) *
-        tenderDriftMul;
+        tenderDriftMul *
+        leanDriftMul;
       const rise = (velocities[i3 + 1] ?? 0.5) * (0.85 + sizeMul * 0.25);
 
       x += driftX * lift * 18;
@@ -395,6 +460,9 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       // Soft radial inhale — ash folds toward the column, not a hard snap.
       x *= gatherPull;
       z *= gatherPull;
+      // LeanIn densify — sustained axis hug, distinct from gather's beat inhale.
+      x *= leanDensify;
+      z *= leanDensify;
       // Vertical inhale: settle slightly toward mid-frame before the beat.
       y += (0 - y) * gather * dt * 1.05;
 
@@ -422,17 +490,29 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       mixC.lerp(coalC, stillness * 0.62);
 
       // Height gradient: cooler near the hearth, hotter as they rise.
-      const heightGlow = 0.75 + ((y - Y_MIN) / Y_SPAN) * 0.45;
+      const heightNorm = (y - Y_MIN) / Y_SPAN;
+      const heightGlow = 0.75 + heightNorm * 0.45;
       // Sparse hat ticks — only ~1/3 of embers sparkle so it reads as ticks.
       const tickSelect = hash01(phase * 17.13 + i * 0.31) > 0.62 ? 1 : 0;
       const sparkle = 1 + tickSelect * hat * (1.1 + m.shimmer * 0.4);
       // Kick warms bass embers; snare flashes mid — motion is the primary accent.
       const kitGlow =
         (band === 0 ? kick * 0.28 : kick * 0.08) + (band === 1 ? snare * 0.32 : snare * 0.1);
+      // Bar-locked coal flicker — continuous height-phased wave, one breath/bar.
+      // Softer and ongoing vs hat ticks / impact flare / kick band glow.
+      const barPhaseWave =
+        barFlickerAmp > 0.01
+          ? Math.sin(heightNorm * Math.PI * 2 - continuousBar * Math.PI * 2 + phase * 0.7)
+          : 0;
+      const barFlicker = 1 + barPhaseWave * 0.2 * barFlickerAmp;
+      // LeanIn expectation glow — faint brighten, not a hit flare.
+      const leanBright = 1 + lean * 0.22;
       const gain =
         heightGlow *
         flare *
         sparkle *
+        barFlicker *
+        leanBright *
         (0.85 + swell * 0.25) *
         (1 + kitGlow) *
         (1 - stillness * 0.42);
@@ -522,11 +602,19 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       dt * pace * calm * motionMul * (1 - tender * 0.5) * (0.04 + m.mid * 0.03 + swell * 0.02);
     if (sparks) sparks.rotation.y = points.rotation.y;
 
+    // LeanIn: drift the ash column nearer with mild presence scale (expectant
+    // approach). Distinct from gather's per-ember radial inhale.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      root.scale.setScalar(1 + lean * 0.06);
+    }
+
     if (analyser) analyser.getFrequencyData(freqBuf.current);
   });
 
   return (
-    <group>
+    <group ref={rootRef}>
       <points ref={ref}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[positions, 3]} count={baseCount} />
