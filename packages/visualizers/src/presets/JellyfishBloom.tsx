@@ -789,14 +789,16 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
 
     // Slow bloom yaw — living, never a storm spin. lockPace steadies the
     // turn when bands lock so the sync reads without freezing.
+    // Tension coils the yaw; drop briefly rushes then settles.
     bells.rotation.y +=
       dt *
       pace *
       calm *
       motionMul *
       lockPace *
-      (0.025 + m.mid * 0.02 + swell * 0.012) *
-      (1 - tender * 0.4);
+      (0.025 + m.mid * 0.02 + swell * 0.012 + dropPulse * 0.04) *
+      (1 - tender * 0.4) *
+      (1 - tension * 0.55);
     tents.rotation.y = bells.rotation.y;
     if (planks) planks.rotation.y = bells.rotation.y;
 
