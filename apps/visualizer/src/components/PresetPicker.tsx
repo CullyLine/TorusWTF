@@ -36,6 +36,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   thunderhead: '#7B8DB8',
   glowworm_grotto: '#3DDC97',
   dune_sea: '#C4A882',
+  moth_ballet: '#E8A060',
   rainforest_reverie: '#4ADE80',
   alien_planet: '#C084FC',
   tidal_sanctuary: '#22D3EE',
