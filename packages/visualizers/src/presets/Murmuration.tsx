@@ -13,6 +13,10 @@
  *  - echo → one-shot wing-glint ripple traveling bird-to-bird through the body
  *  - convergence → headings align + ribbon collapses into one sharp sheet;
  *    soft release as lock fades (alive cohesion with the band)
+ *  - tension → denser, darker mass + sharper banked turns as the build climbs;
+ *    springs loose / scatters open on dropEvent / release (the falcon)
+ *  - barPhase → continuous bar-locked contraction ripple through the flock
+ *    (no stepping) so the body breathes on the music's own clock
  *
  * Birds ride shared curl-noise currents with trailing velocity inertia and
  * banked turns — the flock is never a straight line, always a ribbon folding
@@ -44,6 +48,8 @@ const GLINT_LOW = 0;
 
 const GOLDEN = /* @__PURE__ */ new THREE.Color(1.0, 0.72, 0.38);
 const DUSK = /* @__PURE__ */ new THREE.Color(0.08, 0.05, 0.12);
+/** Value-only darken under tension — denser dusk mass, no hue shift. */
+const TENSION_DARK = /* @__PURE__ */ new THREE.Color(0.04, 0.03, 0.07);
 /** Cool catch-light for phrase-echo — cooler than golden-hour / hat sparks. */
 const ECHO_GLINT = /* @__PURE__ */ new THREE.Color(0.78, 0.92, 1.0);
 
@@ -93,6 +99,8 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   // Lock amp: full sheet snap on high; slightly softer on mid/low.
   const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const barAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
   const flowTimeRef = useRef(0);
@@ -121,6 +129,13 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
   const prevEcho = useRef(0);
   // Convergence lock — headings align into one sharp ribbon sheet.
   const lockSmooth = useRef(0);
+  // Tension coil — denser darker mass; springs loose on the drop.
+  const tensionSmooth = useRef(0);
+  // Continuous unwrapped bar phase for flock contraction ripple (no stepping).
+  const barTurnsRef = useRef(0);
+  const prevBarPhaseRef = useRef(0);
+  const hadBpmRef = useRef(false);
+  const barRippleSmooth = useRef(0);
 
   // Per-bird state: position, velocity, heading, bank (trailing inertia).
   const pos = useRef(new Float32Array(birdCount * 3));
@@ -336,6 +351,51 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     // Steadier continuous drive when locked — not frozen (holdBreath owns that).
     const lockPace = 1 - lock * 0.38;
 
+    // Tension: climb with the build into a denser, darker, sharper-turning mass;
+    // spring loose on drop/release so the flock scatters open (the falcon).
+    // Soft under stillness; gather/leanIn/lock stay distinct (those aren't builds).
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp * (1 - stillness * 0.3);
+    if (m.dropEvent > 0.4 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    // Drop punches the spring open so the coil releases with the hit.
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.05, 0.05);
+    }
+    const tension = tensionSmooth.current;
+
+    // Continuous bar unwrap for flock contraction ripple (no 0→1 step).
+    const bpmKnown = Boolean(m.bpm && m.bpm > 30);
+    const barPhase = bpmKnown ? Math.min(1, Math.max(0, m.barPhase)) : 0;
+    if (bpmKnown) {
+      if (prevBarPhaseRef.current - barPhase > 0.5) {
+        barTurnsRef.current += 1;
+      }
+      prevBarPhaseRef.current = barPhase;
+      if (!hadBpmRef.current) {
+        // Enter lock without a snap — seed turns from current phase only.
+        barTurnsRef.current = 0;
+        hadBpmRef.current = true;
+      }
+    } else if (hadBpmRef.current) {
+      hadBpmRef.current = false;
+    }
+    const continuousBar = bpmKnown ? barTurnsRef.current + barPhase : 0;
+    // Soft amp follow so enter/exit BPM doesn't pop the ripple.
+    barRippleSmooth.current = smoothToward(
+      barRippleSmooth.current,
+      bpmKnown ? barAmp * (1 - stillness * 0.4) : 0,
+      dt,
+      0.16,
+      0.22,
+    );
+    const barRippleAmp = barRippleSmooth.current;
+
     const gather = gatherSmooth.current;
     const kick = kickSmooth.current;
     const snare = snareSmooth.current;
@@ -355,23 +415,33 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
 
     // Curl clock — freezes with the flock under holdBreath; lockPace steadies
     // (does not freeze) when bands lock so the sheet holds without hush.
+    // Tension slightly quickens the fold (hunted urgency) without stealing lock.
     flowTimeRef.current +=
       dt *
       spd *
-      (0.45 + Math.min(m.energy, 1.5) * 0.35) *
+      (0.45 + Math.min(m.energy, 1.5) * 0.35 + tension * 0.12) *
       motionMul *
       motionScale *
       lockPace;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
-    fp.turbulence *= (1 - tender * 0.65) * (1 - lock * 0.7);
-    fp.swirl *= (1 - tender * 0.4) * (0.85 + gather * 0.35) * (1 - lock * 0.25);
+    fp.turbulence *= (1 - tender * 0.65) * (1 - lock * 0.7) * (1 - tension * 0.35);
+    fp.swirl *=
+      (1 - tender * 0.4) *
+      (0.85 + gather * 0.35 + tension * 0.45) *
+      (1 - lock * 0.25);
     // Gather banks tighter: more vortex cohesion, less band spread scatter.
     // LeanIn coils the ribbon a touch more (expectant) without stealing gather.
+    // Tension compresses into a denser hunted mass (sustained, not inhale).
     // Convergence power-locks bandSpread so choruses read as one sheet
     // (stronger than the linear map in flowParamsFromMetrics).
-    fp.vortex = (fp.vortex + gather * 0.85 + lean * 0.45 + lock * 0.55) * (0.7 + calm * 0.3);
-    fp.bandSpread = Math.pow(1 - lock, 2.25) * fp.bandSpread * (1 - gather * 0.85 - lean * 0.35);
+    fp.vortex =
+      (fp.vortex + gather * 0.85 + lean * 0.45 + lock * 0.55 + tension * 1.05) *
+      (0.7 + calm * 0.3);
+    fp.bandSpread =
+      Math.pow(1 - lock, 2.25) *
+      fp.bandSpread *
+      (1 - gather * 0.85 - lean * 0.35 - tension * 0.72);
 
     const flowAmount =
       dt *
@@ -381,13 +451,22 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       motionMul *
       motionScale *
       lockPace;
-    const inertia = 1 - Math.exp(-dt / Math.max(0.04, 0.11 + tender * 0.08 - lock * 0.045)); // trailing turn lag; snappier under lock
-    const bankInertia = 1 - Math.exp(-dt / 0.09);
+    // Trailing turn lag; snappier under lock + tension (sharper banked turns).
+    const inertia =
+      1 -
+      Math.exp(
+        -dt / Math.max(0.04, 0.11 + tender * 0.08 - lock * 0.045 - tension * 0.055),
+      );
+    const bankInertia = 1 - Math.exp(-dt / Math.max(0.05, 0.09 - tension * 0.035));
     const gatherPull = 1 - gather * dt * 1.35;
     // LeanIn: gentle ribbon coil toward center — softer and slower than gather.
     const leanPull = 1 - lean * dt * 0.55;
     // Convergence: soft planar coil so the sheet draws tight without gather's inhale.
     const lockPull = 1 - lockSnap * dt * 0.4;
+    // Tension: sustained denser mass — stronger than lean, distinct from gather inhale.
+    const tensionPull = 1 - tension * dt * 1.15;
+    // Drop springs the flock open as tension releases (scatter after the falcon).
+    const dropOpen = 1 + Math.min(1.2, m.dropEvent) * 0.08 * (1 - tension * 0.35);
     const snareShear = snare * dt * 4.6;
     const kickWave = kick;
     const fv = flowScratch.current;
@@ -408,6 +487,13 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       const warm = GOLDEN;
       bassC.lerp(warm, afterglow * 0.18);
       midC.lerp(warm, afterglow * 0.14);
+    }
+    // Value-only darken under tension — denser dusk mass, no hue (not tenderness).
+    if (tension > 0.001) {
+      const dark = TENSION_DARK;
+      bassC.lerp(dark, tension * 0.48);
+      midC.lerp(dark, tension * 0.42);
+      highC.lerp(dark, tension * 0.35);
     }
 
     const hushDim = 1 - stillness * 0.32;
@@ -475,6 +561,13 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         dy += (cy - y) * lean * 0.55;
         dz += (cz - z) * lean * 0.75;
       }
+      // Tension: denser hunted mass — sustained centroid pull, stronger than lean,
+      // not gather's pre-beat inhale and not lock's heading-align sheet.
+      if (tension > 0.01) {
+        dx += (cx - x) * tension * 2.35;
+        dy += (cy - y) * tension * 1.85;
+        dz += (cz - z) * tension * 2.35;
+      }
       // Convergence: align headings toward flock mean — the sheet locks in.
       // Distinct from gather/leanIn (those pull position; this steers heading).
       if (lock > 0.01) {
@@ -490,7 +583,8 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       }
       // Soft keep-alive so the ribbon never stalls into a straight coast.
       // Under lock, breathe less — the sheet holds stiller without freezing.
-      const breath = (0.15 + phases[i]! * 0.1) * (1 - lock * 0.72);
+      // Under tension, keep a little life so the denser mass still turns.
+      const breath = (0.15 + phases[i]! * 0.1) * (1 - lock * 0.72) * (1 - tension * 0.35);
       dx += Math.sin(flowTimeRef.current * 0.7 + phases[i]! * 12.0) * breath * 0.08;
       dy += Math.cos(flowTimeRef.current * 0.55 + phases[i]! * 9.0) * breath * 0.05;
 
@@ -520,12 +614,28 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         vz += (rz / dist) * impulse;
       }
 
+      // Bar-locked contraction ripple — continuous breathe on the music's clock.
+      // Softer and ongoing vs kick's one-shot punch; travels by distance from centroid.
+      if (barRippleAmp > 0.01) {
+        const rx = x - cx;
+        const ry = y - cy;
+        const rz = z - cz;
+        const dist = Math.sqrt(rx * rx + ry * ry + rz * rz) + 1e-4;
+        // One full contract→expand ripple per bar, unwrapped (no 0→1 step).
+        const phase = dist * 0.72 - continuousBar * Math.PI * 2;
+        const wave = Math.sin(phase) * barRippleAmp;
+        const impulse = -wave * 1.05 * dt * motionMul;
+        vx += (rx / dist) * impulse;
+        vy += (ry / dist) * impulse * 0.65;
+        vz += (rz / dist) * impulse;
+      }
+
       // Snare: lateral heading shear (world X) — distinct from kick radial.
       vx += snareShear * (band === 1 ? 1.15 : band === 0 ? 0.85 : 1.0) * (i % 2 === 0 ? 1 : -1);
 
       // Soft speed clamp so inertia doesn't runaway after kit punches.
       const sp2 = vx * vx + vy * vy + vz * vz;
-      const maxSp = 3.2 * calm + kick * 0.6;
+      const maxSp = 3.2 * calm + kick * 0.6 + tension * 0.35;
       if (sp2 > maxSp * maxSp) {
         const inv = maxSp / Math.sqrt(sp2);
         vx *= inv;
@@ -533,16 +643,18 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
         vz *= inv;
       }
 
-      // Integrate + gather spatial bank + leanIn ribbon coil + lock sheet draw.
-      x = (x + vx * flowAmount * 1.15) * gatherPull * leanPull * lockPull;
-      y = (y + vy * flowAmount * 1.15) * gatherPull * leanPull * lockPull;
-      z = (z + vz * flowAmount * 1.15) * gatherPull * leanPull * lockPull;
+      // Integrate + gather spatial bank + leanIn ribbon coil + lock sheet draw
+      // + tension denser mass; dropOpen scatters as the falcon springs loose.
+      x = (x + vx * flowAmount * 1.15) * gatherPull * leanPull * lockPull * tensionPull * dropOpen;
+      y = (y + vy * flowAmount * 1.15) * gatherPull * leanPull * lockPull * tensionPull * dropOpen;
+      z = (z + vz * flowAmount * 1.15) * gatherPull * leanPull * lockPull * tensionPull * dropOpen;
 
       // Soft bounds — flock folds back as a ribbon, never hard walls.
       // LeanIn gently shrinks the play volume (expectant coil).
+      // Tension shrinks further into a denser hunted mass.
       // Lock flattens the Y bound so the sheet reads as one plane.
-      const bound = 3.6 * (1 - lean * 0.12 - lock * 0.08);
-      const yBound = 2.6 * (1 - lockSnap * 0.35);
+      const bound = 3.6 * (1 - lean * 0.12 - lock * 0.08 - tension * 0.22);
+      const yBound = 2.6 * (1 - lockSnap * 0.35 - tension * 0.18);
       if (x > bound || x < -bound) vx *= -0.35;
       if (y > yBound || y < -yBound) vy *= -0.35;
       if (z > bound || z < -bound) vz *= -0.35;
@@ -563,12 +675,15 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
       const turn = wrapPi(yaw - hArr[i]!) / Math.max(dt, 1e-4);
       hArr[i] = yaw;
       // Bank into the turn; gather + leanIn tighten max bank (coiled ribbon).
-      // Convergence steadies bank toward a clean sheet (distinct from hush).
+      // Tension sharpens bank (hunted turns); convergence steadies toward a sheet.
       const bankTarget = Math.max(
-        -1.15,
+        -1.35,
         Math.min(
-          1.15,
-          -turn * 0.22 * (1 + gather * 0.35 + lean * 0.28) * (1 - lock * 0.55),
+          1.35,
+          -turn *
+            0.22 *
+            (1 + gather * 0.35 + lean * 0.28 + tension * 0.95) *
+            (1 - lock * 0.55),
         ),
       );
       bArr[i] = bArr[i]! + (bankTarget - bArr[i]!) * bankInertia;
@@ -623,9 +738,10 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     // Lock slightly sharpens opacity so the sheet reads as one clean ribbon.
+    // Tension densifies opacity into a darker mass (value already darkened).
     birdMat.opacity = Math.min(
       1,
-      (0.82 + m.swell * 0.12 + afterglow * 0.08 + lock * 0.1) * hushDim,
+      (0.82 + m.swell * 0.12 + afterglow * 0.08 + lock * 0.1 + tension * 0.08) * hushDim,
     );
 
     // Wingtip glints — hat ticks spark selected tips (high/mid); echo crest
@@ -691,8 +807,11 @@ export function MurmurationScene({ analyser, palette, tier, speed = 1 }: Visuali
 
     if (hazeMatRef.current) {
       scratchHaze.current.copy(DUSK).lerp(GOLDEN, tender * 0.35 + afterglow * 0.12);
+      if (tension > 0.001) {
+        scratchHaze.current.lerp(TENSION_DARK, tension * 0.55);
+      }
       hazeMatRef.current.color.copy(scratchHaze.current);
-      hazeMatRef.current.opacity = (0.22 + tender * 0.12) * hushDim;
+      hazeMatRef.current.opacity = (0.22 + tender * 0.12 + tension * 0.1) * hushDim;
     }
   });
 
