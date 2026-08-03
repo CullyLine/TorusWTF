@@ -6,6 +6,8 @@
  *  - snare → lateral shear across the oil film
  *  - hat → sparse micro-glints on the surface
  *  - gather → swirl pulls toward center (pre-beat inhale)
+ *  - leanIn → drift nearer + tighten thin-film bands (pre-drop approach)
+ *  - dropEvent → one full-puddle shock ripple that bends the whole rainbow, then stills
  *  - tenderness → film milkens toward pearl
  *  - swell / afterglow → soft residual spectral wash
  *  - echo → one-shot silver interference ripple train across the slick
@@ -63,6 +65,9 @@ uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uEcho;
 uniform float uEchoTravel;
+uniform float uLean;
+uniform float uDrop;
+uniform float uDropTravel;
 uniform vec4 uRipples[RIPPLE_COUNT];
 uniform float uRippleAge[RIPPLE_COUNT];
 uniform vec3 uColorBass;
@@ -142,22 +147,47 @@ void main() {
   float tender = clamp(uTenderness, 0.0, 1.0);
   float kick = clamp(uKick, 0.0, 1.2);
   float still = clamp(uStillness, 0.0, 1.0);
+  float lean = clamp(uLean, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
   // Whisper of motion remains so thaw never pops from a dead freeze.
   float motion = 1.0 - still * 0.92;
+  // LeanIn hushes swirl slightly — expectant, not holdBreath freeze.
+  float leanMotion = 1.0 - lean * 0.45;
 
   // Gather inhale: film swirls tighten toward the still center.
   float r0 = length(uv) + 1e-4;
   uv *= 1.0 - gather * (0.38 + 0.42 * smoothstep(0.08, 1.2, r0));
+  // LeanIn: isotropic approach — surface drifts nearer (not gather's center pull).
+  uv *= 1.0 - lean * 0.12;
   float ang0 = atan(uv.y, uv.x);
   ang0 += sin(ang0 * 2.0 + uTime * 0.35) * gather * 0.18 * motion;
   uv = vec2(cos(ang0), sin(ang0)) * length(uv);
   // Snare: lateral shear crack across the slick.
   uv.x += snare * 0.06 * sign(uv.x + 1e-4);
+  // Drop: brief outward billow so the shock fills the puddle.
+  uv *= 1.0 + drop * 0.07;
 
   float crest = 0.0;
   uv += rippleBend(uv, crest);
   // Held rings hang as frozen refraction; crest flash stays available for kit.
   crest *= mix(1.0, 0.55, still);
+
+  // DropEvent: one full-puddle shock ripple — centered expanding ring that bends
+  // the entire rainbow sheen at once (bigger than kick rings), then stills.
+  float dropShock = 0.0;
+  float dropBendAmt = 0.0;
+  if (drop > 0.01) {
+    float travel = clamp(uDropTravel, 0.0, 1.0);
+    float radius = travel * 1.22 + 0.02;
+    float width = 0.055 + travel * 0.045 + drop * 0.02;
+    float rDrop = length(uv) + 1e-4;
+    float ring = exp(-pow((rDrop - radius) / max(width, 1e-4), 2.0));
+    // Soft residual sheet so the whole puddle stills together as the envelope falls.
+    float sheet = exp(-rDrop * rDrop * (1.1 - drop * 0.35)) * (1.0 - travel * 0.55);
+    dropShock = clamp(ring * drop * (1.15 - travel * 0.35) + sheet * drop * 0.55, 0.0, 2.2);
+    dropBendAmt = ring * drop * (0.09 + (1.0 - travel) * 0.04);
+    uv += (uv / rDrop) * dropBendAmt;
+  }
 
   // Phrase-echo: one-shot silver interference train — expanding rings that bend
   // the thin-film path (memory at a cooler temperature than kick rainbow crests).
@@ -189,19 +219,25 @@ void main() {
   float r = length(uv);
 
   // Slow oil-film swirl — living thickness field; holdBreath eases it still.
-  float swirlT = uTime * (0.12 + uSwell * 0.18 + uEnergy * 0.06);
-  vec2 flow = uv * (1.25 + uSwell * 0.2);
-  flow += curlOffset(flow * 1.15 + gather * 0.4, swirlT) * (0.18 + uSwell * 0.22) * motion;
+  // LeanIn hushes the swirl (poised); drop adds a brief shock rush.
+  float swirlT = uTime * (0.12 + uSwell * 0.18 + uEnergy * 0.06 + drop * 0.12) * leanMotion;
+  // LeanIn densifies the flow sample so interference bands tighten (expectant).
+  vec2 flow = uv * (1.25 + uSwell * 0.2 + lean * 0.55);
+  flow += curlOffset(flow * 1.15 + gather * 0.4, swirlT) * (0.18 + uSwell * 0.22) * motion * leanMotion;
   flow.x += snare * 0.04;
-  // Soft angular drift so idle still breathes; hush under stillness.
-  float ang = atan(flow.y, flow.x) + swirlT * 0.15 * motion + gather * 0.35;
+  // Soft angular drift so idle still breathes; hush under stillness + lean.
+  float ang = atan(flow.y, flow.x) + swirlT * 0.15 * motion * leanMotion + gather * 0.35;
   float fr = length(flow);
   flow = vec2(cos(ang), sin(ang)) * fr;
 
-  float filmLive = fbm(flow * 1.55 + vec2(swirlT * 0.2 * motion, 0.0));
-  filmLive = mix(filmLive, fbm(flow * 2.4 - swirlT * 0.15 * motion), 0.45);
+  // LeanIn raises spatial frequency so rainbow fringes pack tighter.
+  float filmScale = 1.55 + lean * 1.05;
+  float filmLive = fbm(flow * filmScale + vec2(swirlT * 0.2 * motion * leanMotion, 0.0));
+  filmLive = mix(filmLive, fbm(flow * (2.4 + lean * 1.2) - swirlT * 0.15 * motion * leanMotion), 0.45);
   // Kick crest locally thickens the film (refraction bend reads as rainbow warp).
   filmLive += crest * (0.35 + kick * 0.2);
+  // Drop shock warps optical path across the whole puddle — bigger than kick crests.
+  filmLive += dropShock * 0.55;
   // Echo crests also warp optical path — silver rings bend the rainbow as they pass.
   filmLive += echoCrest * 0.32;
   filmLive += uBass * 0.06 + uMid * 0.04;
@@ -210,7 +246,8 @@ void main() {
   float film = mix(filmLive, filmGlass, still * 0.88);
 
   // Optical path from film + grazing falloff toward rim.
-  float path = 0.35 + film * 1.85 + r * 0.22 + uAfterglow * 0.12;
+  // LeanIn packs path fringes; drop stretches them once across the shock.
+  float path = 0.35 + film * (1.85 + lean * 0.55) + r * 0.22 + uAfterglow * 0.12 + dropShock * 0.18;
   vec3 iridescence = thinFilm(path);
   // Mix living palette into the spectral sheen so it stays branded.
   iridescence = mix(iridescence, mix(uColorMid, uColorHigh, film), 0.28);
@@ -218,6 +255,8 @@ void main() {
   // holdBreath: rainbow sheen barely breathes on dark glass (not pearl milk).
   vec3 glassSheen = mix(iridescence, mix(uColorHigh, vec3(0.55, 0.62, 0.72), 0.55), 0.62) * 0.38;
   iridescence = mix(iridescence, glassSheen, still * 0.78);
+  // LeanIn: faint expectant brighten of the sheen (not hat glints / pearl milk).
+  iridescence *= 1.0 + lean * 0.12;
 
   // Dark wet asphalt under the oil → dark glass mirror on holdBreath.
   vec3 puddle = mix(uColorBass, vec3(0.03, 0.035, 0.05), 0.78) * 0.28;
@@ -238,7 +277,7 @@ void main() {
   // Film coverage: stronger toward center, lifted by swell/energy/crest.
   // holdBreath thins coverage so the dark glass reads through.
   float cover = smoothstep(1.35, 0.15, r);
-  cover *= 0.42 + uSwell * 0.35 + uEnergy * 0.2 + crest * 0.35 + film * 0.25;
+  cover *= 0.42 + uSwell * 0.35 + uEnergy * 0.2 + crest * 0.35 + film * 0.25 + dropShock * 0.28;
   cover = mix(cover, cover * 0.22 + 0.06, still * 0.85);
   cover = clamp(cover, 0.0, 1.0);
 
@@ -246,6 +285,11 @@ void main() {
   col = mix(col, iridescence * (0.55 + film * 0.55), cover * (0.72 + uAfterglow * 0.15));
   // Kick crest flash — rainbow ridge brightens without strobing.
   col += iridescence * crest * (0.28 + kick * 0.22);
+  // Drop shock flash — whole-puddle rainbow bend, clearly bigger than kick crests.
+  if (dropShock > 0.01) {
+    col += iridescence * dropShock * (0.38 + drop * 0.28);
+    col = mix(col, iridescence * 1.15, clamp(dropShock * 0.18, 0.0, 0.45));
+  }
   // Phrase-echo silver catch-light — cooler than kick rainbow / pearl tenderness.
   if (echoCrest > 0.01) {
     vec3 silver = mix(vec3(0.72, 0.84, 1.0), uColorHigh, 0.22);
@@ -347,6 +391,13 @@ export function OpalSlickScene({
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  // LeanIn anticipation — approach + tighten thin-film bands before the drop.
+  const leanSmooth = useRef(0);
+  // Drop full-puddle shock — fast attack, lingering settle; travel expands the ring.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const dropArmed = useRef(true);
+  const prevDrop = useRef(0);
 
   const rippleCount =
     tier === 'high' ? RIPPLES_HIGH : tier === 'mid' ? RIPPLES_MID : RIPPLES_LOW;
@@ -354,6 +405,8 @@ export function OpalSlickScene({
     tier === 'high' ? OCTAVES_HIGH : tier === 'mid' ? OCTAVES_MID : OCTAVES_LOW;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const ripplesRef = useRef<Ripple[]>(makeRipples(rippleCount));
 
   const reducedMotion = useMemo(() => {
@@ -388,6 +441,9 @@ export function OpalSlickScene({
       uStillness: { value: 0 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
+      uLean: { value: 0 },
+      uDrop: { value: 0 },
+      uDropTravel: { value: 1 },
       uRipples: { value: rippleVecs },
       uRippleAge: { value: rippleAges },
       uColorBass: { value: new THREE.Color(palette.bass) },
@@ -423,13 +479,48 @@ export function OpalSlickScene({
     // Nearly freeze swirl clock + ripple age; a whisper remains so thaw never pops.
     const motionMul = 1 - stillness * 0.9;
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Drop full-puddle shock — fast attack, lingering settle across the slick.
+    // Bigger than per-kick rings; continuous envelope so it settles, not snaps.
+    const dropTarget =
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp;
+    dropSmooth.current = smoothToward(dropSmooth.current, dropTarget, dt, 0.03, 0.55);
+    const drop = dropSmooth.current;
+
+    // One-shot travel for the expanding shock ring — fire once per drop rise.
+    if (drop < 0.1) dropArmed.current = true;
+    if (dropArmed.current && drop > 0.35 && prevDrop.current <= 0.35) {
+      dropTravel.current = 0;
+      dropArmed.current = false;
+    }
+    prevDrop.current = drop;
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.95 + pace * 0.12;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpm / 200),
+      );
+    }
+
     timeRef.current +=
       dt *
       pace *
       sectionPace *
       calm *
       motionMul *
-      (0.45 + m.swell * 0.55 + m.impact * 0.15);
+      (0.45 + m.swell * 0.55 + m.impact * 0.15 + drop * 0.22) *
+      (1 - lean * 0.22);
 
     if (ripplesRef.current.length !== rippleCount) {
       ripplesRef.current = makeRipples(rippleCount);
@@ -562,6 +653,9 @@ export function OpalSlickScene({
     mat.uniforms.uBgAlpha!.value = backdrop ? 0 : 1;
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
+    mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uDrop!.value = drop;
+    mat.uniforms.uDropTravel!.value = dropTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
