@@ -13,6 +13,8 @@
  *  - holdBreath / deep silence → nearly still braid travel + ease contrast
  *  - tenderness → soften ribbon sharpness / sway so gentle vocals hush the silk
  *  - leanIn → tighten braid + drift nearer (pre-drop anticipation; not gather fold)
+ *  - tension → sustained taut strain: braid darkens, sharpens, pulls tight (not leanIn)
+ *  - dropEvent → one unfurl burst — ribbons billow loose/wide, then re-braid
  */
 
 import { useMemo, useRef } from 'react';
@@ -49,6 +51,9 @@ uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
 uniform float uLean;
+uniform float uTension;
+uniform float uDrop;
+uniform float uDropTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -62,7 +67,20 @@ float hash11(float n) {
 // soft (0-1 from tenderness) hushes weave/sway and widens the strand so
 // gentle vocals read as softer silk without freezing braid travel.
 // lean (0-1) winds ribbons tighter for pre-drop anticipation — not gather fold.
-float ribbonDist(vec2 uv, float id, float t, float fold, float flare, float soft, float lean) {
+// tension (0-1) draws ribbons taut under sustained strain — darker, sharper,
+// thinner — distinct from leanIn's gentle approach coil.
+// dropPulse (0-1 half-sine) billows the braid loose/wide once, then settles.
+float ribbonDist(
+  vec2 uv,
+  float id,
+  float t,
+  float fold,
+  float flare,
+  float soft,
+  float lean,
+  float tension,
+  float dropPulse
+) {
   float phase = id * 1.6180339887;
   float seed = hash11(id + 0.37);
   float y0 = (seed - 0.5) * 1.55;
@@ -70,23 +88,39 @@ float ribbonDist(vec2 uv, float id, float t, float fold, float flare, float soft
   // Gather pulls strands toward the horizontal mid-line; impact unfurls.
   // Tenderness eases braid amplitude so ribbons feel held, not jagged.
   // LeanIn coils braidAmp tighter — winding expectantly, not mid-line fold.
+  // Tension collapses weave further (taut strain); dropPulse billows it open
+  // wider than impact flare so the unfurl reads as a one-shot payoff.
   float braidAmp = weave * (1.0 - fold * 0.72) * (1.0 + flare * 0.85)
-    * mix(1.0, 0.42, soft) * (1.0 - lean * 0.48);
+    * mix(1.0, 0.42, soft) * (1.0 - lean * 0.48)
+    * (1.0 - tension * 0.72)
+    * (1.0 + dropPulse * 1.55);
   // Kick thrusts flow along the braid (local surge, not a fullscreen wash).
   float kick = clamp(uKick, 0.0, 1.2);
   // LeanIn winds flow a touch faster so ribbons feel coiled for the drop.
-  float flow = t * (0.35 + seed * 0.25 + uBass * 0.15 + kick * 0.55) * (1.0 + lean * 0.28)
+  // Tension sharpens travel (taut silk snaps along the braid); drop slows
+  // flow so the billow reads as release, not another surge.
+  float flow = t * (0.35 + seed * 0.25 + uBass * 0.15 + kick * 0.55)
+    * (1.0 + lean * 0.28)
+    * (1.0 + tension * 0.42)
+    * (1.0 - dropPulse * 0.35)
     + phase + kick * (0.55 + seed * 0.35);
   // LeanIn also draws ribbon centers toward mid-line (tighter sheet),
   // softer than gather's 0.85 so the two gestures stay readable.
+  // Tension pulls path centers flatter still (sustained strain sheet).
+  // DropPulse flings centers outward so ribbons billow loose and wide.
   float pathY = y0 * (1.0 - fold * 0.85) * (1.0 - lean * 0.38)
+      * (1.0 - tension * 0.55)
+      * (1.0 + dropPulse * 0.95)
     + sin(uv.x * (2.1 + seed * 1.4) + flow) * braidAmp
     + sin(uv.x * (4.6 + seed * 2.0) - flow * 1.35 + phase) * braidAmp * 0.42;
   // Soft lateral sway so the braid feels alive, not a flat curtain.
   // Tenderness hushes the jitter so intimate passages don't chatter.
   // LeanIn hushes sway slightly so the coil reads as intent, not chatter.
+  // Tension nearly kills sway (taut wire); dropPulse restores a soft billow.
   float sway = (0.04 + uHigh * 0.06) * (1.0 - fold * 0.5) * mix(1.0, 0.28, soft)
-    * (1.0 - lean * 0.35);
+    * (1.0 - lean * 0.35)
+    * (1.0 - tension * 0.85)
+    * (1.0 + dropPulse * 1.1);
   pathY += cos(uv.x * 1.1 + t * 0.55 + phase) * sway;
   // Snare lateral shear: phase-split L/R crack across the braid.
   // Kit accents stay readable; tenderness only softens continuous jitter.
@@ -95,10 +129,15 @@ float ribbonDist(vec2 uv, float id, float t, float fold, float flare, float soft
   if (abs(lateral) < 0.01) lateral = 1.0;
   pathY += snare * lateral * (0.055 + seed * 0.03) * (1.0 - fold * 0.35);
 
-  float halfW = (0.028 + uEnergy * 0.012 + flare * 0.035 + kick * 0.022)
+  // Tension thins strands (taut silk); dropPulse widens them into a billow
+  // bigger than kick punch so the unfurl owns the frame once.
+  float halfW = (0.028 + uEnergy * 0.012 + flare * 0.035 + kick * 0.022
+      + dropPulse * 0.055)
     * (1.0 + fold * 0.55) // thicker when gathered (silk bunching)
     * (1.0 - flare * 0.15)
-    * mix(1.0, 1.55, soft); // tender passages widen strands (softer edge)
+    * mix(1.0, 1.55, soft) // tender passages widen strands (softer edge)
+    * (1.0 - tension * 0.48)
+    * (1.0 + dropPulse * 0.65);
   float d = abs(uv.y - pathY) / max(halfW, 1e-4);
   return d;
 }
@@ -125,12 +164,21 @@ void main() {
   float soft = clamp(uTenderness, 0.0, 1.0);
   float stillness = clamp(uStillness, 0.0, 1.0);
   float lean = clamp(uLean, 0.0, 1.0);
+  float tension = clamp(uTension, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
+  float dropTravel = clamp(uDropTravel, 0.0, 1.0);
+  // One-shot half-sine billow — peaks mid-travel, settles as ribbons re-braid.
+  float dropPulse = drop * sin(min(dropTravel, 1.0) * 3.14159265)
+    * step(dropTravel, 0.999);
 
   // Gather folds the frame inward; impact stretches it back open.
   // Kick adds a brief along-braid zoom punch (local, not a sky wash).
-  float zoom = 1.0 - fold * 0.28 + flare * 0.18 + kick * 0.06;
+  // DropPulse opens wider than impact so the unfurl owns the screen once.
+  float zoom = 1.0 - fold * 0.28 + flare * 0.18 + kick * 0.06
+    + dropPulse * 0.32;
   uv *= zoom;
   // LeanIn: isotropic approach zoom — braid drifts nearer (not gather fold).
+  // Tension does NOT approach — it strains in place (distinct from leanIn).
   uv *= 1.0 - lean * 0.12;
 
   // Mild radial squeeze on gather so ribbons braid into a silk knot.
@@ -145,6 +193,10 @@ void main() {
   float t = uTime * (0.55 + uSwell * 0.55 + uEnergy * 0.2 + kick * 0.35);
   vec3 body = silkBackdrop(uv);
   body *= 0.5 + uEnergy * 0.22 + uAfterglow * 0.4;
+  // Tension darkens the weave (value-only hush toward deep bass) — sustained
+  // strain, not leanIn's expectant brighten. DropPulse briefly lifts body.
+  body *= mix(1.0, 0.48, tension);
+  body = mix(body, body * 1.35, dropPulse * 0.55);
 
   float glow = 0.0;
   float trail = 0.0;
@@ -152,13 +204,18 @@ void main() {
   vec3 ribbonCol = vec3(0.0);
 
   // Tenderness softens core falloff (less bite); holdBreath eases contrast.
+  // Tension sharpens core (taut silk bite); dropPulse softens for the billow.
   float corePow = mix(1.85, 1.15, soft);
+  corePow = mix(corePow, 2.55, tension);
+  corePow = mix(corePow, 1.05, dropPulse * 0.85);
   float haloPow = mix(0.35, 0.22, soft);
+  haloPow = mix(haloPow, 0.18, tension);
   float contrast = mix(1.0, 0.55, stillness);
+  contrast = mix(contrast, 1.35, tension * 0.85);
 
   for (int i = 0; i < RIBBON_COUNT; i++) {
     float id = float(i);
-    float d = ribbonDist(uv, id, t, fold, flare, soft, lean);
+    float d = ribbonDist(uv, id, t, fold, flare, soft, lean, tension, dropPulse);
     // Core strand + soft halo.
     float core = exp(-d * d * corePow);
     float halo = exp(-d * d * haloPow) * mix(0.45, 0.55, soft);
@@ -184,6 +241,10 @@ void main() {
     // Kick punches bass-warm core; snare cracks toward mid/white flash.
     c = mix(c, mix(uColorBass, vec3(1.0, 0.85, 0.7), 0.35), kick * 0.4 * core);
     c = mix(c, mix(uColorMid, vec3(1.0), 0.55), snare * 0.45 * core);
+    // Tension value-only darkens toward deepest bass (no hue shift).
+    c = mix(c, uColorBass * 0.55, tension * 0.55 * (0.4 + core * 0.6));
+    // Drop unfurl flares white-hot bigger than impact, then settles.
+    c = mix(c, vec3(1.0), dropPulse * 0.55 * core);
 
     ribbonCol += c * strand;
     glow += strand;
@@ -203,7 +264,7 @@ void main() {
   ribbonCol += mix(uColorHigh, vec3(1.0), 0.35) * mote * hat * 1.25;
 
   vec3 col = body;
-  col += ribbonCol * (0.95 + flare * 0.85 + kick * 0.2);
+  col += ribbonCol * (0.95 + flare * 0.85 + kick * 0.2 + dropPulse * 1.15);
   col += mix(uColorBass, vec3(1.0, 0.72, 0.4), 0.5) * trail * 1.15;
   // Soft residual sheet warmth after peaks.
   col += mix(uColorMid, vec3(1.0, 0.7, 0.42), 0.4) * uAfterglow * (0.1 + glow * 0.2);
@@ -268,6 +329,11 @@ export function SilkWakeScene({
   const tenderSmooth = useRef(0);
   // LeanIn anticipation — braid tighten + nearer drift before the drop.
   const leanSmooth = useRef(0);
+  // Tension coil — sustained taut strain; spring-loose on drop/release.
+  const tensionSmooth = useRef(0);
+  // Drop envelope + one-shot travel for the unfurl billow.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -278,6 +344,8 @@ export function SilkWakeScene({
   const flashAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(ribbonCount), [ribbonCount]);
 
   const uniforms = useMemo(
@@ -301,6 +369,9 @@ export function SilkWakeScene({
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
       uLean: { value: 0 },
+      uTension: { value: 0 },
+      uDrop: { value: 0 },
+      uDropTravel: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -345,6 +416,44 @@ export function SilkWakeScene({
       0.22,
     );
 
+    // Tension early so braid clock can strain during the build.
+    // Sustained taut-pull — spring-loose on drop/release. Distinct from leanIn's
+    // gentle approach (no camera zoom here; darken + sharpen instead).
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp;
+    if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+    const tension = tensionSmooth.current * (1 - stillness * 0.3);
+
+    // Drop envelope early — one-shot travel fires when the drop crest hits.
+    dropSmooth.current = smoothToward(
+      dropSmooth.current,
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp,
+      dt,
+      0.03,
+      0.55,
+    );
+    const drop = dropSmooth.current;
+    if (drop > 0.45 && dropTravel.current >= 1) {
+      dropTravel.current = 0;
+    }
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.9 + pace * 0.15;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpm / 200),
+      );
+    }
+
     // LeanIn: fast approach, slower release; soft under holdBreath so hush still owns freeze.
     leanSmooth.current = smoothToward(
       leanSmooth.current,
@@ -355,12 +464,14 @@ export function SilkWakeScene({
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
+    // Tension slightly slows the braid clock (strain); drop does not freeze it.
     timeRef.current +=
       dt *
       pace *
       sectionPace *
       calm *
       motionMul *
+      (1 - tension * 0.28) *
       (0.55 + m.swell * 0.7 + m.impact * 0.25);
 
     // Gather / impact / afterglow / kit stay on full dt so replies still fire on thaw.
@@ -425,6 +536,9 @@ export function SilkWakeScene({
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uTension!.value = tension;
+    mat.uniforms.uDrop!.value = drop;
+    mat.uniforms.uDropTravel!.value = dropTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
