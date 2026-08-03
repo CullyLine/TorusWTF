@@ -583,8 +583,8 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
         snareGust * (i % 3 === 0 ? 1 : -1) * 0.5 * bandMul * (0.45 + seed) * dt * 4.2;
 
       const ang = aArr[i]!;
-      let x = Math.cos(ang) * rr + sxArr[i]!;
-      let z = Math.sin(ang) * rr * 0.92 + szArr[i]!;
+      const x = Math.cos(ang) * rr + sxArr[i]!;
+      const z = Math.sin(ang) * rr * 0.92 + szArr[i]!;
 
       // Breach lift on drop for the chosen koi.
       let liftTarget = 0;
@@ -769,14 +769,13 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       uAfterglow: { value: 0 },
       uMoonWiden: { value: 0 },
       uGlass: { value: 0 },
-      uColorBass: { value: new THREE.Color(palette.bass) },
-      uColorMid: { value: new THREE.Color(palette.mid) },
-      uColorHigh: { value: new THREE.Color(palette.high) },
+      uColorBass: { value: new THREE.Color('#1a2a4a') },
+      uColorMid: { value: new THREE.Color('#2a4a6a') },
+      uColorHigh: { value: new THREE.Color('#7ab0d8') },
       uMoon: { value: new THREE.Color(0.72, 0.82, 0.98) },
       uRipples: { value: rippleUniforms },
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- palette live-updated in useFrame
-    [rippleUniforms, waterFrag],
+    [rippleUniforms],
   );
 
   return (
