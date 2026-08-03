@@ -12,6 +12,8 @@
  *  - dropEvent → one full sandstorm veil sweeps the scene
  *  - leanIn → dunes drift nearer; wind stills expectantly; ripples tighten
  *  - echo → one-shot cool silver glint train along a single ridgeline crest
+ *  - convergence → scattered slip-face ripples settle into one bar-locked
+ *    wave train rolling across the dunes; soft scatter as the lock fades
  *  - tenderness → moonlight warms toward honey
  *  - holdBreath / deep silence → air goes dead-calm; drifting grains hang
  */
@@ -82,9 +84,10 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const dropAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
-  // LeanIn / echo amp — low tier still approaches and ghosts, just softer.
+  // LeanIn / echo / lock amp — low tier still approaches, ghosts, and locks softer.
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -111,6 +114,8 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const windSmooth = useRef(0.35);
   // LeanIn anticipation: eager climb, slower release into the drop.
   const leanSmooth = useRef(0);
+  // Convergence lock: scattered ripples → one bar-locked wave train.
+  const lockSmooth = useRef(0);
   // Phrase-echo one-shot: arm on quiet, fire one cool glint train per gap.
   const echoSmooth = useRef(0);
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
@@ -262,12 +267,17 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     wind: number,
     snareShear: number,
     lean = 0,
+    lock = 0,
+    sharedBarAngle = 0,
   ) => {
     let h = 0;
+    const lockSnap = lock * lock;
     // LeanIn tightens ripple spacing (higher spatial freq, lower amp) —
     // distinct from gather's inhale swell of the whole dune profile.
     const rippleFreq = 7.2 + lean * 5.5;
-    const rippleAmp = 0.045 * (1 - lean * 0.55);
+    // Locked train settles toward one shared spatial frequency (organization, not freeze).
+    const lockedFreq = 8.2 + lean * 2.2;
+    const rippleAmp = 0.045 * (1 - lean * 0.55) * (1 + lockSnap * 0.12);
     for (let c = 0; c < crestCount; c++) {
       const ridgeZ = crestCenterZ[c]!;
       const dist = z - ridgeZ;
@@ -276,15 +286,23 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const lee = dist > 0 ? 1.35 : 0.85;
       const profile = Math.exp((-dist * dist * lee) / (2 * sigma * sigma));
       const undulation = 1 + 0.14 * Math.sin(x * 1.35 + crestPhase[c]! + t * 0.08);
+      // Free: diagonal scatter across Z. Locked: parallel wave train along X,
+      // phase driven by the bar clock — soft blend, never snaps.
+      const freeRipple = Math.sin(
+        x * rippleFreq + ripplePhase.current + z * 2.4 + snareShear * 3.5,
+      );
+      const lockedRipple = Math.sin(
+        x * lockedFreq - sharedBarAngle * 2.0 + snareShear * 1.15,
+      );
       const ripple =
         rippleAmp *
-        Math.sin(x * rippleFreq + ripplePhase.current + z * 2.4 + snareShear * 3.5) *
+        (freeRipple * (1 - lockSnap) + lockedRipple * lockSnap) *
         profile *
         (0.55 + wind * 0.7);
       h += crestAmp[c]! * profile * undulation + ripple;
     }
-    // Soft secondary cross-ripples so the field never reads as static stripes.
-    h += 0.06 * Math.sin(x * 0.55 + z * 1.1 + t * 0.12 * wind);
+    // Soft secondary cross-ripples dissolve into the train under lock.
+    h += 0.06 * Math.sin(x * 0.55 + z * 1.1 + t * 0.12 * wind) * (1 - lockSnap);
     const swellMul = 1 + swell * 0.22 + gather * 0.38;
     return BASE_Y + h * swellMul;
   };
@@ -346,6 +364,20 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     );
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.94;
+
+    // Convergence envelope early so lockPace can steady the shared clock.
+    lockSmooth.current = smoothToward(
+      lockSmooth.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      0.1,
+      0.18,
+    );
+    const lock = lockSmooth.current * (1 - stillness * 0.3);
+    // Power curve: early lock stays loose; choruses snap into one wave train.
+    const lockSnap = lock * lock;
+    // Steadier continuous drive when locked — not frozen (holdBreath owns that).
+    const lockPace = 1 - lock * 0.38;
 
     tenderSmooth.current = smoothToward(
       tenderSmooth.current,
@@ -471,11 +503,23 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     const wind = windSmooth.current;
 
     // Continuous clock freezes with the air; kit envelopes stay on full dt.
-    timeRef.current += dt * pace * sectionPace * calm * motionMul * (1 - tender * 0.3);
+    // Lock steadies the shared pace so the wave train reads as one continuous drive.
+    timeRef.current +=
+      dt * pace * sectionPace * calm * motionMul * (1 - tender * 0.3) * lockPace;
     const t = timeRef.current;
-    // Ripple crawl slows with lean (expectant still) and gather inhale.
+    // Shared bar clock for the convergence wave — continuous, no bar-boundary snap.
+    const barDrive = m.bpm && m.bpm > 30 ? (m.barPhase ?? 0) : (t * 0.18) % 1;
+    const sharedBarAngle = barDrive * Math.PI * 2;
+    // Ripple crawl slows with lean (expectant still) and gather inhale; lock paces it.
     ripplePhase.current +=
-      dt * pace * calm * motionMul * (0.55 + wind * 2.4) * (1 - gather * 0.7) * (1 - lean * 0.65);
+      dt *
+      pace *
+      calm *
+      motionMul *
+      (0.55 + wind * 2.4) *
+      (1 - gather * 0.7) *
+      (1 - lean * 0.65) *
+      lockPace;
 
     // Snare edge flips gust direction so successive cracks alternate.
     if (m.snare > 0.22 && prevSnare.current <= 0.22) {
@@ -490,7 +534,18 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const x =
         Math.sin(t * 0.07 + crestPhase[c]! + c * 1.7) * X_SPAN * 0.28 +
         Math.sin(t * 0.031 + c) * 0.45;
-      const y = duneHeightAt(x, z, t, swell, gather, wind, snare * snareGustDir.current, lean);
+      const y = duneHeightAt(
+        x,
+        z,
+        t,
+        swell,
+        gather,
+        wind,
+        snare * snareGustDir.current,
+        lean,
+        lock,
+        sharedBarAngle,
+      );
       crestX.current[c] = x;
       crestY.current[c] = y;
       crestZ.current[c] = z;
@@ -541,7 +596,18 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const sx = crestX.current[ci]! + (hash01(t * 3.3) - 0.5) * 1.2;
       const sz = crestZ.current[ci]! + (hash01(t * 5.1) - 0.5) * 0.35;
       const sy =
-        duneHeightAt(sx, sz, t, swell, gather, wind, snare * snareGustDir.current, lean) + 0.02;
+        duneHeightAt(
+          sx,
+          sz,
+          t,
+          swell,
+          gather,
+          wind,
+          snare * snareGustDir.current,
+          lean,
+          lock,
+          sharedBarAngle,
+        ) + 0.02;
       emitGrain(
         sx,
         sy,
@@ -565,7 +631,18 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
         const sx = -X_SPAN * 0.42 + along * X_SPAN * 0.84 + (hash01(t * 13.7) - 0.5) * 0.18;
         const sz = crestZ.current[ci]! + (hash01(t * 17.1) - 0.5) * 0.12;
         const sy =
-          duneHeightAt(sx, sz, t, swell, gather, wind, snare * snareGustDir.current, lean) + 0.05;
+          duneHeightAt(
+            sx,
+            sz,
+            t,
+            swell,
+            gather,
+            wind,
+            snare * snareGustDir.current,
+            lean,
+            lock,
+            sharedBarAngle,
+          ) + 0.05;
         const moteN = Math.max(1, Math.floor(2 + kitAmp * 2));
         for (let n = 0; n < moteN; n++) {
           const seed = n * 2.17 + t * 29.1 + along * 11;
@@ -627,7 +704,7 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const shear = snare * snareGustDir.current * 0.22;
       const x = x0 + shear * Math.sin(z0 * 2.1 + t * 0.5);
       const z = z0;
-      const y = duneHeightAt(x, z, t, swell, gather, wind, shear * 4, lean);
+      const y = duneHeightAt(x, z, t, swell, gather, wind, shear * 4, lean, lock, sharedBarAngle);
       sArr[i3] = x;
       sArr[i3 + 1] = y;
       sArr[i3 + 2] = z;
@@ -670,9 +747,18 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
 
       // LeanIn: faint expectant brighten across the field (presence, not gather swell).
       const leanTip = lean * (0.06 + phase * 0.05);
+      // Convergence: faint lock brighten as ripples cohere — organization, not a punch.
+      const lockBright = lockSnap * 0.1;
 
       const lum =
-        hushDim * (0.72 + swell * 0.12 + gather * 0.1 + afterglow * 0.08 + leanTip + echoPulse * 0.15);
+        hushDim *
+        (0.72 +
+          swell * 0.12 +
+          gather * 0.1 +
+          afterglow * 0.08 +
+          leanTip +
+          echoPulse * 0.15 +
+          lockBright);
       sColArr[i3] = Math.min(1, mix.r * lum);
       sColArr[i3 + 1] = Math.min(1, mix.g * lum);
       sColArr[i3 + 2] = Math.min(1, mix.b * lum);
@@ -721,7 +807,18 @@ export function DuneSeaScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const gx = aArr[i3]!;
       const gy = aArr[i3 + 1]!;
       const gz = aArr[i3 + 2]!;
-      const ground = duneHeightAt(gx, gz, t, swell, gather, wind, snare * snareGustDir.current, lean);
+      const ground = duneHeightAt(
+        gx,
+        gz,
+        t,
+        swell,
+        gather,
+        wind,
+        snare * snareGustDir.current,
+        lean,
+        lock,
+        sharedBarAngle,
+      );
 
       // Settle into the slip face; hang mid-air never settles.
       if (airLife[i]! <= 0 || gy < ground - 0.02 || gy > 4.5 || Math.abs(gx) > X_SPAN * 0.72) {
