@@ -12,6 +12,7 @@
  *  - holdBreath / deep silence → suspend coils mid-turn + hang motes; thaw on return
  *  - tenderness → gentle swirl + warm mist toward rosy dusk — gentling, not a freeze
  *  - leanIn → tighten coil radius + drift nearer (pre-drop anticipation; not gather inhale)
+ *  - echo → one-shot cool silver-blue ghost coil climbing the spiral in phrase gaps
  */
 
 import { useMemo, useRef } from 'react';
@@ -53,6 +54,8 @@ uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
 uniform float uLean;
+uniform float uEcho;
+uniform float uEchoTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -229,6 +232,38 @@ void main() {
   float barFlash = pow(1.0 - uBarPhase, 9.0) * (0.05 + uImpact * 0.1);
   col += uColorHigh * barFlash;
 
+  // Phrase-echo: one-shot cool silver-blue ghost coil — a faint wisp retracing
+  // the gap's rhythm as it climbs the spiral (distinct from kick upward swirl,
+  // impact flare, hat motes, and tenderness dusk).
+  float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
+  if (echoPulse > 0.01) {
+    float travel = clamp(uEchoTravel, 0.0, 1.0);
+    // Crest climbs the column bottom → top and fades as it rises.
+    float crestY = mix(-1.08, 1.18, travel);
+    float yGate = exp(-pow((uv.y - crestY) * 4.6, 2.0));
+    float climbFade = 1.0 - travel * 0.52;
+    // Single memory arm (not the full live coil set) — cooler / wider ribbon.
+    float ghostSeed = 0.37;
+    float ghostPitch = pitch * 0.94;
+    float ghostRise = rise + travel * 1.65;
+    float ghostTarget = ghostSeed * 6.2831853
+      + uv.y * ghostPitch
+      + ghostRise * 1.28
+      + 0.22;
+    float ghostWidth = width * (1.12 + echoPulse * 0.18);
+    float ghostLine = coilLine(ang, ghostTarget, ghostWidth);
+    float ghostRadial = exp(-r * r * (1.05 + lean * 0.2));
+    // Crest-by-phase blink so the reply reads as rhythmic, not a wash.
+    float blink =
+      0.32 + 0.68 * yGate * (0.5 + 0.5 * sin(travel * 22.0 + uv.y * 9.0 + ghostSeed * 18.0));
+    float ghostWisp = ghostLine * ghostRadial * blink * echoPulse * climbFade;
+    ghostWisp = clamp(ghostWisp * (1.0 - stillness * 0.45), 0.0, 1.8);
+    // Cool silver-blue — fainter/cooler than kick bass-warm coils.
+    vec3 ghostCol = mix(vec3(0.58, 0.78, 0.98), uColorHigh, 0.22);
+    col += ghostCol * ghostWisp * 0.78;
+    col = mix(col, ghostCol, clamp(ghostWisp * 0.1, 0.0, 0.28));
+  }
+
   float vig = 1.0 - smoothstep(0.78, 1.55, r);
   col *= 0.56 + 0.44 * vig;
 
@@ -290,6 +325,11 @@ export function MistSpiralScene({
   const tenderSmooth = useRef(0);
   // LeanIn anticipation — coil tighten + nearer drift before the drop.
   const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one cool ghost coil per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -304,6 +344,7 @@ export function MistSpiralScene({
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(
     () => buildFragmentShader(coilCount, mistOctaves),
     [coilCount, mistOctaves],
@@ -330,6 +371,8 @@ export function MistSpiralScene({
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
       uLean: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -425,6 +468,37 @@ export function MistSpiralScene({
     );
     afterglowSmooth.current = smoothToward(afterglowSmooth.current, m.afterglow, dt, 0.18, 0.8);
 
+    // Phrase-echo ghost coil: arm on quiet, fire one travel per echo rise
+    // so the spiral answers once in a gap — not while the drums keep speaking.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+
+    if (echoTravel.current < 1) {
+      const bpm = Math.max(60, Math.min(180, m.bpm || 120));
+      const echoPace = 0.9 + pace * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+
     // Rise velocity: mist climbs the column; gather slows the loft.
     // Kick adds a brief upward loft punch (sustained rise stays on swell/bass).
     // holdBreath nearly freezes continuous rise so coils hang mid-turn; kit
@@ -460,6 +534,8 @@ export function MistSpiralScene({
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uEcho!.value = echoVis;
+    mat.uniforms.uEchoTravel!.value = echoTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
