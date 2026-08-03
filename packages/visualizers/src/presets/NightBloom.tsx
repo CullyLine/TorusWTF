@@ -5,6 +5,8 @@
  * Ember Drift ash. Musical anatomy:
  *  - idle / swell → petals open outward, luminous field breathes
  *  - gather → inhale toward center before the beat
+ *  - leanIn → bloom drifts nearer; petal tips brighten faintly (expectant)
+ *  - dropEvent → one full-garden bloom — every petal flares open at once, then settles
  *  - impact → soft flare (petal bloom + core glow), not a strobe
  *  - kick → radial petal pulse (local outward surge + bass-warm core)
  *  - snare → lateral petal shear + flank flash (backbeat crack)
@@ -54,6 +56,8 @@ uniform float uStillness;
 uniform float uTenderness;
 uniform float uEcho;
 uniform float uEchoTravel;
+uniform float uLean;
+uniform float uDrop;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -109,14 +113,20 @@ void main() {
   float snare = clamp(uSnare, 0.0, 1.2);
   float soft = clamp(uTenderness, 0.0, 1.0);
   float stillness = clamp(uStillness, 0.0, 1.0);
+  float lean = clamp(uLean, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
 
   // Gather inhale: petals fold toward the bloom center.
   float fold = uGather * 0.62;
   float r0 = length(uv) + 1e-4;
   // Kick: brief radial zoom punch (local petal surge, not a fullscreen wash).
   uv *= 1.0 - fold * (0.48 + 0.52 * smoothstep(0.1, 1.2, r0)) + kick * 0.055;
+  // LeanIn: isotropic approach zoom — bloom drifts nearer (not gather fold).
+  uv *= 1.0 - lean * 0.12;
   // Snare: lateral petal shear before lobe sampling (backbeat crack).
   uv.x += snare * 0.048 * sign(uv.x + 1e-4);
+  // Drop: brief outward billow so every petal fills the frame at once.
+  uv *= 1.0 + drop * 0.08;
 
   float r = length(uv);
   float ang = atan(uv.y, uv.x);
@@ -128,12 +138,16 @@ void main() {
   float oval = 1.0 + sin(ang * 2.0 + uTime * 0.28) * (0.03 + uMid * 0.04) * mix(1.0, 0.15, stillness);
   r *= oval;
 
-  float openAmt = clamp(uOpen, 0.0, 1.35);
+  // Drop forces a full-garden open on top of swell — bigger than impact flare.
+  float openAmt = clamp(uOpen + drop * 0.55, 0.0, 1.35);
   // Kick widens petals briefly; impact width path stays separate.
   // Tenderness widens ribbons (softer edge); kit width paths stay intact.
+  // LeanIn tightens ribbon width slightly (poised tips); drop widens the garden.
   float width = 0.055 + uBass * 0.02 + uImpact * 0.035 + openAmt * 0.018 + kick * 0.028;
   width *= mix(1.0, 1.42, soft);
-  float spin = uTime * (0.12 + uSwell * 0.08) * (1.0 - uGather * 0.75);
+  width *= 1.0 - lean * 0.28;
+  width *= 1.0 + drop * 0.45;
+  float spin = uTime * (0.12 + uSwell * 0.08) * (1.0 - uGather * 0.75) * (1.0 - lean * 0.35);
 
   // Tenderness softens lobe bite; holdBreath eases petal/field contrast.
   float contrast = mix(1.0, 0.58, stillness);
@@ -146,34 +160,41 @@ void main() {
     float fi = float(i);
     float seed = fract(sin(fi * 19.17 + 2.4) * 43758.5453);
     // Outer layers open more on swell; gather keeps them close.
+    // Drop pushes every layer open at once (full-garden bloom).
     float layerOpen = openAmt * (0.72 + seed * 0.35) * (1.0 - uGather * 0.55);
+    layerOpen *= 1.0 + drop * 0.55;
     // Kick pushes petal targets outward (radial pulse along the flower).
+    // LeanIn draws outer tips slightly nearer the center (poised, not gather fold).
     float baseR = (0.22 + fi * 0.2) * (0.55 + layerOpen * 0.7) * (1.0 + kick * 0.14);
+    baseR *= 1.0 - lean * (0.04 + fi * 0.02);
     float angShift = ang + spin * (0.55 + seed * 0.45) + fi * 0.22
       + snare * (seed - 0.5) * 0.22;
     float lobe = petalLobe(angShift, clamp(layerOpen, 0.0, 1.0), soft);
     float target = baseR * (0.38 + 0.62 * lobe);
     float line = petalRibbon(r, target, width * (0.8 + seed * 0.4));
     // Soft radial falloff so the center owns the frame.
-    float radial = exp(-r * r * (1.05 - openAmt * 0.22 - kick * 0.08));
+    float radial = exp(-r * r * (1.05 - openAmt * 0.22 - kick * 0.08 - drop * 0.12));
     float weight = mix(1.15, 0.5, smoothstep(0.08, 1.2, r));
     petals += line * weight * radial * contrast;
 
     // Hat motes: sparse glitter near petal tips (outer lobes).
     // During holdBreath they hang mid-place (uTime freeze) at soft residual glow.
+    // LeanIn brightens tip mask so tips read expectant before the drop.
     float tipMask = smoothstep(0.55, 0.95, lobe) * smoothstep(0.15, 0.55, r);
+    tipMask *= 1.0 + lean * 0.85;
     float tickSelect = step(0.58, fract(seed * 5.17 + fi * 0.31));
     tipMotes += line * tipMask * tickSelect * weight * mix(1.0, 0.72, stillness);
 
     // Soft inner glow per layer; kick punches the core radially.
-    coreGlow += exp(-r * r * (4.5 - layerOpen * 1.2 - kick * 0.55)) * (0.35 + fi * 0.08);
+    // Drop floods the core once — garden-wide, not a kick-local punch.
+    coreGlow += exp(-r * r * (4.5 - layerOpen * 1.2 - kick * 0.55 - drop * 0.85)) * (0.35 + fi * 0.08);
   }
 
   // Soft vapor fill between petals — ash-like luminous field.
   vec2 mistUv = uv * (1.5 + openAmt * 0.4);
   mistUv += (vnoise(mistUv * 1.3 + uTime * 0.1) - 0.5) * (0.16 + openAmt * 0.18) * mix(1.0, 0.12, stillness);
   float field = vnoise(mistUv);
-  field = smoothstep(0.3, 0.8, field) * (0.28 + openAmt * 0.42 + uEnergy * 0.12);
+  field = smoothstep(0.3, 0.8, field) * (0.28 + openAmt * 0.42 + uEnergy * 0.12 + drop * 0.22);
   field *= exp(-r * r * 0.85);
   field *= contrast;
 
@@ -182,11 +203,14 @@ void main() {
   coreGlow = clamp(coreGlow, 0.0, 1.8);
 
   // Impact flare: petal bloom + soft core flash.
+  // Drop garden flare sits on top — clearly bigger than per-hit impact.
   float flare = uImpact * (0.9 + petals * 0.45);
-  petals *= 0.65 + openAmt * 0.5 + flare * 0.85 + uEnergy * 0.12 + kick * 0.18;
+  float dropFlare = drop * (1.35 + petals * 0.55);
+  petals *= 0.65 + openAmt * 0.5 + flare * 0.85 + dropFlare * 0.95 + uEnergy * 0.12 + kick * 0.18;
   petals += flare * 0.28 * exp(-r * r * 2.2);
-  field *= 0.72 + openAmt * 0.38 + flare * 0.4;
-  coreGlow *= 0.8 + flare * 0.9 + uAfterglow * 0.25 + kick * 0.35;
+  petals += dropFlare * 0.55 * exp(-r * r * 1.45);
+  field *= 0.72 + openAmt * 0.38 + flare * 0.4 + dropFlare * 0.55;
+  coreGlow *= 0.8 + flare * 0.9 + dropFlare * 1.05 + uAfterglow * 0.25 + kick * 0.35;
 
   vec3 body = bloomWash(r, openAmt);
   body *= 0.48 + uEnergy * 0.22 + uAfterglow * 0.3 + field * 0.4;
@@ -212,9 +236,9 @@ void main() {
   body *= mix(1.0, 0.72, stillness);
 
   vec3 col = body;
-  col += petalCol * petals * (0.55 + flare * 0.5 + kick * 0.22);
+  col += petalCol * petals * (0.55 + flare * 0.5 + dropFlare * 0.55 + kick * 0.22);
   col += tipGold * field * (0.2 + uAfterglow * 0.16) * mix(1.0, 0.85, soft);
-  col += duskRose * coreGlow * (0.18 + flare * 0.22 + kick * 0.2) * mix(1.0, 1.12, soft);
+  col += duskRose * coreGlow * (0.18 + flare * 0.22 + dropFlare * 0.32 + kick * 0.2) * mix(1.0, 1.12, soft);
   // Snare flank flash along the bloom sides (distinct from radial kick / tip hats).
   float flank = smoothstep(0.28, 0.9, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.25, abs(uv.y)));
   col += mix(uColorMid, vec3(1.0, 0.92, 0.88), 0.42) * flank * snare * 0.58;
@@ -222,7 +246,11 @@ void main() {
   col += mix(uColorHigh, tipGold, 0.45) * tipMotes * uHat * 1.25;
   // Residual tip hang glow while listening (visible without hat ticks).
   col += tipGold * tipMotes * stillness * 0.22;
+  // LeanIn tip brighten — expectant glints before the drop (distinct from hat ticks).
+  col += tipGold * tipMotes * lean * 0.55;
   col += tipGold * uAfterglow * (0.07 + petals * 0.09);
+  // Drop garden wash — warm full-frame petal flare, settles with the envelope.
+  col += mix(duskRose, tipGold, 0.45) * dropFlare * (0.18 + petals * 0.12) * exp(-r * r * 0.9);
 
   // Phrase-echo: one-shot cool moonlit ghost bloom — re-opens from center and
   // travels to the tips replaying the gap's rhythm (distinct from warm petals /
@@ -324,6 +352,10 @@ export function NightBloomScene({
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
+  // LeanIn anticipation — approach + tip brighten before the drop.
+  const leanSmooth = useRef(0);
+  // Drop garden bloom — fast attack, lingering settle across every petal.
+  const dropSmooth = useRef(0);
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -338,6 +370,8 @@ export function NightBloomScene({
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(
     () => buildFragmentShader(petalCount, layerCount),
     [petalCount, layerCount],
@@ -365,6 +399,8 @@ export function NightBloomScene({
       uTenderness: { value: 0 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
+      uLean: { value: 0 },
+      uDrop: { value: 0 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -408,13 +444,39 @@ export function NightBloomScene({
       0.22,
     );
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    // Distinct from gather (center fold) — this is nearer + tip brighten.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Drop garden bloom — fast attack, lingering settle across every petal.
+    // Bigger than per-hit impact; continuous envelope so it settles, not snaps.
+    const dropTarget =
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp;
+    dropSmooth.current = smoothToward(dropSmooth.current, dropTarget, dt, 0.03, 0.55);
+    const drop = dropSmooth.current;
+
     // Tenderness eases section pace so intimate moments feel held, not torn.
     const sectionPace =
       (0.75 + m.sectionLevel * 0.45) * (1 - tenderSmooth.current * 0.28);
 
     // holdBreath gates spin / oval / mist clocks; kit envelopes stay on full dt.
+    // LeanIn slows the spin slightly (poised); drop adds a brief garden rush.
     timeRef.current +=
-      dt * pace * sectionPace * calm * motionMul * (0.5 + m.swell * 0.65 + m.impact * 0.2);
+      dt *
+      pace *
+      sectionPace *
+      calm *
+      motionMul *
+      (0.5 + m.swell * 0.65 + m.impact * 0.2 + drop * 0.25) *
+      (1 - lean * 0.22);
 
     // Gather / impact / kit stay on full dt so replies still fire on thaw.
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
@@ -511,6 +573,8 @@ export function NightBloomScene({
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
+    mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uDrop!.value = drop;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
