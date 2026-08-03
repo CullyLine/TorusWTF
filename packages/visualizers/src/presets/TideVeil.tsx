@@ -13,6 +13,8 @@
  *  - holdBreath / deep silence → nearly still the caustic roll + ease ridge contrast
  *  - tenderness → soften caustic sharpness so gentle vocals read as a softer sheet
  *  - leanIn → raise the sheet toward camera + tighten caustic folds (pre-drop approach)
+ *  - tension → sustained storm-deep coil: folds tighten + darken (not leanIn approach)
+ *  - dropEvent → one whole-sheet caustic surge — every fold lights, then calms
  *  - echo → one-shot cool moonlit glint train across the veil (phrase-gap replay)
  */
 
@@ -47,6 +49,9 @@ uniform float uBgAlpha;
 uniform float uStillness;
 uniform float uTenderness;
 uniform float uLean;
+uniform float uTension;
+uniform float uDrop;
+uniform float uDropTravel;
 uniform float uKick;
 uniform float uSnare;
 uniform float uHat;
@@ -130,47 +135,75 @@ void main() {
   float snare = clamp(uSnare, 0.0, 1.2);
   float hat = clamp(uHat, 0.0, 1.2);
   float lean = clamp(uLean, 0.0, 1.0);
+  float tension = clamp(uTension, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
+  float dropTravel = clamp(uDropTravel, 0.0, 1.0);
+  // Half-sine one-shot so the surge owns the frame once, then settles.
+  float dropPulse = drop * sin(min(dropTravel, 1.0) * 3.14159265)
+    * step(dropTravel, 0.999);
 
   // Gather folds the sheet toward center — anticipation crease.
   float fold = uGather * 0.55;
   float r0 = length(uv) + 1e-4;
   // Kick: brief center-born surge (local UV inhale, not a fullscreen wash).
-  uv *= 1.0 - fold * (0.55 + 0.45 * smoothstep(0.15, 1.1, r0)) + kick * 0.05;
+  // DropPulse briefly opens the membrane (release after storm coil).
+  uv *= 1.0 - fold * (0.55 + 0.45 * smoothstep(0.15, 1.1, r0)) + kick * 0.05
+    + dropPulse * 0.04;
   // LeanIn: isotropic approach zoom — sheet drifts nearer (not gather crease).
+  // Tension does NOT approach — it coils storm-deep in place.
   uv *= 1.0 - lean * 0.12;
   // Snare: lateral fold crack before caustic sampling (backbeat shear).
   uv.x += snare * 0.052 * sign(uv.x + 1e-4);
   // Slight angular squeeze so the fold reads as a living membrane.
+  // Tension coils the membrane harder (storm strain, not leanIn hug).
   float ang = atan(uv.y, uv.x);
   ang += sin(ang * 3.0 + uTime * 0.4) * fold * 0.22;
+  ang += sin(ang * 5.0 + uTime * 0.55) * tension * 0.28;
   // Snare also twists the membrane phase so the crack reads sideways.
   ang += snare * 0.11 * sign(sin(ang * 3.0 + 0.35));
   float rr = length(uv);
   // LeanIn mildly hugs space toward the axis so folds gather presence.
-  uv = vec2(cos(ang), sin(ang)) * rr * (1.0 - lean * 0.08 * smoothstep(0.12, 1.05, rr));
+  // Tension hugs harder still — storm coil, no camera approach.
+  uv = vec2(cos(ang), sin(ang)) * rr
+    * (1.0 - lean * 0.08 * smoothstep(0.12, 1.05, rr))
+    * (1.0 - tension * 0.16 * smoothstep(0.1, 1.1, rr));
 
   // Swell rolls the veil: scroll + wave amplitude.
   // holdBreath gates uTime advance in JS so the roll nearly freezes while listening.
-  float roll = 0.35 + uSwell * 1.15 + uBass * 0.35 + kick * 0.22;
+  // Tension slows the roll (storm gathering); dropPulse briefly surges it.
+  float roll = (0.35 + uSwell * 1.15 + uBass * 0.35 + kick * 0.22)
+    * (1.0 - tension * 0.55)
+    * (1.0 + dropPulse * 0.85);
   float t = uTime * (0.22 + uSwell * 0.35 + uEnergy * 0.12);
   vec2 flow = uv * (1.15 + uSwell * 0.35 + kick * 0.12);
   flow.x += t * 0.18 * roll;
   // Snare shears the flow field laterally so ridges crack mid-sheet.
   flow.x += snare * 0.085 * sign(uv.x + 1e-4);
-  flow.y += sin(uv.x * 2.4 + t * 0.7) * (0.08 + uSwell * 0.14);
-  flow += (fbm(flow * 1.6 + t * 0.15) - 0.5) * (0.22 + uSwell * 0.28);
+  flow.y += sin(uv.x * 2.4 + t * 0.7) * (0.08 + uSwell * 0.14)
+    * (1.0 - tension * 0.7)
+    * (1.0 + dropPulse * 0.55);
+  flow += (fbm(flow * 1.6 + t * 0.15) - 0.5) * (0.22 + uSwell * 0.28)
+    * (1.0 - tension * 0.45);
   // LeanIn densifies caustic folds — water gathering itself for the drop.
-  flow *= 1.0 + lean * 0.42;
+  // Tension densifies further (storm-deep coil); dropPulse briefly opens density.
+  flow *= 1.0 + lean * 0.42 + tension * 0.95 - dropPulse * 0.22;
 
-  float caust = causticField(flow, t, uTenderness);
+  // Tension hardens ridge bite (storm contrast); dropPulse softens for the flash wash.
+  float softField = clamp(uTenderness - tension * 0.55 + dropPulse * 0.35, 0.0, 1.0);
+  float caust = causticField(flow, t, softField);
   // Impact flashes the ridges; shimmer adds fine continuous glitter.
-  float flash = uImpact * 1.15 + uShimmer * 0.35;
+  // DropPulse lights EVERY fold at once — bigger than per-hit impact flash.
+  float flash = uImpact * 1.15 + uShimmer * 0.35 + dropPulse * 1.85;
   caust *= 0.55 + uSwell * 0.55 + flash * 0.85 + uMid * 0.25 + kick * 0.32;
   // Kick punches a soft core surge under the caustic sheet.
   float coreR = length(uv);
   caust += kick * 0.42 * exp(-coreR * coreR * 2.4);
+  // Drop surge: full-sheet caustic lift (not a center kick punch).
+  caust += dropPulse * 0.95 * (0.55 + 0.45 * (1.0 - smoothstep(0.15, 1.35, coreR)));
   // Quiet hush eases ridge contrast without killing gather fold / impact / kit paths.
   caust *= mix(1.0, 0.58, uStillness);
+  // Tension slightly lifts ridge amplitude so the darkened sheet still bites.
+  caust *= 1.0 + tension * 0.18;
 
   // Hat pinpoint sparkles: sparse hash cells on bright ridges only.
   float sparkCell = hash21(floor(flow * 18.0 + vec2(uTime * 0.8, uTime * 1.1)));
@@ -181,6 +214,10 @@ void main() {
   // Soft body veil under the caustics.
   vec3 body = veilBackground(uv);
   body *= 0.55 + uEnergy * 0.25 + uAfterglow * 0.35 + kick * 0.08;
+  // Tension storm-deep darken (value only) — distinct from leanIn brighten.
+  body *= mix(1.0, 0.42, tension);
+  // DropPulse briefly lifts the sheet body under the full-fold surge.
+  body = mix(body, body * 1.4, dropPulse * 0.55);
 
   // Caustic light: palette mid→high with a warm afterglow tint.
   vec3 caustCol = mix(uColorMid, uColorHigh, clamp(caust * 0.65, 0.0, 1.0));
@@ -189,9 +226,13 @@ void main() {
   // Kick bass-warms the sheet; snare cracks toward cooler mid/white.
   caustCol = mix(caustCol, mix(uColorBass, vec3(1.0, 0.82, 0.62), 0.42), kick * 0.4);
   caustCol = mix(caustCol, mix(uColorMid, vec3(0.94, 0.97, 1.0), 0.5), snare * 0.34);
+  // Tension pulls caustics toward darker bass (storm depth, value-leaning).
+  caustCol = mix(caustCol, uColorBass * 0.55, tension * 0.55 * (0.35 + caust * 0.5));
+  // Drop surge flashes cool-white across every fold (bigger than impact).
+  caustCol = mix(caustCol, vec3(0.92, 0.97, 1.0), dropPulse * 0.62);
 
   vec3 col = body;
-  col += caustCol * caust * (0.55 + flash * 0.7 + kick * 0.22);
+  col += caustCol * caust * (0.55 + flash * 0.7 + kick * 0.22 + dropPulse * 1.05);
   // Snare flank flash along the sheet sides (distinct from kick core / hat sparks).
   float flank = smoothstep(0.28, 0.9, abs(uv.x)) * (1.0 - smoothstep(0.55, 1.25, abs(uv.y)));
   col += mix(uColorMid, vec3(0.95, 0.98, 1.0), 0.45) * flank * snare * 0.58;
@@ -286,6 +327,11 @@ export function TideVeilScene({
   const tenderSmooth = useRef(0);
   // LeanIn anticipation — approach + caustic-fold tighten before the drop.
   const leanSmooth = useRef(0);
+  // Tension coil — storm-deep fold tighten + darken; spring-loose on drop/release.
+  const tensionSmooth = useRef(0);
+  // Drop envelope + one-shot travel for the whole-sheet caustic surge.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
@@ -306,6 +352,8 @@ export function TideVeilScene({
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(octaves), [octaves]);
 
   const uniforms = useMemo(
@@ -326,6 +374,9 @@ export function TideVeilScene({
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
       uLean: { value: 0 },
+      uTension: { value: 0 },
+      uDrop: { value: 0 },
+      uDropTravel: { value: 1 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uHat: { value: 0 },
@@ -372,6 +423,44 @@ export function TideVeilScene({
       0.22,
     );
 
+    // Tension early so the caustic clock can strain during the build.
+    // Sustained storm coil — spring-loose on drop/release. Distinct from leanIn
+    // approach (no camera zoom; densify + darken in place).
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp;
+    if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+    const tension = tensionSmooth.current * (1 - stillness * 0.3);
+
+    // Drop envelope early — one-shot travel fires when the drop crest hits.
+    dropSmooth.current = smoothToward(
+      dropSmooth.current,
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp,
+      dt,
+      0.03,
+      0.55,
+    );
+    const drop = dropSmooth.current;
+    if (drop > 0.45 && dropTravel.current >= 1) {
+      dropTravel.current = 0;
+    }
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.9 + pace * 0.15;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpm / 200),
+      );
+    }
+
     // LeanIn: fast climb into anticipation, slower release into the drop.
     // Soften only a little under holdBreath so approach still reads through hush.
     leanSmooth.current = smoothToward(
@@ -383,12 +472,14 @@ export function TideVeilScene({
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
+    // Tension slightly slows the caustic clock (storm strain); drop does not freeze it.
     timeRef.current +=
       dt *
       pace *
       sectionPace *
       calm *
       motionMul *
+      (1 - tension * 0.28) *
       (0.55 + m.swell * 0.7 + m.impact * 0.25);
 
     // Gather / impact / afterglow stay on full dt so kit replies still fire on thaw.
@@ -477,6 +568,9 @@ export function TideVeilScene({
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uTension!.value = tension;
+    mat.uniforms.uDrop!.value = drop;
+    mat.uniforms.uDropTravel!.value = dropTravel.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
