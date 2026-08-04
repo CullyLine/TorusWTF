@@ -10,6 +10,8 @@
  *  - gather → tightens orbits on a pre-beat inhale
  *  - tension → gutters the flame taller + compresses the spiral
  *  - dropEvent → one-shot flame burst; moths scatter wide then re-gather
+ *  - leanIn → tighten orbits + draw ballet nearer; flame leans taller with expectation
+ *  - echo → one-shot cool silver-blue ghost moth retracing the gap's rhythm
  *  - tenderness → honey-warm light + slowed ballet
  *  - holdBreath / deep silence → hang mid-wingbeat; flame steadies to a still point
  *
@@ -40,6 +42,8 @@ const FLAME_HALO = /* @__PURE__ */ new THREE.Color(1.0, 0.32, 0.08);
 const HONEY = /* @__PURE__ */ new THREE.Color(1.0, 0.72, 0.38);
 const VOID = /* @__PURE__ */ new THREE.Color(0.01, 0.008, 0.02);
 const MOTH_BASE = /* @__PURE__ */ new THREE.Color(0.55, 0.48, 0.42);
+/** Cool silver-blue — phrase-memory ghost, cooler than candle honey / kick flare. */
+const GHOST_SILVER = /* @__PURE__ */ new THREE.Color(0.58, 0.78, 0.98);
 
 function smoothToward(
   current: number,
@@ -74,6 +78,10 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const midMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const haloMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const mothRef = useRef<THREE.InstancedMesh>(null);
+  const ghostRef = useRef<THREE.Mesh>(null);
+  const ghostMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const ghostGlintRef = useRef<THREE.Points>(null);
+  const ghostGlintMatRef = useRef<THREE.PointsMaterial>(null);
   const glintRef = useRef<THREE.Points>(null);
   const glintMatRef = useRef<THREE.PointsMaterial>(null);
   const voidMatRef = useRef<THREE.MeshBasicMaterial>(null);
@@ -83,13 +91,17 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const mothCount = tier === 'high' ? COUNT_HIGH : tier === 'mid' ? COUNT_MID : COUNT_LOW;
   const glintCount = tier === 'high' ? GLINT_HIGH : tier === 'mid' ? GLINT_MID : GLINT_LOW;
   // Low skips outer halo shell + wing glints — cheaper candle, coarser moths.
+  // Ghost moth always renders (one mesh); ghost wing glints skip on low.
   const showOuterHalo = tier !== 'low';
+  const showGhostGlints = tier !== 'low';
   const mothSegs = tier === 'high' ? 4 : 3;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const dropAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -111,6 +123,14 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const dropSmooth = useRef(0);
   // One-shot drop scatter travel 0..1; >=1 idle.
   const dropTravel = useRef(1);
+  // LeanIn anticipation: eager climb, slower release into the drop.
+  const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one cool ghost moth per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  const echoSeed = useRef(0.37);
   const timeRef = useRef(0);
 
   // Per-moth orbital state — radius / angle / lag / bank / wing phase.
@@ -200,6 +220,9 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
     () => new Float32Array(Math.max(glintCount, 1) * 3),
     [glintCount],
   );
+  // Two pale wing-tip glints for the ghost moth (skipped on low).
+  const ghostGlintPositions = useMemo(() => new Float32Array(2 * 3), []);
+  const ghostGlintColors = useMemo(() => new Float32Array(2 * 3), []);
 
   // Flat diamond moth body — tip along −Z so yaw faces the flame.
   const mothGeo = useMemo(() => {
@@ -247,6 +270,48 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.92;
     const hatMul = 1 - stillness * 0.95;
+
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soft under holdBreath so approach still reads through hush.
+    // Distinct from gather (pre-beat inhale) and tension (gutter + compress).
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Phrase-echo: arm on quiet, fire one cool silver ghost moth per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      echoSeed.current = hash01(timeRef.current * 0.53 + echoNow * 11.3 + (m.barPhase ?? 0) * 2.7);
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + spd * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpmEcho / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
 
     gatherSmooth.current = smoothToward(
       gatherSmooth.current,
@@ -346,7 +411,16 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const calm = 1 - tender * 0.5;
     const hushDim = 1 - stillness * 0.28;
 
+    // Draw nearer on leanIn — mild camera-ward pull, distinct from gather inhale.
+    const root = rootRef.current;
+    if (root) {
+      root.position.z = -lean * 0.55;
+      const leanScale = 1 + lean * 0.06;
+      root.scale.setScalar(leanScale);
+    }
+
     // Ballet clock — freezes under holdBreath; tenderness slows without stopping.
+    // Lean hush: slightly quieter freewheel (expectant still), not a freeze.
     timeRef.current +=
       dt *
       spd *
@@ -354,23 +428,28 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
       calm *
       motionMul *
       motionScale *
-      (1 - tension * 0.18);
+      (1 - tension * 0.18) *
+      (1 - lean * 0.22);
     const t = timeRef.current;
 
     // —— Flame: candle core + warm mid + soft outer halo ——
     const flame = flameRef.current;
     if (flame) {
-      // Kick flares; tension gutters taller; drop bursts once; stillness steadies.
-      const flare = 1 + kick * 0.55 + dropPulse * 0.85 + swell * 0.08;
-      const tall = 1 + tension * 0.55 + kick * 0.12 + dropPulse * 0.35;
+      // Kick flares; tension gutters taller; lean leans taller with expectation;
+      // drop bursts once; stillness steadies.
+      const flare =
+        1 + kick * 0.55 + dropPulse * 0.85 + swell * 0.08 + lean * 0.08;
+      const tall =
+        1 + tension * 0.55 + kick * 0.12 + dropPulse * 0.35 + lean * 0.28;
       const steady = 1 - stillness * 0.35;
       flame.scale.set(flare * (0.92 + steady * 0.08), tall * flare * 0.95, flare);
-      flame.position.y = 0.12 + tension * 0.18 + kick * 0.04;
+      flame.position.y = 0.12 + tension * 0.18 + kick * 0.04 + lean * 0.1;
       // Soft flicker — nearly gone under hush so the still point reads.
       const flicker =
         (1 - stillness * 0.92) *
         (0.012 + Math.sin(t * 11.3) * 0.01 + Math.sin(t * 17.7) * 0.006) *
-        (1 - tender * 0.35);
+        (1 - tender * 0.35) *
+        (1 - lean * 0.35);
       flame.position.x = flicker;
       flame.position.z = flicker * 0.7;
     }
@@ -384,20 +463,29 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
       midC.multiplyScalar(1 - tension * 0.08);
     }
     const flameGain =
-      (0.85 + kick * 0.55 + dropPulse * 0.7 + swell * 0.15 + afterglow * 0.1) * hushDim;
+      (0.85 +
+        kick * 0.55 +
+        dropPulse * 0.7 +
+        swell * 0.15 +
+        afterglow * 0.1 +
+        lean * 0.18) *
+      hushDim;
     if (coreMatRef.current) {
       coreMatRef.current.color.copy(coreC).multiplyScalar(flameGain);
       coreMatRef.current.opacity = Math.min(1, 0.95 * hushDim);
     }
     if (midMatRef.current) {
       midMatRef.current.color.copy(midC).multiplyScalar(flameGain * 0.9);
-      midMatRef.current.opacity = Math.min(1, (0.55 + kick * 0.25 + dropPulse * 0.3) * hushDim);
+      midMatRef.current.opacity = Math.min(
+        1,
+        (0.55 + kick * 0.25 + dropPulse * 0.3 + lean * 0.12) * hushDim,
+      );
     }
     if (haloMatRef.current) {
       haloMatRef.current.color.copy(haloC).multiplyScalar(flameGain * 0.7);
       haloMatRef.current.opacity = Math.min(
         1,
-        (0.28 + kick * 0.2 + dropPulse * 0.35 + tension * 0.08) * hushDim,
+        (0.28 + kick * 0.2 + dropPulse * 0.35 + tension * 0.08 + lean * 0.1) * hushDim,
       );
     }
 
@@ -421,13 +509,15 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const szArr = scatterZ.current;
     const pArr = pos.current;
 
-    // Orbit radius targets: gather inhale + tension compress + kick surge in.
+    // Orbit radius targets: gather inhale + tension compress + lean approach + kick surge in.
+    // lean tighten (~0.18) is gentler than gather (0.42) / tension (0.32) — approach, not inhale.
     const gatherTighten = 1 - gather * 0.42;
     const tensionTighten = 1 - tension * 0.32;
+    const leanTighten = 1 - lean * 0.18;
     const kickSurge = 1 - kick * 0.38;
     // Drop scatter: expand then settle (pulse envelope).
     const dropScatter = 1 + dropPulse * 1.15;
-    const radiusMul = gatherTighten * tensionTighten * kickSurge * dropScatter;
+    const radiusMul = gatherTighten * tensionTighten * leanTighten * kickSurge * dropScatter;
     const radiusInertia = 1 - Math.exp(-dt / Math.max(0.05, 0.12 + tender * 0.06));
     const lagInertia = 1 - Math.exp(-dt / 0.11);
     const bankInertia = 1 - Math.exp(-dt / 0.09);
@@ -446,7 +536,8 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
       const targetR = home * radiusMul * (0.92 + swell * 0.08);
       rArr[i] = rArr[i]! + (targetR - rArr[i]!) * radiusInertia;
 
-      // Angular drive — tenderness slows; hush nearly freezes; tension coils.
+      // Angular drive — tenderness slows; hush nearly freezes; tension coils;
+      // lean quickens a whisper (expectant spiral).
       const orbitRate =
         orbitSpd[i]! *
         (0.55 + spd * 0.45) *
@@ -454,7 +545,8 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
         motionMul *
         motionScale *
         (1 + gather * 0.15) *
-        (1 + tension * 0.22);
+        (1 + tension * 0.22) *
+        (1 + lean * 0.12);
       aArr[i] = wrapTau(aArr[i]! + dt * orbitRate);
 
       // Lagged follow — banked ballet; each moth trails its lead angle.
@@ -547,6 +639,71 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mothMat.opacity = Math.min(1, (0.78 + swell * 0.12 + afterglow * 0.08) * hushDim);
+
+    // —— Phrase-echo ghost moth: one cool silver-blue memory circling the flame ——
+    const ghost = ghostRef.current;
+    const ghostMat = ghostMatRef.current;
+    if (ghost && ghostMat) {
+      const seed = echoSeed.current;
+      const travel = echoTravel.current;
+      // BPM-paced orbit count — retraces the gap's rhythm, then fades.
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const turns = Math.max(1.35, Math.min(2.6, bpmEcho / 70));
+      const ang = seed * Math.PI * 2 + travel * Math.PI * 2 * turns;
+      const ghostR = 1.15 + seed * 0.55;
+      const gx = Math.cos(ang) * ghostR;
+      const gz = Math.sin(ang) * ghostR * 0.92;
+      const gy =
+        (seed - 0.42) * 0.85 +
+        Math.sin(travel * Math.PI * turns * 2 + seed * 6) * 0.08 * (traveling ? 1 : 0);
+      const fade = traveling
+        ? Math.sin(Math.min(1, travel) * Math.PI) * (1 - travel * 0.55)
+        : 0;
+      const ghostOpacity = Math.min(1, echoVis * fade * 0.95 * (1 - stillness * 0.55));
+      ghost.visible = ghostOpacity > 0.01;
+      if (ghost.visible) {
+        const yaw = Math.atan2(-gx, -gz);
+        const wingFlap =
+          Math.sin(travel * Math.PI * turns * 6 + seed * 14) * 0.32 * fade;
+        ghost.position.set(gx, gy, gz);
+        ghost.rotation.set(wingFlap * 0.35, yaw, wingFlap * 0.55, 'YXZ');
+        ghost.scale.set(1.15 + Math.abs(wingFlap) * 0.4, 1, 1.05);
+        ghostMat.color.copy(GHOST_SILVER).multiplyScalar(0.55 + fade * 0.65);
+        ghostMat.opacity = ghostOpacity;
+      }
+
+      // Pale wing-tip glints ride the ghost (mid/high only).
+      if (showGhostGlints) {
+        const gPos = ghostGlintPositions;
+        const gCol = ghostGlintColors;
+        const gPoints = ghostGlintRef.current;
+        const gMat = ghostGlintMatRef.current;
+        const wing = 0.07;
+        const yaw = Math.atan2(-gx, -gz);
+        for (let g = 0; g < 2; g++) {
+          const side = g === 0 ? 1 : -1;
+          const g3 = g * 3;
+          gPos[g3] = gx + Math.cos(yaw + Math.PI / 2) * wing * side;
+          gPos[g3 + 1] = gy + 0.01;
+          gPos[g3 + 2] = gz + Math.sin(yaw + Math.PI / 2) * wing * side;
+          const spark = ghostOpacity * (0.55 + fade * 0.7);
+          gCol[g3] = Math.min(1, GHOST_SILVER.r * spark);
+          gCol[g3 + 1] = Math.min(1, GHOST_SILVER.g * spark);
+          gCol[g3 + 2] = Math.min(1, GHOST_SILVER.b * spark);
+        }
+        if (gPoints) {
+          const posAttr = gPoints.geometry.getAttribute('position') as THREE.BufferAttribute;
+          const colAttr = gPoints.geometry.getAttribute('color') as THREE.BufferAttribute;
+          posAttr.needsUpdate = true;
+          colAttr.needsUpdate = true;
+          gPoints.visible = ghostOpacity > 0.02;
+        }
+        if (gMat) {
+          gMat.size = 0.028 + fade * 0.04;
+          gMat.opacity = Math.min(1, ghostOpacity * 0.85);
+        }
+      }
+    }
 
     // Wing glints — wink when selected moths cross the lit face (hat-driven).
     if (glintCount > 0) {
@@ -657,6 +814,46 @@ export function MothBalletScene({ analyser, palette, tier, speed = 1 }: Visualiz
         args={[mothGeo, mothMat, mothCount]}
         frustumCulled={false}
       />
+
+      {/* Phrase-echo ghost moth — cool silver-blue memory circling the flame. */}
+      <mesh ref={ghostRef} geometry={mothGeo} visible={false} frustumCulled={false}>
+        <meshBasicMaterial
+          ref={ghostMatRef}
+          color={GHOST_SILVER}
+          transparent
+          opacity={0}
+          depthWrite={false}
+          toneMapped={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+
+      {showGhostGlints ? (
+        <points ref={ghostGlintRef} visible={false}>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[ghostGlintPositions, 3]}
+              count={2}
+            />
+            <bufferAttribute
+              attach="attributes-color"
+              args={[ghostGlintColors, 3]}
+              count={2}
+            />
+          </bufferGeometry>
+          <pointsMaterial
+            ref={ghostGlintMatRef}
+            size={0.03}
+            map={sprite}
+            sizeAttenuation
+            transparent
+            vertexColors
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </points>
+      ) : null}
 
       {glintCount > 0 ? (
         <points ref={glintRef}>
