@@ -294,16 +294,10 @@ void main() {
   // Dim the sun on holdBreath; tension stretch shape stays intact.
   sunCol *= mix(1.0, 0.52, stillness);
 
-  // Sun bands: crawl slows under lock so rays cohere into clean stripes.
+  // Sun bands: crawl slows + edges sharpen under lock so rays cohere.
   float bandCrawl = mix(0.5, 0.06, lockSnap);
-  float bandMask = smoothstep(0.02, 0.0, abs(fract((uv.y - sunY) * 28.0 + uTime * bandCrawl) - 0.5));
-  // Sharper band edges when locked — coherent rays, not mush.
   float bandEdge = mix(0.02, 0.012, lockSnap);
-  bandMask = mix(
-    bandMask,
-    smoothstep(bandEdge, 0.0, abs(fract((uv.y - sunY) * 28.0 + uTime * bandCrawl) - 0.5)),
-    lockSnap
-  );
+  float bandMask = smoothstep(bandEdge, 0.0, abs(fract((uv.y - sunY) * 28.0 + uTime * bandCrawl) - 0.5));
   sunCol *= 0.6 + bandMask * (0.8 + lockSnap * 0.25);
 
   float shimmer = sin(uv.x * 80.0 + uTime * 6.0) * uHigh * 0.015 * (1.0 - stillness * 0.85) * (1.0 - lockSnap * 0.7);
