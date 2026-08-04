@@ -29,6 +29,7 @@ import { ThunderheadScene } from './presets/Thunderhead';
 import { GlowwormGrottoScene } from './presets/GlowwormGrotto';
 import { DuneSeaScene } from './presets/DuneSea';
 import { MothBalletScene } from './presets/MothBallet';
+import { KoiPondScene } from './presets/KoiPond';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -60,6 +61,7 @@ export type VisualizerId =
   | 'glowworm_grotto'
   | 'dune_sea'
   | 'moth_ballet'
+  | 'koi_pond'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -685,6 +687,24 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       bloomIntensity: 1.1,
       cameraDistance: 1,
       lightLevel: 1.05,
+    },
+  },
+  koi_pond: {
+    id: 'koi_pond',
+    label: 'Koi Pond',
+    hint: 'Midnight pond from above — glowing koi brushstrokes under black-mirror water; kick flicks tails and rings ripples, snare scatters, hats dimple, gather curves center, tension tightens and darkens, drop breaches one koi, tenderness milks the moon, holdBreath hangs mid-glide over glass.',
+    Scene: KoiPondScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.74,
+      scale: 1.05,
+      bassShake: 0.28,
+      anima: 0.5,
+      aura: 0.3,
+      cameraMode: 'drift',
+      bloomIntensity: 1.0,
+      cameraDistance: 1,
+      lightLevel: 1.0,
     },
   },
   rainforest_reverie: {
