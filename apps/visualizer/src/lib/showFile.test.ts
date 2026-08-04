@@ -108,6 +108,7 @@ describe('showFile', () => {
       'glowworm_grotto',
       'dune_sea',
       'moth_ballet',
+      'koi_pond',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',
