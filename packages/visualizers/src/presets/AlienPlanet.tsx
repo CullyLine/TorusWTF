@@ -18,6 +18,10 @@
  *  - silence / holdBreath → windless, mist-heavy held breath
  *  - tenderness → ease canopy sway + warm-soften bioluminescent glow
  *    (still breathes; distinct from holdBreath freeze)
+ *  - leanIn → draw canopy nearer + brighten bio-lights in expectation
+ *    (pre-drop approach; distinct from gather mist thicken)
+ *  - barPhase → continuous bar-locked pulse through canopy glow
+ *    (planet's life on the music's clock; no stepping)
  *  - echo → one-shot cool bioluminescent spore glints drift the crowns
  *    (phrase-gap memory; alien cousin of Rainforest firefly echo)
  *  - afterglow → warm light lingering on slopes and haze
@@ -70,6 +74,8 @@ uniform float uGather;
 uniform float uSurge;
 uniform float uStillness;
 uniform float uTenderness;
+uniform float uLean;
+uniform float uBarPhase;
 uniform float uEcho;
 uniform float uEchoTravel;
 uniform float uAfterglow;
@@ -357,8 +363,19 @@ void main() {
   vec2 res = max(uResolution, vec2(1.0));
   vec2 uv = (gl_FragCoord.xy - 0.5 * res) / res.y;
 
+  float lean = clamp(uLean, 0.0, 1.0);
+  // LeanIn: isotropic approach zoom — canopy drifts nearer (not gather mist).
+  uv *= 1.0 - lean * 0.12;
+
   float s = clamp(uScale, 0.35, 2.4);
   float zoomT = clamp01((s - 0.35) / 2.05);
+  // Lean also sinks the flight a touch toward the crowns.
+  zoomT = clamp01(zoomT + lean * 0.18);
+
+  // Continuous bar-locked breath — soft cosine, never a stepped flash.
+  // uBarPhase < 0 means BPM unknown: leave glow unmodulated.
+  float barActive = step(0.0, uBarPhase);
+  float barBreath = 0.5 + 0.5 * cos(clamp(uBarPhase, 0.0, 1.0) * 6.2831853);
 
   // Glide down the valley corridor; scale sinks toward the canopy.
   float travel = uCamDist;
@@ -467,6 +484,27 @@ void main() {
       col += bioWarm * tender * (0.04 + 0.06 * crownAmt) * (0.45 + dome * 0.55);
       // Soft rim honey — alive hush on the crown edges.
       col += mix(bioWarm, sunCol, 0.35) * tender * rim * 0.22 * crownAmt;
+    }
+
+    // LeanIn expectation: bio-lights brighten as the canopy nears — poised,
+    // not a hit flare. Distinct from tenderness honey hush and kick ring.
+    if (lean > 0.001) {
+      vec3 leanBio = mix(mix(uColorMid, uColorHigh, 0.55), vec3(0.55, 0.95, 0.82), 0.35);
+      float leanAmt = lean * crownAmt * (0.16 + dome * 0.14 + rim * 0.2);
+      col += leanBio * leanAmt * 0.85;
+      col *= 1.0 + lean * (0.06 + 0.08 * crownAmt);
+    }
+
+    // Bar-locked canopy breath — continuous pulse through bio-glow so the
+    // planet's life runs on the music's clock. Soft under stillness; never
+    // a stepped flash (no pow(1-bar) attack). Distinct from kit / echo.
+    if (barActive > 0.5) {
+      float barPulse = mix(1.0, 0.78 + 0.44 * barBreath, crownAmt);
+      barPulse = mix(1.0, barPulse, 1.0 - clamp01(uStillness) * 0.55);
+      vec3 barBio = mix(uColorMid, uColorHigh, 0.4 + 0.25 * barBreath);
+      col *= mix(1.0, barPulse, 0.55 + 0.25 * crownAmt);
+      col += barBio * crownAmt * (0.028 + 0.055 * barBreath) *
+        (0.35 + dome * 0.65) * (1.0 - clamp01(uStillness) * 0.5);
     }
 
     // Kick: a ring of light rolling outward across the canopy.
@@ -606,6 +644,7 @@ export function AlienPlanetScene({
   const camDistRef = useRef(0);
   const stillnessSmooth = useRef(0);
   const tenderSmooth = useRef(0);
+  const leanSmooth = useRef(0);
   const gatherSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const surgeSmooth = useRef(0);
@@ -626,6 +665,7 @@ export function AlienPlanetScene({
   const fragmentShader = useMemo(() => buildFragmentShader(budgets), [budgets]);
   const kitAmp = tier === 'low' ? 0.78 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
@@ -647,6 +687,8 @@ export function AlienPlanetScene({
       uSurge: { value: 0 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
+      uLean: { value: 0 },
+      uBarPhase: { value: 0 },
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
       uAfterglow: { value: 0 },
@@ -698,6 +740,17 @@ export function AlienPlanetScene({
     // Ease continuous wind/glide clocks (~half of holdBreath) so the canopy
     // keeps breathing through tender passages.
     const tenderMotion = 1 - tender * 0.35;
+
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
     // Forward-only wind/mist clock — never reverses when energy drops.
@@ -815,6 +868,10 @@ export function AlienPlanetScene({
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tender;
+    mat.uniforms.uLean!.value = lean;
+    // Continuous bar clock — negative sentinel when BPM unknown so breath rests.
+    mat.uniforms.uBarPhase!.value =
+      m.bpm && m.bpm > 30 ? clamp(m.barPhase, 0, 1) : -1;
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uAfterglow!.value = afterglowSmooth.current;

@@ -34,6 +34,11 @@ import { getDotTexture } from './dotTexture';
  * core and `snare` a brief lateral aurora shear so the sky answers the
  * drums under every preset — subtle, never fighting the foreground;
  * gather / leanIn / holdBreath / afterglow / tenderness stay distinct.
+ * On `convergence`, the sky organizes into coherence — aurora curtains
+ * align into parallel bands, nebula billows ease into one slow shared
+ * drift, glow steadies and brightens faintly, star shell spin coheres —
+ * dissolving back into free drift as the lock fades. Sibling to
+ * livingPalette chord lock, SceneRig plant, and Aura shared orbit.
  * Honors `prefers-reduced-motion` by freezing the drift. Contrast-capped
  * so it never competes with the foreground preset.
  */
@@ -127,11 +132,25 @@ const KIT_KICK_FALL_TAU = 0.14;
 const KIT_SNARE_RISE_TAU = 0.02;
 const KIT_SNARE_FALL_TAU = 0.12;
 
+/**
+ * Convergence lock: eager into the chord (~0.1s), softer release (~0.18s)
+ * so aligned curtains / shared drift dissolve without a snap. Soft under
+ * stillness so holdBreath hush still owns quiet (lock ≠ freeze).
+ */
+const LOCK_RISE_TAU = 0.1;
+const LOCK_FALL_TAU = 0.18;
+/** Faint intensity lift while bands lock — coherence, not a swell punch. */
+const LOCK_BRIGHTEN = 0.1;
+
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
 const SKY_RADIUS = 50;
 
 function kitAmpForTier(tier: 'high' | 'mid' | 'low'): number {
   return tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
+}
+
+function lockAmpForTier(tier: 'high' | 'mid' | 'low'): number {
+  return tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
 }
 
 function smoothToward(
@@ -307,26 +326,40 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform float uLean;
   uniform float uKick;
   uniform float uSnare;
+  uniform float uLock;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
     vec3 d = normalize(vDir);
     float kick = clamp(uKick, 0.0, 1.2);
     float snare = clamp(uSnare, 0.0, 1.2);
+    float lock = clamp(uLock, 0.0, 1.0);
+    float lockSnap = lock * lock;
     // Lean zooms features (sky approaches) — distinct from gather's density inhale.
     // Kick briefly opens the domain (depth pulse from the fog core).
     float zoom = 1.0 - uLean * 0.28 + kick * 0.07;
     // Snare: brief lateral shear of the fog field (backbeat flick).
-    vec2 shear = vec2(snare * 0.055 * sign(d.x + 1e-4), 0.0);
-    float n1 = fbmDir(d, 2.6 * zoom, vec2(uTime * 0.020, uTime * 0.015) + shear);
-    float n2 = fbmDir(d, 4.4 * zoom, vec2(-uTime * 0.012, uTime * 0.008) + shear * 1.2);
+    // Lock softens shear so free billows yield to one shared drift.
+    vec2 shear = vec2(snare * 0.055 * (1.0 - lock * 0.7) * sign(d.x + 1e-4), 0.0);
+    // Free: two opposing drift clocks. Locked: both layers share one slow
+    // advect so the fog reads as one coherent billow (not frozen — hush owns that).
+    vec2 sharedDrift = vec2(uTime * 0.011, uTime * 0.0085);
+    vec2 free1 = vec2(uTime * 0.020, uTime * 0.015) + shear;
+    vec2 free2 = vec2(-uTime * 0.012, uTime * 0.008) + shear * 1.2;
+    vec2 drift1 = mix(free1, sharedDrift, lock * 0.88);
+    vec2 drift2 = mix(free2, sharedDrift * vec2(1.04, 0.96), lock * 0.88);
+    // Lock eases the dual-scale chaos toward one slower frequency band.
+    float n1 = fbmDir(d, mix(2.6, 2.05, lock) * zoom, drift1);
+    float n2 = fbmDir(d, mix(4.4, 2.35, lockSnap) * zoom, drift2);
     // Gather raises the density floor so fog thins / pulls toward denser
     // pockets — a pre-beat inhale instead of a flat dim.
     // Kick drops the floor so dense cores surge outward (depth pulse).
     float lo = 0.28 + uInhale * 0.16 - kick * 0.1;
     float hi = 0.95 + uInhale * 0.04;
-    float density = smoothstep(lo, hi, n1 * 0.62 + n2 * 0.38);
-    vec3 col = mix(uColorA, uColorB, n2);
+    // Lock blends toward a single coherent density field (n1-led).
+    float mixN = mix(0.62, 0.82, lockSnap);
+    float density = smoothstep(lo, hi, n1 * mixN + n2 * (1.0 - mixN));
+    vec3 col = mix(uColorA, uColorB, mix(n2, n1 * 0.55 + n2 * 0.45, lock));
     // Slightly thinner straight overhead/underfoot so the fog reads as a
     // horizon-hugging cloudscape instead of a uniform wash.
     float band = 1.0 - 0.35 * abs(d.y) - uInhale * 0.18 * (1.0 - abs(d.y));
@@ -335,10 +368,11 @@ const NEBULA_FRAGMENT = /* glsl */ `
     float glitter = 1.0 + uGlitter * (0.25 + 0.75 * sparkle);
     // Lean slightly brightens (anticipation), gather dims (inhale).
     // Kick core pulse + snare flank flash stay under the contrast cap.
+    // Lock faint brighten — coherence glow, not kit punch or tension swell.
     float corePulse = 1.0 + kick * 0.14 * density;
     float flank = smoothstep(0.15, 0.85, abs(d.x)) * (1.0 - abs(d.y) * 0.55);
     float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * (1.0 + uLean * 0.08)
-            * glitter * corePulse * (1.0 + snare * 0.1 * flank);
+            * glitter * corePulse * (1.0 + snare * 0.1 * flank) * (1.0 + lock * 0.1);
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -363,6 +397,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       uLean: { value: 0 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
+      uLock: { value: 0 },
     }),
     [palette.bass, palette.mid],
   );
@@ -372,6 +407,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const leanRef = useRef(0);
   const kickRef = useRef(0);
   const snareRef = useRef(0);
+  const lockRef = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -381,6 +417,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
     const kitAmp = kitAmpForTier(tier);
+    const lockAmp = lockAmpForTier(tier);
     // Hold-breath hush: freeze drift clock; gather/lean/afterglow stay on full dt.
     stillnessRef.current = smoothToward(
       stillnessRef.current,
@@ -398,8 +435,20 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     );
     const stillness = stillnessRef.current;
     const tender = tenderRef.current;
+    // Convergence lock: eager into chord, soft release; soft under hush.
+    lockRef.current = smoothToward(
+      lockRef.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      LOCK_RISE_TAU,
+      LOCK_FALL_TAU,
+    );
+    const lock = lockRef.current * (1 - stillness * 0.3);
+    // Steadier shared clock when locked — not frozen (holdBreath owns that).
+    const lockPace = 1 - lock * 0.38;
     // Tenderness eases drift without the hush freeze — stack under stillness.
-    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
+    const motionMul =
+      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
@@ -413,10 +462,11 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       m.dropEvent * 0.25 +
       m.afterglow * 0.2;
     // Warm-dim under tenderness — re-brightens on release; not gather dim.
+    // Lock faint brighten — coherence, not tension swell.
     const tenderDim = 1 - tender * TENDER_DIM;
     mat.uniforms.uIntensity!.value = Math.min(
       NEBULA_CAP,
-      swell * intensity * NEBULA_CAP * tenderDim,
+      swell * intensity * NEBULA_CAP * tenderDim * (1 + lock * LOCK_BRIGHTEN),
     );
     // Ease gather/glitter so the sky inhales and sparkles fluidly.
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
@@ -453,6 +503,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     mat.uniforms.uLean!.value = leanRef.current;
     mat.uniforms.uKick!.value = kickRef.current;
     mat.uniforms.uSnare!.value = snareRef.current;
+    mat.uniforms.uLock!.value = lock;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }
@@ -502,11 +553,13 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
+  const lockRef = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const vocalLingerRef = useRef(0);
   const sprite = useMemo(() => getDotTexture(), []);
   const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
+  const lockAmp = lockAmpForTier(tier);
 
   const { positions, colors, starBand, starVariance } = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -557,7 +610,18 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     );
     const stillness = stillnessRef.current;
     const tender = tenderRef.current;
-    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
+    // Convergence: shell spin coheres into one shared axis; soft under hush.
+    lockRef.current = smoothToward(
+      lockRef.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      LOCK_RISE_TAU,
+      LOCK_FALL_TAU,
+    );
+    const lock = lockRef.current * (1 - stillness * 0.3);
+    const lockPace = 1 - lock * 0.38;
+    const motionMul =
+      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     const glitterLive = (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     const tenderDim = 1 - tender * TENDER_DIM;
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
@@ -566,8 +630,9 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     if (g && !reducedMotion) {
       // Very slow whole-sky rotation — hushes with holdBreath; eases on tenderness.
-      g.rotation.y += delta * 0.004 * motionMul;
-      g.rotation.z += delta * 0.002 * motionMul;
+      // Lock collapses Z tumble into one coherent Y drift (shared sky axis).
+      g.rotation.y += delta * 0.004 * motionMul * (1 + lock * 0.15);
+      g.rotation.z += delta * 0.002 * motionMul * (1 - lock * 0.92);
     }
     if (g) {
       // Lean pulls the star shell toward the camera (anticipation).
@@ -595,7 +660,8 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
         (0.3 + m.high * 0.35 + m.flow * 0.15 + m.tension * 0.22 + glitter * 0.28) *
           intensity *
           gatherDim *
-          tenderDim,
+          tenderDim *
+          (1 + lock * LOCK_BRIGHTEN),
       );
     }
     // Live palette: stars re-tint per frame so they follow color life.
@@ -664,38 +730,50 @@ const AURORA_FRAGMENT = /* glsl */ `
   uniform float uLean;
   uniform float uKick;
   uniform float uSnare;
+  uniform float uLock;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
     vec3 d = normalize(vDir);
     float kick = clamp(uKick, 0.0, 1.2);
     float snare = clamp(uSnare, 0.0, 1.2);
+    float lock = clamp(uLock, 0.0, 1.0);
+    float lockSnap = lock * lock;
     // Horizontal domain (seam-free): the direction's x/z components,
     // ignoring elevation — curtains wrap 360° around the viewer.
     // Snare shears the horizon domain laterally (aurora backbeat flick).
-    vec3 flat3 = normalize(vec3(d.x + snare * 0.08 * sign(d.x + 1e-4), 0.0, d.z) + 1e-4);
+    // Lock softens shear so free billow yields to aligned parallel bands.
+    vec3 flat3 = normalize(vec3(d.x + snare * 0.08 * (1.0 - lock * 0.75) * sign(d.x + 1e-4), 0.0, d.z) + 1e-4);
+    float az = atan(flat3.z, flat3.x);
     // Lean zooms curtain detail (approach); gather drops the top edge.
     // Kick briefly opens the domain (depth pulse through the curtain).
     float leanZoom = 1.0 - uLean * 0.22 + kick * 0.06;
-    float wave = fbmDir(flat3, 2.4 * leanZoom, vec2(uTime * 0.05 + snare * 0.12 * sign(d.x + 1e-4), 0.0));
+    float waveFree = fbmDir(flat3, 2.4 * leanZoom, vec2(uTime * 0.05 + snare * 0.12 * (1.0 - lock * 0.7) * sign(d.x + 1e-4), 0.0));
+    // Locked: even azimuth spacing + slow shared scroll = parallel curtains.
+    float bandWave = 0.5 + 0.5 * sin(az * 6.0 + uTime * 0.09);
+    float wave = mix(waveFree, bandWave * 0.55 + 0.22, lockSnap);
     // Gather drops the curtain edge toward the horizon (inward inhale).
     // Kick lifts the ribbon slightly from depth (distinct from gather drop).
-    float topEdge = 0.16 + 0.34 * wave - uInhale * 0.14 + kick * 0.05;
+    // Lock flattens the top edge so bands read as one aligned train.
+    float topEdge = 0.16 + mix(0.34, 0.14, lockSnap) * wave - uInhale * 0.14 + kick * 0.05;
     // Curtain: bright ribbon below its wavy top edge, fading out toward
     // the nadir so it hugs the horizon like the real thing.
-    float curtain = smoothstep(topEdge, topEdge - 0.55, d.y) * smoothstep(-0.75, -0.25, d.y);
-    // Vertical shimmer striations that scroll around the horizon.
-    float shimmer = 0.55 + 0.45 * fbmDir(d, 7.0 * leanZoom, vec2(uTime * 0.18, uTime * 0.06));
+    float curtain = smoothstep(topEdge, topEdge - mix(0.55, 0.42, lock), d.y) * smoothstep(-0.75, -0.25, d.y);
+    // Free: noisy shimmer. Locked: vertical parallel striations, shared scroll.
+    float shimmerFree = 0.55 + 0.45 * fbmDir(d, 7.0 * leanZoom, vec2(uTime * 0.18, uTime * 0.06));
+    float striation = 0.55 + 0.45 * sin(d.y * 22.0 + uTime * 0.14 + az * 0.15);
+    float shimmer = mix(shimmerFree, striation, lock * 0.82);
     // Hat glitter: sharp sparkle ticks on the curtain, not bass billow.
     float sparkle = noise(d.xz * 52.0 + vec2(uTime * 11.0, -uTime * 7.0));
-    shimmer += uGlitter * (0.35 + 0.65 * sparkle);
+    shimmer += uGlitter * (0.35 + 0.65 * sparkle) * (1.0 - lock * 0.35);
     float hueBand = clamp(d.y * 1.3 + 0.55, 0.0, 1.0);
     vec3 col = mix(uColorA, uColorB, hueBand + 0.2 * wave);
     // Kick core pulse along denser curtain; snare flank flash at the sides.
+    // Lock faint brighten — aligned bands glow together, not a kit punch.
     float corePulse = 1.0 + kick * 0.12 * curtain;
     float flank = smoothstep(0.2, 0.9, abs(d.x)) * (1.0 - abs(d.y) * 0.4);
     float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38) * (1.0 + uLean * 0.07)
-            * corePulse * (1.0 + snare * 0.14 * flank);
+            * corePulse * (1.0 + snare * 0.14 * flank) * (1.0 + lock * 0.12);
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -718,6 +796,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
       uLean: { value: 0 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
+      uLock: { value: 0 },
     }),
     [palette.bass, palette.high],
   );
@@ -728,6 +807,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const leanRef = useRef(0);
   const kickRef = useRef(0);
   const snareRef = useRef(0);
+  const lockRef = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -737,6 +817,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
     const kitAmp = kitAmpForTier(tier);
+    const lockAmp = lockAmpForTier(tier);
     stillnessRef.current = smoothToward(
       stillnessRef.current,
       stillnessFromMetrics(m.holdBreath, m.silence),
@@ -753,7 +834,18 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     );
     const stillness = stillnessRef.current;
     const tender = tenderRef.current;
-    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
+    // Convergence: curtains align into parallel bands; soft under hush.
+    lockRef.current = smoothToward(
+      lockRef.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      LOCK_RISE_TAU,
+      LOCK_FALL_TAU,
+    );
+    const lock = lockRef.current * (1 - stillness * 0.3);
+    const lockPace = 1 - lock * 0.38;
+    const motionMul =
+      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
     // Smooth the bass drive so curtains billow rather than flicker.
     // Tension swells through builds on top of the slow breath.
@@ -797,7 +889,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const tenderDim = 1 - tender * TENDER_DIM;
     mat.uniforms.uIntensity!.value = Math.min(
       AURORA_CAP,
-      levelRef.current * intensity * AURORA_CAP * tenderDim,
+      levelRef.current * intensity * AURORA_CAP * tenderDim * (1 + lock * LOCK_BRIGHTEN),
     );
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value =
@@ -805,6 +897,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     mat.uniforms.uLean!.value = leanRef.current;
     mat.uniforms.uKick!.value = kickRef.current;
     mat.uniforms.uSnare!.value = snareRef.current;
+    mat.uniforms.uLock!.value = lock;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }
@@ -841,24 +934,29 @@ const GLOW_FRAGMENT = /* glsl */ `
   uniform float uLean;
   uniform float uKick;
   uniform float uSnare;
+  uniform float uLock;
   varying vec3 vDir;
   void main() {
     vec3 d = normalize(vDir);
     float kick = clamp(uKick, 0.0, 1.2);
     float snare = clamp(uSnare, 0.0, 1.2);
+    float lock = clamp(uLock, 0.0, 1.0);
     // Snare flicks the sample direction sideways so the halo cracks laterally.
-    vec3 dSample = normalize(d + vec3(snare * 0.07 * sign(d.x + 1e-4), 0.0, 0.0));
+    // Lock softens shear so the source steadies into one coherent disc.
+    vec3 dSample = normalize(d + vec3(snare * 0.07 * (1.0 - lock * 0.7) * sign(d.x + 1e-4), 0.0, 0.0));
     // Wide soft halo around the drifting energy source...
     // Gather tightens the core (inward inhale); lean gently focuses it.
     // Kick softens the falloff (depth pulse from the glow core).
-    float core = pow(max(dot(dSample, uSunDir), 0.0), 3.0 + uInhale * 2.2 + uLean * 0.9 - kick * 0.85);
+    // Lock steadies the falloff (slightly tighter, not gather's inhale pinch).
+    float core = pow(max(dot(dSample, uSunDir), 0.0), 3.0 + uInhale * 2.2 + uLean * 0.9 - kick * 0.85 + lock * 0.55);
     // ...plus a faint horizon glow so the rest of the sky isn't dead.
-    float horizon = (1.0 - abs(d.y)) * 0.18 * (1.0 - uInhale * 0.35);
+    float horizon = (1.0 - abs(d.y)) * 0.18 * (1.0 - uInhale * 0.35) * (1.0 + lock * 0.12);
     float sparkle = fract(sin(dot(d.xy, vec2(12.9898, 78.233))) * 43758.5453);
-    float glitter = 1.0 + uGlitter * (0.2 + 0.8 * sparkle);
+    float glitter = 1.0 + uGlitter * (0.2 + 0.8 * sparkle) * (1.0 - lock * 0.4);
     float flank = smoothstep(0.2, 0.95, abs(d.x)) * (1.0 - abs(d.y) * 0.5);
     float a = (core + horizon) * uIntensity * (1.0 - uInhale * 0.3) * (1.0 + uLean * 0.06)
-            * glitter * (1.0 + kick * 0.16 * core) * (1.0 + snare * 0.12 * flank);
+            * glitter * (1.0 + kick * 0.16 * core) * (1.0 + snare * 0.12 * flank)
+            * (1.0 + lock * 0.1);
     gl_FragColor = vec4(uColor, a);
   }
 `;
@@ -882,6 +980,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
       uLean: { value: 0 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
+      uLock: { value: 0 },
     }),
     [palette.mid],
   );
@@ -891,6 +990,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const leanRef = useRef(0);
   const kickRef = useRef(0);
   const snareRef = useRef(0);
+  const lockRef = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -900,6 +1000,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const m = metricsRef.current;
     const dt = Math.min(delta, 0.1);
     const kitAmp = kitAmpForTier(tier);
+    const lockAmp = lockAmpForTier(tier);
     stillnessRef.current = smoothToward(
       stillnessRef.current,
       stillnessFromMetrics(m.holdBreath, m.silence),
@@ -916,7 +1017,18 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     );
     const stillness = stillnessRef.current;
     const tender = tenderRef.current;
-    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER);
+    // Convergence: glow steadies into one coherent disc; soft under hush.
+    lockRef.current = smoothToward(
+      lockRef.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      LOCK_RISE_TAU,
+      LOCK_FALL_TAU,
+    );
+    const lock = lockRef.current * (1 - stillness * 0.3);
+    const lockPace = 1 - lock * 0.38;
+    const motionMul =
+      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     tRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
@@ -924,13 +1036,16 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     // gently in elevation — walking around it (orbit/flow cameras) works.
     // HoldBreath nearly freezes the orbit so the glow listens with the sky.
     // Tenderness eases the orbit without freezing — still breathes.
+    // Lock steadies azimuth crawl + elevation bob (coherent disc, not hush freeze).
     const az = tRef.current * 0.026;
-    const el = 0.15 + Math.sin(tRef.current * 0.05) * 0.25;
+    const elBob = Math.sin(tRef.current * 0.05) * 0.25 * (1 - lock * 0.78);
+    const el = 0.15 + elBob;
     (mat.uniforms.uSunDir!.value as THREE.Vector3)
       .set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el))
       .normalize();
     // Slow autonomous breath plus energy swell; tension builds; drops punch.
-    const autoBreath = 0.45 + 0.12 * Math.sin(tRef.current * 0.4);
+    // Lock damps autonomous wobble so the disc steadies while bands lock.
+    const autoBreath = 0.45 + 0.12 * Math.sin(tRef.current * 0.4) * (1 - lock * 0.7);
     const swell =
       autoBreath +
       m.flow * 0.5 +
@@ -968,7 +1083,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     mat.uniforms.uIntensity!.value = Math.min(
       GLOW_CAP,
-      swell * silenceMute * intensity * GLOW_CAP * tenderDim,
+      swell * silenceMute * intensity * GLOW_CAP * tenderDim * (1 + lock * LOCK_BRIGHTEN),
     );
     mat.uniforms.uInhale!.value = inhaleRef.current;
     mat.uniforms.uGlitter!.value =
@@ -976,6 +1091,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     mat.uniforms.uLean!.value = leanRef.current;
     mat.uniforms.uKick!.value = kickRef.current;
     mat.uniforms.uSnare!.value = snareRef.current;
+    mat.uniforms.uLock!.value = lock;
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }
