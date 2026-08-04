@@ -29,6 +29,10 @@ function smoothToward(
  *    spin, and height jitter so the form listens, then thaws when music returns
  *  - tenderness → soften ridge sharpness and height jitter on gentle vocals
  *
+ * Anticipation / payoff:
+ *  - leanIn → draw nearer with crest lines brightening (poised approach)
+ *  - dropEvent → one full-terrain ridge surge, then settle
+ *
  * Gather pinch + kick/snare/hat + phrase-echo ghost stay on their own envelopes.
  */
 export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
@@ -58,6 +62,13 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
   const stillnessSmooth = useRef(0);
   // Tenderness hush — softens ridges on gentle vocal passages.
   const tenderSmooth = useRef(0);
+  // LeanIn approach — nearer + crest brighten, distinct from gather pinch.
+  const leanSmooth = useRef(0);
+  // DropEvent full-terrain surge — one synchronized lift, bigger than impact bloom.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const dropArmed = useRef(true);
+  const prevDrop = useRef(0);
   // Local phase so height jitter can freeze during holdBreath (clock never stops).
   const phaseRef = useRef(0);
   // Captured crest shape (per-sample |amp|) replayed as a faded traveling ghost.
@@ -73,6 +84,8 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
   const pinchAmt = tier === 'low' ? 0.42 : 0.55;
   // Kit accents soften on low/mid so mid-tier stays fluid without strobing.
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const positions = useMemo(() => new Float32Array(samples * 2 * 3), [samples]);
   const ghostPositions = useMemo(() => new Float32Array(samples * 2 * 3), [samples]);
@@ -150,6 +163,41 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     // Soften height jitter (z wobble) on tender passages.
     const jitterSoft = 1 - tender * 0.7;
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soft under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Drop full-terrain surge — fast attack, lingering settle; bigger than impact bloom.
+    const dropTarget =
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp;
+    dropSmooth.current = smoothToward(dropSmooth.current, dropTarget, dt, 0.03, 0.55);
+    const drop = dropSmooth.current;
+
+    // One-shot travel for the synchronized ridge lift — fire once per drop rise.
+    if (drop < 0.1) dropArmed.current = true;
+    if (dropArmed.current && drop > 0.35 && prevDrop.current <= 0.35) {
+      dropTravel.current = 0;
+      dropArmed.current = false;
+    }
+    prevDrop.current = drop;
+    if (dropTravel.current < 1) {
+      const bpmDrop = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.95 + spd * 0.12;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpmDrop / 200),
+      );
+    }
+    // Half-sine envelope: every ridge lifts once then settles.
+    const dropSurge = drop * Math.sin(Math.min(1, dropTravel.current) * Math.PI);
+
     // Freeze pinch envelope motion while listening; thaw promptly for gather.
     const pinchDt = dt * Math.max(motionMul, 0.06);
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, pinchDt, 0.04, 0.13);
@@ -179,17 +227,22 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       0.1,
     );
 
-    group.rotation.y += delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2) * motionMul;
+    // LeanIn slows the crawl — expectant, not freeze.
+    const leanPace = 1 - lean * 0.22;
+    group.rotation.y +=
+      delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2) * motionMul * leanPace;
     // Snare briefly rolls the ribbon on Z so the crease reads in depth, not only X.
     group.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
     // Gather pinches the whole form toward the axis; impact/afterglow bloom out.
     // During holdBreath, nearly freeze scale settling so pinch motion stills.
+    // Drop punch is a half-sine billow — bigger than impact's 0.08, then settles.
     const scaleTarget =
       1 -
       gatherSmooth.current * pinchAmt * 0.35 +
       bloomSmooth.current * 0.08 +
       m.swell * 0.1 +
-      m.afterglow * 0.04;
+      m.afterglow * 0.04 +
+      dropSurge * 0.16;
     scaleSmooth.current = smoothToward(
       scaleSmooth.current,
       scaleTarget,
@@ -197,17 +250,26 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       0.045,
       0.12,
     );
-    group.scale.setScalar(scaleSmooth.current);
+    // LeanIn: mild camera-ward pull + presence scale — approach, distinct from gather pinch.
+    group.position.z = -lean * 0.55;
+    group.scale.setScalar(scaleSmooth.current * (1 + lean * 0.06));
 
     // Advance local phase only while awake so height jitter can freeze.
-    phaseRef.current += dt * spd * motionMul;
+    // LeanIn hushes the clock slightly — poised, not still.
+    phaseRef.current += dt * spd * motionMul * leanPace;
 
     // The line itself brightens when a lead/vocal carries the moment —
     // the waveform IS the melody's voice, so give it presence.
+    // LeanIn brightens crest lines; drop surge flashes the whole terrain once.
     const lineMat = line.material as THREE.LineBasicMaterial;
     lineMat.opacity = Math.min(
       1,
-      0.72 + m.leadActivity * 0.18 + m.vocalActivity * 0.1 + m.afterglow * 0.1,
+      0.72 +
+        m.leadActivity * 0.18 +
+        m.vocalActivity * 0.1 +
+        m.afterglow * 0.1 +
+        lean * 0.16 +
+        dropSurge * 0.22,
     );
 
     // Live palette: re-tint the waveform gradient every frame so color life
@@ -217,13 +279,15 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     const bassC = scratchBass.current.set(palette.bass);
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
+    // Crest brighten on lean (poised) + drop flash — value lift, no hue shift.
+    const crestBoost = 1 + lean * 0.28 + dropSurge * 0.35;
     const vertCount = samples * 2;
     for (let i = 0; i < vertCount; i++) {
       const t = i / vertCount;
       const color = t < 0.33 ? bassC : t < 0.66 ? midC : highC;
-      cArr[i * 3] = color.r;
-      cArr[i * 3 + 1] = color.g;
-      cArr[i * 3 + 2] = color.b;
+      cArr[i * 3] = Math.min(1, color.r * crestBoost);
+      cArr[i * 3 + 1] = Math.min(1, color.g * crestBoost);
+      cArr[i * 3 + 2] = Math.min(1, color.b * crestBoost);
     }
     cAttr.needsUpdate = true;
 
@@ -255,24 +319,30 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
         // and intimate, the song's biggest sections fill the frame.
         // Gather pinches amp toward the axis; impact blooms it open.
         // Kick punches vertical reach (floor thump) without washing the whole frame.
+        // Drop lifts EVERY ridge at once — half-sine surge bigger than impact bloom.
         // Tenderness softens peakiness so ridges feel held, not jagged.
         const pinch = 1 - gatherSmooth.current * pinchAmt;
         const bloom = 1 + bloomSmooth.current * 0.55;
         const kickPunch = 1 + kickSmooth.current * 0.45;
+        // dropSurge peaks ~1; 0.95 lift vs bloom's 0.55 so the payoff clearly owns the frame.
+        const dropLift = 1 + dropSurge * 0.95;
         const amp =
           (1.2 + m.energy * 1.3) *
           (0.75 + m.sectionLevel * 0.45) *
           pinch *
           bloom *
           kickPunch *
+          dropLift *
           (1 - tender * 0.18);
         // Downward floor bias so kicks read as thumps, not just louder swings.
         const kickFloor = kickSmooth.current * 0.28;
         // Snare lateral crease: phase-split L/R with a mid-ribbon peak.
         // Tenderness softens the crease so ridges read rounder on gentle vocals.
         const snareCrease = snareSmooth.current * 0.32 * ridgeSoft;
-        // Height jitter hushes during holdBreath and softens on tenderness.
-        const jitterAmp = m.mid * 0.2 * (1 - stillness * 0.88) * jitterSoft;
+        // Height jitter hushes during holdBreath, softens on tenderness,
+        // and stills slightly on leanIn (poised, not frozen).
+        const jitterAmp =
+          m.mid * 0.2 * (1 - stillness * 0.88) * jitterSoft * (1 - lean * 0.4);
         const phase = phaseRef.current;
 
         if (!crestShape.current || crestShape.current.length !== samples) {
@@ -367,7 +437,12 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       mat.size = 0.035 + m.flow * 0.05 + hatSmooth.current * 0.055;
       mat.opacity = Math.min(
         1,
-        0.3 + m.swell * 0.55 + m.afterglow * 0.2 + hatSmooth.current * 0.35,
+        0.3 +
+          m.swell * 0.55 +
+          m.afterglow * 0.2 +
+          hatSmooth.current * 0.35 +
+          lean * 0.08 +
+          dropSurge * 0.25,
       );
       // Lean toward high-band color on hats so ticks sparkle, not just brighten.
       mat.color.set(palette.mid).lerp(scratchHigh.current.set(palette.high), hatSmooth.current * 0.65);
@@ -376,16 +451,21 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       const drive =
         delta *
         spd *
-        (0.5 + m.energy * 3.5 + m.impact * 3 + hatSmooth.current * 2.2) *
+        (0.5 + m.energy * 3.5 + m.impact * 3 + hatSmooth.current * 2.2 + dropSurge * 2.8) *
         motionMul;
-      const active = Math.min(1, 0.2 + m.flow * 0.8 + hatSmooth.current * 0.25);
+      const active = Math.min(1, 0.2 + m.flow * 0.8 + hatSmooth.current * 0.25 + dropSurge * 0.2);
       // Dust also inhales slightly on gather so the field feels of-a-piece.
-      const dustPinch = 1 - gatherSmooth.current * 0.015;
+      // LeanIn draws the dust nearer with the terrain (mild pinch, not gather's squeeze).
+      const dustPinch = 1 - gatherSmooth.current * 0.015 - lean * 0.008;
       for (let i = 0; i < dustCount; i++) {
         if (i / dustCount > active) continue;
         const i3 = i * 3;
         arr[i3] = ((arr[i3] ?? 0) + (dustVel[i3] ?? 0) * drive * 20) * dustPinch;
-        arr[i3 + 1] = (arr[i3 + 1] ?? 0) + (dustVel[i3 + 1] ?? 0) * drive * 20;
+        // Drop surge lifts the dust field with the ridges — one upward billow.
+        arr[i3 + 1] =
+          (arr[i3 + 1] ?? 0) +
+          (dustVel[i3 + 1] ?? 0) * drive * 20 +
+          dropSurge * 0.012;
         arr[i3 + 2] = ((arr[i3 + 2] ?? 0) + (dustVel[i3 + 2] ?? 0) * drive * 20) * dustPinch;
         if (Math.abs(arr[i3 + 1]!) > 2.5) arr[i3 + 1] = 0;
       }
