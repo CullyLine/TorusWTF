@@ -12,6 +12,9 @@
  *  - holdBreath / deep silence → ease deformation speed + idle spin so the
  *    chrome nearly freezes and listens, then thaws.
  *  - gather inhale + kick/snare/echo + tenderness calm stay intact.
+ * Anticipation / payoff:
+ *  - leanIn → drift nearer with reflections tightening (expectant approach)
+ *  - dropEvent → one full-surface mercury shockwave, then stills
  */
 
 import { useMemo, useRef } from 'react';
@@ -31,6 +34,9 @@ uniform float uGather;
 uniform float uEcho;
 uniform float uKick;
 uniform float uSnare;
+uniform float uLean;
+uniform float uDrop;
+uniform float uDropTravel;
 
 varying vec3 vNormal;
 varying vec3 vViewDir;
@@ -38,6 +44,7 @@ varying float vNoise;
 varying float vRimSeed;
 varying float vEchoWave;
 varying float vSnareCrack;
+varying float vDropShock;
 
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
 vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -105,10 +112,15 @@ void main() {
   vec3 pos = position;
   vec3 n = normalize(normal);
   float t = uTime;
+  float lean = clamp(uLean, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
+  float dropTravel = clamp(uDropTravel, 0.0, 1.0);
   // Gather softens displacement (the metal holds its breath); impact
   // and energy still push the surface out on the release.
+  // LeanIn hushes churn slightly — expectant polish, not gather's squeeze.
   float inhale = 1.0 - uGather * 0.55;
-  float disp = (0.12 + uBass * 0.35 + uBeat * 0.32 + uEnergy * 0.08) * inhale;
+  float disp =
+    (0.12 + uBass * 0.35 + uBeat * 0.32 + uEnergy * 0.08) * inhale * (1.0 - lean * 0.28);
   vec3 samplePos = pos * 2.1 + vec3(t * 0.35, t * 0.28, t * 0.22);
   float noise = fbm(samplePos + uMid * 0.35);
   vNoise = noise;
@@ -136,6 +148,21 @@ void main() {
   pos += n * echoWave * 0.085;
   vEchoWave = echoWave;
 
+  // DropEvent: one full-surface mercury shockwave — expanding ring + residual
+  // sheet shudder, clearly bigger than the per-kick floor bulge, then stills.
+  float dropShock = 0.0;
+  if (drop > 0.01) {
+    float radius = dropTravel * 7.2 + 0.15;
+    float width = 0.55 + dropTravel * 0.35 + drop * 0.12;
+    float ring = exp(-pow((radial - radius) / max(width, 1e-4), 2.0));
+    float sheet = (1.0 - dropTravel) * drop * (0.55 + 0.45 * abs(noise));
+    dropShock = clamp(ring * drop * (1.25 - dropTravel * 0.4) + sheet * 0.85, 0.0, 2.4);
+    pos += n * dropShock * 0.22;
+    // Brief whole-body shudder on the attack — settles as the ring travels out.
+    pos *= 1.0 + drop * (1.0 - dropTravel) * 0.06;
+  }
+  vDropShock = dropShock;
+
   // Whole-body inhale / hit-release (paired with mesh.scale in JS).
   pos *= 1.0 - uGather * 0.07 + uBeat * 0.045;
 
@@ -162,6 +189,8 @@ uniform float uSparkle;
 uniform float uEcho;
 uniform float uKick;
 uniform float uSnare;
+uniform float uLean;
+uniform float uDrop;
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform vec3 uEmissive;
@@ -172,6 +201,7 @@ varying float vNoise;
 varying float vRimSeed;
 varying float vEchoWave;
 varying float vSnareCrack;
+varying float vDropShock;
 
 vec3 envColor(vec3 dir) {
   float t = dir.y * 0.5 + 0.5;
@@ -187,16 +217,20 @@ void main() {
   vec3 V = normalize(vViewDir);
   vec3 R = reflect(-V, N);
   vec3 env = envColor(R);
+  float lean = clamp(uLean, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
 
-  float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
+  // LeanIn tightens reflections — sharper fresnel, more env, expectant polish.
+  float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0 + lean * 2.2);
   vec3 base = mix(uColorA, uColorB, vNoise * 0.5 + 0.5);
   // Chrome leans on the palette (not the fixed env) so the body stays
   // colorful; emissive is kept low or loud passages clip the whole blob
   // to white.
-  vec3 tintedEnv = mix(env, base, 0.45);
-  vec3 chrome = mix(base * 0.4, tintedEnv, 0.5 + fresnel * 0.4);
+  float envPull = 0.45 - lean * 0.22;
+  vec3 tintedEnv = mix(env, base, envPull);
+  vec3 chrome = mix(base * 0.4, tintedEnv, 0.5 + fresnel * (0.4 + lean * 0.18));
   chrome += uEmissive * (0.08 + uEnergy * 0.2 + uBeat * 0.22 + uKick * 0.12);
-  chrome += mix(uColorB, vec3(1.0), 0.4) * fresnel * 0.3;
+  chrome += mix(uColorB, vec3(1.0), 0.4) * fresnel * (0.3 + lean * 0.22);
 
   // Hat / shimmer: sharp rim sparkles — glitter, not a soft wash.
   float twinkle = step(0.72, fract(vRimSeed * 17.0 + uTime * 11.0));
@@ -208,6 +242,10 @@ void main() {
 
   // Echo ripple leaves a faint bright crest on the metal.
   chrome += mix(uColorB, vec3(1.0), 0.5) * max(vEchoWave, 0.0) * uEcho * 0.22;
+
+  // Drop shock crest — cool mercury flash across the whole shell (not kick glow).
+  vec3 mercury = mix(uColorB, vec3(0.78, 0.88, 1.0), 0.55);
+  chrome += mercury * vDropShock * (0.28 + drop * 0.22);
 
   gl_FragColor = vec4(chrome, 1.0);
 }
@@ -236,6 +274,11 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
   const sparkleSmooth = useRef(0);
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
+  const leanSmooth = useRef(0);
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const dropArmed = useRef(true);
+  const prevDrop = useRef(0);
   const scaleSmooth = useRef(1);
   const scaleYSmooth = useRef(1);
 
@@ -245,6 +288,8 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
   const echoAmp = tier === 'low' ? 0.75 : 1;
   const sparkleAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const geometry = useMemo(() => new THREE.IcosahedronGeometry(1.1, detail), [detail]);
 
@@ -260,6 +305,9 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
       uSparkle: { value: 0 },
       uKick: { value: 0 },
       uSnare: { value: 0 },
+      uLean: { value: 0 },
+      uDrop: { value: 0 },
+      uDropTravel: { value: 1 },
       uColorA: { value: new THREE.Color(palette.mid) },
       uColorB: { value: new THREE.Color(palette.high) },
       uEmissive: { value: new THREE.Color(palette.high) },
@@ -294,13 +342,53 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
     // never looks frozen-solid / dead.
     const motionMul = 1 - stillness * 0.92;
 
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soften only a little under holdBreath so approach still reads through hush.
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Drop full-surface mercury shock — fast attack, lingering settle.
+    // Bigger than per-kick floor bulge; continuous envelope so it settles, not snaps.
+    const dropTarget =
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp;
+    dropSmooth.current = smoothToward(dropSmooth.current, dropTarget, dt, 0.03, 0.55);
+    const drop = dropSmooth.current;
+
+    // One-shot travel for the expanding shock ring — fire once per drop rise.
+    if (drop < 0.1) dropArmed.current = true;
+    if (dropArmed.current && drop > 0.35 && prevDrop.current <= 0.35) {
+      dropTravel.current = 0;
+      dropArmed.current = false;
+    }
+    prevDrop.current = drop;
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.95 + spd * 0.12;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpm / 200),
+      );
+    }
+
     // Music-paced clock: flows faster in loud passages, honors Speed.
     // Tenderness stills the surface — vocal-led quiet passages read as a
     // calm pool instead of churning metal. holdBreath gates the advance rate.
+    // LeanIn slows the crawl — expectant, not freeze.
     const calm = 1 - m.tenderness * 0.35;
     timeRef.current +=
-      dt * spd * (0.6 + m.swell * 0.9 + m.impact * 0.4) * calm * motionMul;
-    wobblePhaseRef.current += dt * motionMul;
+      dt *
+      spd *
+      (0.6 + m.swell * 0.9 + m.impact * 0.4 + drop * 0.22) *
+      calm *
+      motionMul *
+      (1 - lean * 0.22);
+    wobblePhaseRef.current += dt * motionMul * (1 - lean * 0.35);
     mat.uniforms.uTime!.value = timeRef.current;
     mat.uniforms.uBass!.value = m.bass * calm;
     mat.uniforms.uMid!.value = m.mid;
@@ -337,6 +425,9 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
     mat.uniforms.uSparkle!.value = sparkleSmooth.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
+    mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uDrop!.value = drop;
+    mat.uniforms.uDropTravel!.value = dropTravel.current;
 
     (mat.uniforms.uColorA!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorB!.value as THREE.Color).set(palette.high);
@@ -344,12 +435,23 @@ export function LiquidChromeScene({ analyser, palette, tier, speed = 1 }: Visual
 
     // Mesh-scale inhale / hit-release on top of vertex squeeze.
     // Kick adds a brief Y stretch so the floor thump also reads in silhouette.
+    // Drop punch is a half-sine billow — bigger than impact, then settles.
+    const dropPunch =
+      drop * Math.sin(Math.min(1, dropTravel.current) * Math.PI) * 0.14;
     const scaleTarget =
-      1 - gatherSmooth.current * 0.08 + m.impact * 0.055 + m.release * 0.02;
+      1 -
+      gatherSmooth.current * 0.08 +
+      m.impact * 0.055 +
+      m.release * 0.02 +
+      dropPunch +
+      lean * 0.06;
     scaleSmooth.current = smoothToward(scaleSmooth.current, scaleTarget, dt, 0.04, 0.11);
     const scaleYTarget = scaleSmooth.current * (1 + kickSmooth.current * 0.1);
     scaleYSmooth.current = smoothToward(scaleYSmooth.current, scaleYTarget, dt, 0.03, 0.1);
     mesh.scale.set(scaleSmooth.current, scaleYSmooth.current, scaleSmooth.current);
+
+    // LeanIn: mild camera-ward pull — approach, distinct from gather squeeze.
+    mesh.position.z = -lean * 0.55;
 
     // Snare: absolute Z roll (never accumulate) — a lateral flash of the shell.
     mesh.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
