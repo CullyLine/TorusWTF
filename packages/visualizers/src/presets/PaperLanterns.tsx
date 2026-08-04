@@ -15,6 +15,11 @@
  *    calm water toward glass; thaw upward on the music's return
  *  - echo → one-shot train of cool drifting embers from one lantern,
  *    mirrored in the dark water, replaying the phrase gap then fading
+ *  - tension → dim the flotilla and press it lower over darkening water as
+ *    the build climbs (night holding its breath — not holdBreath freeze,
+ *    not leanIn approach)
+ *  - dropEvent → one festival flash — every lantern (and its water mirror)
+ *    flares at once, then eases back into drift (bigger than kick bob)
  */
 
 import { useMemo, useRef } from 'react';
@@ -82,6 +87,9 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   // LeanIn / bar-lock amp — mid/low still approach and ride the bar, just softer.
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const barAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Tension / drop — mid/low still hush and festival-flash, just softer.
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -94,6 +102,10 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   const scratchEcho = useRef(new THREE.Color(0.78, 0.88, 1.0));
   // Cool glass bed under the flotilla when the water hushes.
   const scratchGlass = useRef(new THREE.Color(0.03, 0.05, 0.08));
+  // Storm-night water under tension — deeper than glass hush, not freeze.
+  const scratchNight = useRef(new THREE.Color(0.01, 0.015, 0.035));
+  // Festival flash — pale warm-white, brighter than kick flame.
+  const scratchFestival = useRef(new THREE.Color(1.0, 0.94, 0.78));
   const scratchMix = useRef(new THREE.Color());
   const scratchWater = useRef(new THREE.Color(0.02, 0.04, 0.07));
 
@@ -114,6 +126,11 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
   const echoSource = useRef({ x: 0, y: 1.1, z: 0, seed: 0.37 });
   // LeanIn anticipation: eager climb, slower release into the drop.
   const leanSmooth = useRef(0);
+  // Tension coil — dim + press low over darkening water; spring-loose on drop.
+  const tensionSmooth = useRef(0);
+  // Drop envelope + one-shot travel for the full-flotilla festival flash.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
   // Bar-locked bob: unwrap turns so the flotilla rides the swell without stepping.
   const barTurnsRef = useRef(0);
   const prevBarPhaseRef = useRef(0);
@@ -254,6 +271,49 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
+    // Tension coil — sustained night hush: dim lanterns + press lower over
+    // darkening water. Spring-loose on drop/release. Distinct from leanIn
+    // approach/brighten and holdBreath freeze.
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp;
+    if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+    const tension = tensionSmooth.current * (1 - stillness * 0.3);
+
+    // Drop envelope — one festival flash across every lantern + mirror.
+    dropSmooth.current = smoothToward(
+      dropSmooth.current,
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp,
+      dt,
+      0.03,
+      0.55,
+    );
+    const drop = dropSmooth.current;
+    if (drop > 0.45 && dropTravel.current >= 1) {
+      dropTravel.current = 0;
+    }
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.9 + pace * 0.15;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpm / 200),
+      );
+    }
+    // Half-sine travel pulse — crest once then settle; idle travel>=1 → 0.
+    const dropPulse =
+      drop *
+      Math.sin(Math.min(dropTravel.current, 1) * Math.PI) *
+      (dropTravel.current < 0.999 ? 1 : 0);
+
     // Continuous bar unwrap for bob lock (no 0→1 step at bar boundaries).
     const bpmKnown = Boolean(m.bpm && m.bpm > 30);
     const barPhase = bpmKnown ? Math.min(1, Math.max(0, m.barPhase)) : 0;
@@ -389,6 +449,8 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
 
     // Continuous loft: swell sustains — motionMul hangs the flotilla mid-rise.
     // Kick surge stays ungated so drum hits still punch through the thaw.
+    // Tension presses loft down (storm hush) without freezing; dropPulse adds
+    // one shared festival lift bigger than kick.
     const targetLift =
       (0.22 + swell * 0.55 + m.energy * 0.18 + m.bass * 0.1) *
       pace *
@@ -396,32 +458,49 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       calm *
       motionMul *
       (1 - gather * 0.55) *
-      (1 - tender * 0.38);
+      (1 - tender * 0.38) *
+      (1 - tension * 0.72) *
+      (1 + dropPulse * 1.55);
     const kickLift = kick * 0.95 * pace * sectionPace * calm;
+    // Drop festival loft — one shared surge across every lantern (kick is personal).
+    const dropLift = dropPulse * 2.4 * pace * sectionPace * calm;
 
     // Embers dim: size + opacity ease down while suspended, then rekindle on thaw.
     // LeanIn lifts glow with expectation (faint brighten, not a kick flare).
+    // Tension dims the flotilla (night hush); dropPulse festival-flares size/opacity.
     const emberDim = 1 - stillness * 0.48;
     const leanGlow = 1 + lean * 0.12;
+    const tensionGlow = 1 - tension * 0.42;
+    const dropGlow = 1 + dropPulse * 0.65;
     lanternMat.size =
-      (0.095 + swell * 0.035 + kick * 0.055 + afterglow * 0.02) *
+      (0.095 + swell * 0.035 + kick * 0.055 + afterglow * 0.02 + dropPulse * 0.045) *
       (0.92 + kitAmp * 0.08) *
       (1 - tender * 0.12) *
       (0.72 + emberDim * 0.28) *
-      leanGlow;
+      leanGlow *
+      tensionGlow *
+      dropGlow;
     lanternMat.opacity = Math.min(
       1,
-      (0.72 + swell * 0.18 + kick * 0.14 + afterglow * 0.1 + lean * 0.08) * emberDim,
+      (0.72 +
+        swell * 0.18 +
+        kick * 0.14 +
+        afterglow * 0.1 +
+        lean * 0.08 +
+        dropPulse * 0.28) *
+        emberDim *
+        (1 - tension * 0.38),
     );
 
     if (mirrorMat) {
       mirrorMat.size = lanternMat.size * 0.78;
       mirrorMat.opacity = Math.min(
         0.55,
-        (0.28 + swell * 0.12 + kick * 0.1) *
+        (0.28 + swell * 0.12 + kick * 0.1 + dropPulse * 0.18) *
           (tier === 'low' ? 0.7 : 1) *
           (1 - tender * 0.15) *
-          emberDim,
+          emberDim *
+          (1 - tension * 0.35),
       );
     }
 
@@ -432,9 +511,16 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       waterC.offsetHSL(0.02 * tender, 0.08 * tender, 0.04 * tender);
       // holdBreath: cool glass hush — distinct from honey tenderness.
       waterC.lerp(scratchGlass.current, stillness * 0.72);
+      // Tension: deepen toward storm-night water (alive under pressure, not freeze).
+      waterC.lerp(scratchNight.current, tension * (1 - stillness * 0.55) * 0.78);
+      // Festival flash briefly lifts the water bed toward warm pale.
+      waterC.lerp(scratchFestival.current, dropPulse * 0.22);
       waterMat.color.copy(waterC);
       waterMat.opacity =
-        (0.55 + swell * 0.08 + tender * 0.06) * (1 - stillness * 0.18) + stillness * 0.68;
+        (0.55 + swell * 0.08 + tender * 0.06 + dropPulse * 0.08) *
+          (1 - stillness * 0.18) *
+          (1 - tension * 0.12) +
+        stillness * 0.68;
     }
 
     const posAttr = lanterns.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -448,6 +534,7 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
     const honeyC = scratchHoney.current.setRGB(1, 0.72, 0.38);
     const flameC = scratchFlame.current.setRGB(1, 0.88, 0.55);
     const emberC = scratchEmber.current.setRGB(0.22, 0.1, 0.05);
+    const festivalC = scratchFestival.current.setRGB(1.0, 0.94, 0.78);
     const mixC = scratchMix.current;
     const t = timeRef.current;
 
@@ -474,8 +561,9 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       let z = arr[i3 + 2] ?? 0;
 
       // Buoyant inertia: continuous loft hangs under stillness; kick stays ungated.
+      // Drop festival loft is shared across every lantern (bigger than kick).
       const personalTarget =
-        (targetLift + kickLift) * (0.7 + sizeMul * 0.35) * (0.85 + phase * 0.3);
+        (targetLift + kickLift + dropLift) * (0.7 + sizeMul * 0.35) * (0.85 + phase * 0.3);
       vy[i] = smoothToward(vy[i] ?? 0, personalTarget, dt, 0.18, 0.28);
       y += (vy[i] ?? 0) * dt * 1.15;
 
@@ -527,6 +615,10 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       x += (hx - x) * homePull;
       z += (hz - z) * homePull;
 
+      // Tension press: settle the flotilla toward the water (low + dim storm hush).
+      // Distinct from gather's center inhale and holdBreath freeze.
+      y += (Y_MIN + 0.28 - y) * tension * dt * 1.55;
+
       // Recycle past the top — soft respawn just above the water.
       if (y > Y_MAX || Math.hypot(x, z) > 3.8) {
         const seed = i * 1.6180339887 + t * 0.01;
@@ -551,9 +643,14 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
       mixC.copy(baseCol).lerp(honeyC, 0.42 + phase * 0.2 + afterglow * 0.25 + tender * 0.35);
       // Kick flares the flame toward pale gold.
       mixC.lerp(flameC, Math.min(0.75, kick * 0.55 + swell * 0.12));
+      // Festival flash — every lantern toward warm-white at once (bigger than kick).
+      mixC.lerp(festivalC, Math.min(0.85, dropPulse * 0.72));
       // Hold-breath embers: milk the flame toward residual coal heat
       // (distinct from tenderness honey-warm, which stays in the blend above).
       mixC.lerp(emberC, stillness * 0.62);
+      // Tension smolder: dim toward quiet coals under pressure (alive, not freeze).
+      // Soft under stillness so holdBreath still owns the hush read.
+      mixC.lerp(emberC, tension * (1 - stillness * 0.7) * 0.52);
 
       const heightGlow = 0.78 + ((y - Y_MIN) / Y_SPAN) * 0.4;
       const tickSelect = hash01(phase * 17.13 + i * 0.31) > 0.68 ? 1 : 0;
@@ -569,7 +666,9 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
         (0.88 + swell * 0.22) *
         (1 - tender * 0.12) *
         (0.95 + afterglow * 0.12) *
-        (1 - stillness * 0.42);
+        (1 - stillness * 0.42) *
+        (1 - tension * 0.32) *
+        (1 + dropPulse * 0.7);
 
       colArr[i3] = Math.min(1, mixC.r * gain);
       colArr[i3 + 1] = Math.min(1, mixC.g * gain);
@@ -600,7 +699,10 @@ export function PaperLanternsScene({ analyser, palette, tier, speed = 1 }: Visua
         mirrorArr[mi3] = x + ripple;
         mirrorArr[mi3 + 1] = WATER_Y - (y - WATER_Y) * 0.55 - 0.08 + barMirrorY;
         mirrorArr[mi3 + 2] = z + ripple * 0.6;
-        const dim = (0.42 + swell * 0.12 + kick * 0.1 + lean * 0.06) * (1 - stillness * 0.28);
+        const dim =
+          (0.42 + swell * 0.12 + kick * 0.1 + lean * 0.06 + dropPulse * 0.22) *
+          (1 - stillness * 0.28) *
+          (1 - tension * 0.3);
         mirrorColArr[mi3] = Math.min(1, colArr[i3]! * dim * (0.85 + tender * 0.2));
         mirrorColArr[mi3 + 1] = Math.min(1, colArr[i3 + 1]! * dim * 0.9);
         mirrorColArr[mi3 + 2] = Math.min(1, colArr[i3 + 2]! * dim * 0.75);
