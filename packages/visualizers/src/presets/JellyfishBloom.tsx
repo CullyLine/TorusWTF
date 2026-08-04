@@ -5,7 +5,9 @@
  * Musical anatomy:
  *  - gather → bells contract (anticipate) before the beat
  *  - leanIn → bloom drifts nearer; bells tip up expectantly (pre-drop pull)
+ *  - tension → sustained compress + tentacle coil + deep dim as the build climbs
  *  - kick → pulse-propulsion thrust; bells flare open after the contract
+ *  - dropEvent → one synchronized full-bloom thrust (all bells fire, then lag)
  *  - snare → lateral current gust that shears the bloom
  *  - hat → sparse plankton glints on selected tentacle tips
  *  - tenderness → milky moonlit haze (softer glow, gentler swim)
@@ -88,6 +90,8 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   // Lock amp: full sync on high; slightly softer on mid/low.
   const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
@@ -111,6 +115,11 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
   const tenderSmooth = useRef(0);
   // LeanIn anticipation: eager climb, slower release into the drop.
   const leanSmooth = useRef(0);
+  // Tension coil: sustained compress + tentacle inward pull; spring-loose on drop.
+  const tensionSmooth = useRef(0);
+  // Drop full-bloom thrust — fast attack envelope + one-shot travel pulse.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
   // Phrase-echo one-shot: arm on quiet, fire one jelly-to-jelly pulse train.
   const echoSmooth = useRef(0);
   const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
@@ -287,7 +296,49 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
     // Steadier continuous drive when locked — not frozen (holdBreath owns that).
     const lockPace = 1 - lock * 0.38;
 
-    timeRef.current += dt * pace * sectionPace * calm * motionMul * lockPace;
+    // Tension early so the bloom clock can coil during the build.
+    // Sustained compress — spring-loose on drop/release. Distinct from gather
+    // (pre-beat inhale) and leanIn (tip-up approach).
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp;
+    if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+    const tension = tensionSmooth.current * (1 - still * 0.3);
+
+    // Drop envelope early — one-shot travel fires when the drop crest hits.
+    dropSmooth.current = smoothToward(
+      dropSmooth.current,
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp,
+      dt,
+      0.03,
+      0.55,
+    );
+    const drop = dropSmooth.current;
+    if (drop > 0.45 && dropTravel.current >= 1) {
+      dropTravel.current = 0;
+    }
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const beatSec = 60 / bpm;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + (dt / (beatSec * 2.1)) * (0.85 + pace * 0.2),
+      );
+    }
+    const dropping = dropTravel.current < 1;
+    // Half-sine envelope: rises and settles — one thrust, not a sustained push.
+    const dropPulse = dropping ? Math.sin(dropTravel.current * Math.PI) : 0;
+
+    timeRef.current +=
+      dt * pace * sectionPace * calm * motionMul * lockPace * (1 - tension * 0.22);
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
     swellSmooth.current = smoothToward(swellSmooth.current, m.swell, dt, 0.12, 0.45);
@@ -380,16 +431,25 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
     }
 
     tentMat.size =
-      (0.055 + swell * 0.02 + kick * 0.018) * (0.9 + kitAmp * 0.1) * (1 - tender * 0.08);
-    tentMat.opacity = Math.min(0.95, 0.55 + swell * 0.18 + kick * 0.1) * (1 - still * 0.22);
+      (0.055 + swell * 0.02 + kick * 0.018 + dropPulse * 0.022) *
+      (0.9 + kitAmp * 0.1) *
+      (1 - tender * 0.08) *
+      (1 - tension * 0.18);
+    tentMat.opacity =
+      Math.min(0.95, 0.55 + swell * 0.18 + kick * 0.1 + dropPulse * 0.12) *
+      (1 - still * 0.22) *
+      (1 - tension * 0.28);
 
     const waterMat = waterMatRef.current;
     if (waterMat) {
       const waterC = scratchWater.current.setRGB(0.01, 0.03, 0.07);
       // Moonlit milk on tenderness — cool haze, not amber honey.
       waterC.offsetHSL(0.04 * tender, 0.05 * tender, 0.05 * tender);
+      // Tension dims toward the deep — ambient hush before the drop payoff.
+      waterC.multiplyScalar(1 - tension * 0.45);
       waterMat.color.copy(waterC);
-      waterMat.opacity = 0.62 + swell * 0.06 + tender * 0.08 + still * 0.05;
+      waterMat.opacity =
+        0.62 + swell * 0.06 + tender * 0.08 + still * 0.05 + tension * 0.1;
     }
 
     const bassC = scratchBass.current.set(palette.bass);
@@ -426,14 +486,17 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
 
       // Anticipate: gather contracts the bell; personal phase staggers the bloom.
       // Under lock, stagger collapses so the whole bloom inhales as one.
+      // Tension adds a sustained whole-bloom compress (no stagger) — strain, not inhale.
       const personalGather = Math.min(
         1,
         gather * (0.75 + phase * 0.5 * (1 - lockSnap) + 0.25 * lockSnap),
       );
-      cs[i] = smoothToward(cs[i] ?? 0, personalGather, dt, 0.05, 0.16);
+      const compressTarget = Math.min(1, personalGather + tension * 0.72);
+      cs[i] = smoothToward(cs[i] ?? 0, compressTarget, dt, 0.05, 0.16);
       const contract = cs[i] ?? 0;
 
-      // Target scale: contract on gather, flare open on kick (pulse phrasing).
+      // Target scale: contract on gather/tension, flare open on kick (pulse phrasing).
+      // Drop opens every bell at once — synchronized bloom bigger than per-kick.
       // Convergence adds a shared breath swell so locked bells pulse together.
       const personalPulseAngle = t * (0.55 + phase * 0.35) + phase * 9.0;
       const pulseAngle =
@@ -443,7 +506,8 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
       const scaleTarget =
         (1 -
           contract * 0.38 +
-          kick * (0.42 + (band === 0 ? 0.12 : 0)) -
+          kick * (0.42 + (band === 0 ? 0.12 : 0)) +
+          dropPulse * 0.58 -
           tender * 0.06 +
           lockBreath * 0.1) *
         (0.9 + sizeMul * 0.12);
@@ -451,18 +515,24 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
       const scale = bs[i] ?? 1;
 
       // Pulse thrust: kick drives upward/forward; gather holds back slightly.
+      // Drop fires one synchronized full-bloom thrust — clearly bigger than kick.
       // Lock steadies heading rates so the bloom swims as one without freezing.
       const heading =
         phase * Math.PI * 2 * (1 - lockSnap * 0.55) +
         t * (0.08 + phase * 0.04 * (1 - lockSnap)) +
         lockSnap * sharedPulseAngle * 0.15;
-      const thrust =
+      const kickThrust =
         kick * (1.55 + sizeMul * 0.45) * (1 - contract * 0.35) * (1 - tender * 0.4) * motionMul;
+      // Synchronized drop thrust — no phase stagger, so every bell fires together.
+      const dropThrust =
+        dropPulse * (2.85 + sizeMul * 0.35) * (1 - tender * 0.25) * motionMul;
+      const thrust = kickThrust + dropThrust;
       const idleLift =
         (0.08 + swell * 0.12 + m.bass * 0.06) *
         breath *
         (1 - tender * 0.45) *
-        motionMul;
+        motionMul *
+        (1 - tension * 0.55);
 
       const targetVx =
         Math.cos(heading) * thrust * 0.55 +
@@ -475,7 +545,8 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
         thrust * 0.95 +
         idleLift +
         (hy - (jp[i3 + 1] ?? hy)) * 0.35 * motionMul -
-        gather * 0.12 * motionMul;
+        gather * 0.12 * motionMul -
+        tension * 0.18 * motionMul;
       const targetVz =
         Math.sin(heading) * thrust * 0.55 +
         (phase > 0.5 ? 1 : -1) * gustZ * (0.45 + phase * 0.35) * (1 - lock * 0.35) +
@@ -529,12 +600,17 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
         : 0;
       const echoPulse = echoVis * crestEnv * (1 - still * 0.55);
 
-      // Flattened bell — contracts taller/narrower on gather, flares open on kick.
+      // Flattened bell — contracts taller/narrower on gather/tension, flares on kick/drop.
       // LeanIn: tip the bell mouth up/toward camera (expectant), not a gather squeeze.
-      const bellSX = 0.85 * sizeMul * scale * (1 + kick * 0.12 + echoPulse * 0.1);
+      const bellSX =
+        0.85 * sizeMul * scale * (1 + kick * 0.12 + dropPulse * 0.18 + echoPulse * 0.1);
       const bellSY =
-        0.55 * sizeMul * (1.15 - (scale - 1) * 0.55 + contract * 0.2) * (1 + echoPulse * 0.18);
-      const bellSZ = 0.85 * sizeMul * scale * (1 + kick * 0.12 + echoPulse * 0.1);
+        0.55 *
+        sizeMul *
+        (1.15 - (scale - 1) * 0.55 + contract * 0.2 + tension * 0.12) *
+        (1 + echoPulse * 0.18 + dropPulse * 0.22);
+      const bellSZ =
+        0.85 * sizeMul * scale * (1 + kick * 0.12 + dropPulse * 0.18 + echoPulse * 0.1);
       const tipUp = lean * (0.32 + phase * 0.12 * (1 - lockSnap * 0.5));
       _dummy.position.set(x, y, z);
       _dummy.scale.set(bellSX, bellSY, bellSZ);
@@ -544,7 +620,8 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
         Math.sin(t * 0.4 + phase * 6 * (1 - lockSnap) + lockSnap * sharedPulseAngle) *
           0.12 *
           motionMul *
-          (1 - lock * 0.25),
+          (1 - lock * 0.25) *
+          (1 - tension * 0.55),
       );
       _dummy.updateMatrix();
       bells.setMatrixAt(i, _dummy.matrix);
@@ -555,16 +632,21 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
       mixC.lerp(milkC, tender * 0.55 + still * 0.2);
       // Echo reply → cool aqua bioluminescence crest (cooler than kick glow).
       mixC.lerp(echoC, echoPulse * 0.72);
+      // Drop flare → bright synchronized bloom flash.
+      mixC.lerp(glowC, dropPulse * 0.55);
 
       const pulseGain =
         0.75 +
         scale * 0.45 +
         kick * 0.35 +
+        dropPulse * 0.7 +
         swell * 0.18 +
         echoPulse * 0.85 +
         // Shared glow breath under lock — the bloom lights as one creature.
         Math.max(0, lockBreath) * 0.55;
-      const hush = (1 - tender * 0.18) * (1 - still * 0.28);
+      // Tension dims toward the deep — hush before the drop payoff.
+      const hush =
+        (1 - tender * 0.18) * (1 - still * 0.28) * (1 - tension * 0.42);
       _bellColor.setRGB(
         Math.min(1, mixC.r * pulseGain * hush),
         Math.min(1, mixC.g * pulseGain * hush),
@@ -588,6 +670,7 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
           const along = (s + 1) / segCount;
           // Trailing sway — delayed phase down the strand for fluid lag.
           // Under lock, sway clocks converge so tentacles breathe with the bells.
+          // Tension coils strands inward: sway collapses, length shortens.
           const swayT =
             t * (0.7 + phase * 0.4 * (1 - lockSnap) + lockSnap * 0.85) -
             along * (1.8 + snare * 0.9) +
@@ -596,23 +679,32 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
           const swayAmp =
             (0.04 + along * 0.11) *
             (1 - contract * 0.45) *
+            (1 - tension * 0.72) *
             (1 - tender * 0.4) *
             motionMul *
             lenScale;
+          const coilIn = tension * along * 0.055 * lenScale;
           const targetX =
             prevX +
-            Math.cos(az + along * 0.35) * along * 0.02 * lenScale +
+            Math.cos(az + along * 0.35) * along * 0.02 * lenScale * (1 - tension * 0.65) +
             Math.sin(swayT) * swayAmp +
-            (i & 1 ? 1 : -1) * gustX * along * 0.08;
+            (i & 1 ? 1 : -1) * gustX * along * 0.08 -
+            Math.cos(az) * coilIn;
           const targetY =
             prevY -
-            (0.085 + (1 - scale) * 0.04) * lenScale * (1 + contract * 0.2) -
-            kick * along * 0.015 * motionMul;
+            (0.085 + (1 - scale) * 0.04) *
+              lenScale *
+              (1 + contract * 0.2) *
+              (1 - tension * 0.35) -
+            kick * along * 0.015 * motionMul -
+            dropPulse * along * 0.028 * motionMul +
+            tension * along * 0.04;
           const targetZ =
             prevZ +
-            Math.sin(az + along * 0.35) * along * 0.02 * lenScale +
+            Math.sin(az + along * 0.35) * along * 0.02 * lenScale * (1 - tension * 0.65) +
             Math.cos(swayT * 0.9) * swayAmp * 0.85 +
-            (phase > 0.5 ? 1 : -1) * gustZ * along * 0.08;
+            (phase > 0.5 ? 1 : -1) * gustZ * along * 0.08 -
+            Math.sin(az) * coilIn;
 
           // Deeper segments lag more — inertia thickens toward the tips.
           const lagTau = (0.05 + along * 0.12) * (1 + still * 2.5);
@@ -636,11 +728,15 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
 
           mixC
             .copy(baseCol)
-            .lerp(glowC, 0.15 + (1 - along) * 0.25 + kick * 0.12)
+            .lerp(glowC, 0.15 + (1 - along) * 0.25 + kick * 0.12 + dropPulse * 0.2)
             .lerp(milkC, tender * 0.5 + still * 0.18)
             .lerp(echoC, echoPulse * (0.55 + along * 0.25));
           const fade =
-            (1 - along * 0.55) * (0.7 + swell * 0.25) * tipSpark * hush * (1 + echoPulse * 0.55);
+            (1 - along * 0.55) *
+            (0.7 + swell * 0.25) *
+            tipSpark *
+            hush *
+            (1 + echoPulse * 0.55 + dropPulse * 0.35);
           tentCol[pi] = Math.min(1, mixC.r * fade);
           tentCol[pi + 1] = Math.min(1, mixC.g * fade);
           tentCol[pi + 2] = Math.min(1, mixC.b * fade);
@@ -693,14 +789,16 @@ export function JellyfishBloomScene({ analyser, palette, tier, speed = 1 }: Visu
 
     // Slow bloom yaw — living, never a storm spin. lockPace steadies the
     // turn when bands lock so the sync reads without freezing.
+    // Tension coils the yaw; drop briefly rushes then settles.
     bells.rotation.y +=
       dt *
       pace *
       calm *
       motionMul *
       lockPace *
-      (0.025 + m.mid * 0.02 + swell * 0.012) *
-      (1 - tender * 0.4);
+      (0.025 + m.mid * 0.02 + swell * 0.012 + dropPulse * 0.04) *
+      (1 - tender * 0.4) *
+      (1 - tension * 0.55);
     tents.rotation.y = bells.rotation.y;
     if (planks) planks.rotation.y = bells.rotation.y;
 
