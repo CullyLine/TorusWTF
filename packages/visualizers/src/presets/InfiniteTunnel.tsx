@@ -850,9 +850,14 @@ export function InfiniteTunnelScene({
     fp.time = flowTimeRef.current;
     fp.turbulence *= turbulenceNow;
     // Tenderness gentles particle advection; afterglow keeps a faint warm drift.
+    // lockPace steadies the stream when bands lock (organization, not freeze).
     const drift =
-      dt * (0.35 + m.energy * 0.65 + m.dropEvent * 1.2 + afterglow * 0.12) * (1 - tender * 0.4);
-    const swirl = vortexNow * dt * (0.6 + m.mid * 1.2) * (1 - tender * 0.35);
+      dt *
+      (0.35 + m.energy * 0.65 + m.dropEvent * 1.2 + afterglow * 0.12) *
+      (1 - tender * 0.4) *
+      lockPace;
+    const swirl =
+      vortexNow * dt * (0.6 + m.mid * 1.2) * (1 - tender * 0.35) * (1 - lockSnap * 0.7);
     const sweep = tunnelSpeed * dt * 0.85;
     const fv = flowScratch.current;
     const arr = particles.positions;
