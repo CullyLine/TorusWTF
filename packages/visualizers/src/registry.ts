@@ -30,6 +30,7 @@ import { GlowwormGrottoScene } from './presets/GlowwormGrotto';
 import { DuneSeaScene } from './presets/DuneSea';
 import { MothBalletScene } from './presets/MothBallet';
 import { KoiPondScene } from './presets/KoiPond';
+import { FrostBloomScene } from './presets/FrostBloom';
 import { RainforestReverieScene } from './presets/RainforestReverie';
 import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
@@ -62,6 +63,7 @@ export type VisualizerId =
   | 'dune_sea'
   | 'moth_ballet'
   | 'koi_pond'
+  | 'frost_bloom'
   | 'rainforest_reverie'
   | 'alien_planet'
   | 'tidal_sanctuary'
@@ -703,6 +705,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       aura: 0.3,
       cameraMode: 'drift',
       bloomIntensity: 1.0,
+      cameraDistance: 1,
+      lightLevel: 1.0,
+    },
+  },
+  frost_bloom: {
+    id: 'frost_bloom',
+    label: 'Frost Bloom',
+    hint: 'Night glass frost — dendrite crystals accrete with the music; kick spurts new branches, snare cracks a shear line, hats spark prism tips, gather braces, tension needle-freezes, drop flash-freezes the pane, tenderness thaws wet, holdBreath holds mid-sparkle.',
+    Scene: FrostBloomScene,
+    // Fullscreen frost pane owns the frame via clip-space quad; still camera
+    // keeps the glass stable while the shader grows the crystals.
+    defaults: {
+      speed: 1,
+      smoothness: 0.72,
+      scale: 1,
+      bassShake: 0.3,
+      anima: 0.5,
+      aura: 0.25,
+      cameraMode: 'still',
+      bloomIntensity: 0.75,
       cameraDistance: 1,
       lightLevel: 1.0,
     },
