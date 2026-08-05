@@ -10,6 +10,8 @@
  *  - high / shimmer / hat → foam + micro-crests
  *  - gather → calms / draws the sea inward before a hit
  *  - leanIn → raise swell + draw horizon nearer (pre-drop approach; not gather calm)
+ *  - tension → chop shorter + darken as the build climbs (storm-sea gather; not lean approach)
+ *  - convergence → crests align into bar-locked rolling wave sets; soft scatter on release
  *  - release / drop → surges the sea
  *  - silence / holdBreath → glassy resting surface
  *  - tenderness → ease chop/swell + milky pearlescent sheen (still moves)
@@ -53,6 +55,9 @@ uniform float uKickTravel;
 uniform float uSnare;
 uniform float uGather;
 uniform float uLean;
+uniform float uTension;
+uniform float uLock;
+uniform float uLockBar;
 uniform float uSurge;
 uniform float uStillness;
 uniform float uTenderness;
@@ -108,6 +113,9 @@ float heightField(vec2 xz) {
   float stillness = clamp01(uStillness);
   float gather = clamp01(uGather);
   float lean = clamp01(uLean);
+  float tension = clamp01(uTension);
+  float lock = clamp01(uLock);
+  float lockSnap = lock * lock;
   float surge = clamp01(uSurge);
   float tender = clamp01(uTenderness);
   float chop = clamp(uTurbulence, 0.0, 2.0);
@@ -115,31 +123,53 @@ float heightField(vec2 xz) {
   // Tenderness eases chop/swell while the sea keeps rolling (holdBreath owns glass).
   float swellCalm = mix(1.0, 0.52, tender);
   float chopMul = mix(1.0, 0.28, tender);
+  // Tension sharpens storm chop (alive under pressure — not gather calm / lean raise).
+  chopMul *= 1.0 + tension * 1.15;
   chop *= chopMul;
 
   // Gather draws wavelengths inward and calms amplitude before the hit.
   float pull = 1.0 + gather * 0.55;
+  // Tension shortens wavelengths in place (storm chop) without gather's inhale pull.
+  float stormPull = 1.0 + tension * 0.72;
   float ampScale = glass * (1.0 - gather * 0.62) * (1.0 + surge * 0.85);
   ampScale *= 0.55 + uSwell * 0.55 + uBass * 0.35 + uBassAct * 0.4;
   // LeanIn raises the swell — water gathers itself for the drop (opposite of gather calm).
   ampScale *= 1.0 + lean * 0.48;
+  // Tension presses amplitude slightly — darker storm sea, not lean swell raise.
+  ampScale *= mix(1.0, 0.82, tension);
+  // Convergence organizes sets: primary swell stays present, chop fades.
+  ampScale *= 1.0 + lockSnap * 0.08;
   ampScale = clamp(ampScale, 0.08, 1.85);
+
+  // Shared bar clock for wave-set trains — continuous, no bar-boundary snap.
+  float lockBar = uLockBar;
+  // Primary swell direction — lock pulls secondary trains toward this set axis.
+  vec2 setDir = vec2(0.92, 0.28);
+  float setFreq = 0.42 * stormPull;
 
   float h = 0.0;
   // Broad swells — deep movement from bass / bassActivity.
-  h += dirWave(xz * pull, vec2(0.92, 0.28), 0.42, 0.38 * ampScale * swellCalm, 0.55, 0.25, t);
-  h += dirWave(xz * pull, vec2(-0.35, 0.94), 0.31, 0.28 * ampScale * swellCalm, 0.41, 0.2, t * 0.92);
-  h += dirWave(xz * pull, vec2(0.55, -0.72), 0.58, 0.16 * ampScale * swellCalm * (0.7 + uBassAct), 0.68, 0.3, t * 1.07);
+  // Under lock, phases snap toward the shared bar so crests arrive in sets.
+  float tA = mix(t, lockBar / max(0.55, 1e-3), lockSnap);
+  float tB = mix(t * 0.92, lockBar / max(0.41, 1e-3) + 0.15, lockSnap);
+  float tC = mix(t * 1.07, lockBar / max(0.68, 1e-3) + 0.31, lockSnap);
+  vec2 dA = normalize(mix(vec2(0.92, 0.28), setDir, lockSnap));
+  vec2 dB = normalize(mix(vec2(-0.35, 0.94), setDir, lockSnap * 0.85));
+  vec2 dC = normalize(mix(vec2(0.55, -0.72), setDir, lockSnap * 0.7));
+  h += dirWave(xz * pull * stormPull, dA, 0.42 * stormPull, 0.38 * ampScale * swellCalm * (1.0 + lockSnap * 0.12), 0.55, mix(0.25, 0.42, lockSnap), tA);
+  h += dirWave(xz * pull * stormPull, dB, 0.31 * stormPull, 0.28 * ampScale * swellCalm * (1.0 - lockSnap * 0.2), 0.41, mix(0.2, 0.38, lockSnap), tB);
+  h += dirWave(xz * pull * stormPull, dC, 0.58 * stormPull, 0.16 * ampScale * swellCalm * (0.7 + uBassAct) * (1.0 - lockSnap * 0.35), 0.68, mix(0.3, 0.45, lockSnap), tC);
 
-  // Mid roll — surface body from mids / swell.
-  float midAmp = ampScale * swellCalm * (0.45 + uMid * 0.55 + uSwell * 0.35);
-  h += dirWave(xz * pull, vec2(0.78, 0.62), 1.15, 0.12 * midAmp, 0.95, mix(0.35, 0.18, tender), t * 1.15);
-  h += dirWave(xz * pull, vec2(-0.66, 0.55), 1.55, 0.08 * midAmp, 1.22, mix(0.4, 0.2, tender), t * 1.28);
+  // Mid roll — surface body from mids / swell. Lock softens cross-chop into the set.
+  float midAmp = ampScale * swellCalm * (0.45 + uMid * 0.55 + uSwell * 0.35) * (1.0 - lockSnap * 0.55);
+  float midSharp = mix(mix(0.35, 0.18, tender), mix(0.55, 0.28, tender), tension);
+  h += dirWave(xz * pull * stormPull, normalize(mix(vec2(0.78, 0.62), setDir, lockSnap * 0.6)), 1.15 * stormPull, 0.12 * midAmp, 0.95, midSharp, mix(t * 1.15, lockBar * 1.7 + 0.4, lockSnap));
+  h += dirWave(xz * pull * stormPull, normalize(mix(vec2(-0.66, 0.55), setDir, lockSnap * 0.5)), 1.55 * stormPull, 0.08 * midAmp, 1.22, midSharp, mix(t * 1.28, lockBar * 2.1 + 0.7, lockSnap));
 
-  // Chop / detail octaves — turbulence raises frequency content.
-  float octAmp = 0.07 * ampScale * swellCalm * (0.35 + chop * 0.65);
-  float octFreq = 2.1 + chop * 1.4;
-  vec2 oDir = vec2(0.71, 0.41);
+  // Chop / detail octaves — turbulence raises frequency content; tension shortens further.
+  float octAmp = 0.07 * ampScale * swellCalm * (0.35 + chop * 0.65) * (1.0 - lockSnap * 0.72);
+  float octFreq = (2.1 + chop * 1.4) * (1.0 + tension * 0.85);
+  vec2 oDir = mix(vec2(0.71, 0.41), setDir, lockSnap * 0.4);
   for (int i = 0; i < WAVE_OCTAVES; i++) {
     float fi = float(i);
     float ang = fi * 1.37;
@@ -148,15 +178,29 @@ float heightField(vec2 xz) {
     d = normalize(d * 0.85 + oDir * 0.15);
     float f = octFreq * pow(1.72, fi);
     float a = octAmp * pow(0.52, fi);
-    float sharp = clamp01(0.2 + chop * 0.25 + uHigh * 0.15) * mix(1.0, 0.42, tender);
-    h += dirWave(xz * pull, d, f, a, 1.4 + fi * 0.35, sharp, t * (1.0 + fi * 0.08));
+    float sharp = clamp01(0.2 + chop * 0.25 + uHigh * 0.15 + tension * 0.35) * mix(1.0, 0.42, tender);
+    h += dirWave(xz * pull * stormPull, d, f, a, 1.4 + fi * 0.35, sharp, t * (1.0 + fi * 0.08));
   }
 
-  // Micro-crests from high / shimmer / hat.
+  // Micro-crests from high / shimmer / hat — tension sharpens spray ticks.
   float sparkle =
-    sin(dot(xz, vec2(3.7, 2.9)) * (2.4 + uHigh) + t * 2.6) *
+    sin(dot(xz, vec2(3.7, 2.9)) * (2.4 + uHigh + tension * 1.1) + t * 2.6) *
     cos(dot(xz, vec2(-2.1, 3.3)) * (2.1 + uShimmer) - t * 2.1);
-  h += sparkle * 0.035 * ampScale * (0.25 + uHigh * 0.55 + uShimmer * 0.7 + uHat * 0.45);
+  float sparkleAmp = 0.035 * ampScale * (0.25 + uHigh * 0.55 + uShimmer * 0.7 + uHat * 0.45);
+  sparkleAmp *= 1.0 + tension * 0.55;
+  sparkleAmp *= 1.0 - lockSnap * 0.4;
+  h += sparkle * sparkleAmp;
+
+  // Convergence set crest — one bar-locked rolling train that organizes the sea.
+  // Soft scatter as lock fades (lockSnap falls); never a kick ring or snare shear.
+  if (lockSnap > 0.01) {
+    float setPhase = dot(xz * pull, setDir) * setFreq + lockBar;
+    float setCrest = pow(0.5 + 0.5 * sin(setPhase), mix(1.4, 2.8, lockSnap));
+    float setWave = (setCrest * 2.0 - 1.0) * 0.32 * ampScale * swellCalm * lockSnap;
+    // Harmonic companion so sets read as trains, not a single sine sheet.
+    float setHarm = sin(setPhase * 2.0 + 0.4) * 0.1 * ampScale * swellCalm * lockSnap;
+    h += setWave + setHarm;
+  }
 
   // Kick: outward crest pulse traveling forward-only along +Z from the viewer.
   float travel = clamp(uKickTravel, 0.0, 28.0);
@@ -200,13 +244,19 @@ float foamMask(vec2 xz, vec3 n, float h) {
   float micro =
     0.5 + 0.5 * sin(dot(xz, vec2(7.2, 5.1)) + uPhase * 3.2 + uHat * 4.0);
   float dens = clamp(uDensity, 0.05, 1.0);
+  float tension = clamp01(uTension);
+  float lock = clamp01(uLock);
+  float lockSnap = lock * lock;
   // Density lowers the foam threshold → more coverage at high density.
+  // Tension sharpens spray (lower thresh, crisper crest) — storm flecks, not hat glitter.
   float thresh = mix(0.78, 0.54, dens);
-  thresh -= clamp(uHigh * 0.01 + uShimmer * 0.025 + uHat * 0.015, 0.0, 0.06);
+  thresh -= clamp(uHigh * 0.01 + uShimmer * 0.025 + uHat * 0.015 + tension * 0.08, 0.0, 0.12);
+  // Lock organizes foam onto set crests — less scatter, clearer trains.
+  thresh += lockSnap * 0.06;
   float raw =
     slope * 0.18 +
     crest * 0.48 +
-    micro * 0.06 * (0.35 + uShimmer * 0.5 + uHat * 0.3);
+    micro * 0.06 * (0.35 + uShimmer * 0.5 + uHat * 0.3 + tension * 0.35);
   // Snare boosts foam along a lateral crest shear — short whitecap crack.
   float snareCrack =
     clamp01(uSnare) *
@@ -214,7 +264,9 @@ float foamMask(vec2 xz, vec3 n, float h) {
     (0.35 + 0.65 * abs(sin(xz.x * 5.4 + uPhase * 0.2)));
   raw += snareCrack * 0.4;
   raw *= 0.48 + dens * 0.52;
-  float foam = smoothstep(thresh, thresh + 0.22, raw);
+  // Tension boosts crest foam without filling troughs.
+  raw += crest * tension * 0.22;
+  float foam = smoothstep(thresh, thresh + mix(0.22, 0.14, tension), raw);
   foam *= 1.0 - clamp01(uStillness) * 0.85;
   foam *= 1.0 - clamp01(uGather) * 0.45;
   // Tender passages thin foam slightly — milky calm, not holdBreath wipe.
@@ -362,6 +414,17 @@ void main() {
     vec3 deepCol = uColorBass * (0.55 + uBass * 0.2);
     vec3 bodyCol = uColorMid * (0.75 + uMid * 0.15);
     vec3 water = mix(bodyCol, deepCol, deepAmt);
+
+    // Tension storm darken — ink the troughs toward bass; distinct from gather calm
+    // and lean approach (no camera move). Soft under stillness so glass still owns hush.
+    float tension = clamp01(uTension);
+    float lock = clamp01(uLock);
+    float lockSnap = lock * lock;
+    float stillShade = clamp01(uStillness);
+    water = mix(water, deepCol * 0.72, tension * (0.35 + deepAmt * 0.4) * (1.0 - stillShade * 0.7));
+    water *= mix(1.0, 0.78, tension * (1.0 - stillShade * 0.5));
+    // Convergence faint crest brighten — organization, not a punch.
+    water *= 1.0 + lockSnap * 0.08;
 
     // Colored Fresnel-like reflection (palette-tinted, not plain white sky).
     float ndv = clamp01(dot(n, V));
@@ -532,6 +595,8 @@ export function TidalSanctuaryScene({
   const tenderSmooth = useRef(0);
   const leanSmooth = useRef(0);
   const gatherSmooth = useRef(0);
+  const tensionSmooth = useRef(0);
+  const lockSmooth = useRef(0);
   const swellSmooth = useRef(0.15);
   const surgeSmooth = useRef(0);
   const afterglowSmooth = useRef(0);
@@ -555,6 +620,8 @@ export function TidalSanctuaryScene({
   const kitAmp = tier === 'low' ? 0.78 : tier === 'mid' ? 0.9 : 1;
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
 
   const uniforms = useMemo(
     () => ({
@@ -573,6 +640,9 @@ export function TidalSanctuaryScene({
       uSnare: { value: 0 },
       uGather: { value: 0 },
       uLean: { value: 0 },
+      uTension: { value: 0 },
+      uLock: { value: 0 },
+      uLockBar: { value: 0 },
       uSurge: { value: 0 },
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
@@ -615,6 +685,17 @@ export function TidalSanctuaryScene({
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.9;
 
+    // Convergence envelope early so lockPace can steady the swell clock.
+    lockSmooth.current = smoothToward(
+      lockSmooth.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      0.1,
+      0.18,
+    );
+    const lock = lockSmooth.current * (1 - stillness * 0.3);
+    const lockPace = 1 - lock * 0.38;
+
     tenderSmooth.current = smoothToward(
       tenderSmooth.current,
       Math.min(1, m.tenderness),
@@ -632,8 +713,24 @@ export function TidalSanctuaryScene({
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
+    // Tension storm coil — spring-loose on drop/release (Tide Veil envelope).
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp;
+    if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+    const tension = tensionSmooth.current * (1 - stillness * 0.3);
+
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
     // Forward-only accumulated phase — never reverses when energy drops.
+    // Lock steadies the clock (organization, not freeze — holdBreath owns that).
     const phaseRate =
       (0.22 +
         Math.min(m.energy, 1.5) * 0.12 +
@@ -641,7 +738,9 @@ export function TidalSanctuaryScene({
         Math.min(m.swell, 1) * 0.08) *
       pace *
       sectionPace *
-      motionMul;
+      motionMul *
+      lockPace *
+      (1 - tension * 0.18);
     phaseRef.current += dt * Math.max(phaseRate, 0.02 * pace * (1 - stillness * 0.85));
 
     gatherSmooth.current = smoothToward(gatherSmooth.current, m.gather, dt, 0.04, 0.14);
@@ -721,6 +820,11 @@ export function TidalSanctuaryScene({
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
 
+    // Shared bar clock for convergence wave sets — continuous, no bar-boundary snap.
+    const barDrive =
+      m.bpm && m.bpm > 30 ? (m.barPhase ?? 0) : (phaseRef.current * 0.08) % 1;
+    const lockBar = barDrive * Math.PI * 2;
+
     mat.uniforms.uResolution!.value.set(size.width * viewport.dpr, size.height * viewport.dpr);
     mat.uniforms.uTime!.value = phaseRef.current;
     mat.uniforms.uPhase!.value = phaseRef.current;
@@ -736,6 +840,9 @@ export function TidalSanctuaryScene({
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uGather!.value = gatherSmooth.current;
     mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uTension!.value = tension;
+    mat.uniforms.uLock!.value = lock;
+    mat.uniforms.uLockBar!.value = lockBar;
     mat.uniforms.uSurge!.value = surgeSmooth.current;
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;

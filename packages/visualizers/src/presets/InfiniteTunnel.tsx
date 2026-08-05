@@ -21,6 +21,8 @@
  *  - tenderness → ease the rush + warm walls candlelit-soft (gentle vocals)
  *  - afterglow → lingering warm heat trace on the walls after big moments
  *  - leanIn → draw deeper into the throat + narrow the walls (pre-drop coil)
+ *  - barPhase → continuous bar-locked ring pulse receding down the bore
+ *  - convergence → walls cohere into clean concentric geometry + steadier rush
  *
  * Plus ~3k "existential particles" advected by the shared curl-noise flow
  * field while the conveyor sweeps them past the camera.
@@ -42,7 +44,7 @@ import {
 
 /**
  * Smooth toward a target with asymmetric rise/fall (seconds).
- * Keeps kit / holdBreath / tenderness / afterglow / leanIn fluid — no snaps.
+ * Keeps kit / holdBreath / tenderness / afterglow / leanIn / bar / lock fluid.
  */
 function smoothToward(
   current: number,
@@ -84,6 +86,7 @@ uniform float uTeeth;
 uniform float uGather;
 uniform float uKick;
 uniform float uSnare;
+uniform float uLock;
 
 varying float vKind;
 varying float vViewZ;
@@ -93,16 +96,20 @@ varying float vKick;
 
 void main() {
   vec3 pos = position;
+  float lock = clamp(uLock, 0.0, 1.0);
+  float lockSnap = lock * lock;
   // Bass explosion pushes walls outward; gather squeezes them inward
   // just before the beat lands (the inhale). Kick adds a sharper radial
   // punch on the same axis so drums answer without washing the bore.
-  pos.xy += aWallDir * (uExplode - uGather * 0.35 + uKick * 0.28);
+  // Convergence softens sustained explode so walls read as clean rings.
+  pos.xy += aWallDir * ((uExplode * (1.0 - lockSnap * 0.55)) - uGather * 0.35 + uKick * 0.28);
   // Mid teeth: pyramid apexes extend further into the bore.
-  pos.xy -= aWallDir * aApex * uTeeth;
+  // Lock tucks teeth so segments align into concentric geometry.
+  pos.xy -= aWallDir * aApex * uTeeth * (1.0 - lockSnap * 0.7);
   // Snare: lateral X shear — floor/ceiling slide, side walls skew with depth.
-  // Distinct axis from the kick's radial wall punch.
+  // Distinct axis from the kick's radial wall punch. Lock damps the warp.
   float depthWave = sin(pos.z * 1.15);
-  pos.x += uSnare * (aWallDir.y * 0.22 + aWallDir.x * depthWave * 0.12);
+  pos.x += uSnare * (1.0 - lockSnap) * (aWallDir.y * 0.22 + aWallDir.x * depthWave * 0.12);
 
   vKind = aKind;
   vWallDir = aWallDir;
@@ -126,6 +133,9 @@ uniform float uFar;
 uniform float uSnare;
 uniform float uTenderness;
 uniform float uAfterglow;
+uniform float uBarPhase;
+uniform float uBarAmp;
+uniform float uLock;
 
 varying float vKind;
 varying float vViewZ;
@@ -135,12 +145,16 @@ varying float vKick;
 
 void main() {
   vec3 col = mix(uWallColor, uPyrColor, vKind);
+  float lock = clamp(uLock, 0.0, 1.0);
+  float lockSnap = lock * lock;
 
   // Side walls read darker than floor/ceiling — fake form shading.
-  col *= 0.6 + 0.4 * abs(vWallDir.y);
+  // Convergence flattens the shading so rings read clean and concentric.
+  float formShade = mix(0.6 + 0.4 * abs(vWallDir.y), 0.92, lockSnap);
+  col *= formShade;
 
   // High band makes the pyramid faces glint toward the accent color.
-  col += uAccentColor * (uHigh * uHigh) * vKind * 0.5;
+  col += uAccentColor * (uHigh * uHigh) * vKind * 0.5 * (1.0 - lockSnap * 0.35);
 
   // Kick wall punch: brief brightness on the walls (not a full-frame strobe).
   col += uWallColor * vKick * (1.0 - vKind) * 0.35;
@@ -159,6 +173,18 @@ void main() {
   float glowHeat = uAfterglow * (0.22 + depthBias * 0.55);
   col = mix(col, uWarmColor, clamp(tenderHeat * 0.55 + glowHeat * 0.42, 0.0, 0.72));
   col += uWarmColor * glowHeat * 0.28;
+
+  // Continuous bar-locked ring pulse traveling down the bore (no stepping).
+  // uBarPhase < 0 when BPM unknown so cos(0) never leaves glow stuck bright.
+  float barOn = step(0.0, uBarPhase) * clamp(uBarAmp, 0.0, 1.0);
+  float barWave = 0.5 + 0.5 * cos(vViewZ * 0.55 - uBarPhase * 6.2831853);
+  float barBreath = 0.5 + 0.5 * cos(uBarPhase * 6.2831853);
+  float barPulse = (barWave * 0.78 + barBreath * 0.22) * barOn;
+  col += uAccentColor * barPulse * (0.18 + (1.0 - vKind) * 0.1);
+  col *= 1.0 + barPulse * 0.14;
+
+  // Faint lock brighten — organization, not a punch.
+  col *= 1.0 + lockSnap * 0.1;
 
   // Depth fog into black — the infinite throat.
   float fog = 1.0 - smoothstep(10.0, uFar, vViewZ);
@@ -360,11 +386,20 @@ export function InfiniteTunnelScene({
   const afterglowSmooth = useRef(0);
   // LeanIn anticipation — deeper throat + narrower walls (pre-drop coil).
   const leanSmooth = useRef(0);
+  // Continuous bar unwrap for ring pulse (no 0→1 step at bar boundaries).
+  const barTurnsRef = useRef(0);
+  const prevBarPhaseRef = useRef(0);
+  const hadBpmRef = useRef(false);
+  const barAmpSmooth = useRef(0);
+  // Convergence lock: walls cohere + rush steadies (not freeze).
+  const lockSmooth = useRef(0);
 
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const glowAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const barAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const lockAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
 
   // ---- Tunnel materials (even/odd alternating two-tone) ----
   const evenMaterial = useMemo(
@@ -384,6 +419,9 @@ export function InfiniteTunnelScene({
           uFar: { value: tunnelLength * 0.9 },
           uTenderness: { value: 0 },
           uAfterglow: { value: 0 },
+          uBarPhase: { value: -1 },
+          uBarAmp: { value: 0 },
+          uLock: { value: 0 },
           uWallColor: { value: new THREE.Color(palette.bass) },
           uPyrColor: { value: new THREE.Color(palette.mid) },
           uAccentColor: { value: new THREE.Color(palette.high) },
@@ -550,6 +588,19 @@ export function InfiniteTunnelScene({
     // Ease sustained wall punch / kick punch while listening.
     const punchMul = 1 - stillness * 0.88;
 
+    // Convergence envelope early so lockPace can steady the shared clock.
+    lockSmooth.current = smoothToward(
+      lockSmooth.current,
+      Math.min(1, Math.max(0, m.convergence ?? 0)) * lockAmp,
+      dt,
+      0.1,
+      0.18,
+    );
+    const lock = lockSmooth.current * (1 - stillness * 0.3);
+    const lockSnap = lock * lock;
+    // Steadier continuous rush when locked — not frozen (holdBreath owns that).
+    const lockPace = 1 - lock * 0.38;
+
     // Tenderness: damp the rush without freezing (holdBreath owns freeze).
     tenderSmooth.current = smoothToward(
       tenderSmooth.current,
@@ -584,7 +635,8 @@ export function InfiniteTunnelScene({
     const lean = leanSmooth.current * (1 - stillness * 0.35);
     // Camera-ward depth pull (shared leanIn vocabulary) + XY bore tighten.
     // Z scale stays 1 so segment spacing / conveyor math stay honest.
-    const leanNarrow = 1 - lean * 0.1;
+    // Lock adds a faint extra cohere (walls plant; lean still owns approach).
+    const leanNarrow = 1 - lean * 0.1 - lockSnap * 0.04;
     tunnel.root.position.z = -lean * 0.55;
     tunnel.root.scale.set(leanNarrow, leanNarrow, 1);
     echoRings.root.position.z = -lean * 0.55;
@@ -592,14 +644,41 @@ export function InfiniteTunnelScene({
     particles.points.position.z = -lean * 0.55;
     particles.points.scale.set(leanNarrow, leanNarrow, 1);
 
+    // Continuous bar unwrap for ring pulse (no 0→1 step at bar boundaries).
+    const bpmKnown = Boolean(m.bpm && m.bpm > 30);
+    const barPhase = bpmKnown ? Math.min(1, Math.max(0, m.barPhase)) : 0;
+    if (bpmKnown) {
+      if (prevBarPhaseRef.current - barPhase > 0.5) {
+        barTurnsRef.current += 1;
+      }
+      prevBarPhaseRef.current = barPhase;
+      if (!hadBpmRef.current) {
+        barTurnsRef.current = 0;
+        hadBpmRef.current = true;
+      }
+    } else if (hadBpmRef.current) {
+      hadBpmRef.current = false;
+    }
+    const continuousBar = bpmKnown ? barTurnsRef.current + barPhase : 0;
+    // Soft amp follow so enter/exit BPM doesn't pop the pulse.
+    barAmpSmooth.current = smoothToward(
+      barAmpSmooth.current,
+      bpmKnown ? barAmp * (1 - stillness * 0.4) : 0,
+      dt,
+      0.16,
+      0.22,
+    );
+    const barAmpNow = barAmpSmooth.current;
+
     // ---- The throttle: audio drives the conveyor (the original's soul) ----
     const silenceDamp = 1 - m.silence * 0.88;
     const tunnelSpeed =
       ((0.55 + m.energy * 4.2 + m.impact * 2.6 + m.dropEvent * 7.0) *
         silenceDamp *
         rushMul *
-        tenderRushMul +
-        0.12 * (1 - stillness * 0.9) * (1 - tender * 0.35)) *
+        tenderRushMul *
+        lockPace +
+        0.12 * (1 - stillness * 0.9) * (1 - tender * 0.35) * lockPace) *
       spd;
 
     // ---- Kit accents: kick wall punch / snare lateral / hat rail sparkle ----
@@ -629,8 +708,15 @@ export function InfiniteTunnelScene({
 
     // ---- Segment conveyor + counter-roll ----
     // Tenderness gentles the counter-roll so intimate passages feel held.
+    // Convergence kills tumble so walls plant into clean concentric rings;
+    // holdBreath still owns the freeze via stillness on rollRate.
     const rollRate =
-      (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) * dt * (1 - stillness * 0.7) * (1 - tender * 0.4);
+      (0.03 + m.mid * 0.5 + tunnelSpeed * 0.012) *
+      dt *
+      (1 - stillness * 0.7) *
+      (1 - tender * 0.4) *
+      (1 - lock * 0.92);
+    const alignRate = 1 - Math.exp(-dt / 0.14) * (0.35 + lockSnap * 0.65);
     for (let i = 0; i < tunnel.segments.length; i++) {
       const seg = tunnel.segments[i]!;
       seg.position.z += tunnelSpeed * dt;
@@ -640,9 +726,18 @@ export function InfiniteTunnelScene({
       }
       // Alternating segments counter-rotate (optionRotate homage).
       seg.rotation.z += i % 2 === 0 ? rollRate : -rollRate;
+      // Lock: ease rotation toward axis-aligned so rings read concentric.
+      if (lock > 0.02) {
+        const twopi = Math.PI * 2;
+        let rz = seg.rotation.z;
+        rz = rz - twopi * Math.floor(rz / twopi + 0.5);
+        const halfPi = Math.PI * 0.5;
+        const nearest = Math.round(rz / halfPi) * halfPi;
+        seg.rotation.z += (nearest - rz) * alignRate * lock;
+      }
       // Snare: brief lateral offset (absolute, not accumulating) so the bore
-      // cracks sideways without tumbling the ride over time.
-      seg.position.x = (i % 2 === 0 ? 1 : -1) * snareSmooth.current * 0.07;
+      // cracks sideways without tumbling the ride over time. Lock plants X.
+      seg.position.x = (i % 2 === 0 ? 1 : -1) * snareSmooth.current * 0.07 * (1 - lockSnap);
     }
 
     // ---- Band-driven uniforms ----
@@ -682,14 +777,21 @@ export function InfiniteTunnelScene({
       u.uFar!.value = tunnelLength * 0.9;
       u.uTenderness!.value = tender;
       u.uAfterglow!.value = afterglow;
+      u.uBarPhase!.value = bpmKnown ? continuousBar : -1;
+      u.uBarAmp!.value = barAmpNow;
+      u.uLock!.value = lock;
       (u.uAccentColor!.value as THREE.Color).copy(cs.high);
       (u.uWarmColor!.value as THREE.Color).copy(cs.warm);
     }
     // Even segments: dim wall in the bass color (brightness breathes with
     // the bass), pyramids in mid. Afterglow lifts residual heat; tenderness
     // milks slightly toward candlelit soft without a white flash.
+    // Lock adds a faint organize brighten (not a punch).
     const wallPulse =
-      (0.16 + m.bass * 0.14) * (1 - tender * 0.1) * (1 + afterglow * 0.28);
+      (0.16 + m.bass * 0.14) *
+      (1 - tender * 0.1) *
+      (1 + afterglow * 0.28) *
+      (1 + lockSnap * 0.1);
     const wallC = (eu.uWallColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(wallPulse);
     wallC.lerp(cs.warm, Math.min(0.62, tender * 0.42 + afterglow * 0.38));
     const pyrC = (eu.uPyrColor!.value as THREE.Color).copy(cs.mid).multiplyScalar(0.45);
@@ -712,7 +814,9 @@ export function InfiniteTunnelScene({
         m.high * 0.55 * (1 - tender * 0.35) +
         m.shimmer * 0.25 * (1 - tender * 0.45) +
         hatSmooth.current * 0.7 +
-        afterglow * 0.12,
+        afterglow * 0.12 +
+        barAmpNow * 0.08 +
+        lockSnap * 0.06,
     );
 
     // ---- Echo rings: phrase memory rushing back up the tunnel ----
@@ -746,9 +850,14 @@ export function InfiniteTunnelScene({
     fp.time = flowTimeRef.current;
     fp.turbulence *= turbulenceNow;
     // Tenderness gentles particle advection; afterglow keeps a faint warm drift.
+    // lockPace steadies the stream when bands lock (organization, not freeze).
     const drift =
-      dt * (0.35 + m.energy * 0.65 + m.dropEvent * 1.2 + afterglow * 0.12) * (1 - tender * 0.4);
-    const swirl = vortexNow * dt * (0.6 + m.mid * 1.2) * (1 - tender * 0.35);
+      dt *
+      (0.35 + m.energy * 0.65 + m.dropEvent * 1.2 + afterglow * 0.12) *
+      (1 - tender * 0.4) *
+      lockPace;
+    const swirl =
+      vortexNow * dt * (0.6 + m.mid * 1.2) * (1 - tender * 0.35) * (1 - lockSnap * 0.7);
     const sweep = tunnelSpeed * dt * 0.85;
     const fv = flowScratch.current;
     const arr = particles.positions;
