@@ -109,6 +109,7 @@ describe('showFile', () => {
       'dune_sea',
       'moth_ballet',
       'koi_pond',
+      'frost_bloom',
       'rainforest_reverie',
       'alien_planet',
       'tidal_sanctuary',

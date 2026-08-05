@@ -39,6 +39,12 @@ import { getDotTexture } from './dotTexture';
  * drift, glow steadies and brightens faintly, star shell spin coheres —
  * dissolving back into free drift as the lock fades. Sibling to
  * livingPalette chord lock, SceneRig plant, and Aura shared orbit.
+ * On `echo`, replay the last phrase as a one-shot train of cool silver
+ * glints sweeping the backdrop — aurora curtains flickering in sequence,
+ * nebula billows pulsing faintly, glow halo chasing a cool pulse, star
+ * shells glinting — fading as the music returns. The sky's last missing
+ * voice; sibling to Aura phrase-echo (#107). Gather / leanIn / holdBreath /
+ * afterglow / tenderness / kit / convergence stay distinct.
  * Honors `prefers-reduced-motion` by freezing the drift. Contrast-capped
  * so it never competes with the foreground preset.
  */
@@ -142,6 +148,16 @@ const LOCK_FALL_TAU = 0.18;
 /** Faint intensity lift while bands lock — coherence, not a swell punch. */
 const LOCK_BRIGHTEN = 0.1;
 
+/**
+ * Phrase-echo one-shot: arm on quiet, fire one cool silver glint train per
+ * gap. Eager rise, soft fall; travel is BPM-paced. Soft under hush so
+ * holdBreath still owns quiet (echo = memory, not freeze).
+ */
+const ECHO_RISE_TAU = 0.05;
+const ECHO_FALL_TAU = 0.18;
+/** Cool silver after-image — cooler than afterglow amber / tender milk. */
+const ECHO_SILVER = new THREE.Color(0.58, 0.78, 0.98);
+
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
 const SKY_RADIUS = 50;
 
@@ -151,6 +167,10 @@ function kitAmpForTier(tier: 'high' | 'mid' | 'low'): number {
 
 function lockAmpForTier(tier: 'high' | 'mid' | 'low'): number {
   return tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
+}
+
+function echoAmpForTier(tier: 'high' | 'mid' | 'low'): number {
+  return tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
 }
 
 function smoothToward(
@@ -327,6 +347,9 @@ const NEBULA_FRAGMENT = /* glsl */ `
   uniform float uKick;
   uniform float uSnare;
   uniform float uLock;
+  uniform float uEcho;
+  uniform float uEchoTravel;
+  uniform vec3 uEchoColor;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
@@ -335,6 +358,8 @@ const NEBULA_FRAGMENT = /* glsl */ `
     float snare = clamp(uSnare, 0.0, 1.2);
     float lock = clamp(uLock, 0.0, 1.0);
     float lockSnap = lock * lock;
+    float echo = clamp(uEcho, 0.0, 1.0);
+    float travel = clamp(uEchoTravel, 0.0, 1.0);
     // Lean zooms features (sky approaches) — distinct from gather's density inhale.
     // Kick briefly opens the domain (depth pulse from the fog core).
     float zoom = 1.0 - uLean * 0.28 + kick * 0.07;
@@ -366,13 +391,22 @@ const NEBULA_FRAGMENT = /* glsl */ `
     // Hat/shimmer glitter: brief high-frequency sparkle, not bass swell.
     float sparkle = noise(d.xy * 38.0 + vec2(uTime * 9.0, uTime * 6.5));
     float glitter = 1.0 + uGlitter * (0.25 + 0.75 * sparkle);
+    // Phrase-echo: cool silver billow pulses sweeping azimuth — memory, not kit.
+    float azN = atan(d.z, d.x) / 6.2831853 + 0.5;
+    float train = abs(azN - travel);
+    train = min(train, 1.0 - train);
+    float beatPulse = 0.5 + 0.5 * sin(travel * 3.14159265 * 8.0 + density * 14.0);
+    float echoGlint = echo * (1.0 - travel * 0.85) * smoothstep(0.11, 0.0, train)
+                    * (0.4 + 0.6 * beatPulse) * density;
+    col = mix(col, uEchoColor, clamp(echoGlint * 0.78, 0.0, 0.85));
     // Lean slightly brightens (anticipation), gather dims (inhale).
     // Kick core pulse + snare flank flash stay under the contrast cap.
     // Lock faint brighten — coherence glow, not kit punch or tension swell.
     float corePulse = 1.0 + kick * 0.14 * density;
     float flank = smoothstep(0.15, 0.85, abs(d.x)) * (1.0 - abs(d.y) * 0.55);
     float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * (1.0 + uLean * 0.08)
-            * glitter * corePulse * (1.0 + snare * 0.1 * flank) * (1.0 + lock * 0.1);
+            * glitter * corePulse * (1.0 + snare * 0.1 * flank) * (1.0 + lock * 0.1)
+            * (1.0 + echoGlint * 0.22);
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -386,6 +420,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const scratchAmber = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
   const scratchTender = useRef(new THREE.Color());
+  const scratchEcho = useRef(new THREE.Color().copy(ECHO_SILVER));
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -398,6 +433,9 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uLock: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
+      uEchoColor: { value: new THREE.Color().copy(ECHO_SILVER) },
     }),
     [palette.bass, palette.mid],
   );
@@ -408,6 +446,10 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const kickRef = useRef(0);
   const snareRef = useRef(0);
   const lockRef = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1);
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -418,6 +460,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const dt = Math.min(delta, 0.1);
     const kitAmp = kitAmpForTier(tier);
     const lockAmp = lockAmpForTier(tier);
+    const echoAmp = echoAmpForTier(tier);
     // Hold-breath hush: freeze drift clock; gather/lean/afterglow stay on full dt.
     stillnessRef.current = smoothToward(
       stillnessRef.current,
@@ -446,6 +489,33 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const lock = lockRef.current * (1 - stillness * 0.3);
     // Steadier shared clock when locked — not frozen (holdBreath owns that).
     const lockPace = 1 - lock * 0.38;
+    // Phrase-echo: arm on quiet, fire one cool silver billow-pulse train per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      ECHO_RISE_TAU,
+      ECHO_FALL_TAU,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    const echoMul = 1 - stillness * 0.55;
     // Tenderness eases drift without the hush freeze — stack under stillness.
     const motionMul =
       (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
@@ -504,6 +574,9 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     mat.uniforms.uKick!.value = kickRef.current;
     mat.uniforms.uSnare!.value = snareRef.current;
     mat.uniforms.uLock!.value = lock;
+    mat.uniforms.uEcho!.value = echoVis * echoMul;
+    mat.uniforms.uEchoTravel!.value = traveling ? echoTravel.current : 1;
+    (mat.uniforms.uEchoColor!.value as THREE.Color).copy(scratchEcho.current);
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }
@@ -550,16 +623,22 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const scratchHigh = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
   const scratchTender = useRef(new THREE.Color());
+  const scratchEcho = useRef(new THREE.Color().copy(ECHO_SILVER));
   const inhaleRef = useRef(0);
   const glitterRef = useRef(0);
   const leanRef = useRef(0);
   const lockRef = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1);
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const vocalLingerRef = useRef(0);
   const sprite = useMemo(() => getDotTexture(), []);
   const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
   const lockAmp = lockAmpForTier(tier);
+  const echoAmp = echoAmpForTier(tier);
 
   const { positions, colors, starBand, starVariance } = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -620,6 +699,33 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     );
     const lock = lockRef.current * (1 - stillness * 0.3);
     const lockPace = 1 - lock * 0.38;
+    // Phrase-echo: arm on quiet, fire one cool silver shell-glint train per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      ECHO_RISE_TAU,
+      ECHO_FALL_TAU,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    const echoMul = 1 - stillness * 0.55;
     const motionMul =
       (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     const glitterLive = (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
@@ -668,6 +774,8 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     if (g) {
       const cAttr = g.geometry.getAttribute('color') as THREE.BufferAttribute;
       const cArr = cAttr.array as Float32Array;
+      const pAttr = g.geometry.getAttribute('position') as THREE.BufferAttribute;
+      const pArr = pAttr.array as Float32Array;
       const midC = scratchMid.current.set(palette.mid);
       const highC = scratchHigh.current.set(palette.high);
       const vocalT =
@@ -683,12 +791,43 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
         midC.lerp(milk, tenderT);
         highC.lerp(milk, tenderT);
       }
+      const echoC = scratchEcho.current;
+      const travel = traveling ? echoTravel.current : 1;
+      const echoAmt = echoVis * echoMul;
       for (let i = 0; i < count; i++) {
         const c = starBand[i] === 1 ? highC : midC;
         const v = starVariance[i]!;
-        cArr[i * 3] = c.r * v;
-        cArr[i * 3 + 1] = c.g * v;
-        cArr[i * 3 + 2] = c.b * v;
+        let r = c.r * v;
+        let gch = c.g * v;
+        let b = c.b * v;
+        // Phrase-echo: cool silver shell glints sweeping azimuth (memory, not hat tick).
+        if (echoAmt > 0.02) {
+          const x = pArr[i * 3]!;
+          const z = pArr[i * 3 + 2]!;
+          const azN = Math.atan2(z, x) / (Math.PI * 2) + 0.5;
+          let dist = Math.abs(azN - travel);
+          dist = Math.min(dist, 1 - dist);
+          const beat =
+            0.45 +
+            0.55 *
+              Math.max(
+                0,
+                Math.sin(travel * Math.PI * 8 + (starVariance[i] ?? 0.5) * 14),
+              );
+          const glint =
+            (traveling ? echoAmt * (1 - travel * 0.85) : echoAmt * 0.35) *
+            Math.max(0, 1 - dist / 0.1) *
+            beat;
+          if (glint > 0.02) {
+            const t = Math.min(0.85, glint * 0.9);
+            r = r + (echoC.r - r) * t;
+            gch = gch + (echoC.g - gch) * t;
+            b = b + (echoC.b - b) * t;
+          }
+        }
+        cArr[i * 3] = r;
+        cArr[i * 3 + 1] = gch;
+        cArr[i * 3 + 2] = b;
       }
       cAttr.needsUpdate = true;
     }
@@ -731,6 +870,9 @@ const AURORA_FRAGMENT = /* glsl */ `
   uniform float uKick;
   uniform float uSnare;
   uniform float uLock;
+  uniform float uEcho;
+  uniform float uEchoTravel;
+  uniform vec3 uEchoColor;
   varying vec3 vDir;
   ${NOISE_GLSL}
   void main() {
@@ -739,6 +881,8 @@ const AURORA_FRAGMENT = /* glsl */ `
     float snare = clamp(uSnare, 0.0, 1.2);
     float lock = clamp(uLock, 0.0, 1.0);
     float lockSnap = lock * lock;
+    float echo = clamp(uEcho, 0.0, 1.0);
+    float travel = clamp(uEchoTravel, 0.0, 1.0);
     // Horizontal domain (seam-free): the direction's x/z components,
     // ignoring elevation — curtains wrap 360° around the viewer.
     // Snare shears the horizon domain laterally (aurora backbeat flick).
@@ -768,12 +912,23 @@ const AURORA_FRAGMENT = /* glsl */ `
     shimmer += uGlitter * (0.35 + 0.65 * sparkle) * (1.0 - lock * 0.35);
     float hueBand = clamp(d.y * 1.3 + 0.55, 0.0, 1.0);
     vec3 col = mix(uColorA, uColorB, hueBand + 0.2 * wave);
+    // Phrase-echo: curtains flicker in sequence around the horizon (cool silver).
+    float azN = az / 6.2831853 + 0.5;
+    float curtainSlot = floor(azN * 6.0) / 6.0 + 1.0 / 12.0;
+    float seq = abs(curtainSlot - travel);
+    seq = min(seq, 1.0 - seq);
+    float flicker = max(0.0, sin(travel * 3.14159265 * 10.0 + az * 3.0));
+    float echoGlint = echo * (1.0 - travel * 0.85) * smoothstep(0.12, 0.0, seq)
+                    * (0.45 + 0.55 * flicker) * curtain;
+    col = mix(col, uEchoColor, clamp(echoGlint * 0.82, 0.0, 0.88));
+    shimmer += echoGlint * 0.55;
     // Kick core pulse along denser curtain; snare flank flash at the sides.
     // Lock faint brighten — aligned bands glow together, not a kit punch.
     float corePulse = 1.0 + kick * 0.12 * curtain;
     float flank = smoothstep(0.2, 0.9, abs(d.x)) * (1.0 - abs(d.y) * 0.4);
     float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38) * (1.0 + uLean * 0.07)
-            * corePulse * (1.0 + snare * 0.14 * flank) * (1.0 + lock * 0.12);
+            * corePulse * (1.0 + snare * 0.14 * flank) * (1.0 + lock * 0.12)
+            * (1.0 + echoGlint * 0.28);
     gl_FragColor = vec4(col, a);
   }
 `;
@@ -785,6 +940,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const scratchAmber = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
   const scratchTender = useRef(new THREE.Color());
+  const scratchEcho = useRef(new THREE.Color().copy(ECHO_SILVER));
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -797,6 +953,9 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uLock: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
+      uEchoColor: { value: new THREE.Color().copy(ECHO_SILVER) },
     }),
     [palette.bass, palette.high],
   );
@@ -808,6 +967,10 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const kickRef = useRef(0);
   const snareRef = useRef(0);
   const lockRef = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1);
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -818,6 +981,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const dt = Math.min(delta, 0.1);
     const kitAmp = kitAmpForTier(tier);
     const lockAmp = lockAmpForTier(tier);
+    const echoAmp = echoAmpForTier(tier);
     stillnessRef.current = smoothToward(
       stillnessRef.current,
       stillnessFromMetrics(m.holdBreath, m.silence),
@@ -844,6 +1008,33 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     );
     const lock = lockRef.current * (1 - stillness * 0.3);
     const lockPace = 1 - lock * 0.38;
+    // Phrase-echo: arm on quiet, fire one sequential curtain-flicker train per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      ECHO_RISE_TAU,
+      ECHO_FALL_TAU,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    const echoMul = 1 - stillness * 0.55;
     const motionMul =
       (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
@@ -898,6 +1089,9 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     mat.uniforms.uKick!.value = kickRef.current;
     mat.uniforms.uSnare!.value = snareRef.current;
     mat.uniforms.uLock!.value = lock;
+    mat.uniforms.uEcho!.value = echoVis * echoMul;
+    mat.uniforms.uEchoTravel!.value = traveling ? echoTravel.current : 1;
+    (mat.uniforms.uEchoColor!.value as THREE.Color).copy(scratchEcho.current);
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }
@@ -935,12 +1129,17 @@ const GLOW_FRAGMENT = /* glsl */ `
   uniform float uKick;
   uniform float uSnare;
   uniform float uLock;
+  uniform float uEcho;
+  uniform float uEchoTravel;
+  uniform vec3 uEchoColor;
   varying vec3 vDir;
   void main() {
     vec3 d = normalize(vDir);
     float kick = clamp(uKick, 0.0, 1.2);
     float snare = clamp(uSnare, 0.0, 1.2);
     float lock = clamp(uLock, 0.0, 1.0);
+    float echo = clamp(uEcho, 0.0, 1.0);
+    float travel = clamp(uEchoTravel, 0.0, 1.0);
     // Snare flicks the sample direction sideways so the halo cracks laterally.
     // Lock softens shear so the source steadies into one coherent disc.
     vec3 dSample = normalize(d + vec3(snare * 0.07 * (1.0 - lock * 0.7) * sign(d.x + 1e-4), 0.0, 0.0));
@@ -954,10 +1153,18 @@ const GLOW_FRAGMENT = /* glsl */ `
     float sparkle = fract(sin(dot(d.xy, vec2(12.9898, 78.233))) * 43758.5453);
     float glitter = 1.0 + uGlitter * (0.2 + 0.8 * sparkle) * (1.0 - lock * 0.4);
     float flank = smoothstep(0.2, 0.95, abs(d.x)) * (1.0 - abs(d.y) * 0.5);
+    // Phrase-echo: cool silver pulse chasing around the sky (memory, not kick).
+    float azN = atan(d.z, d.x) / 6.2831853 + 0.5;
+    float train = abs(azN - travel);
+    train = min(train, 1.0 - train);
+    float beatPulse = 0.5 + 0.5 * sin(travel * 3.14159265 * 8.0 + core * 10.0);
+    float echoGlint = echo * (1.0 - travel * 0.85) * smoothstep(0.1, 0.0, train)
+                    * (0.4 + 0.6 * beatPulse);
+    vec3 col = mix(uColor, uEchoColor, clamp(echoGlint * 0.75, 0.0, 0.85));
     float a = (core + horizon) * uIntensity * (1.0 - uInhale * 0.3) * (1.0 + uLean * 0.06)
             * glitter * (1.0 + kick * 0.16 * core) * (1.0 + snare * 0.12 * flank)
-            * (1.0 + lock * 0.1);
-    gl_FragColor = vec4(uColor, a);
+            * (1.0 + lock * 0.1) * (1.0 + echoGlint * 0.24);
+    gl_FragColor = vec4(col, a);
   }
 `;
 
@@ -970,6 +1177,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const scratchAmber = useRef(new THREE.Color());
   const scratchVocal = useRef(new THREE.Color());
   const scratchTender = useRef(new THREE.Color());
+  const scratchEcho = useRef(new THREE.Color().copy(ECHO_SILVER));
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(palette.mid) },
@@ -981,6 +1189,9 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
       uKick: { value: 0 },
       uSnare: { value: 0 },
       uLock: { value: 0 },
+      uEcho: { value: 0 },
+      uEchoTravel: { value: 1 },
+      uEchoColor: { value: new THREE.Color().copy(ECHO_SILVER) },
     }),
     [palette.mid],
   );
@@ -991,6 +1202,10 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const kickRef = useRef(0);
   const snareRef = useRef(0);
   const lockRef = useRef(0);
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1);
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
   const stillnessRef = useRef(0);
   const tenderRef = useRef(0);
   const warmthLingerRef = useRef(0);
@@ -1001,6 +1216,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const dt = Math.min(delta, 0.1);
     const kitAmp = kitAmpForTier(tier);
     const lockAmp = lockAmpForTier(tier);
+    const echoAmp = echoAmpForTier(tier);
     stillnessRef.current = smoothToward(
       stillnessRef.current,
       stillnessFromMetrics(m.holdBreath, m.silence),
@@ -1027,6 +1243,33 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     );
     const lock = lockRef.current * (1 - stillness * 0.3);
     const lockPace = 1 - lock * 0.38;
+    // Phrase-echo: arm on quiet, fire one cool silver halo-chase train per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      ECHO_RISE_TAU,
+      ECHO_FALL_TAU,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
+    const echoMul = 1 - stillness * 0.55;
     const motionMul =
       (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     tRef.current += reducedMotion ? 0 : dt * motionMul;
@@ -1092,6 +1335,9 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     mat.uniforms.uKick!.value = kickRef.current;
     mat.uniforms.uSnare!.value = snareRef.current;
     mat.uniforms.uLock!.value = lock;
+    mat.uniforms.uEcho!.value = echoVis * echoMul;
+    mat.uniforms.uEchoTravel!.value = traveling ? echoTravel.current : 1;
+    (mat.uniforms.uEchoColor!.value as THREE.Color).copy(scratchEcho.current);
     if (groupRef.current) {
       groupRef.current.scale.setScalar(1 - leanRef.current * LEAN_SKY_PULL);
     }

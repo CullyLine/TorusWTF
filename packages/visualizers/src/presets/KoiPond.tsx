@@ -11,6 +11,8 @@
  *  - gather → curves the koi toward center on a pre-beat inhale
  *  - tension → circles faster and tighter while the water darkens
  *  - dropEvent → one koi breaches — splash + full-pond ripple, then calm
+ *  - leanIn → drift nearer the water; koi rise + glow brightens with expectation
+ *  - echo → one-shot cool silver-blue ghost koi gliding across with a pale wake
  *  - tenderness → widens milky moon reflection + slows glide to honey
  *  - holdBreath / deep silence → hang every koi mid-glide; water to glass
  *
@@ -45,6 +47,9 @@ const WATER_SEGS_LOW = 32;
 
 const WATER_Y = 0.02;
 const KOI_DEPTH = -0.08;
+const GHOST_WAKE = 8;
+/** Cool silver-blue — phrase-memory ghost, cooler than warm koi / moon milk. */
+const GHOST_SILVER = /* @__PURE__ */ new THREE.Color(0.58, 0.78, 0.98);
 
 function smoothToward(
   current: number,
@@ -183,6 +188,10 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const glintMatRef = useRef<THREE.PointsMaterial>(null);
   const splashRef = useRef<THREE.Points>(null);
   const splashMatRef = useRef<THREE.PointsMaterial>(null);
+  const ghostRef = useRef<THREE.Mesh>(null);
+  const ghostMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const ghostWakeRef = useRef<THREE.Points>(null);
+  const ghostWakeMatRef = useRef<THREE.PointsMaterial>(null);
   const waterMatRef = useRef<THREE.ShaderMaterial>(null);
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
@@ -199,6 +208,8 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const dropAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -222,6 +233,14 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   const dropSmooth = useRef(0);
   // One-shot drop breach travel 0..1; >=1 idle.
   const dropTravel = useRef(1);
+  // LeanIn anticipation: eager climb, slower release into the drop.
+  const leanSmooth = useRef(0);
+  // Phrase-echo one-shot: arm on quiet, fire one cool ghost koi per gap.
+  const echoSmooth = useRef(0);
+  const echoTravel = useRef(1); // 0..1 traveling; >=1 idle
+  const echoArmed = useRef(true);
+  const prevEcho = useRef(0);
+  const echoSeed = useRef(0.37);
   const prevKick = useRef(0);
   const timeRef = useRef(0);
   const rippleCursor = useRef(0);
@@ -317,6 +336,8 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
   );
   const splashPositions = useMemo(() => new Float32Array(24 * 3), []);
   const splashColors = useMemo(() => new Float32Array(24 * 3), []);
+  const ghostWakePositions = useMemo(() => new Float32Array(GHOST_WAKE * 3), []);
+  const ghostWakeColors = useMemo(() => new Float32Array(GHOST_WAKE * 3), []);
 
   // Elongated brushstroke body — tip along +Z so yaw faces swim heading.
   const koiGeo = useMemo(() => {
@@ -396,6 +417,48 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.92;
     const glass = stillness;
+
+    // LeanIn: fast climb into anticipation, slower release into the drop.
+    // Soft under holdBreath so approach still reads through hush.
+    // Distinct from gather (center-curve inhale) and tension (fast dark circle).
+    leanSmooth.current = smoothToward(
+      leanSmooth.current,
+      Math.min(1, m.leanIn) * leanAmp,
+      dt,
+      0.06,
+      0.18,
+    );
+    const lean = leanSmooth.current * (1 - stillness * 0.35);
+
+    // Phrase-echo: arm on quiet, fire one cool silver ghost koi per gap.
+    echoSmooth.current = smoothToward(
+      echoSmooth.current,
+      Math.min(1, m.echo) * echoAmp,
+      dt,
+      0.05,
+      0.28,
+    );
+    const echoNow = echoSmooth.current;
+    if (echoNow < 0.08) echoArmed.current = true;
+    if (echoArmed.current && echoNow > 0.22 && prevEcho.current <= 0.22) {
+      echoTravel.current = 0;
+      echoArmed.current = false;
+      echoSeed.current = hash01(timeRef.current * 0.53 + echoNow * 11.3 + (m.barPhase ?? 0) * 2.7);
+    }
+    prevEcho.current = echoNow;
+    if (echoTravel.current < 1) {
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const echoPace = 0.9 + spd * 0.15;
+      echoTravel.current = Math.min(
+        1,
+        echoTravel.current + dt * echoPace * (0.85 + bpmEcho / 180),
+      );
+    }
+    const traveling = echoTravel.current < 1;
+    // Idle nearly silent so speaking passages never sticky-glow.
+    const echoVis = traveling
+      ? echoSmooth.current * (1 - echoTravel.current * 0.3)
+      : echoSmooth.current * 0.04;
 
     gatherSmooth.current = smoothToward(
       gatherSmooth.current,
@@ -499,6 +562,14 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     const tender = tenderSmooth.current;
     const afterglow = afterglowSmooth.current;
 
+    // Draw nearer on leanIn — mild camera-ward pull toward the water surface.
+    // Distinct from gather's center-curve inhale and tension's fast dark circling.
+    const root = rootRef.current;
+    if (root) {
+      root.position.set(0, 0.35, 0.15 - lean * 0.55);
+      root.scale.setScalar(1 + lean * 0.06);
+    }
+
     // Kick edge → crisp ripple under a varying koi.
     if (kick > 0.42 && prevKick.current < 0.28) {
       const ki = Math.floor(hash01(timeRef.current * 17.3 + kick) * koiCount) % koiCount;
@@ -519,7 +590,13 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
     }
 
     const clock =
-      dt * spd * motionScale * motionMul * (1 - tender * 0.55) * (1 + tension * 0.55);
+      dt *
+      spd *
+      motionScale *
+      motionMul *
+      (1 - tender * 0.55) *
+      (1 + tension * 0.55) *
+      (1 - lean * 0.22);
     timeRef.current += clock;
 
     scratchBass.current.set(palette.bass);
@@ -555,16 +632,17 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const home = homeR[i]!;
       const osp = orbitSpd[i]!;
 
-      // Gather / tension pull radii inward; kick adds a brief outward then surge.
+      // Gather / tension pull radii inward; lean approaches gently (not an inhale);
+      // kick adds a brief outward then surge.
       const targetR =
         home *
-        (1 - gather * 0.42 - tension * 0.38) *
+        (1 - gather * 0.42 - tension * 0.38 - lean * 0.14) *
         (1 + kick * 0.06 * (0.5 + seed));
       rArr[i] = smoothToward(rArr[i]!, targetR, dt, 0.08, 0.14);
 
       const orbitRate =
         osp *
-        (0.55 + swell * 0.35 + kick * 0.85 + tension * 0.95) *
+        (0.55 + swell * 0.35 + kick * 0.85 + tension * 0.95 + lean * 0.12) *
         (1 - gather * 0.25) *
         (1 - tender * 0.5);
       const dAng = orbitRate * clock * (1 + wander[i]! * 0.15);
@@ -586,10 +664,10 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       const x = Math.cos(ang) * rr + sxArr[i]!;
       const z = Math.sin(ang) * rr * 0.92 + szArr[i]!;
 
-      // Breach lift on drop for the chosen koi.
-      let liftTarget = 0;
+      // Lean rises koi toward the surface with expectation; breach lifts higher.
+      let liftTarget = lean * 0.055;
       if (i === breachIndex.current && dropPulse > 0.05) {
-        liftTarget = dropPulse * 0.55;
+        liftTarget = Math.max(liftTarget, dropPulse * 0.55);
       }
       lyArr[i] = smoothToward(lyArr[i]!, liftTarget, dt, 0.04, 0.12);
       const y = KOI_DEPTH + lyArr[i]!;
@@ -638,11 +716,12 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
         .lerp(honeyC, tender * 0.35)
         .lerp(milkC, tender * 0.2 + stillness * 0.15);
       const gain =
-        (0.55 + kick * 0.25 + swell * 0.12 + hat * 0.08 + lyArr[i]! * 0.8) * hushDim;
+        (0.55 + kick * 0.25 + swell * 0.12 + hat * 0.08 + lyArr[i]! * 0.8 + lean * 0.22) *
+        hushDim;
       _color.multiplyScalar(gain);
       mesh.setColorAt(i, _color);
       if (glowMesh) {
-        _color.lerp(milkC, 0.2).multiplyScalar(0.85);
+        _color.lerp(milkC, 0.2).multiplyScalar(0.85 + lean * 0.2);
         glowMesh.setColorAt(i, _color);
       }
 
@@ -667,8 +746,11 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       glowMesh.instanceMatrix.needsUpdate = true;
       if (glowMesh.instanceColor) glowMesh.instanceColor.needsUpdate = true;
     }
-    koiMat.opacity = Math.min(1, (0.82 + swell * 0.1) * hushDim);
-    glowMat.opacity = Math.min(0.45, (0.22 + kick * 0.12 + tender * 0.08) * hushDim);
+    koiMat.opacity = Math.min(1, (0.82 + swell * 0.1 + lean * 0.06) * hushDim);
+    glowMat.opacity = Math.min(
+      0.55,
+      (0.22 + kick * 0.12 + tender * 0.08 + lean * 0.16) * hushDim,
+    );
 
     if (wakeRef.current) {
       const posAttr = wakeRef.current.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -739,6 +821,72 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
       splashMatRef.current.opacity = Math.min(1, dropPulse * 0.9);
     }
 
+    // —— Phrase-echo ghost koi: one cool silver-blue memory gliding across ——
+    const ghost = ghostRef.current;
+    const ghostMat = ghostMatRef.current;
+    if (ghost && ghostMat) {
+      const seed = echoSeed.current;
+      const travel = echoTravel.current;
+      // Cross the pond on a BPM-paced path — retraces the gap's rhythm, then fades.
+      const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const turns = Math.max(0.85, Math.min(1.45, bpmEcho / 95));
+      const heading = seed * Math.PI * 2;
+      const along = (travel - 0.5) * (4.8 + seed * 0.6);
+      const lateral =
+        Math.sin(travel * Math.PI * turns * 2 + seed * 8) * 0.22 * (traveling ? 1 : 0);
+      const gx = Math.cos(heading) * along + Math.cos(heading + Math.PI / 2) * lateral;
+      const gz =
+        Math.sin(heading) * along * 0.92 + Math.sin(heading + Math.PI / 2) * lateral * 0.92;
+      // Slightly deeper than live koi — memory under the black mirror.
+      const gy = KOI_DEPTH - 0.025;
+      const fade = traveling
+        ? Math.sin(Math.min(1, travel) * Math.PI) * (1 - travel * 0.55)
+        : 0;
+      const ghostOpacity = Math.min(1, echoVis * fade * 0.95 * (1 - stillness * 0.55));
+      ghost.visible = ghostOpacity > 0.01;
+      // Face the glide direction (along increases with travel).
+      const yaw = Math.atan2(Math.cos(heading), Math.sin(heading) * 0.92);
+      if (ghost.visible) {
+        const tail =
+          Math.sin(travel * Math.PI * turns * 5 + seed * 14) * 0.28 * fade;
+        ghost.position.set(gx, gy, gz);
+        ghost.rotation.set(tail * 0.25, yaw, tail * 0.55, 'YXZ');
+        ghost.scale.set(1.05, 1, 1.15 + fade * 0.1);
+        ghostMat.color.copy(GHOST_SILVER).multiplyScalar(0.55 + fade * 0.65);
+        ghostMat.opacity = ghostOpacity;
+      }
+
+      // Pale wake trailing the ghost — distinct from live koi wakes.
+      const gWakePos = ghostWakePositions;
+      const gWakeCol = ghostWakeColors;
+      const gWakePts = ghostWakeRef.current;
+      const gWakeMat = ghostWakeMatRef.current;
+      for (let w = 0; w < GHOST_WAKE; w++) {
+        const wi = w * 3;
+        const alongTrail = (w + 1) / GHOST_WAKE;
+        const back = alongTrail * (0.22 + fade * 0.12);
+        gWakePos[wi] = gx - Math.sin(yaw) * back;
+        gWakePos[wi + 1] = WATER_Y + 0.005 - alongTrail * 0.008;
+        gWakePos[wi + 2] = gz - Math.cos(yaw) * back;
+        const trailFade =
+          ghostOpacity * (1 - alongTrail) * (0.55 + fade * 0.45) * (traveling ? 1 : 0.15);
+        gWakeCol[wi] = Math.min(1, GHOST_SILVER.r * trailFade);
+        gWakeCol[wi + 1] = Math.min(1, GHOST_SILVER.g * trailFade);
+        gWakeCol[wi + 2] = Math.min(1, GHOST_SILVER.b * trailFade);
+      }
+      if (gWakePts) {
+        const posAttr = gWakePts.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const colAttr = gWakePts.geometry.getAttribute('color') as THREE.BufferAttribute;
+        posAttr.needsUpdate = true;
+        colAttr.needsUpdate = true;
+        gWakePts.visible = ghostOpacity > 0.02;
+      }
+      if (gWakeMat) {
+        gWakeMat.size = 0.035 + fade * 0.03;
+        gWakeMat.opacity = Math.min(0.85, ghostOpacity * 0.75);
+      }
+    }
+
     // Water uniforms.
     const wMat = waterMatRef.current;
     if (wMat) {
@@ -797,6 +945,46 @@ export function KoiPondScene({ analyser, palette, tier, speed = 1 }: VisualizerS
 
       <instancedMesh ref={glowRef} args={[glowGeo, glowMat, koiCount]} frustumCulled={false} />
       <instancedMesh ref={koiRef} args={[koiGeo, koiMat, koiCount]} frustumCulled={false} />
+
+      {/* Phrase-echo ghost koi — cool silver-blue memory gliding beneath the surface. */}
+      <mesh ref={ghostRef} geometry={koiGeo} visible={false} frustumCulled={false}>
+        <meshBasicMaterial
+          ref={ghostMatRef}
+          color={GHOST_SILVER}
+          transparent
+          opacity={0}
+          depthWrite={false}
+          toneMapped={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+
+      <points ref={ghostWakeRef} visible={false}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            args={[ghostWakePositions, 3]}
+            count={GHOST_WAKE}
+          />
+          <bufferAttribute
+            attach="attributes-color"
+            args={[ghostWakeColors, 3]}
+            count={GHOST_WAKE}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          ref={ghostWakeMatRef}
+          size={0.035}
+          map={sprite}
+          sizeAttenuation
+          transparent
+          depthWrite={false}
+          toneMapped={false}
+          vertexColors
+          blending={THREE.AdditiveBlending}
+          opacity={0}
+        />
+      </points>
 
       <points ref={wakeRef}>
         <bufferGeometry>
