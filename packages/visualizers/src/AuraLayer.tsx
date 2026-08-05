@@ -23,6 +23,10 @@ import { useMetricsRef } from './metrics';
  *  - afterglow → residual ember warmth on wisps + soul glow while peaks decay
  *  - convergence → shared orbital ring around the flock center; calm deliberate
  *    orbit + faint brighten while bands lock; soft dissolve as lock fades
+ *  - tension → slow tightening coil around the subject; dim + sharpen as the
+ *    build climbs (sustained strain, not gather inhale or lock ring)
+ *  - dropEvent → one synchronized outward bloom, then ease back to free flocking
+ *    (bigger than per-kick dip / impact burst; springs the coil loose)
  *
  * Stillness (holdBreath / deep silence):
  *  - Perlin drift nearly freezes
@@ -124,6 +128,11 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const lockSmooth = useRef(0);
   // Shared orbit angle advances while locked (calm, deliberate pace).
   const lockOrbitAngle = useRef(0);
+  // Tension coil — slow inward spiral + dim/sharpen through builds; springs
+  // loose on dropEvent/release. Distinct from gather inhale and lock ring.
+  const tensionSmooth = useRef(0);
+  // Drop bloom — one synchronized outward burst bigger than kick/impact.
+  const dropSmooth = useRef(0);
   // Color-temperature linger tracks afterglow (intensity path unchanged).
   const warmthLingerRef = useRef(0);
 
@@ -140,6 +149,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   const kitAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
   // Lock amp: full ring formation on high; slightly softer on mid/low.
   const lockAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
+  // Tension / drop amps: full coil+bloom on high; readable without fighting presets.
+  const tensionAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
+  const dropAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
   const warmthMix =
     (tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75) * AFTERGLOW_WARMTH_MIX;
 
@@ -299,6 +311,33 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       0.18,
     );
 
+    // Tension coil: slow rise through the build (~0.4s), spring-loose on
+    // drop/release (~0.12s). Soft under stillness so holdBreath still owns quiet.
+    // Zero target on drop/release so the coil never fights the bloom.
+    let tensionTarget = Math.min(1, Math.max(0, m.tension ?? 0)) * tensionAmp;
+    if (m.dropEvent > 0.12 || m.release > 0.18) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.4,
+      0.12,
+    );
+    if (m.dropEvent > 0.12) {
+      // Hard-release the coil so the bloom reads as spring-loose, not a fade.
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+
+    // Drop bloom: fast attack, inertial settle — one outward surge bigger than
+    // per-kick dip / impact burst. Sibling to Tide Veil / Silk Wake drop envelopes.
+    dropSmooth.current = smoothToward(
+      dropSmooth.current,
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp,
+      dt,
+      0.03,
+      0.55,
+    );
+
     const gather = gatherSmooth.current;
     const burst = burstSmooth.current;
     const glitter = glitterSmooth.current;
@@ -307,6 +346,8 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     const lean = leanSmooth.current;
     const stillness = stillnessSmooth.current;
     const lock = lockSmooth.current * (1 - stillness * 0.3);
+    const tension = tensionSmooth.current * (1 - stillness * 0.3);
+    const drop = dropSmooth.current;
     // Power curve: early lock stays loose; choruses snap into one ring.
     const lockSnap = lock * lock;
     // Steadier continuous drive when locked — not frozen (holdBreath owns that).
@@ -321,6 +362,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     // Drift nearly stops at full stillness; a whisper remains so the cloud
     // never looks frozen-dead. Flock gather/burst still owns the radial axis.
     // Lock trims wander so free flocking yields to the shared ring.
+    // Tension also trims wander — the coil coheres without freezing.
     const driftMul = 1 - stillness * 0.92;
     const huddle = stillness * 1.35;
     // Lean approach keeps moving through hush — anticipation ≠ listening freeze.
@@ -342,19 +384,30 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // the inhale reads clearly; burst rides impact without exploding.
       // Lean-in is a milder approach (~0.9 vs gather 2.4) so pre-drop
       // anticipation never masquerades as the gather inhale.
-      const flockIn = gather * 2.4 + lean * 0.9 * leanMul;
-      const flockOut = burst * 3.2;
+      // Tension adds a slow inward coil pull — weaker and sustained vs gather.
+      // Drop blooms outward hard — bigger than impact burst, springs the coil.
+      const flockIn = gather * 2.4 + lean * 0.9 * leanMul + tension * 1.15;
+      const flockOut = burst * 3.2 + drop * 5.4;
       // Soften idle wander during the inhale so the cloud coheres; stillness
       // scales the leftover wander further. Lean trims wander lightly so the
       // cloud coheres toward the viewer without freezing like holdBreath.
       // Lock yields free flocking to the shared ring without a freeze.
+      // Tension coils wander down further — strain, not freeze.
       const wanderScale =
-        (1 - gather * 0.55 - lean * 0.22 * leanMul - lock * 0.55) * driftMul;
+        (1 -
+          gather * 0.55 -
+          lean * 0.22 * leanMul -
+          lock * 0.55 -
+          tension * 0.62) *
+        driftMul;
       // Camera is +Z-facing; lean drifts wisps toward the viewer separately
       // from the radial gather inhale.
       const approachZ = lean * 0.85 * leanMul;
       // Tangential swirl speed (units/sec) — orthogonal to gather radial axis.
       const swirlSpeed = swirlAmt * 2.6 * echoMul;
+      // Tension coil: slow shared tangential spin that tightens with the build —
+      // distinct from echo's one-shot reply swirl and lock's calm ring orbit.
+      const coilSpin = tension * 1.55;
       // Lateral scatter speed — world-X flick with per-wisp sign (not echo swirl).
       const snareFlick = snare * 3.4;
       // Kick dip speed — brief inward + downward thump (not snare X, not gather inhale).
@@ -404,6 +457,19 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           x += sx * swirlSpeed * swirlPhase * dt;
           y += sy * swirlSpeed * swirlPhase * dt;
           z += sz * Math.abs(swirlSpeed) * swirlPhase * dt * 0.45;
+        }
+
+        // Tension coil spin: sustained shared tangential tighten through the
+        // build — slower and steadier than echo reply, not a lock ring slot.
+        if (coilSpin > 0.01) {
+          const seedPhase = seeds[i * 4 + 3]!;
+          const coilPhase = 0.85 + 0.3 * Math.sin(seedPhase * 1.3 + i * 0.07);
+          const sx = -dy * invR;
+          const sy = dx * invR;
+          x += sx * coilSpin * coilPhase * dt;
+          y += sy * coilSpin * coilPhase * dt;
+          // Slight Z compress so the coil reads as tightening, not flattening.
+          z += (FLOCK_CZ - z) * tension * coilPhase * dt * 0.35;
         }
 
         // Snare lateral scatter flick: world-X kick with opposing signs so the
@@ -516,6 +582,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Lean slightly brightens — presence leans closer into the light.
       // Phrase-echo replays glints on a BPM-ish pulse that fades with travel.
       // Convergence faintly brightens as the ring locks — cohesion, not a hit.
+      // Tension dims + sharpens (smaller size); drop blooms size/opacity once.
       const livePulse = 1 - stillness * 0.55;
       const phaseTwinkle = glitter > 0.08 ? 0.5 + 0.5 * Math.sin(now * 28 + glitter * 9) : 0;
       const bpm = Math.max(60, Math.min(180, m.bpm || 120));
@@ -535,7 +602,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           glitter * 0.09 * (0.55 + phaseTwinkle * 0.9) +
           lean * 0.025 * leanMul +
           echoVis * echoMul * 0.07 * (0.45 + echoGlint * 0.9) +
-          lock * 0.028) *
+          lock * 0.028 +
+          drop * 0.055 -
+          tension * 0.022) *
         (0.7 + amount * 0.3);
       mat.opacity = Math.min(
         1,
@@ -545,7 +614,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           gather * 0.08 +
           lean * 0.06 * leanMul +
           echoVis * echoMul * 0.32 * (0.5 + echoGlint * 0.7) +
-          lock * 0.1) *
+          lock * 0.1 +
+          drop * 0.28 -
+          tension * 0.14) *
           amount,
       );
     }
@@ -564,6 +635,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Lean adds a soft presence lift (anticipation), weaker than burst.
       // Echo lifts the halo briefly during the reply, then eases with travel.
       // Lock faintly brightens the halo as the ring forms — cohesion, not a hit.
+      // Tension dims the halo (coil darkens); drop blooms it once — spring-loose.
       glowMat.uniforms.uIntensity!.value =
         (autoBreath +
           m.bass * 0.5 +
@@ -574,8 +646,10 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           glitter * 0.18 +
           lean * 0.1 * leanMul +
           echoVis * echoMul * 0.14 +
-          lock * 0.09 -
-          gather * 0.12) *
+          lock * 0.09 +
+          drop * 0.38 -
+          gather * 0.12 -
+          tension * 0.22) *
         amount *
         silenceMute *
         tenderExpand;
@@ -598,6 +672,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Kick briefly opens the core (chest swell) then rides the kick envelope out.
       // Stillness tucks the halo in slightly while listening.
       // Lean gently enlarges toward the viewer — presence approaches.
+      // Tension tightens the halo; drop blooms it outward once.
       glowMat.uniforms.uRadius!.value =
         1 -
         gather * 0.12 +
@@ -605,7 +680,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         kick * 0.07 -
         stillness * 0.1 +
         lean * 0.05 * leanMul +
-        echoVis * echoMul * 0.04;
+        echoVis * echoMul * 0.04 -
+        tension * 0.1 +
+        drop * 0.14;
       if (glowMesh) {
         const s =
           1 -
@@ -614,7 +691,9 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           kick * 0.045 -
           stillness * 0.04 +
           lean * 0.035 * leanMul +
-          echoVis * echoMul * 0.025;
+          echoVis * echoMul * 0.025 -
+          tension * 0.055 +
+          drop * 0.08;
         glowMesh.scale.setScalar(s);
       }
     }
