@@ -19,6 +19,11 @@
  *    (pre-drop anticipation; distinct from gather's pulsed inhale)
  *  - barPhase → slow bar-locked coal flicker so the field glows on the music's
  *    clock (continuous unwrap, no stepping)
+ *  - tension → press the ashfield low and dim toward smoldering coals as the
+ *    build climbs, with sparks quickening underneath (storm coil — not freeze,
+ *    not leanIn densify/approach)
+ *  - dropEvent → one full-field updraft flare — every ember surges upward and
+ *    brightens at once, then settles back into drift (bigger than kick lift)
  */
 
 import { useMemo, useRef } from 'react';
@@ -76,6 +81,9 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   // LeanIn / bar-clock amps — mid/low still approach and breathe, just softer.
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const barAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  // Tension / drop — mid/low still coil and blaze, just softer.
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
 
   const scratchBass = useRef(new THREE.Color());
   const scratchMid = useRef(new THREE.Color());
@@ -107,6 +115,11 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const echoSource = useRef({ x: 0, y: Y_MIN + 0.55, z: 0, seed: 0.37 });
   // LeanIn anticipation: densify + near approach before the drop.
   const leanSmooth = useRef(0);
+  // Tension coil — press low + dim coals; spring-loose on drop/release.
+  const tensionSmooth = useRef(0);
+  // Drop envelope + one-shot travel for the full-field updraft flare.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
   // Continuous unwrapped bar phase for coal flicker (no 0→1 step).
   const barTurnsRef = useRef(0);
   const prevBarPhaseRef = useRef(0);
@@ -328,6 +341,49 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
+    // Tension coil — sustained storm press: ash pressed low + dim coals, sparks
+    // quickening underneath. Spring-loose on drop/release. Distinct from leanIn
+    // densify/approach and holdBreath freeze.
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp;
+    if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+    const tension = tensionSmooth.current * (1 - stillness * 0.3);
+
+    // Drop envelope — one full-field updraft flare, bigger than per-kick lift.
+    dropSmooth.current = smoothToward(
+      dropSmooth.current,
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp,
+      dt,
+      0.03,
+      0.55,
+    );
+    const drop = dropSmooth.current;
+    if (drop > 0.45 && dropTravel.current >= 1) {
+      dropTravel.current = 0;
+    }
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.9 + pace * 0.15;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpm / 200),
+      );
+    }
+    // Half-sine travel pulse — crest once then settle; idle travel>=1 → 0.
+    const dropPulse =
+      drop *
+      Math.sin(Math.min(dropTravel.current, 1) * Math.PI) *
+      (dropTravel.current < 0.999 ? 1 : 0);
+
     // Continuous bar unwrap for coal flicker (no 0→1 step).
     const bpmKnown = Boolean(m.bpm && m.bpm > 30);
     const barPhase = bpmKnown ? Math.min(1, Math.max(0, m.barPhase)) : 0;
@@ -365,6 +421,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Lift on swell: choruses loft the ashfield; gather slows the rise.
     // motionMul suspends the column mid-air during holdBreath; tenderLiftMul
     // gentles the loft on soft vocals without stopping it.
+    // Tension presses the loft down (storm coil) without freezing motion.
+    // DropPulse adds a one-shot full-field updraft surge (bigger than kick).
     const lift =
       dt *
       pace *
@@ -373,32 +431,42 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       motionMul *
       tenderLiftMul *
       (0.55 + swell * 1.15 + m.energy * 0.35 + m.bass * 0.2) *
-      (1 - gather * 0.72);
+      (1 - gather * 0.72) *
+      (1 - tension * 0.72) *
+      (1 + dropPulse * 1.85);
 
     // Kick: brief upward punch — distinct from swell's sustained loft.
     // Kit accents stay ungated so thaw + drum hits remain intact.
     const kickLift = kick * dt * pace * calm * 2.8;
+    // Drop updraft — one shared surge across every ember (kick is per-ember punch).
+    const dropLift = dropPulse * dt * pace * calm * 7.2;
     // Snare: lateral ash shear amplitude (phase-split L/R per ember).
     const snareShear = snare * dt * pace * calm * 3.4;
 
-    const flare = 1 + impact * 0.85 + afterglow * 0.2;
+    const flare = 1 + impact * 0.85 + afterglow * 0.2 + dropPulse * 0.95;
     // Coals dim: size + opacity ease down while suspended, then rekindle on thaw.
     // Tenderness softens into slightly larger, milkier glow (rosy soft coals).
     // LeanIn brightens faintly with expectation (not impact's hit flare).
+    // Tension dims toward smoldering coals (alive under pressure, not freeze).
     const coalDim = 1 - stillness * 0.48;
     const softGlow = 1 + tender * 0.14;
     const leanGlow = 1 + lean * 0.12;
+    const tensionGlow = 1 - tension * 0.38;
+    const dropGlow = 1 + dropPulse * 0.55;
     mat.size =
-      (0.048 + swell * 0.028 + impact * 0.04 + kick * 0.018) *
+      (0.048 + swell * 0.028 + impact * 0.04 + kick * 0.018 + dropPulse * 0.032) *
       (0.92 + kitAmp * 0.08) *
       (0.72 + coalDim * 0.28) *
       softGlow *
-      leanGlow;
+      leanGlow *
+      tensionGlow *
+      dropGlow;
     mat.opacity = Math.min(
       1,
-      (0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12 + lean * 0.08) *
+      (0.58 + swell * 0.28 + impact * 0.18 + afterglow * 0.12 + lean * 0.08 + dropPulse * 0.22) *
         coalDim *
-        (1 - tender * 0.06),
+        (1 - tender * 0.06) *
+        (1 - tension * 0.32),
     );
 
     const posAttr = points.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -433,14 +501,19 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       let y = arr[i3 + 1] ?? 0;
       let z = arr[i3 + 2] ?? 0;
 
+      // Height before motion — tension sparks quicken near the hearth (low).
+      const heightNormPre = Math.min(1, Math.max(0, (y - Y_MIN) / Y_SPAN));
+
       const wobble =
-        Math.sin(t * (1.1 + phase * 1.8) + phase * 12.0) *
-        (0.01 + m.mid * 0.012) *
+        Math.sin(t * (1.1 + phase * 1.8) * (1 + tension * 1.85 * (1 - heightNormPre)) + phase * 12.0) *
+        (0.01 + m.mid * 0.012 + tension * 0.008 * (1 - heightNormPre)) *
         tenderDriftMul *
         leanDriftMul;
       const driftX = ((velocities[i3] ?? 0) + wobble) * tenderDriftMul * leanDriftMul;
       const driftZ =
-        ((velocities[i3 + 2] ?? 0) + Math.cos(t * (0.9 + phase) + phase * 7.0) * 0.008) *
+        ((velocities[i3 + 2] ?? 0) +
+          Math.cos(t * (0.9 + phase) * (1 + tension * 1.4 * (1 - heightNormPre)) + phase * 7.0) *
+            0.008) *
         tenderDriftMul *
         leanDriftMul;
       const rise = (velocities[i3 + 1] ?? 0.5) * (0.85 + sizeMul * 0.25);
@@ -451,6 +524,8 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
       // Kick upward lift punch — ash surges up the column on the kick.
       y += rise * kickLift * (0.7 + sizeMul * 0.45);
+      // Drop full-field updraft — every ember surges once, bigger than kick.
+      y += rise * dropLift * (0.85 + sizeMul * 0.55);
       // Snare lateral shear — phase-split L/R so the field cracks sideways.
       const lateral = (i & 1) === 0 ? 1 : -1;
       const shearSign = phase > 0.5 ? lateral : -lateral;
@@ -465,6 +540,9 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       z *= leanDensify;
       // Vertical inhale: settle slightly toward mid-frame before the beat.
       y += (0 - y) * gather * dt * 1.05;
+      // Tension press: settle the column toward the hearth (low + dim storm coil).
+      // Distinct from gather's mid-frame inhale and holdBreath freeze.
+      y += (Y_MIN + 0.35 - y) * tension * dt * 1.55;
 
       // Recycle off the top (or if yanked too far) back to the hearth below.
       if (y > Y_MAX || Math.hypot(x, z) > 3.6) {
@@ -481,13 +559,22 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       arr[i3 + 2] = z;
 
       const baseCol = band === 0 ? bassC : band === 1 ? midC : highC;
-      const warmth = 0.42 + phase * 0.28 + afterglow * 0.35 + impact * 0.2 + kick * 0.12;
+      const warmth =
+        0.42 +
+        phase * 0.28 +
+        afterglow * 0.35 +
+        impact * 0.2 +
+        kick * 0.12 +
+        dropPulse * 0.35;
       mixC.copy(baseCol).lerp(warmC, Math.min(0.85, warmth));
       // Tenderness: milk toward rosy soft coals while the field keeps breathing.
       // Softened under stillness so holdBreath dark coals stay the freeze read.
       mixC.lerp(rosyC, tender * (1 - stillness * 0.85) * 0.58);
       // Hold-breath coals: milk the ember toward dark residual heat.
       mixC.lerp(coalC, stillness * 0.62);
+      // Tension smolder: dim toward coals under pressure (alive, not freeze).
+      // Soft under stillness so holdBreath still owns the hush read.
+      mixC.lerp(coalC, tension * (1 - stillness * 0.7) * 0.48);
 
       // Height gradient: cooler near the hearth, hotter as they rise.
       const heightNorm = (y - Y_MIN) / Y_SPAN;
@@ -495,6 +582,11 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
       // Sparse hat ticks — only ~1/3 of embers sparkle so it reads as ticks.
       const tickSelect = hash01(phase * 17.13 + i * 0.31) > 0.62 ? 1 : 0;
       const sparkle = 1 + tickSelect * hat * (1.1 + m.shimmer * 0.4);
+      // Tension under-sparks — quicken near the hearth (low), not hat ticks.
+      const underSpark =
+        tension *
+        (1 - heightNorm) *
+        (0.35 + 0.65 * Math.max(0, Math.sin(t * (14 + phase * 9) + phase * 22.0)));
       // Kick warms bass embers; snare flashes mid — motion is the primary accent.
       const kitGlow =
         (band === 0 ? kick * 0.28 : kick * 0.08) + (band === 1 ? snare * 0.32 : snare * 0.1);
@@ -515,7 +607,10 @@ export function EmberDriftScene({ analyser, palette, tier, speed = 1 }: Visualiz
         leanBright *
         (0.85 + swell * 0.25) *
         (1 + kitGlow) *
-        (1 - stillness * 0.42);
+        (1 + underSpark * 0.85) *
+        (1 - stillness * 0.42) *
+        (1 - tension * 0.28) *
+        (1 + dropPulse * 0.55);
 
       colArr[i3] = Math.min(1, mixC.r * gain);
       colArr[i3 + 1] = Math.min(1, mixC.g * gain);

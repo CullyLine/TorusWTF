@@ -6,6 +6,8 @@
  *  - idle → rings drift downward like celestial rain
  *  - gather → reverse-inhale: drift flips upward and radii tighten to center
  *  - leanIn → tighten ring spacing + drift nearer (pre-drop anticipation; not gather inhale)
+ *  - tension → storm coil: denser spacing + darken + inward-accelerating drift (not lean zoom)
+ *  - dropEvent → one full-field outward ring wave — every ring flares, then calms
  *  - impact → rings flare bright (soft flash, not a strobe)
  *  - kick → center-born ring pulse (radial outward surge + bass-warm core)
  *  - snare → lateral ring shear + flank flash (backbeat crack)
@@ -51,6 +53,9 @@ uniform float uEchoTravel;
 uniform float uStillness;
 uniform float uTenderness;
 uniform float uLean;
+uniform float uTension;
+uniform float uDrop;
+uniform float uDropTravel;
 uniform vec3 uColorBass;
 uniform vec3 uColorMid;
 uniform vec3 uColorHigh;
@@ -85,6 +90,12 @@ void main() {
   float soft = clamp(uTenderness, 0.0, 1.0);
   float stillness = clamp(uStillness, 0.0, 1.0);
   float lean = clamp(uLean, 0.0, 1.0);
+  float tension = clamp(uTension, 0.0, 1.0);
+  float drop = clamp(uDrop, 0.0, 1.4);
+  float dropTravel = clamp(uDropTravel, 0.0, 1.0);
+  // Half-sine travel envelope — one outward wave crest, then settles.
+  float dropPulse = drop * sin(min(dropTravel, 1.0) * 3.14159265)
+    * step(dropTravel, 0.999);
 
   // Gather reverse-inhale: pull space toward center before the beat.
   float fold = uGather * 0.62;
@@ -92,7 +103,8 @@ void main() {
   // Kick: brief radial zoom punch so a new ring is born at the core.
   uv *= 1.0 - fold * (0.5 + 0.5 * smoothstep(0.12, 1.15, r0)) + kick * 0.055;
   // LeanIn: isotropic approach zoom — rings drift nearer (not gather's radial fold).
-  uv *= 1.0 - lean * 0.12;
+  // Tension stays in-place (no lean zoom); dropPulse briefly opens the field.
+  uv *= 1.0 - lean * 0.12 + dropPulse * 0.035;
   // Snare: lateral ring shear before radius sampling (backbeat crack).
   uv.x += snare * 0.048 * sign(uv.x + 1e-4);
 
@@ -103,7 +115,10 @@ void main() {
 
   // Soft elliptical breathe so rings feel alive, not compass-perfect.
   // holdBreath gates uTime advance in JS so oval nearly freezes.
-  float oval = 1.0 + sin(ang * 2.0 + uTime * 0.35) * (0.03 + uMid * 0.04) * mix(1.0, 0.12, stillness);
+  // Tension hardens the oval (storm bite); dropPulse softens for the wash.
+  float oval = 1.0 + sin(ang * 2.0 + uTime * 0.35) * (0.03 + uMid * 0.04)
+    * mix(1.0, 0.12, stillness)
+    * (1.0 - tension * 0.55 + dropPulse * 0.25);
   r *= oval;
 
   // Phrase-echo reply envelope: peaks early, fades as the ghost travels.
@@ -111,13 +126,21 @@ void main() {
 
   // Downward rain = positive drift; gather flips sign and slows the fall.
   // Echo reverse is applied in JS to uDrift itself (brief upward reply).
-  float rain = uDrift * (1.0 - uGather * 1.35);
+  // Tension accelerates inward (faster scroll, denser fall) — not gather reverse.
+  float rain = uDrift * (1.0 - uGather * 1.35) * (1.0 + tension * 0.85);
   // LeanIn tightens ring spacing — denser field, expectant (not gather fold).
-  float spacing = (0.115 + uSwell * 0.018) * (1.0 - lean * 0.42);
+  // Tension densifies further (storm coil); dropPulse briefly opens spacing.
+  float spacing = (0.115 + uSwell * 0.018)
+    * (1.0 - lean * 0.42)
+    * (1.0 - tension * 0.58)
+    * (1.0 + dropPulse * 0.28);
   // Kick thickens the ring line at the core; impact width path stays separate.
   // Tenderness widens rings (softer candle edge); kit width paths stay intact.
-  float width = 0.012 + uBass * 0.006 + uImpact * 0.01 + kick * 0.008;
+  // Tension sharpens lines; dropPulse flares them wide for the full-field wave.
+  float width = 0.012 + uBass * 0.006 + uImpact * 0.01 + kick * 0.008
+    + dropPulse * 0.022;
   width *= mix(1.0, 1.38, soft);
+  width *= mix(1.0, 0.72, tension);
 
   float rings = 0.0;
   float hatTick = 0.0;
@@ -125,18 +148,26 @@ void main() {
   float phase = rain;
   // Ghost field scrolls opposite the live rain — after-image, not a second gather.
   float ghostPhase = -uEchoTravel * 1.55;
+  // Drop wave crest rides core→rim once — full-field, not kick's local core.
+  float dropCrestR = mix(0.06, 1.38, dropTravel);
 
   for (int i = 0; i < RING_COUNT; i++) {
     float fi = float(i);
     float seed = hash11(fi * 17.13 + 3.7);
     // Staggered radii scroll through the frame — rain falling past the lens.
     // Kick pushes targets outward from center (center-born pulse).
+    // Drop surges ALL rings outward together (full-field wave, bigger than kick).
     float target = fract(fi * spacing + phase * 0.55 + seed * 0.08) * 1.45;
     target *= 1.0 + kick * 0.12 * (1.0 - smoothstep(0.05, 0.85, target));
+    target *= 1.0 + dropPulse * 0.28;
+    // Tension pulls targets slightly inward (storm gathering) without gather fold.
+    target *= 1.0 - tension * 0.12 * smoothstep(0.2, 1.2, target);
     float line = ringLine(r, target, width * (0.85 + seed * 0.4));
     // Outer rings slightly thinner so the core owns the frame;
     // leanIn hugs weight toward the nearer core (presence, not gather reverse).
+    // Tension weights the denser mid field; dropPulse lifts every ring equally.
     float weight = mix(1.15 + lean * 0.18, 0.55 - lean * 0.1, smoothstep(0.15, 1.25, target));
+    weight *= 1.0 + tension * 0.22 + dropPulse * 0.55;
     rings += line * weight;
 
     // Hat ticks sparse rings (every ~3rd) — sparkle without washing the flare.
@@ -150,23 +181,33 @@ void main() {
   }
 
   // Tenderness softens ring bite; holdBreath eases field contrast toward still glow.
+  // Tension hardens contrast (storm bite) before the drop wash softens it.
   float contrast = mix(1.0, 0.58, stillness);
-  rings = clamp(rings * contrast, 0.0, 2.2);
+  contrast *= 1.0 + tension * 0.28 - dropPulse * 0.12;
+  rings = clamp(rings * contrast, 0.0, 2.6);
   hatTick = clamp(hatTick * mix(1.0, 0.72, stillness), 0.0, 1.6);
   ghostRings = clamp(ghostRings, 0.0, 2.0);
   // Soft crest rides core→rim so the reply reads as a traveling after-image.
   float crestR = mix(0.1, 1.32, clamp(uEchoTravel, 0.0, 1.0));
   float ghostCrest = exp(-pow((r - crestR) * 6.5, 2.0));
+  // Drop crest: luminous expanding ring wave across the whole field.
+  float dropCrest = exp(-pow((r - dropCrestR) * 4.2, 2.0)) * dropPulse;
 
   // Impact flare: brighten + slight radial bloom of the ring field.
   float flare = uImpact * (0.85 + rings * 0.55);
-  rings *= 0.7 + uSwell * 0.45 + flare * 0.9 + uEnergy * 0.12 + kick * 0.18;
+  rings *= 0.7 + uSwell * 0.45 + flare * 0.9 + uEnergy * 0.12 + kick * 0.18
+    + dropPulse * 0.55;
   rings += flare * 0.35 * exp(-r * r * 2.2);
   // Kick: soft center-born ring pulse (local core surge, not a fullscreen wash).
   rings += kick * 0.42 * exp(-r * r * 3.4);
+  // Drop: full-field outward wave — crest + sheet lift, clearly bigger than kick.
+  rings += dropCrest * 1.35 + dropPulse * 0.55 * (0.45 + 0.55 * (1.0 - smoothstep(0.1, 1.35, r)));
 
   vec3 body = skyWash(uv, r);
   body *= 0.55 + uEnergy * 0.22 + uAfterglow * 0.28;
+  // Tension storm-darkens the sky (value only); dropPulse briefly lifts it.
+  body *= mix(1.0, 0.38, tension);
+  body = mix(body, body * 1.45, dropPulse * 0.5);
 
   // Palette ride: bass core → mid body → high outer glitter.
   float tCol = clamp(r * 0.85 + rings * 0.15, 0.0, 1.0);
@@ -177,6 +218,10 @@ void main() {
   // Kick bass-warms the core; snare cracks toward cooler mid/white.
   ringCol = mix(ringCol, mix(uColorBass, vec3(0.95, 0.88, 0.78), 0.35), kick * 0.36);
   ringCol = mix(ringCol, mix(uColorMid, vec3(0.96, 0.98, 1.0), 0.48), snare * 0.3);
+  // Tension cools toward deep storm bass (not tenderness honey / hush glow).
+  ringCol = mix(ringCol, uColorBass * 0.55, tension * 0.55 * (0.35 + rings * 0.35));
+  // Drop flashes cool-white across the field (bigger than kick warm core).
+  ringCol = mix(ringCol, vec3(0.92, 0.97, 1.0), dropPulse * 0.58);
   // Tenderness: candlelit honey soften — warm pale wash, distinct from holdBreath hush.
   vec3 candleHoney = mix(warm, vec3(1.0, 0.9, 0.72), 0.55);
   ringCol = mix(ringCol, candleHoney, soft * 0.48);
@@ -187,7 +232,8 @@ void main() {
   body *= mix(1.0, 0.72, stillness);
 
   vec3 col = body;
-  col += ringCol * rings * (0.55 + flare * 0.55 + kick * 0.2);
+  col += ringCol * rings * (0.55 + flare * 0.55 + kick * 0.2 + dropPulse * 0.85);
+  col += mix(uColorHigh, vec3(0.9, 0.95, 1.0), 0.45) * dropCrest * 1.15;
   // Snare flank flash along the ring sides (distinct from kick core / hat ticks).
   float flank = smoothstep(0.25, 0.95, abs(uv.x)) * exp(-r * r * 1.15);
   col += mix(uColorMid, vec3(0.94, 0.97, 1.0), 0.4) * flank * snare * 0.55;
@@ -271,6 +317,11 @@ export function HaloRainScene({
   const tenderSmooth = useRef(0);
   // LeanIn anticipation — approach + ring-spacing tighten before the drop.
   const leanSmooth = useRef(0);
+  // Tension coil — denser/darker inward storm; spring-loose on drop/release.
+  const tensionSmooth = useRef(0);
+  // Drop envelope + one-shot full-field outward ring wave travel.
+  const dropSmooth = useRef(0);
+  const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
 
   const reducedMotion = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -284,6 +335,8 @@ export function HaloRainScene({
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const tenderAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
+  const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
+  const dropAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const fragmentShader = useMemo(() => buildFragmentShader(ringCount), [ringCount]);
 
   const uniforms = useMemo(
@@ -309,6 +362,9 @@ export function HaloRainScene({
       uStillness: { value: 0 },
       uTenderness: { value: 0 },
       uLean: { value: 0 },
+      uTension: { value: 0 },
+      uDrop: { value: 0 },
+      uDropTravel: { value: 1 },
       uColorBass: { value: new THREE.Color(palette.bass) },
       uColorMid: { value: new THREE.Color(palette.mid) },
       uColorHigh: { value: new THREE.Color(palette.high) },
@@ -352,6 +408,44 @@ export function HaloRainScene({
       0.22,
     );
 
+    // Tension early so rain pace can accelerate during the build.
+    // Sustained storm coil — spring-loose on drop/release. Distinct from leanIn
+    // approach zoom (densify + darken + inward drift in place).
+    let tensionTarget = Math.min(1, m.tension) * tensionAmp;
+    if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
+    tensionSmooth.current = smoothToward(
+      tensionSmooth.current,
+      tensionTarget,
+      dt,
+      0.1,
+      0.22,
+    );
+    if (m.dropEvent > 0.45) {
+      tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
+    }
+    const tension = tensionSmooth.current * (1 - stillness * 0.3);
+
+    // Drop envelope — one-shot travel fires when the drop crest hits.
+    dropSmooth.current = smoothToward(
+      dropSmooth.current,
+      Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp,
+      dt,
+      0.03,
+      0.55,
+    );
+    const drop = dropSmooth.current;
+    if (drop > 0.45 && dropTravel.current >= 1) {
+      dropTravel.current = 0;
+    }
+    if (dropTravel.current < 1) {
+      const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
+      const dropPace = 0.9 + pace * 0.15;
+      dropTravel.current = Math.min(
+        1,
+        dropTravel.current + dt * dropPace * (0.9 + bpm / 200),
+      );
+    }
+
     // LeanIn: fast climb into anticipation, slower release into the drop.
     // Soften only a little under holdBreath so approach still reads through hush.
     leanSmooth.current = smoothToward(
@@ -364,8 +458,11 @@ export function HaloRainScene({
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
     // Tenderness eases section pace so intimate moments feel held, not torn.
+    // Tension slightly strains the clock (storm gathering); drop does not freeze it.
     const sectionPace =
-      (0.75 + m.sectionLevel * 0.45) * (1 - tenderSmooth.current * 0.28);
+      (0.75 + m.sectionLevel * 0.45) *
+      (1 - tenderSmooth.current * 0.28) *
+      (1 - tension * 0.18);
 
     // holdBreath gates oval / rain clocks; kit envelopes stay on full dt.
     timeRef.current +=
@@ -442,8 +539,13 @@ export function HaloRainScene({
     // Rain velocity: steady fall, bass thickens the pace, gather reverses in
     // the shader; echo briefly flips accumulation for the upward reply.
     // holdBreath nearly freezes rain scroll; echo reverse + kit stay ungated above.
+    // Tension accelerates inward drift (storm rush) without gather's reverse flip.
     const fallSpeed =
-      (0.55 + swellSmooth.current * 0.85 + m.bass * 0.35 + m.energy * 0.2) *
+      (0.55 +
+        swellSmooth.current * 0.85 +
+        m.bass * 0.35 +
+        m.energy * 0.2 +
+        tension * 0.95) *
       pace *
       sectionPace *
       calm *
@@ -471,6 +573,9 @@ export function HaloRainScene({
     mat.uniforms.uStillness!.value = stillness;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
     mat.uniforms.uLean!.value = lean;
+    mat.uniforms.uTension!.value = tension;
+    mat.uniforms.uDrop!.value = drop;
+    mat.uniforms.uDropTravel!.value = dropTravel.current;
     (mat.uniforms.uColorBass!.value as THREE.Color).set(palette.bass);
     (mat.uniforms.uColorMid!.value as THREE.Color).set(palette.mid);
     (mat.uniforms.uColorHigh!.value as THREE.Color).set(palette.high);
