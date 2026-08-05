@@ -12,7 +12,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 
-### Presets (31)
+### Presets (32)
 
 | ID                    | Name                | Vibe                                                                                                                 |
 | --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -42,6 +42,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | `dune_sea`            | Dune Sea            | Moonlit desert — kick sand plumes off varying crests, snare wind shear, hat mica, gather swell, tension haze, drop sandstorm, tender honey, holdBreath hang |
 | `moth_ballet`         | Moth Ballet         | Lone candle in darkness — moths spiral in lagged banked orbits; kick flares inward, snare scatters, hats wink, gather tightens, tension gutters, drop bursts, tender honey, holdBreath hang |
 | `koi_pond`            | Koi Pond            | Midnight pond from above — glowing koi brushstrokes under black-mirror water; kick flicks tails and rings ripples, snare scatters, hats dimple, gather curves center, tension tightens, drop breaches, tender moon, holdBreath glass hang |
+| `frost_bloom`         | Frost Bloom         | Night glass frost — dendrite crystals accrete with the music; kick spurts branches, snare shear crack, hat prism tips, gather braces, tension needle-freeze, drop flash-freeze, tenderness thaw, holdBreath mid-sparkle |
 | `rainforest_reverie`  | Rainforest Reverie  | iq's Rainforest (ported with permission) — audio breathes the fog, wind, clouds, and sun                             |
 | `alien_planet`        | Alien Planet        | Raymarched valley of alien tree crowns with breathing mist banks, wind, and sun bursts                               |
 | `tidal_sanctuary`     | Tidal Sanctuary     | Audio-reactive ocean with low-band depth, mid-band water, and high-band foam                                         |
@@ -65,7 +66,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 | Feature                       | Free                   | Full ($10 one-time)                             |
 | ----------------------------- | ---------------------- | ----------------------------------------------- |
-| All 31 presets + live preview | Yes                    | Yes                                             |
+| All 32 presets + live preview | Yes                    | Yes                                             |
 | Export length                 | Unlimited              | Unlimited                                       |
 | Export resolution             | 720p                   | Up to 4K                                        |
 | Export FPS                    | 30                     | Up to 240                                       |
