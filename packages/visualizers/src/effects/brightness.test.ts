@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  HIGHLIGHT_GUARD_KNEE,
-  HIGHLIGHT_GUARD_THRESHOLD,
   MAX_BLOOM_INTENSITY,
   MAX_FLASH_LIGHT_BOOST,
   MAX_REACTIVE_LIGHT_INTENSITY,
@@ -9,7 +7,6 @@ import {
   calculateFlashLightBoost,
   clampLightSignal,
   clampReactiveLightIntensity,
-  compressHighlightRgb,
 } from './brightness';
 
 describe('calculateBoundedBloomIntensity', () => {
@@ -60,23 +57,5 @@ describe('reactive light limits', () => {
     expect(calculateFlashLightBoost(100)).toBe(MAX_FLASH_LIGHT_BOOST);
     expect(clampReactiveLightIntensity(100)).toBe(MAX_REACTIVE_LIGHT_INTENSITY);
     expect(clampReactiveLightIntensity(Number.NaN)).toBe(0);
-  });
-});
-
-describe('compressHighlightRgb', () => {
-  it('leaves ordinary colors unchanged', () => {
-    expect(compressHighlightRgb([0.2, 0.5, 0.8])).toEqual([0.2, 0.5, 0.8]);
-  });
-
-  it('preserves hue ratios while keeping highlights below the display ceiling', () => {
-    const compressed = compressHighlightRgb([4, 2, 1]);
-    expect(Math.max(...compressed)).toBeLessThan(HIGHLIGHT_GUARD_THRESHOLD + HIGHLIGHT_GUARD_KNEE);
-    expect(compressed[0] / compressed[1]).toBeCloseTo(2, 8);
-    expect(compressed[1] / compressed[2]).toBeCloseTo(2, 8);
-  });
-
-  it('returns finite output for invalid channel values', () => {
-    const compressed = compressHighlightRgb([Number.POSITIVE_INFINITY, Number.NaN, 0.5]);
-    expect(compressed.every(Number.isFinite)).toBe(true);
   });
 });

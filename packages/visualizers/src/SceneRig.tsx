@@ -14,7 +14,7 @@ import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
 import { AuraLayer } from './AuraLayer';
 import { LightLevel, type LightLevelEffectImpl } from './LightLevelEffect';
-import { HighlightGuard } from './effects/HighlightGuardEffect';
+import { Look } from './look/LookEffect';
 import {
   calculateBoundedBloomIntensity,
   calculateFlashLightBoost,
@@ -1215,7 +1215,7 @@ export function SceneRig({
                 tier={tier}
               />
             ) : null}
-            <HighlightGuard enabled={highlightProtection} />
+            <Look filmic={highlightProtection} />
           </>
         </EffectComposer>
       ) : (
@@ -1233,7 +1233,7 @@ export function SceneRig({
                 tier={tier}
               />
             ) : null}
-            <HighlightGuard enabled={highlightProtection} />
+            <Look filmic={highlightProtection} />
           </>
         </EffectComposer>
       )}

@@ -81,9 +81,9 @@ export interface ToggleControlDef {
 export const TOGGLE_CONTROL_SCHEMA: readonly ToggleControlDef[] = [
   {
     key: 'highlightProtection',
-    label: 'Highlight protection',
+    label: 'Filmic highlights',
     fallback: true,
-    hint: 'Preserves color and detail when bright effects would otherwise clip to white',
+    hint: 'Rolls bright light off toward white like film, so loud moments keep getting brighter instead of flattening out',
     group: 'effects',
   },
 ];
