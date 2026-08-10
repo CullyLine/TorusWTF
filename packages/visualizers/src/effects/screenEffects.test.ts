@@ -223,7 +223,7 @@ describe('screen effect controls', () => {
     effect.mix = 0.65;
     effect.updateFrame({
       time: 1.5,
-      palette: { bass: [1, 0, 0], mid: [0, 1, 0], high: [0, 0, 1] },
+      palette: { bass: '#ff0000', mid: '#00ff00', high: '#0000ff' },
       metrics: DEFAULT_METRICS,
       cameraNear: 0.1,
       cameraFar: 100,

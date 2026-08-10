@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useRef } from 'react';
 import {
   ASPECT_OPTIONS,
+  MAX_REALTIME_FPS,
   isFpsLocked,
+  isFpsRealtimeCapable,
   isResolutionLocked,
   type AspectRatio,
   type ExportFps,
@@ -118,11 +120,19 @@ export function ExportPanel({
               <option key={f} value={f} disabled={isFpsLocked(f, unlocked)}>
                 {f}
                 {isFpsLocked(f, unlocked) ? ' (unlock)' : ''}
+                {!isFpsLocked(f, unlocked) && !isFpsRealtimeCapable(f) ? ' (pre-render)' : ''}
               </option>
             ))}
           </select>
         </label>
       </div>
+
+      {!isFpsRealtimeCapable(fps) ? (
+        <p className="mb-3 text-xs text-torus-fg-dim">
+          {fps} FPS is only produced by <strong>Export Pre-Rendered Video</strong>. Live recording
+          draws one frame per screen refresh, so it tops out near {MAX_REALTIME_FPS}.
+        </p>
+      ) : null}
 
       <div className="mb-3">
         <p className="mb-2 text-xs text-torus-fg-dim">Aspect ratio</p>
