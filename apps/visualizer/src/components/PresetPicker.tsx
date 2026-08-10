@@ -26,7 +26,7 @@ export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) 
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-medium text-torus-fg-dim">Preset</h2>
+        <h2 className="text-sm font-medium text-torus-fg-dim">Visualizer</h2>
         <button type="button" onClick={onRandom} className="text-xs text-torus-mid hover:underline">
           Random
         </button>

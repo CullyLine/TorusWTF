@@ -11,7 +11,7 @@ interface ShortcutsModalProps {
 const SHORTCUTS = [
   { keys: 'Space', action: 'Play / pause (file source)' },
   { keys: 'F', action: 'Toggle fullscreen' },
-  { keys: 'R', action: 'Random preset' },
+  { keys: 'R', action: 'Random visualizer' },
   { keys: '← / →', action: 'Seek ±5s (file source)' },
   { keys: 'Shift + ← / →', action: 'Seek ±15s (file source)' },
   { keys: '?', action: 'Show this help' },

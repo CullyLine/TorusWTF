@@ -45,7 +45,7 @@ export default function AboutPage() {
             your mic. No signup.
           </li>
           <li>
-            <strong className="text-torus-fg">Shape</strong> — pick a preset, tune the reactivity,
+            <strong className="text-torus-fg">Shape</strong> — pick a visualizer, tune the reactivity,
             colors, and camera until it feels right.
           </li>
           <li>

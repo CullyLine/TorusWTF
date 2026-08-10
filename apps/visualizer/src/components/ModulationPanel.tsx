@@ -184,7 +184,7 @@ export function ModulationPanel({
                     empty option) instead of silently rewriting it. */}
                 {!targets.includes(r.target) ? (
                   <option value="" disabled>
-                    {CONTROL_DEFS_BY_KEY[r.target]?.label ?? r.target} (other preset)
+                    {CONTROL_DEFS_BY_KEY[r.target]?.label ?? r.target} (other visualizer)
                   </option>
                 ) : null}
                 {targets.map((key) => (
