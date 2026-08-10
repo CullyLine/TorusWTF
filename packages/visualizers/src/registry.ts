@@ -10,6 +10,7 @@ import { StarFieldScene } from './presets/StarField';
 import { LiquidBlobScene } from './presets/LiquidBlob';
 import { FlowFieldScene } from './presets/FlowField';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
+import { PlasmaGlobeScene } from './presets/PlasmaGlobe';
 
 export type VisualizerId =
   | 'flow_field'
@@ -19,7 +20,8 @@ export type VisualizerId =
   | 'cosmic_mandala'
   | 'star_field'
   | 'liquid_blob'
-  | 'tidal_sanctuary';
+  | 'tidal_sanctuary'
+  | 'plasma_globe';
 
 /**
  * Visualizers removed in the curation pass. Saved looks and show files that
@@ -339,6 +341,26 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       lightLevel: 1.05,
       turbulence: 1,
       density: 0.75,
+    },
+  },
+  plasma_globe: {
+    id: 'plasma_globe',
+    label: 'Plasma Globe',
+    hint: 'The novelty plasma ball — filaments reach for the glass and re-strike on every kick. Built light enough to stay smooth without a graphics card.',
+    Scene: PlasmaGlobeScene,
+    defaults: {
+      speed: 1,
+      smoothness: 0.55,
+      scale: 1.05,
+      bassShake: 0.35,
+      cameraMode: 'orbit',
+      cameraDistance: 1,
+      // Deliberately restrained: this one earns its look from line work, not
+      // from post, and bloom is the most expensive thing in the chain.
+      bloomIntensity: 0.55,
+      aura: 0,
+      anima: 0.5,
+      lightLevel: 1,
     },
   },
 };

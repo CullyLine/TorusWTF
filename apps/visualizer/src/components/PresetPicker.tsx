@@ -19,6 +19,7 @@ const PRESET_COLORS: Record<VisualizerId, string> = {
   star_field: '#60A5FA',
   liquid_blob: '#F472B6',
   tidal_sanctuary: '#22D3EE',
+  plasma_globe: '#B388FF',
 };
 
 export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) {
