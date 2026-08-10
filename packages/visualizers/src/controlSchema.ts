@@ -24,6 +24,7 @@ export type ControlKey =
   | 'speed'
   | 'anima'
   | 'colorLife'
+  | 'saturation'
   | 'bloomIntensity'
   | 'lightLevel'
   | 'aura'
@@ -160,6 +161,16 @@ export const CONTROL_SCHEMA: ControlDef[] = [
   },
 
   // ---- Color & light ----
+  {
+    key: 'saturation',
+    label: 'Saturation',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 1.22,
+    hint: 'How much colour survives the brightest moments — 0 is monochrome',
+    group: 'color',
+  },
   {
     key: 'colorLife',
     label: 'Color life',

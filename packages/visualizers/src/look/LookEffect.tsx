@@ -3,7 +3,7 @@
 import { forwardRef, useEffect, useMemo } from 'react';
 import { BlendFunction, Effect } from 'postprocessing';
 import { Uniform } from 'three';
-import { DISPLAY_TRANSFORM_GLSL, LOOK_EXPOSURE } from './displayTransform';
+import { DEFAULT_SATURATION, DISPLAY_TRANSFORM_GLSL, LOOK_EXPOSURE } from './displayTransform';
 
 /**
  * The final scene-referred to display-referred stage. Runs last, after bloom,
@@ -21,6 +21,7 @@ const fragmentShader = /* glsl */ `
 uniform float exposure;
 uniform float filmic;
 uniform float grain;
+uniform float saturation;
 
 ${DISPLAY_TRANSFORM_GLSL}
 
@@ -32,6 +33,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   vec3 color = max(inputColor.rgb, vec3(0.0)) * exposure;
 
   vec3 mapped = filmic > 0.5 ? torusAcesFilmic(color) : torusNeutralClamp(color);
+  mapped = torusSaturate(mapped, saturation);
 
   if (grain > 0.0) {
     // Two decorrelated samples per pixel keep the pattern from crawling in a
@@ -55,19 +57,27 @@ export interface LookOptions {
   filmic?: boolean;
   /** Grain amplitude in display units. ~1/255 is one code value. */
   grain?: number;
+  /** Post-curve chroma. 1 = neutral. */
+  saturation?: number;
 }
 
 /** Roughly half a code value: enough to break up banding, invisible as noise. */
 export const DEFAULT_GRAIN = 0.002;
 
 export class LookEffectImpl extends Effect {
-  constructor({ level = 1, filmic = true, grain = DEFAULT_GRAIN }: LookOptions = {}) {
+  constructor({
+    level = 1,
+    filmic = true,
+    grain = DEFAULT_GRAIN,
+    saturation = DEFAULT_SATURATION,
+  }: LookOptions = {}) {
     super('LookEffect', fragmentShader, {
       blendFunction: BlendFunction.SRC,
       uniforms: new Map<string, Uniform>([
         ['exposure', new Uniform(level * LOOK_EXPOSURE)],
         ['filmic', new Uniform(filmic ? 1 : 0)],
         ['grain', new Uniform(grain)],
+        ['saturation', new Uniform(saturation)],
       ]),
     });
   }
@@ -83,16 +93,21 @@ export class LookEffectImpl extends Effect {
   set grain(value: number) {
     this.uniforms.get('grain')!.value = Math.max(0, value);
   }
+
+  set saturation(value: number) {
+    this.uniforms.get('saturation')!.value = Math.max(0, value);
+  }
 }
 
 export const Look = forwardRef<LookEffectImpl, LookOptions>(function Look(
-  { level = 1, filmic = true, grain = DEFAULT_GRAIN },
+  { level = 1, filmic = true, grain = DEFAULT_GRAIN, saturation = DEFAULT_SATURATION },
   ref,
 ) {
-  const effect = useMemo(() => new LookEffectImpl({ level, filmic, grain }), []);
+  const effect = useMemo(() => new LookEffectImpl({ level, filmic, grain, saturation }), []);
   effect.level = level;
   effect.filmic = filmic;
   effect.grain = grain;
+  effect.saturation = saturation;
   useEffect(() => () => effect.dispose(), [effect]);
   return <primitive ref={ref} object={effect} dispose={null} />;
 });

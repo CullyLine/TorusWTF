@@ -97,16 +97,52 @@ export function neutralClamp(rgb: Rgb): MutableRgb {
   return [clamp01(c[0] * s), clamp01(c[1] * s), clamp01(c[2] * s)];
 }
 
+/** Rec. 709 luminance, the axis saturation pivots around. */
+const LUMA = [0.2126, 0.7152, 0.0722] as const;
+
+/**
+ * Luminance-preserving saturation, applied after the curve.
+ *
+ * A filmic curve necessarily desaturates as it approaches white — that is
+ * what makes a highlight read as light rather than paint. Applied to an
+ * additive renderer where most of the frame is already bright, it also
+ * costs chroma in the mid-tones, which is where the colour actually lives.
+ * This pulls that back without touching the rolloff.
+ */
+export function saturate(rgb: Rgb, amount: number): MutableRgb {
+  const a = Math.max(0, safe(amount));
+  if (a === 1) return [rgb[0], rgb[1], rgb[2]];
+  const luma = LUMA[0] * rgb[0] + LUMA[1] * rgb[1] + LUMA[2] * rgb[2];
+  return [
+    clamp01(luma + (rgb[0] - luma) * a),
+    clamp01(luma + (rgb[1] - luma) * a),
+    clamp01(luma + (rgb[2] - luma) * a),
+  ];
+}
+
 export interface LookParams {
   /** User "Light" level, multiplied by `LOOK_EXPOSURE` before the curve. */
   exposure: number;
   /** True for the ACES filmic shoulder, false for the neutral peak clamp. */
   filmic: boolean;
+  /** Post-curve chroma. 1 = the curve's own output, >1 richer. */
+  saturation: number;
 }
 
-export const DEFAULT_LOOK: LookParams = { exposure: 1, filmic: true };
+/**
+ * Slightly rich by default. The presets are additive and bloom-heavy, so the
+ * neutral result reads washed; a modest lift puts the colour back without
+ * making anything look like a filter.
+ */
+export const DEFAULT_SATURATION = 1.22;
 
-/** Full CPU reference for one pixel: exposure, then the chosen rolloff. */
+export const DEFAULT_LOOK: LookParams = {
+  exposure: 1,
+  filmic: true,
+  saturation: DEFAULT_SATURATION,
+};
+
+/** Full CPU reference for one pixel: exposure, rolloff, then chroma. */
 export function applyLook(rgb: Rgb, params: LookParams = DEFAULT_LOOK): MutableRgb {
   const e = Math.max(0, safe(params.exposure)) * LOOK_EXPOSURE;
   const exposed: MutableRgb = [
@@ -114,7 +150,8 @@ export function applyLook(rgb: Rgb, params: LookParams = DEFAULT_LOOK): MutableR
     Math.max(0, safe(rgb[1])) * e,
     Math.max(0, safe(rgb[2])) * e,
   ];
-  return params.filmic ? acesFilmic(exposed) : neutralClamp(exposed);
+  const mapped = params.filmic ? acesFilmic(exposed) : neutralClamp(exposed);
+  return saturate(mapped, params.saturation);
 }
 
 /**
@@ -152,5 +189,10 @@ vec3 torusNeutralClamp(vec3 color) {
   float peak = max(max(color.r, color.g), max(color.b, 0.0));
   if (peak <= 1.0) return clamp(color, 0.0, 1.0);
   return clamp(color / peak, 0.0, 1.0);
+}
+
+vec3 torusSaturate(vec3 color, float amount) {
+  float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  return clamp(mix(vec3(luma), color, amount), 0.0, 1.0);
 }
 `;

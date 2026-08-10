@@ -622,6 +622,7 @@ export function VisualizerApp() {
       highlightProtection: saved.highlightProtection ?? true,
       autoGain: saved.autoGain ?? true,
       colorLife: saved.colorLife ?? 0.6,
+      saturation: saved.saturation ?? 1.22,
       linger: saved.linger ?? 0.3,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
@@ -1101,6 +1102,7 @@ export function VisualizerApp() {
                 energy={controls.energy ?? 0}
                 autoGain={controls.autoGain ?? true}
                 colorLife={controls.colorLife ?? 0.6}
+                saturation={controls.saturation ?? 1.22}
                 background={background.mode}
                 backgroundIntensity={background.intensity}
                 inflate={controls.inflate ?? 0.5}

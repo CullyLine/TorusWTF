@@ -332,18 +332,24 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
       leanSat +
       echoSat +
       chordSat;
+    // Loud passages used to gain lightness roughly as fast as they gained
+    // chroma, and lightness has a hard 0.86 ceiling while saturation does
+    // not. The palette therefore washed out at exactly the moments it should
+    // have been richest. Big moments now read through colour first and
+    // brightness second, so these coefficients are deliberately about half
+    // of the matching satBoost terms.
     const lightBoost =
       1 +
       life *
-        (m.swell * 0.14 +
-          m.impact * 0.18 +
-          m.shimmer * 0.08 +
-          m.afterglow * 0.08 -
+        (m.swell * 0.07 +
+          m.impact * 0.09 +
+          m.shimmer * 0.05 +
+          m.afterglow * 0.04 -
           m.silence * 0.22 +
           // Soft warm lift — amber passages feel lit, not just tinted.
-          Math.max(0, warmth) * 0.05) +
-      phraseLight +
-      echoLight;
+          Math.max(0, warmth) * 0.03) +
+      phraseLight * 0.5 +
+      echoLight * 0.5;
 
     // Chord center = circular mean of the three base hues. Each band walks
     // toward it by chordPull; sparse verses leave bandSpread open.

@@ -129,6 +129,7 @@ export default function ProjectorPage() {
           energy={controls.energy ?? 0}
           autoGain={controls.autoGain ?? true}
           colorLife={controls.colorLife ?? 0.6}
+          saturation={controls.saturation ?? 1.22}
           background={look.background.mode}
           backgroundIntensity={look.background.intensity}
           inflate={controls.inflate ?? 0.5}

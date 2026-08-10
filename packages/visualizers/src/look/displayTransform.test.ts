@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_LOOK,
   DISPLAY_TRANSFORM_GLSL,
   LOOK_EXPOSURE,
   acesFilmic,
   applyLook,
   neutralClamp,
+  saturate,
   type Rgb,
 } from './displayTransform';
 
@@ -42,6 +44,16 @@ const legacyGuard = (rgb: Rgb): number[] => {
 
 /** A saturated magenta, the kind of additive neon these presets emit. */
 const neon = (k: number): Rgb => [1 * k, 0.08 * k, 0.6 * k];
+
+const hueOf = (rgb: readonly number[]): number => {
+  const [r, g, b] = rgb as [number, number, number];
+  const max = Math.max(r, g, b);
+  const delta = max - Math.min(r, g, b);
+  if (delta === 0) return 0;
+  const h =
+    max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+  return (((h * 60) % 360) + 360) % 360;
+};
 
 describe('acesFilmic', () => {
   it('keeps climbing across the whole scene range', () => {
@@ -85,16 +97,17 @@ describe('acesFilmic', () => {
   });
 
   it('holds hue steady through the ordinary range', () => {
-    const hueOf = (rgb: readonly number[]): number => {
-      const [r, g, b] = rgb as [number, number, number];
-      const max = Math.max(r, g, b);
-      const delta = max - Math.min(r, g, b);
-      if (delta === 0) return 0;
-      const h = max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
-      return ((h * 60) % 360 + 360) % 360;
-    };
+    const curveOnly = { ...DEFAULT_LOOK, saturation: 1 };
+    const base = hueOf(applyLook(neon(0.5), curveOnly));
+    expect(Math.abs(hueOf(applyLook(neon(2), curveOnly)) - base)).toBeLessThan(8);
+  });
+
+  it('keeps the default chroma lift from skewing hue badly', () => {
+    // Boosting chroma in RGB space is not hue-preserving, so the default
+    // look drifts more than the bare curve. It has to stay small enough
+    // that a palette colour still reads as that colour.
     const base = hueOf(applyLook(neon(0.5)));
-    expect(Math.abs(hueOf(applyLook(neon(2))) - base)).toBeLessThan(8);
+    expect(Math.abs(hueOf(applyLook(neon(2))) - base)).toBeLessThan(20);
   });
 
   it('never leaves the displayable range', () => {
@@ -118,7 +131,7 @@ describe('acesFilmic', () => {
 
 describe('applyLook', () => {
   it('scales scene light by the user level and the anchor exposure', () => {
-    expect(applyLook(grey(0.2), { exposure: 2, filmic: true })).toEqual(
+    expect(applyLook(grey(0.2), { exposure: 2, filmic: true, saturation: 1 })).toEqual(
       acesFilmic(grey(0.2 * 2 * LOOK_EXPOSURE)),
     );
   });
@@ -129,9 +142,39 @@ describe('applyLook', () => {
 
   it('falls back to the neutral clamp when the filmic shoulder is off', () => {
     const scene = grey(3);
-    expect(applyLook(scene, { exposure: 1, filmic: false })).toEqual(
+    expect(applyLook(scene, { exposure: 1, filmic: false, saturation: 1 })).toEqual(
       neutralClamp(grey(3 * LOOK_EXPOSURE)),
     );
+  });
+
+  it('ships richer than neutral by default', () => {
+    const neutral = saturation(applyLook(neon(1), { ...DEFAULT_LOOK, saturation: 1 }));
+    expect(saturation(applyLook(neon(1)))).toBeGreaterThan(neutral);
+  });
+});
+
+describe('saturate', () => {
+  it('leaves greys grey at any amount', () => {
+    expect(saturate([0.4, 0.4, 0.4], 1.8)).toEqual([0.4, 0.4, 0.4]);
+  });
+
+  it('collapses to luminance at zero', () => {
+    const [r, g, b] = saturate([0.8, 0.2, 0.4], 0);
+    expect(r).toBeCloseTo(g, 6);
+    expect(g).toBeCloseTo(b, 6);
+  });
+
+  it('holds luminance roughly steady while adding chroma', () => {
+    const before = luminance([0.6, 0.25, 0.45]);
+    const after = luminance(saturate([0.6, 0.25, 0.45], 1.4));
+    expect(Math.abs(after - before)).toBeLessThan(0.01);
+  });
+
+  it('stays inside the displayable range when pushed hard', () => {
+    for (const channel of saturate([0.95, 0.05, 0.5], 2)) {
+      expect(channel).toBeGreaterThanOrEqual(0);
+      expect(channel).toBeLessThanOrEqual(1);
+    }
   });
 });
 

@@ -128,6 +128,7 @@ export interface SavedPreset {
   autoGain?: boolean;
   /** Living-color amount. Absent for legacy presets → default life. */
   colorLife?: number;
+  saturation?: number;
   /** Linger amount. Absent for legacy presets → default echo. */
   linger?: number;
   /** Whole-frame style. Absent for legacy presets → no style. */
@@ -215,6 +216,7 @@ export interface VisualizerControls {
    * color wheel. Default 0.6.
    */
   colorLife?: number;
+  saturation?: number;
   /**
    * How long big moments echo after they pass, 0..1. Scales only the release
    * side of the musical envelopes (attack stays instant) — 0 is the old
@@ -263,6 +265,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   highlightProtection: true,
   autoGain: true,
   colorLife: 0.6,
+  saturation: 1.22,
   linger: 0.3,
   bloomIntensity: 0.9,
   cameraMode: 'flow',
