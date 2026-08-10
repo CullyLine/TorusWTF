@@ -78,6 +78,8 @@ uniform float uGather;
 uniform float uEcho;
 uniform float uEchoTravel;
 uniform float uKick;
+// Seconds since the last kick onset — drives the soft-body settle.
+uniform float uKickAge;
 uniform float uSnare;
 uniform float uHat;
 // 0..1 — tender vocal hush: cool toward dark glass, damp heat glow.
@@ -96,6 +98,31 @@ float emberHash(vec2 p) {
 
 float sdSphere(vec3 p, float r) {
   return length(p) - r;
+}
+
+/**
+ * Bounded ellipsoid distance (iq's approximation).
+ *
+ * Dividing a sphere's input space by a per-axis scale does NOT give the
+ * distance to an ellipsoid — it returns a field that overstates distance
+ * along the squashed axis and breaks the Lipschitz bound the raymarcher
+ * relies on, so the marcher oversteps and the surface tears into pinched,
+ * spiky artefacts. That is exactly what the voices were doing whenever a
+ * kick landed or inflate was low. This stays conservative, so squash and
+ * stretch can be as strong as the music wants without shredding the choir.
+ */
+float sdEllipsoid(vec3 p, vec3 r) {
+  float k0 = length(p / r);
+  float k1 = length(p / (r * r));
+  return k0 * (k0 - 1.0) / max(k1, 1e-4);
+}
+
+/**
+ * Damped oscillation after an impact — the jelly wobble that makes a body
+ * read as soft. Deforming space cannot do this; a real decaying spring can.
+ */
+float softBodyWobble(float age, float phase) {
+  return exp(-age * 5.5) * sin(age * 24.0 + phase);
 }
 
 float smin(float a, float b, float k) {
@@ -148,10 +175,6 @@ float transientField(vec3 p) {
   return d;
 }
 
-vec3 kickDomain(vec3 p) {
-  float kickY = 1.0 + uKick * 0.42;
-  return vec3(p.x, p.y / kickY, p.z);
-}
 
 // Persistent choir voices + soft magma hearth. Compact in unit space so
 // max scale / inflate cannot put the ortho camera inside the field.
@@ -168,14 +191,23 @@ float sceneInner(vec3 p) {
   float k = mix(0.025, 0.11, uInflate) + uMid * 0.02 + uEnergy * 0.01;
   float stretch = (1.0 - uInflate) * (0.22 + uBass * 0.18);
 
-  // Kick: vertical floor / puff — anisotropic Y pulse through the choir.
-  float kickY = 1.0 + uKick * 0.42;
-  vec3 pk = kickDomain(p);
+  // The kick used to divide the entire field's Y axis, which distorted the
+  // hearth and every voice at once and broke the distance field for all of
+  // them. It is now a per-body squash below, so the field stays valid and
+  // each body answers the kick on its own.
+  vec3 pk = p;
 
-  // Magma hearth — deep bass body under the choir (always present).
+  // Magma hearth — deep bass body under the choir (always present). It gets
+  // its own settle, heavier and slower than the voices.
+  float hearthWob = softBodyWobble(uKickAge, 0.0) * (0.1 + uKick * 0.06);
+  float hearthSy = 1.0 + hearthWob;
+  float hearthSxz = inversesqrt(max(hearthSy, 1e-3));
   float hearthR = (0.22 + uBass * 0.14 * puff + uKick * 0.03) * gatherSqueeze;
   vec3 hearthC = vec3(0.0, -0.42 + uBass * 0.04, 0.05);
-  float d = sdSphere(pk - hearthC, hearthR) * mix(1.0, kickY, 0.3);
+  float d = sdEllipsoid(
+    pk - hearthC,
+    vec3(hearthR * hearthSxz, hearthR * hearthSy, hearthR * hearthSxz)
+  );
 
   // Mid sway of the whole riser.
   float sway = sin(ot * 0.55) * (0.04 + uMid * 0.07) * (1.0 - uGather * 0.4);
@@ -214,16 +246,17 @@ float sceneInner(vec3 p) {
              + uMid * 0.025 * puff + uSnare * 0.012)
              * puff * gatherSqueeze;
 
-    // Low inflate: stretch voices into teardrop singers along local up.
+    // Squash and stretch, done properly. The vertical scale is the teardrop
+    // shape at low inflate plus a decaying wobble kicked off by each hit;
+    // the lateral scale is derived from it as 1/sqrt so the voice conserves
+    // volume the way a soft body does, instead of visibly gaining mass as it
+    // stretched the way the old anisotropic domain divide did.
     vec3 q = pk - center;
-    if (stretch > 0.001) {
-      float sy = 1.0 + stretch * (0.55 + 0.35 * sin(t + fi));
-      float sx = 1.0 - stretch * 0.25;
-      q = vec3(q.x / sx, q.y / sy, q.z / sx);
-      d = smin(d, sdSphere(q, rr) * mix(1.0, sy, 0.35), k);
-    } else {
-      d = smin(d, sdSphere(q, rr), k);
-    }
+    float teardrop = stretch * (0.55 + 0.35 * sin(t + fi));
+    float wob = softBodyWobble(uKickAge, fi * 1.9) * (0.16 + uKick * 0.12);
+    float sy = max(0.35, 1.0 + teardrop + wob);
+    float sxz = inversesqrt(sy);
+    d = smin(d, sdEllipsoid(q, vec3(rr * sxz, rr * sy, rr * sxz)), k);
   }
 
   float td = transientField(pk);
@@ -367,7 +400,7 @@ void main() {
 
     // Transient tint at hit — well-defined ascending smoothstep.
     vec3 pInner = sceneDomain(p);
-    float subAtHit = transientField(kickDomain(pInner)) * sceneScale();
+    float subAtHit = transientField(pInner) * sceneScale();
     float subWeight = 1.0 - smoothstep(-0.015, 0.09, subAtHit);
     col = mix(col, uColorHigh * (1.25 + uHigh * 0.45), subWeight * mix(0.6, 0.28, cool));
 
@@ -446,6 +479,8 @@ export function LiquidBlobScene({
   const echoArmed = useRef(true);
   const prevEcho = useRef(0);
   const kickSmooth = useRef(0);
+  const kickAge = useRef(10);
+  const kickPrev = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
   const tenderSmooth = useRef(0);
@@ -480,6 +515,7 @@ export function LiquidBlobScene({
       uEcho: { value: 0 },
       uEchoTravel: { value: 1 },
       uKick: { value: 0 },
+      uKickAge: { value: 10 },
       uSnare: { value: 0 },
       uHat: { value: 0 },
       uTenderness: { value: 0 },
@@ -531,13 +567,15 @@ export function LiquidBlobScene({
 
     wobblePhaseRef.current += dt * motionMul;
 
-    kickSmooth.current = smoothToward(
-      kickSmooth.current,
-      Math.min(1.2, m.kick) * kitAmp,
-      dt,
-      0.028,
-      0.11,
-    );
+    // Track time since the last kick onset so the shader can run a decaying
+    // spring per body. A smoothed envelope alone cannot express overshoot,
+    // which is the part that reads as "soft".
+    const kickNow = Math.min(1.2, m.kick) * kitAmp;
+    if (kickNow > 0.28 && kickPrev.current <= 0.28) kickAge.current = 0;
+    else kickAge.current = Math.min(10, kickAge.current + dt);
+    kickPrev.current = kickNow;
+
+    kickSmooth.current = smoothToward(kickSmooth.current, kickNow, dt, 0.028, 0.11);
     snareSmooth.current = smoothToward(
       snareSmooth.current,
       Math.min(1.2, m.snare) * kitAmp,
@@ -605,6 +643,7 @@ export function LiquidBlobScene({
     mat.uniforms.uEcho!.value = echoVis;
     mat.uniforms.uEchoTravel!.value = echoTravel.current;
     mat.uniforms.uKick!.value = kickSmooth.current;
+    mat.uniforms.uKickAge!.value = kickAge.current;
     mat.uniforms.uSnare!.value = snareSmooth.current;
     mat.uniforms.uHat!.value = hatSmooth.current;
     mat.uniforms.uTenderness!.value = tenderSmooth.current;
