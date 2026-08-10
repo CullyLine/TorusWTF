@@ -81,7 +81,7 @@ This runs `scripts/fetch-demos.mjs` first, which downloads the latest 10 public 
 
 ### Demo audio attribution
 
-`public/demo.mp3` ("Try with demo audio") is **"Scheming Weasel (faster version)" by Kevin MacLeod** ([incompetech.com](https://incompetech.com)), licensed under [Creative Commons: By Attribution 3.0](https://creativecommons.org/licenses/by/3.0/). Keep this credit if you redistribute the app.
+`public/demo.mp3` ("Try with demo audio") is **"Despresso Shots" by CullyLine**, used with permission. It ships as a 160 kbps MP3 encoded from the master in `assets/`, and is fetched only when someone presses the demo button, so it does not affect page load.
 
 ## Environment variables
 

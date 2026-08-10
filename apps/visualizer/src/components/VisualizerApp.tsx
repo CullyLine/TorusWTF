@@ -392,11 +392,8 @@ export function VisualizerApp() {
       const res = await fetch('/demo.mp3');
       if (!res.ok) throw new Error('fetch failed');
       const blob = await res.blob();
-      // "Scheming Weasel (faster version)" — Kevin MacLeod (incompetech.com),
-      // CC BY 3.0. Filename doubles as on-screen attribution.
-      handleFile(
-        new File([blob], 'Scheming Weasel — Kevin MacLeod.mp3', { type: 'audio/mpeg' }),
-      );
+      // The filename doubles as on-screen attribution in the playback bar.
+      handleFile(new File([blob], 'Despresso Shots — CullyLine.mp3', { type: 'audio/mpeg' }));
     } catch {
       toast({ message: 'Could not load demo audio', variant: 'error' });
     } finally {
