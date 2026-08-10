@@ -64,9 +64,14 @@ const DEPTH = 3; // depth of one segment
 const RESET_Z = 8; // recycle plane behind the camera
 
 /** Candlelit soft — tender passages warm the bore without blowing it out. */
-const CANDLE_WARM = new THREE.Color(1.0, 0.72, 0.42);
-/** Residual heat after peaks — amber linger, distinct from white drop flash. */
-const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.58, 0.28);
+/**
+ * Both warms are deliberately saturated. A pale warm has to be mixed in
+ * heavily before it reads as warm at all, and by then it has replaced the
+ * palette; a rich one tints convincingly at a fraction of the amount.
+ */
+const CANDLE_WARM = new THREE.Color(1.0, 0.52, 0.18);
+/** Residual heat after peaks — amber linger, distinct from the drop surge. */
+const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.34, 0.06);
 
 // ---------------------------------------------------------------------------
 // Tunnel segment shader — one template geometry shared by every segment.
@@ -143,6 +148,13 @@ varying vec2 vWallDir;
 varying float vApex;
 varying float vKick;
 
+// Raise chroma around luminance. Lets "hotter" read as a richer colour
+// instead of a brighter one, which is the whole point of the tunnel grade.
+vec3 enrich(vec3 c, float amount) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  return max(vec3(0.0), mix(vec3(l), c, 1.0 + amount));
+}
+
 void main() {
   vec3 col = mix(uWallColor, uPyrColor, vKind);
   float lock = clamp(uLock, 0.0, 1.0);
@@ -153,26 +165,49 @@ void main() {
   float formShade = mix(0.6 + 0.4 * abs(vWallDir.y), 0.92, lockSnap);
   col *= formShade;
 
-  // High band makes the pyramid faces glint toward the accent color.
-  col += uAccentColor * (uHigh * uHigh) * vKind * 0.5 * (1.0 - lockSnap * 0.35);
+  // Faces were single flat fields of colour, which is most of why the bore
+  // read as folded paper. Gradient each one from its apex outward and put a
+  // bright lip on the leading edge so the geometry has an inside and an
+  // outside instead of being a silhouette.
+  float apex = clamp(vApex, 0.0, 1.0);
+  col *= 0.52 + 0.78 * apex;
+  float lip = smoothstep(0.86, 1.0, apex);
+  col = mix(col, col * uAccentColor * 2.2, lip * 0.5);
+  col = enrich(col, lip * 0.35);
+
+  // Pyramid faces glint on highs and snare. The accent colour is usually the
+  // opposite end of the palette from the faces, so both adding it and
+  // blending toward it mixed complements and landed on grey — that is why
+  // the teeth read as cardboard. Let the glint raise the face's own colour
+  // instead, and save the accent for the lip below, where a contrasting hue
+  // reads as a rim light rather than a wash.
+  float glint = vKind * ((uHigh * uHigh) * 0.5 * (1.0 - lockSnap * 0.35) + uSnare * 0.4);
+  col *= 1.0 + glint * 0.85;
+  col = enrich(col, glint * 0.3);
 
   // Kick wall punch: brief brightness on the walls (not a full-frame strobe).
+  // Same hue as the wall, so this one can stay additive.
   col += uWallColor * vKick * (1.0 - vKind) * 0.35;
-  // Snare: thin lateral crack glint on pyramids toward accent.
-  col += uAccentColor * uSnare * vKind * 0.4;
 
-  // Drop warp: white flash, strongest deep in the tunnel so it reads as a
-  // shockwave arriving from the far end.
+  // Drop warp: a shockwave arriving from the far end. It used to add pure
+  // white, which erased the palette on the single biggest moment of the
+  // track; it now surges in the accent hue with only a little white in it.
   float depthBias = smoothstep(4.0, 24.0, vViewZ);
-  col += vec3(1.0) * uFlash * (0.12 + depthBias * 0.5);
+  float flashAmt = uFlash * (0.12 + depthBias * 0.5);
+  col += mix(uAccentColor, vec3(1.0), 0.22) * flashAmt;
+  col = enrich(col, flashAmt * 0.5);
 
-  // Tenderness: candlelit soft wash (near walls read warmer, not brighter).
-  // Afterglow: residual heat lingering deeper in the throat after peaks —
-  // distinct from the white drop flash and from holdBreath hush.
+  // Heat. Tenderness is candlelight near the camera, afterglow is residual
+  // embers deeper in the throat. This used to lerp up to 72% toward a pale
+  // warm colour, which replaced the palette with tan — the single largest
+  // reason the tunnel read washed out. Tint multiplicatively so the warmth
+  // passes THROUGH the palette hue instead of over it, and let the rest of
+  // the heat express as chroma rather than luminance.
   float tenderHeat = uTenderness * (0.55 - depthBias * 0.2);
   float glowHeat = uAfterglow * (0.22 + depthBias * 0.55);
-  col = mix(col, uWarmColor, clamp(tenderHeat * 0.55 + glowHeat * 0.42, 0.0, 0.72));
-  col += uWarmColor * glowHeat * 0.28;
+  float heat = clamp(tenderHeat * 0.55 + glowHeat * 0.42, 0.0, 0.72);
+  col = mix(col, col * uWarmColor * 2.0, heat * 0.5);
+  col = enrich(col, heat * 0.2);
 
   // Continuous bar-locked ring pulse traveling down the bore (no stepping).
   // uBarPhase < 0 when BPM unknown so cos(0) never leaves glow stuck bright.
@@ -192,6 +227,13 @@ void main() {
   // segment doesn't dominate the frame as a flat bright slab.
   float nearFade = smoothstep(0.4, 5.0, vViewZ);
   col *= fog * (0.25 + 0.75 * nearFade);
+
+  // Depth grade: distance reads as colour, not just as less light. The far
+  // throat cools and deepens toward the bass end of the palette while the
+  // near walls keep their full chroma, so the bore has somewhere to recede
+  // to instead of fading uniformly to grey.
+  col = mix(col, col * uWallColor * 1.6, depthBias * 0.35);
+  col = enrich(col, (1.0 - depthBias) * 0.06);
 
   gl_FragColor = vec4(col, 1.0);
 }
@@ -787,27 +829,32 @@ export function InfiniteTunnelScene({
     // the bass), pyramids in mid. Afterglow lifts residual heat; tenderness
     // milks slightly toward candlelit soft without a white flash.
     // Lock adds a faint organize brighten (not a punch).
+    // Warm lerps used to reach 62% and pulled every surface toward a pale
+    // tan. They are now a light seasoning on top of a wall that carries the
+    // palette at a usable value, so bass reads as deep colour rather than as
+    // a dim grey that has to be rescued by additive glow later in the frame.
     const wallPulse =
-      (0.16 + m.bass * 0.14) *
+      (0.72 + m.bass * 0.3) *
       (1 - tender * 0.1) *
-      (1 + afterglow * 0.28) *
+      (1 + afterglow * 0.22) *
       (1 + lockSnap * 0.1);
     const wallC = (eu.uWallColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(wallPulse);
-    wallC.lerp(cs.warm, Math.min(0.62, tender * 0.42 + afterglow * 0.38));
-    const pyrC = (eu.uPyrColor!.value as THREE.Color).copy(cs.mid).multiplyScalar(0.45);
-    pyrC.lerp(cs.warm, Math.min(0.5, tender * 0.28 + afterglow * 0.22));
-    // Odd segments: near-black walls (your hsl(278,5%,5%)), bass-tinted pyramids.
+    wallC.lerp(cs.warm, Math.min(0.16, tender * 0.12 + afterglow * 0.1));
+    const pyrC = (eu.uPyrColor!.value as THREE.Color).copy(cs.mid).multiplyScalar(1.35);
+    pyrC.lerp(cs.warm, Math.min(0.14, tender * 0.09 + afterglow * 0.07));
+    // Odd segments stay near-black so the bore keeps its rhythm, but they
+    // hold the bass hue rather than drifting to grey-tan.
     const oddWall = (ou.uWallColor!.value as THREE.Color)
       .copy(cs.bass)
-      .multiplyScalar(0.045 * (1 + afterglow * 0.9));
-    oddWall.lerp(cs.warm, Math.min(0.55, tender * 0.35 + afterglow * 0.4));
-    const oddPyr = (ou.uPyrColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(0.2);
-    oddPyr.lerp(cs.warm, Math.min(0.45, tender * 0.22 + afterglow * 0.28));
+      .multiplyScalar(0.12 * (1 + afterglow * 0.9));
+    oddWall.lerp(cs.warm, Math.min(0.14, tender * 0.1 + afterglow * 0.1));
+    const oddPyr = (ou.uPyrColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(0.5);
+    oddPyr.lerp(cs.warm, Math.min(0.12, tender * 0.07 + afterglow * 0.08));
 
     // High band lights the corner rails; hats glitter them with sharp ticks
     // distinct from the slower shimmer wash and from bass wall explode.
     // Afterglow leaves a brief warm ember on the rails; tenderness softens glitter.
-    railMaterial.color.copy(cs.high).lerp(cs.warm, Math.min(0.55, tender * 0.25 + afterglow * 0.4));
+    railMaterial.color.copy(cs.high).lerp(cs.warm, Math.min(0.2, tender * 0.1 + afterglow * 0.14));
     railMaterial.opacity = Math.min(
       1,
       0.1 +
