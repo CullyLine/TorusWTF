@@ -167,7 +167,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     min: 0,
     max: 2,
     step: 0.05,
-    fallback: 1.22,
+    fallback: 1.1,
     hint: 'How much colour survives the brightest moments — 0 is monochrome',
     group: 'color',
   },

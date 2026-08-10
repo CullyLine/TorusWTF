@@ -134,7 +134,7 @@ export interface LookParams {
  * neutral result reads washed; a modest lift puts the colour back without
  * making anything look like a filter.
  */
-export const DEFAULT_SATURATION = 1.22;
+export const DEFAULT_SATURATION = 1.1;
 
 export const DEFAULT_LOOK: LookParams = {
   exposure: 1,

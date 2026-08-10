@@ -170,10 +170,10 @@ void main() {
   // bright lip on the leading edge so the geometry has an inside and an
   // outside instead of being a silhouette.
   float apex = clamp(vApex, 0.0, 1.0);
-  col *= 0.52 + 0.78 * apex;
+  col *= 0.42 + 1.05 * apex;
   float lip = smoothstep(0.86, 1.0, apex);
   col = mix(col, col * uAccentColor * 2.2, lip * 0.5);
-  col = enrich(col, lip * 0.35);
+  col = enrich(col, lip * 0.15);
 
   // Pyramid faces glint on highs and snare. The accent colour is usually the
   // opposite end of the palette from the faces, so both adding it and
@@ -183,7 +183,7 @@ void main() {
   // reads as a rim light rather than a wash.
   float glint = vKind * ((uHigh * uHigh) * 0.5 * (1.0 - lockSnap * 0.35) + uSnare * 0.4);
   col *= 1.0 + glint * 0.85;
-  col = enrich(col, glint * 0.3);
+  col = enrich(col, glint * 0.12);
 
   // Kick wall punch: brief brightness on the walls (not a full-frame strobe).
   // Same hue as the wall, so this one can stay additive.
@@ -195,7 +195,7 @@ void main() {
   float depthBias = smoothstep(4.0, 24.0, vViewZ);
   float flashAmt = uFlash * (0.12 + depthBias * 0.5);
   col += mix(uAccentColor, vec3(1.0), 0.22) * flashAmt;
-  col = enrich(col, flashAmt * 0.5);
+  col = enrich(col, flashAmt * 0.25);
 
   // Heat. Tenderness is candlelight near the camera, afterglow is residual
   // embers deeper in the throat. This used to lerp up to 72% toward a pale
@@ -207,7 +207,7 @@ void main() {
   float glowHeat = uAfterglow * (0.22 + depthBias * 0.55);
   float heat = clamp(tenderHeat * 0.55 + glowHeat * 0.42, 0.0, 0.72);
   col = mix(col, col * uWarmColor * 2.0, heat * 0.5);
-  col = enrich(col, heat * 0.2);
+  col = enrich(col, heat * 0.08);
 
   // Continuous bar-locked ring pulse traveling down the bore (no stepping).
   // uBarPhase < 0 when BPM unknown so cos(0) never leaves glow stuck bright.
@@ -233,7 +233,7 @@ void main() {
   // near walls keep their full chroma, so the bore has somewhere to recede
   // to instead of fading uniformly to grey.
   col = mix(col, col * uWallColor * 1.6, depthBias * 0.35);
-  col = enrich(col, (1.0 - depthBias) * 0.06);
+  col = enrich(col, (1.0 - depthBias) * 0.03);
 
   gl_FragColor = vec4(col, 1.0);
 }

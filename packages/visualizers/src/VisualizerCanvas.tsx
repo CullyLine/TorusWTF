@@ -258,7 +258,7 @@ export function VisualizerCanvas({
   vortexAmount,
   interactStrength,
   colorLife = 0.6,
-  saturation = 1.22,
+  saturation = 1.1,
   background = 'none',
   backgroundIntensity = 0.6,
   linger = 0.3,

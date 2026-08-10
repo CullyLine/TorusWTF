@@ -265,7 +265,7 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   highlightProtection: true,
   autoGain: true,
   colorLife: 0.6,
-  saturation: 1.22,
+  saturation: 1.1,
   linger: 0.3,
   bloomIntensity: 0.9,
   cameraMode: 'flow',
