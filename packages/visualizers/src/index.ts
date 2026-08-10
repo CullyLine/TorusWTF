@@ -3,6 +3,14 @@ export { useAudioAnalyser, useStreamAnalyser } from './audio';
 export type { AnalyserHandle } from './audio';
 export { detectTier, type DeviceTier } from './tier';
 export {
+  RESOLUTION_STEPS,
+  advanceGovernor,
+  createGovernorState,
+  resolutionScaleFor,
+  type GovernorConfig,
+  type GovernorState,
+} from './perf/governor';
+export {
   VISUALIZERS,
   RETIRED_VISUALIZER_IDS,
   resolveVisualizerId,

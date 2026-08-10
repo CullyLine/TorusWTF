@@ -119,14 +119,12 @@ export function PlasmaGlobeScene({ palette, tier, speed = 1 }: VisualizerScenePr
     [arcCount],
   );
 
-  const { geometry, positions, colors } = useMemo(() => {
+  const geometry = useMemo(() => {
     const vertexCount = arcCount * segsPerArc * 2;
-    const positions = new Float32Array(vertexCount * 3);
-    const colors = new Float32Array(vertexCount * 3);
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    return { geometry, positions, colors };
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(vertexCount * 3), 3));
+    return g;
   }, [arcCount, segsPerArc]);
 
   const glowGeometry = useMemo(() => {

@@ -28,6 +28,7 @@ import {
   type ModulatedValues,
 } from './modulation';
 import { SceneRig, type CameraMode } from './SceneRig';
+import { AdaptiveResolution } from './perf/AdaptiveResolution';
 import { CameraZoomProvider, VisualizerZoomSurface } from './cameraZoom';
 import type { AnalyserHandle } from './audio';
 import type { CreaturePersonality } from './dsp/creature';
@@ -271,6 +272,17 @@ export function VisualizerCanvas({
   onR3FState,
 }: VisualizerCanvasProps) {
   const tier = useMemo(() => forceTier ?? detectTier(), [forceTier]);
+  // The governor scales down from whatever the device would normally get.
+  const adaptiveBaseDpr = useMemo(
+    () =>
+      typeof window === 'undefined'
+        ? 1
+        : tier === 'high'
+          ? Math.min(2, window.devicePixelRatio || 1)
+          : 1,
+    [tier],
+  );
+  const [resolutionScale, setResolutionScale] = useState(1);
   const fftSize = tier === 'low' ? 256 : 1024;
   const audioAnalyser = useAudioAnalyser(audioRef?.current ?? null, fftSize);
   const analyser = analyserOverride ?? audioAnalyser;
@@ -420,6 +432,9 @@ export function VisualizerCanvas({
     interactStrength,
   };
 
+  // An export pins its own pixel ratio and must not have it drift mid-render.
+  const adaptiveEnabled = pixelRatio == null && exportSize == null && frameloop === 'always';
+
   const containerStyle = exportSize
     ? {
         position: 'relative' as const,
@@ -434,7 +449,11 @@ export function VisualizerCanvas({
         <div style={containerStyle}>
           <Canvas
             camera={{ position: [0, 0, defaultZ], fov: embedded ? 55 : 50 }}
-            dpr={pixelRatio ?? (tier === 'high' ? [1, 2] : 1)}
+            dpr={
+              adaptiveEnabled
+                ? adaptiveBaseDpr * resolutionScale
+                : (pixelRatio ?? (tier === 'high' ? [1, 2] : 1))
+            }
             gl={{
               antialias: tier !== 'low',
               powerPreference: 'high-performance',
@@ -452,6 +471,10 @@ export function VisualizerCanvas({
           >
             <color attach="background" args={['#0a0b1e']} />
             <CrossfadeCapture armRef={captureArmRef} onCaptured={handleCaptured} />
+            {/* Off whenever a pixel ratio was pinned for us: exportSize and
+                pixelRatio mean an export is in flight and its resolution must
+                not drift. */}
+            <AdaptiveResolution onScaleChange={setResolutionScale} enabled={adaptiveEnabled} />
             <AudioMetricsProvider analyser={analyser} {...metricsScales}>
               <ModulationProvider routings={modMatrix} base={modBase}>
                 <LivingPaletteDriver
