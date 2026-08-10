@@ -55,7 +55,7 @@ export default function OpengraphImage() {
               lineHeight: 1.3,
             }}
           >
-            Spotify · Ableton · Splice · mic — nine reactive presets, infinite Mandelbrot zoom,
+            Spotify · Ableton · Splice · mic — eight reactive visualizers,
             instant export.
           </div>
         </div>

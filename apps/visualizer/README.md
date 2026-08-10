@@ -12,42 +12,22 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 - **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
 - **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
 
-### Presets (32)
+### Visualizers (8)
+
+Curated down from 32 — the library is deliberately small so every entry is
+worth shipping. Retired ids still load: they resolve to the closest surviving
+visualizer via `resolveVisualizerId`.
 
 | ID                    | Name                | Vibe                                                                                                                 |
 | --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `liquid_blob`         | Lava Choir          | Raymarched harmonic lava orbs that stretch, breathe, and fuse with the music                                         |
-| `anima`               | Anima               | The living creature — aurora curtains + soul core that listens with you                                              |
-| `torus_field`         | Torus Field         | Flowing torus with bass-reactive bloom, the brand signature                                                          |
-| `particle_storm`      | Particle Storm      | High-density particles, beat-driven bursts                                                                           |
-| `infinite_tunnel`     | Tunnel              | Infinite segmented tunnel — bass explodes the walls, mids drive pyramid teeth, flow-field particles ride the current |
-| `volumetric_waveform` | Volumetric Waveform | Time-domain ribbon in 3D                                                                                             |
-| `cosmic_mandala`      | Cosmic Mandala      | Radial symmetry, dreamlike                                                                                           |
-| `star_field`          | Galaxy Garden       | Dimensional spiral galaxy with bass lensing, drop shockwaves, and shimmer glints                                     |
-| `outrun_grid`         | Outrun Grid         | Real 3D wireframe terrain receding to a banded synthwave sun                                                         |
-| `liquid_chrome`       | Liquid Chrome       | GPU-shader chrome blob with fresnel + procedural env reflection                                                      |
-| `ember_drift`         | Ember Drift         | Rising warm ashfield — swell lift, gather inhale, impact flare, hat ticks                                            |
-| `silk_wake`           | Silk Wake           | Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow                                    |
-| `tide_veil`           | Tide Veil           | Soft caustic light-sheet — rolls with swell, folds before the beat, warm afterglow                                   |
-| `halo_rain`           | Halo Rain           | Concentric luminous rings drifting like celestial rain — gather inhale, impact flare, hat ticks                      |
-| `mist_spiral`         | Mist Spiral         | Rising mist coils — gather inhale, impact flare, hat mote glitter                                                    |
-| `night_bloom`         | Night Bloom         | Radial soft-light petals — open on swell, inhale on gather, flare on impact, hat motes                               |
-| `ink_bloom`           | Ink Bloom           | Dark still water from above — kick blooms curling ink, snare shears, hats sparkle, gather draws center               |
-| `opal_slick`          | Opal Slick          | Dark rain puddle — thin-film rainbow sheen; kick ripples bend the film, snare shears, hats glint, gather pulls center |
-| `paper_lanterns`      | Paper Lanterns      | Night flotilla over dark water — buoyant rise, kick flame/lift, snare gust, hat ticks, gather center, honey tenderness |
-| `jellyfish_bloom`     | Jellyfish Bloom     | Bioluminescent jellies — gather contract, kick thrust, lagged tentacles, snare gust, hat plankton, tender moonlight  |
-| `murmuration`         | Murmuration         | Starling flock at dusk — banked curl-noise ribbon; gather tightens, kick wave, snare shear, hat glints, golden hush  |
-| `thunderhead`         | Thunderhead         | Night cumulonimbus — kick lightning pockets, snare rain shear, hat static, gather swell, tension tower, drop sky-split |
-| `glowworm_grotto`     | Glowworm Grotto     | Dark limestone cavern of bioluminescent silk threads — kick cascades, snare sway, hat winks, gather inhale, tension lengthens, drop blaze |
-| `dune_sea`            | Dune Sea            | Moonlit desert — kick sand plumes off varying crests, snare wind shear, hat mica, gather swell, tension haze, drop sandstorm, tender honey, holdBreath hang |
-| `moth_ballet`         | Moth Ballet         | Lone candle in darkness — moths spiral in lagged banked orbits; kick flares inward, snare scatters, hats wink, gather tightens, tension gutters, drop bursts, tender honey, holdBreath hang |
-| `koi_pond`            | Koi Pond            | Midnight pond from above — glowing koi brushstrokes under black-mirror water; kick flicks tails and rings ripples, snare scatters, hats dimple, gather curves center, tension tightens, drop breaches, tender moon, holdBreath glass hang |
-| `frost_bloom`         | Frost Bloom         | Night glass frost — dendrite crystals accrete with the music; kick spurts branches, snare shear crack, hat prism tips, gather braces, tension needle-freeze, drop flash-freeze, tenderness thaw, holdBreath mid-sparkle |
-| `rainforest_reverie`  | Rainforest Reverie  | iq's Rainforest (ported with permission) — audio breathes the fog, wind, clouds, and sun                             |
-| `alien_planet`        | Alien Planet        | Raymarched valley of alien tree crowns with breathing mist banks, wind, and sun bursts                               |
-| `tidal_sanctuary`     | Tidal Sanctuary     | Audio-reactive ocean with low-band depth, mid-band water, and high-band foam                                         |
-| `mandelbrot_zoom`     | Mandelbulb          | Living 3D fractal that grows more ornate as the music swells                                                         |
 | `flow_field`          | Flow Field          | Quarter-million particles riding living currents — stir with the cursor                                              |
+| `torus_field`         | Torus Field         | Flowing torus with bass-reactive bloom, the brand signature                                                          |
+| `cosmic_mandala`      | Cosmic Mandala      | Nested rings that each dance on their own band                                                                       |
+| `infinite_tunnel`     | Tunnel              | Infinite segmented tunnel — bass explodes the walls, mids drive pyramid teeth, flow-field particles ride the current |
+| `volumetric_waveform` | Volumetric Waveform | The song's EQ as a ribbon in 3D — the only literal one                                                               |
+| `tidal_sanctuary`     | Tidal Sanctuary     | Audio-reactive ocean with low-band depth, mid-band water, and high-band foam                                         |
+| `star_field`          | Galaxy Garden       | Dimensional spiral galaxy with bass lensing, drop shockwaves, and shimmer glints                                     |
+| `liquid_blob`         | Lava Choir          | Raymarched harmonic lava orbs that breathe and fuse with the music                                                   |
 
 ### UI features
 
@@ -66,7 +46,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 
 | Feature                       | Free                   | Full ($10 one-time)                             |
 | ----------------------------- | ---------------------- | ----------------------------------------------- |
-| All 32 presets + live preview | Yes                    | Yes                                             |
+| All 8 visualizers + live preview | Yes                 | Yes                                             |
 | Export length                 | Unlimited              | Unlimited                                       |
 | Export resolution             | 720p                   | Up to 4K                                        |
 | Export FPS                    | 30                     | Up to 240                                       |
@@ -76,7 +56,7 @@ Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in produc
 | Title card on exports         | Bottom-left brand card | Position + color + opacity                      |
 | Custom 3-band palette         | —                      | Yes                                             |
 | Saved presets                 | —                      | Yes                                             |
-| Future presets                | —                      | Free forever                                    |
+| Future visualizers            | —                      | Free forever                                    |
 
 Live preview is never watermarked.
 

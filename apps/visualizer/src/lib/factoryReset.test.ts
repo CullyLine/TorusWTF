@@ -29,7 +29,7 @@ describe('factory visual reset', () => {
     const savedPresets = [{ id: 'saved-look' }];
     const watermark = { show: false, customImageDataUrl: 'data:image/png;base64,abc' };
     const reset = resetToFactoryLook({
-      preset: 'anima',
+      preset: 'cosmic_mandala',
       palette: { bass: '#000000', mid: '#111111', high: '#222222' },
       controls: { ...DEFAULT_CONTROLS, speed: 3 },
       background: { mode: 'aurora', intensity: 1 },

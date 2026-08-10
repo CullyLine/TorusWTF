@@ -4,7 +4,8 @@ export type { AnalyserHandle } from './audio';
 export { detectTier, type DeviceTier } from './tier';
 export {
   VISUALIZERS,
-  FULLSCREEN_SHADER_PRESETS,
+  RETIRED_VISUALIZER_IDS,
+  resolveVisualizerId,
   type VisualizerId,
   type VisualizerDefinition,
   type PresetControlDefaults,

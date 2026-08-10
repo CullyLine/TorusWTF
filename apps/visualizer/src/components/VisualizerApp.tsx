@@ -13,6 +13,7 @@ import {
   sanitizeEmitterSettings,
   sanitizeScreenEffectSettings,
   VISUALIZERS,
+  resolveVisualizerId,
   type AudioMetrics,
   type Creature,
   type EmitterSettings,
@@ -136,11 +137,9 @@ export function VisualizerApp() {
   const prerender = usePrerender();
   const { toast, prompt } = useToast();
 
-  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'flow_field', (v) => {
-    // Spectral Tunnel was replaced by Infinite Tunnel in the Flow Field Update.
-    if (v === 'spectral_tunnel') return 'infinite_tunnel';
-    return typeof v === 'string' && v in VISUALIZERS ? (v as VisualizerId) : undefined;
-  });
+  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'flow_field', (v) =>
+    typeof v === 'string' ? (resolveVisualizerId(v) ?? undefined) : undefined,
+  );
   const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
   const [controls, setControls] = usePersistedState<VisualizerControls>(
     CONTROLS_KEY,
@@ -591,10 +590,8 @@ export function VisualizerApp() {
   );
 
   const handleLoadSaved = useCallback((saved: SavedPreset) => {
-    // Legacy saved presets may still point at the removed Spectral Tunnel.
-    const presetId =
-      (saved.presetId as string) === 'spectral_tunnel' ? 'infinite_tunnel' : saved.presetId;
-    setPreset(presetId in VISUALIZERS ? presetId : 'liquid_blob');
+    // A saved look may point at a visualizer that has since been retired.
+    setPreset(resolveVisualizerId(saved.presetId) ?? 'flow_field');
     setPalette(saved.palette);
     setControls({
       reactivity: saved.reactivity,
