@@ -500,9 +500,17 @@ export function SceneRig({
   // can rack focusDistance / focusRange / bokehScale with the music.
   // Skipped on low tier; wide rest-state focusRange keeps the frame sharp
   // until a bass/trigger kick narrows it.
+  // Depth of field needs a depth texture, and asking the composer for one
+  // while it is also resolving MSAA makes it blit a framebuffer onto itself:
+  // "Read and write depth stencil attachments cannot be the same image",
+  // logged every single frame. It was also being built unconditionally even
+  // though the control defaults to 0, so the common case paid for a half-res
+  // pass that rendered nothing. Build it only when it is actually wanted,
+  // and drop multisampling for as long as it is mounted.
+  const wantsDof = tier !== 'low' && depthOfField > 0;
   const dofEffect = useMemo(
     () =>
-      tier === 'low'
+      !wantsDof
         ? null
         : new DepthOfFieldEffect(camera, {
             focusDistance: 3.0,
@@ -510,7 +518,7 @@ export function SceneRig({
             bokehScale: 0,
             resolutionScale: 0.5,
           }),
-    [tier, camera],
+    [wantsDof, camera],
   );
   useEffect(() => () => dofEffect?.dispose(), [dofEffect]);
   const zoomDistanceRef = useCameraZoomDistanceRef();
@@ -1241,7 +1249,7 @@ export function SceneRig({
           </>
         </EffectComposer>
       ) : (
-        <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
+        <EffectComposer multisampling={tier === 'high' && !wantsDof ? 4 : 0}>
           <>
             {dofEffect ? <primitive object={dofEffect} dispose={null} /> : null}
             {bloomEffect ? <primitive object={bloomEffect} dispose={null} /> : null}
