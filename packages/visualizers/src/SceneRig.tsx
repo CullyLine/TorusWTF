@@ -14,7 +14,8 @@ import { NEUTRAL_ANIMA, updateAnima, type AnimaState } from './dsp/anima';
 import type { CreaturePersonality } from './dsp/creature';
 import { AuraLayer } from './AuraLayer';
 import { LightLevel, type LightLevelEffectImpl } from './LightLevelEffect';
-import { HighlightGuard } from './effects/HighlightGuardEffect';
+import { Look, type LookEffectImpl } from './look/LookEffect';
+import { DEFAULT_SATURATION } from './look/displayTransform';
 import {
   calculateBoundedBloomIntensity,
   calculateFlashLightBoost,
@@ -264,6 +265,15 @@ function settleSpring3(
   }
 }
 
+/**
+ * Only the wireframe meshes in Torus Field and Cosmic Mandala are lit by the
+ * rig; everything else is self-lit. Three saturated point lights at high
+ * intensity sum toward white on those meshes and bury their emissive palette
+ * colour, so the rig is scaled back to a rim/fill role and the emissive
+ * carries the hue.
+ */
+const STAGE_LIGHT_SCALE = 0.55;
+
 const SCREEN_DEPTH_TEXTURE_SIZE = 384;
 
 function ScreenStylePass({
@@ -368,6 +378,7 @@ interface SceneRigProps {
    * works for shader presets too (which bypass scene lights entirely).
    */
   lightLevel?: number;
+  saturation?: number;
   /** Hue-preserving final-frame highlight compression. Default on. */
   highlightProtection?: boolean;
   /** Mutually-exclusive whole-frame post-processing style. */
@@ -396,6 +407,7 @@ export function SceneRig({
   cinematicSpeed = 1,
   cameraDistance = 1,
   lightLevel = 1,
+  saturation = DEFAULT_SATURATION,
   highlightProtection = true,
   screenEffect = 'none',
   shaderMix = 1,
@@ -410,6 +422,7 @@ export function SceneRig({
   const keySpotRef = useRef<SpotLight>(null);
   const resolvedBloomRef = useRef(1);
   const lightLevelRef = useRef<LightLevelEffectImpl | null>(null);
+  const lookRef = useRef<LookEffectImpl | null>(null);
   const baseFovRef = useRef<number | null>(null);
   const fovSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // Light-level musical breath: swell/afterglow multiplier eases via SmoothDamp
@@ -471,8 +484,12 @@ export function SceneRig({
         ? null
         : new BloomEffect({
             intensity: 1,
-            luminanceThreshold: 0.35,
-            luminanceSmoothing: 0.55,
+            // These scenes are additive and self-lit, so most of the frame
+            // sits above a low threshold and bloom stops being a highlight
+            // effect and becomes a white wash over everything. Threshold it
+            // high enough that only genuine highlights bleed.
+            luminanceThreshold: 0.62,
+            luminanceSmoothing: 0.4,
             mipmapBlur: true,
           }),
     [tier],
@@ -483,9 +500,17 @@ export function SceneRig({
   // can rack focusDistance / focusRange / bokehScale with the music.
   // Skipped on low tier; wide rest-state focusRange keeps the frame sharp
   // until a bass/trigger kick narrows it.
+  // Depth of field needs a depth texture, and asking the composer for one
+  // while it is also resolving MSAA makes it blit a framebuffer onto itself:
+  // "Read and write depth stencil attachments cannot be the same image",
+  // logged every single frame. It was also being built unconditionally even
+  // though the control defaults to 0, so the common case paid for a half-res
+  // pass that rendered nothing. Build it only when it is actually wanted,
+  // and drop multisampling for as long as it is mounted.
+  const wantsDof = tier !== 'low' && depthOfField > 0;
   const dofEffect = useMemo(
     () =>
-      tier === 'low'
+      !wantsDof
         ? null
         : new DepthOfFieldEffect(camera, {
             focusDistance: 3.0,
@@ -493,7 +518,7 @@ export function SceneRig({
             bokehScale: 0,
             resolutionScale: 0.5,
           }),
-    [tier, camera],
+    [wantsDof, camera],
   );
   useEffect(() => () => dofEffect?.dispose(), [dofEffect]);
   const zoomDistanceRef = useCameraZoomDistanceRef();
@@ -611,6 +636,7 @@ export function SceneRig({
     // (mid) softens less so the stage still reads. Kit accents stay additive
     // on the softened base so kick/snare/hat punches remain distinct.
     if (lightLevelRef.current) lightLevelRef.current.level = effectiveLightLevel;
+    if (lookRef.current) lookRef.current.saturation = mv.saturation ?? saturation;
     tenderSmoothRef.current = smoothToward(
       tenderSmoothRef.current,
       Math.min(1, m.tenderness),
@@ -637,13 +663,14 @@ export function SceneRig({
     const flashLightBoost = calculateFlashLightBoost(flash);
     if (bassLight.current) {
       bassLight.current.intensity = clampReactiveLightIntensity(
-        (0.55 +
+        ((0.55 +
           bassSignal * 2.4 +
           impactSignal * 2.2 +
           afterglowSignal * 0.7 +
           flashLightBoost) *
           keyRimDim +
-          kickPunch * 1.6 * kitKeep,
+          kickPunch * 1.6 * kitKeep) *
+          STAGE_LIGHT_SCALE,
       );
       bassLight.current.distance = 12 + clampLightSignal(m.breath) * 6 + kickPunch * 2.5;
       bassLight.current.color.set(palette.bass);
@@ -654,13 +681,14 @@ export function SceneRig({
     }
     if (midLight.current) {
       midLight.current.intensity = clampReactiveLightIntensity(
-        (0.45 +
+        ((0.45 +
           midSignal * 2.0 +
           swellSignal * 0.8 +
           afterglowSignal * 0.4 +
           flashLightBoost) *
           fillDim +
-          snareCrack * 1.8 * kitKeep,
+          snareCrack * 1.8 * kitKeep) *
+          STAGE_LIGHT_SCALE,
       );
       // Lateral crack: snare snaps the mid light outward on its home axis
       // then the envelope eases it home — a sideways flash, not a strobe.
@@ -672,8 +700,9 @@ export function SceneRig({
     }
     if (highLight.current) {
       highLight.current.intensity = clampReactiveLightIntensity(
-        (0.3 + highSignal * 1.6 + shimmerSignal * 1.9 + flashLightBoost) * keyRimDim +
-          hatTick * 1.4 * kitKeep,
+        ((0.3 + highSignal * 1.6 + shimmerSignal * 1.9 + flashLightBoost) * keyRimDim +
+          hatTick * 1.4 * kitKeep) *
+          STAGE_LIGHT_SCALE,
       );
       highLight.current.color.set(palette.high);
       if (tender > 0.001) {
@@ -681,7 +710,7 @@ export function SceneRig({
       }
     }
     if (keySpotRef.current) {
-      keySpotRef.current.intensity = 0.4 * keyRimDim;
+      keySpotRef.current.intensity = 0.4 * keyRimDim * STAGE_LIGHT_SCALE;
       keySpotRef.current.color.set(palette.mid);
       if (tender > 0.001) {
         keySpotRef.current.color.offsetHSL(-0.035 * tender, -0.06 * tender, 0.02 * tender);
@@ -1169,10 +1198,11 @@ export function SceneRig({
   // re-creating the closure.
   resolvedBloomRef.current = resolvedBloom;
   const level = Math.min(2, Math.max(0, lightLevel));
+  const saturationNow = Math.min(2, Math.max(0, saturation));
 
   return (
     <>
-      <ambientLight intensity={0.28} />
+      <ambientLight intensity={0.14} />
       <pointLight
         ref={bassLight}
         position={[0, -1.5, 2]}
@@ -1215,11 +1245,11 @@ export function SceneRig({
                 tier={tier}
               />
             ) : null}
-            <HighlightGuard enabled={highlightProtection} />
+            <Look ref={lookRef} filmic={highlightProtection} saturation={saturationNow} />
           </>
         </EffectComposer>
       ) : (
-        <EffectComposer multisampling={tier === 'high' ? 4 : 0}>
+        <EffectComposer multisampling={tier === 'high' && !wantsDof ? 4 : 0}>
           <>
             {dofEffect ? <primitive object={dofEffect} dispose={null} /> : null}
             {bloomEffect ? <primitive object={bloomEffect} dispose={null} /> : null}
@@ -1233,7 +1263,7 @@ export function SceneRig({
                 tier={tier}
               />
             ) : null}
-            <HighlightGuard enabled={highlightProtection} />
+            <Look ref={lookRef} filmic={highlightProtection} saturation={saturationNow} />
           </>
         </EffectComposer>
       )}

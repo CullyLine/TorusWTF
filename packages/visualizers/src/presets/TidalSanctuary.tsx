@@ -426,17 +426,27 @@ void main() {
     // Convergence faint crest brighten — organization, not a punch.
     water *= 1.0 + lockSnap * 0.08;
 
-    // Colored Fresnel-like reflection (palette-tinted, not plain white sky).
+    // Water is a mirror at grazing angles. Schlick against water's real F0
+    // of about 0.02 takes reflectance from nearly nothing straight down to
+    // nearly total at the horizon, which is what gives an ocean its depth
+    // and its sense of being wet. The previous curve peaked at a 0.26 blend,
+    // so the surface never reflected anything and read as coloured fog.
     float ndv = clamp01(dot(n, V));
-    float fres = pow(1.0 - ndv, 3.2);
+    float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
     vec3 reflDir = reflect(rd, n);
     vec3 reflSky = skyColor(uv, reflDir.y);
-    vec3 fresCol = mix(mix(uColorMid, uColorHigh, 0.35), reflSky, 0.55);
-    water = mix(water, fresCol, fres * (0.18 + uAfterglow * 0.08));
+    vec3 fresCol = mix(reflSky, mix(uColorMid, uColorHigh, 0.35), 0.3);
+    // Deepen the body before reflecting into it. Facing water returns very
+    // little light, so troughs should go dark and let the crests carry the
+    // sky; without this the sea is uniformly lit and has no depth to read.
+    water *= mix(0.35, 1.0, fres);
+    water = mix(water, fresCol, fres * (0.62 - uStillness * 0.1));
 
-    // Soft key light for readability without bloom flood.
+    // Only a trace of diffuse. Water scatters very little back at the viewer;
+    // shading it like a lambert surface is what made it look like painted
+    // plastic. The body colour comes from depth and reflection instead.
     vec3 L = safeNorm(vec3(0.35, 0.82, 0.4));
-    float diff = 0.35 + 0.65 * clamp01(dot(n, L));
+    float diff = 0.86 + 0.14 * clamp01(dot(n, L));
     water *= diff;
 
     // Colored contour glints make the moving height field legible even when
@@ -511,10 +521,17 @@ void main() {
       water = mix(water, tintHighlight(moonCol, 0.1), moonAmt * 0.18);
     }
 
-    // Small specular accents in the high band.
+    // Specular. A broad sheen plus a tight glitter: the wide lobe gives the
+    // swell its wet sheen, the narrow one scatters the sun across individual
+    // crests, and that glitter path is most of what the eye uses to read a
+    // surface as water rather than as a coloured plane.
     vec3 R = reflect(-L, n);
-    float spec = pow(clamp01(dot(R, V)), 48.0);
-    water += uColorHigh * spec * (0.18 + uShimmer * 0.15) * (1.0 - clamp01(uStillness) * 0.7);
+    float rv = clamp01(dot(R, V));
+    float sheen = pow(rv, 14.0);
+    float glitter = pow(rv, 220.0);
+    vec3 sunTint = mix(vec3(1.0), uColorHigh, 0.45);
+    water += sunTint * sheen * (0.16 + uShimmer * 0.1) * (1.0 - clamp01(uStillness) * 0.6);
+    water += sunTint * glitter * (0.6 + uShimmer * 0.55) * (1.0 - clamp01(uStillness) * 0.7);
 
     // Afterglow leaves restrained horizon/foam warmth — not a fill bloom.
     water += mix(uColorMid, uColorHigh, 0.45) * uAfterglow * (0.06 + foam * 0.08);

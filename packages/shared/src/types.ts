@@ -2,12 +2,6 @@ export type ClipStatus = 'pending' | 'processing' | 'ready' | 'failed';
 export type ClipVisibility = 'public' | 'unlisted';
 export type UserRole = 'user' | 'admin';
 export type UserTier = 'free' | 'supporter';
-export type VisualizerPreset =
-  | 'torus_field'
-  | 'particle_storm'
-  | 'spectral_tunnel'
-  | 'volumetric_waveform'
-  | 'none';
 
 export interface WaveformPalette {
   bass: string;

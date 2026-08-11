@@ -45,7 +45,7 @@ export default function AboutPage() {
             your mic. No signup.
           </li>
           <li>
-            <strong className="text-torus-fg">Shape</strong> — pick a preset, tune the reactivity,
+            <strong className="text-torus-fg">Shape</strong> — pick a visualizer, tune the reactivity,
             colors, and camera until it feels right.
           </li>
           <li>
@@ -82,25 +82,7 @@ export default function AboutPage() {
       </p>
 
       <p className="mt-4 text-xs text-torus-fg-faint">
-        Demo audio: &ldquo;Scheming Weasel (faster version)&rdquo; by Kevin MacLeod (
-        <a
-          href="https://incompetech.com"
-          target="_blank"
-          rel="noreferrer"
-          className="underline"
-        >
-          incompetech.com
-        </a>
-        ), licensed under{' '}
-        <a
-          href="https://creativecommons.org/licenses/by/3.0/"
-          target="_blank"
-          rel="noreferrer"
-          className="underline"
-        >
-          CC BY 3.0
-        </a>
-        .
+        Demo audio: &ldquo;Despresso Shots&rdquo; by CullyLine, used with permission.
       </p>
 
       <p className="mt-10 text-xs text-torus-fg-faint">

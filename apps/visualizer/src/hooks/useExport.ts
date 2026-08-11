@@ -23,6 +23,7 @@ export function useExport(unlocked: boolean) {
   const timerRef = useRef<number | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const onSavedRef = useRef<((fileName: string) => void) | null>(null);
+  const failedRef = useRef(false);
 
   const stop = useCallback(() => {
     if (timerRef.current) {
@@ -40,7 +41,14 @@ export function useExport(unlocked: boolean) {
       recorder.onstop = () => {
         const mime = recorder.mimeType || 'video/webm';
         const blob = new Blob(chunksRef.current, { type: mime });
+        const bytes = blob.size;
         chunksRef.current = [];
+        if (failedRef.current || bytes === 0) {
+          failedRef.current = false;
+          setState('idle');
+          setElapsedSec(0);
+          return;
+        }
         const ext = fileExtensionForMime(mime);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -73,10 +81,15 @@ export function useExport(unlocked: boolean) {
       onBeforeRecord?: () => Promise<void>;
       onFileEnded?: () => void;
       onSaved?: (fileName: string) => void;
+      /** No audio track made it into the recording. */
+      onSilentCapture?: () => void;
+      /** The recorder failed part-way through; the file is not trustworthy. */
+      onRecordingError?: (message: string) => void;
     }) => {
       if (state !== 'idle') return;
 
       onSavedRef.current = opts.onSaved ?? null;
+      failedRef.current = false;
 
       const { width, height } = dimensionsFor(opts.resolution, opts.aspect ?? '16:9');
       const watermark = unlocked ? (opts.watermark ?? true) : true;
@@ -93,17 +106,21 @@ export function useExport(unlocked: boolean) {
 
       let recorder: MediaRecorder;
       try {
+        const mimeType = pickRecorderMimeType();
+        if (!mimeType) {
+          throw new Error(
+            'This browser cannot record video. Try Chrome or Edge, or use Export Pre-Rendered Video.',
+          );
+        }
+
         compositor.start();
 
-        const mimeType = pickRecorderMimeType();
         const videoStream = compositor.canvas.captureStream(opts.fps);
 
         const tracks: MediaStreamTrack[] = [...videoStream.getVideoTracks()];
-        if (opts.audioStream) {
-          for (const track of opts.audioStream.getAudioTracks()) {
-            tracks.push(track);
-          }
-        }
+        const audioTracks = opts.audioStream?.getAudioTracks() ?? [];
+        for (const track of audioTracks) tracks.push(track);
+        if (audioTracks.length === 0) opts.onSilentCapture?.();
 
         const combined = new MediaStream(tracks);
         recorder = new MediaRecorder(combined, {
@@ -122,6 +139,15 @@ export function useExport(unlocked: boolean) {
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      // Without this a mid-recording failure is silent: the UI keeps showing
+      // REC and Stop still downloads a truncated or empty file with a success
+      // toast.
+      recorder.onerror = (event) => {
+        const detail = (event as unknown as { error?: DOMException }).error;
+        failedRef.current = true;
+        opts.onRecordingError?.(detail?.message || 'Recording failed part-way through.');
+        stop();
       };
 
       recorderRef.current = recorder;

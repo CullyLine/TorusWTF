@@ -96,25 +96,16 @@ describe('showFile', () => {
     }
   });
 
-  it('round-trips new presets and preserves the legacy Liquid Blob and Star Field IDs', () => {
+  it('round-trips every surviving visualizer id', () => {
     for (const preset of [
-      'night_bloom',
-      'ink_bloom',
-      'opal_slick',
-      'paper_lanterns',
-      'jellyfish_bloom',
-      'murmuration',
-      'thunderhead',
-      'glowworm_grotto',
-      'dune_sea',
-      'moth_ballet',
-      'koi_pond',
-      'frost_bloom',
-      'rainforest_reverie',
-      'alien_planet',
-      'tidal_sanctuary',
-      'liquid_blob',
+      'flow_field',
+      'torus_field',
+      'infinite_tunnel',
+      'volumetric_waveform',
+      'cosmic_mandala',
       'star_field',
+      'liquid_blob',
+      'tidal_sanctuary',
     ] as const) {
       const show = buildShowFile({
         ...baseState,
@@ -169,12 +160,26 @@ describe('showFile', () => {
     expect(result.error).toMatch(/newer version/i);
   });
 
-  it('migrates spectral_tunnel to infinite_tunnel', () => {
+  it('steers retired visualizer ids onto a surviving one instead of failing', () => {
     const show = buildShowFile(baseState);
-    const result = parseShowFile(JSON.stringify({ ...show, preset: 'spectral_tunnel' }));
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.show.preset).toBe('infinite_tunnel');
+    for (const [retired, expected] of [
+      ['spectral_tunnel', 'infinite_tunnel'],
+      ['outrun_grid', 'infinite_tunnel'],
+      ['rainforest_reverie', 'tidal_sanctuary'],
+      ['anima', 'liquid_blob'],
+      ['murmuration', 'flow_field'],
+    ] as const) {
+      const result = parseShowFile(JSON.stringify({ ...show, preset: retired }));
+      expect(result.ok).toBe(true);
+      if (!result.ok) continue;
+      expect(result.show.preset).toBe(expected);
+    }
+  });
+
+  it('still rejects an id that never existed', () => {
+    const show = buildShowFile(baseState);
+    const result = parseShowFile(JSON.stringify({ ...show, preset: 'not_a_visualizer' }));
+    expect(result.ok).toBe(false);
   });
 
   it('rejects bad palette hex', () => {

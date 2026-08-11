@@ -142,6 +142,7 @@ export const MOD_GLOBAL_TARGETS: ControlKey[] = [
   'lightLevel',
   'shaderMix',
   'colorLife',
+  'saturation',
   'cameraDistance',
   'bassShake',
   'depthOfField',

@@ -13,6 +13,7 @@ import {
   sanitizeEmitterSettings,
   sanitizeScreenEffectSettings,
   VISUALIZERS,
+  resolveVisualizerId,
   type AudioMetrics,
   type Creature,
   type EmitterSettings,
@@ -75,6 +76,7 @@ import {
   dimensionsFor,
   isFpsLocked,
   isResolutionLocked,
+  waitForCanvasSize,
   type AspectRatio,
   type ExportFps,
   type ExportResolution,
@@ -136,11 +138,9 @@ export function VisualizerApp() {
   const prerender = usePrerender();
   const { toast, prompt } = useToast();
 
-  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'flow_field', (v) => {
-    // Spectral Tunnel was replaced by Infinite Tunnel in the Flow Field Update.
-    if (v === 'spectral_tunnel') return 'infinite_tunnel';
-    return typeof v === 'string' && v in VISUALIZERS ? (v as VisualizerId) : undefined;
-  });
+  const [preset, setPreset] = usePersistedState<VisualizerId>(PRESET_KEY, 'flow_field', (v) =>
+    typeof v === 'string' ? (resolveVisualizerId(v) ?? undefined) : undefined,
+  );
   const [palette, setPalette] = usePersistedState<WaveformPalette>(PALETTE_KEY, DEFAULT_PALETTE);
   const [controls, setControls] = usePersistedState<VisualizerControls>(
     CONTROLS_KEY,
@@ -172,6 +172,7 @@ export function VisualizerApp() {
   const [demoLoading, setDemoLoading] = useState(false);
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const [presetsVersion, setPresetsVersion] = useState(0);
+  const [armedForRecording, setArmedForRecording] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [showBpm, setShowBpm] = usePersistedState<boolean>(SHOW_BPM_KEY, false);
   const [titleOverlay, setTitleOverlay] = usePersistedState<TitleOverlay>(
@@ -391,11 +392,8 @@ export function VisualizerApp() {
       const res = await fetch('/demo.mp3');
       if (!res.ok) throw new Error('fetch failed');
       const blob = await res.blob();
-      // "Scheming Weasel (faster version)" — Kevin MacLeod (incompetech.com),
-      // CC BY 3.0. Filename doubles as on-screen attribution.
-      handleFile(
-        new File([blob], 'Scheming Weasel — Kevin MacLeod.mp3', { type: 'audio/mpeg' }),
-      );
+      // The filename doubles as on-screen attribution in the playback bar.
+      handleFile(new File([blob], 'Despresso Shots — CullyLine.mp3', { type: 'audio/mpeg' }));
     } catch {
       toast({ message: 'Could not load demo audio', variant: 'error' });
     } finally {
@@ -591,10 +589,8 @@ export function VisualizerApp() {
   );
 
   const handleLoadSaved = useCallback((saved: SavedPreset) => {
-    // Legacy saved presets may still point at the removed Spectral Tunnel.
-    const presetId =
-      (saved.presetId as string) === 'spectral_tunnel' ? 'infinite_tunnel' : saved.presetId;
-    setPreset(presetId in VISUALIZERS ? presetId : 'liquid_blob');
+    // A saved look may point at a visualizer that has since been retired.
+    setPreset(resolveVisualizerId(saved.presetId) ?? 'flow_field');
     setPalette(saved.palette);
     setControls({
       reactivity: saved.reactivity,
@@ -625,6 +621,7 @@ export function VisualizerApp() {
       highlightProtection: saved.highlightProtection ?? true,
       autoGain: saved.autoGain ?? true,
       colorLife: saved.colorLife ?? 0.6,
+      saturation: saved.saturation ?? 1.1,
       linger: saved.linger ?? 0.3,
       bloomIntensity: saved.bloomIntensity,
       cameraMode: saved.cameraMode,
@@ -705,20 +702,42 @@ export function VisualizerApp() {
         watermark: watermark.show,
         watermarkImage,
         onBeforeRecord: async () => {
+          // Resize the WebGL canvas to the export dimensions and wait for it
+          // to actually get there before the first frame is captured.
+          const target = dimensionsFor(resolution, aspect);
+          setArmedForRecording(true);
+          await waitForCanvasSize(canvas, target.width, target.height);
           if (audio.source?.kind === 'file') {
             await audio.restartFile();
           }
         },
         onFileEnded: () => exportHook.stop(),
         onSaved: () => toast({ message: 'Export saved to your downloads', variant: 'success' }),
+        onSilentCapture: () =>
+          toast({
+            message: 'Recording without audio — this browser would not share the audio track',
+            variant: 'info',
+          }),
+        onRecordingError: (message) => toast({ message, variant: 'error' }),
       });
     } catch (err) {
+      setArmedForRecording(false);
       toast({
         message: err instanceof Error ? err.message : 'Could not start recording',
         variant: 'error',
       });
     }
-  }, [audio, exportHook, resolution, aspect, fps, titleOverlay, watermark, unlock.unlocked, toast]);
+  }, [
+    audio,
+    exportHook,
+    resolution,
+    aspect,
+    fps,
+    titleOverlay,
+    watermark,
+    unlock.unlocked,
+    toast,
+  ]);
 
   const handleWatermarkImageFile = useCallback(
     async (file: File) => {
@@ -821,10 +840,26 @@ export function VisualizerApp() {
 
   const exportSize = dimensionsFor(resolution, aspect);
   const isRecording = exportHook.state === 'recording';
+  // Render at export dimensions from slightly before the recorder starts.
+  // Driving this off `isRecording` alone meant the canvas was still preview
+  // sized for the first frames, so a paid 1080p or 4K export opened on
+  // upscaled preview pixels.
+  const renderAtExportSize = isRecording || armedForRecording;
   const hasSource = Boolean(audio.source);
   const isMobile = useMediaQuery('(max-width: 767px)');
   const bannerVisible = !unlock.unlocked && !unlock.checking;
   const previewAspect = `${exportSize.width} / ${exportSize.height}`;
+
+  // Disarm on the trailing edge only. Arming happens while the hook is still
+  // idle (it has not called setState yet), so a plain `=== 'idle'` check here
+  // would immediately undo it and the canvas would never resize in time.
+  const prevExportState = useRef(exportHook.state);
+  useEffect(() => {
+    if (prevExportState.current !== 'idle' && exportHook.state === 'idle') {
+      setArmedForRecording(false);
+    }
+    prevExportState.current = exportHook.state;
+  }, [exportHook.state]);
   const previewPortrait = aspect === '9:16' || aspect === '4:5';
   // Nothing auto-hides until there's actually audio on screen — a fresh
   // visitor should never watch the controls fade away.
@@ -1075,8 +1110,8 @@ export function VisualizerApp() {
                 preset={preset}
                 palette={palette}
                 embedded={false}
-                exportSize={isRecording ? exportSize : undefined}
-                pixelRatio={isRecording ? 1 : undefined}
+                exportSize={renderAtExportSize ? exportSize : undefined}
+                pixelRatio={renderAtExportSize ? 1 : undefined}
                 onGlCanvasReady={(c) => {
                   glCanvasRef.current = c;
                 }}
@@ -1104,6 +1139,7 @@ export function VisualizerApp() {
                 energy={controls.energy ?? 0}
                 autoGain={controls.autoGain ?? true}
                 colorLife={controls.colorLife ?? 0.6}
+                saturation={controls.saturation ?? 1.1}
                 background={background.mode}
                 backgroundIntensity={background.intensity}
                 inflate={controls.inflate ?? 0.5}

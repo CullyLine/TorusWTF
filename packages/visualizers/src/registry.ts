@@ -3,79 +3,71 @@ import type { AnalyserHandle } from './audio';
 import type { ControlKey } from './controlSchema';
 import type { CameraMode } from './SceneRig';
 import { TorusFieldScene } from './presets/TorusField';
-import { ParticleStormScene } from './presets/ParticleStorm';
 import { InfiniteTunnelScene } from './presets/InfiniteTunnel';
 import { VolumetricWaveformScene } from './presets/VolumetricWaveform';
 import { CosmicMandalaScene } from './presets/CosmicMandala';
 import { StarFieldScene } from './presets/StarField';
-import { OutrunGridScene } from './presets/OutrunGrid';
-import { LiquidChromeScene } from './presets/LiquidChrome';
 import { LiquidBlobScene } from './presets/LiquidBlob';
-import { MandelbrotZoomScene } from './presets/MandelbrotZoom';
-import { SilkWakeScene } from './presets/SilkWake';
-import { TideVeilScene } from './presets/TideVeil';
-import { AnimaScene } from './presets/Anima';
 import { FlowFieldScene } from './presets/FlowField';
-import { EmberDriftScene } from './presets/EmberDrift';
-import { HaloRainScene } from './presets/HaloRain';
-import { MistSpiralScene } from './presets/MistSpiral';
-import { NightBloomScene } from './presets/NightBloom';
-import { InkBloomScene } from './presets/InkBloom';
-import { OpalSlickScene } from './presets/OpalSlick';
-import { PaperLanternsScene } from './presets/PaperLanterns';
-import { JellyfishBloomScene } from './presets/JellyfishBloom';
-import { MurmurationScene } from './presets/Murmuration';
-import { ThunderheadScene } from './presets/Thunderhead';
-import { GlowwormGrottoScene } from './presets/GlowwormGrotto';
-import { DuneSeaScene } from './presets/DuneSea';
-import { MothBalletScene } from './presets/MothBallet';
-import { KoiPondScene } from './presets/KoiPond';
-import { FrostBloomScene } from './presets/FrostBloom';
-import { RainforestReverieScene } from './presets/RainforestReverie';
-import { AlienPlanetScene } from './presets/AlienPlanet';
 import { TidalSanctuaryScene } from './presets/TidalSanctuary';
+import { PlasmaGlobeScene } from './presets/PlasmaGlobe';
 
 export type VisualizerId =
-  | 'anima'
   | 'flow_field'
   | 'torus_field'
-  | 'particle_storm'
   | 'infinite_tunnel'
   | 'volumetric_waveform'
   | 'cosmic_mandala'
   | 'star_field'
-  | 'outrun_grid'
-  | 'liquid_chrome'
   | 'liquid_blob'
-  | 'ember_drift'
-  | 'silk_wake'
-  | 'tide_veil'
-  | 'halo_rain'
-  | 'mist_spiral'
-  | 'night_bloom'
-  | 'ink_bloom'
-  | 'opal_slick'
-  | 'paper_lanterns'
-  | 'jellyfish_bloom'
-  | 'murmuration'
-  | 'thunderhead'
-  | 'glowworm_grotto'
-  | 'dune_sea'
-  | 'moth_ballet'
-  | 'koi_pond'
-  | 'frost_bloom'
-  | 'rainforest_reverie'
-  | 'alien_planet'
   | 'tidal_sanctuary'
-  | 'mandelbrot_zoom';
+  | 'plasma_globe';
 
 /**
- * Legacy set — used to gate the BackgroundLayer off for presets that painted
- * an opaque fullscreen quad. Every preset now supports a live backdrop (the
- * fullscreen shaders switch to transparent-miss / additive compositing when
- * `backdrop` is set), so this is empty. Kept exported for API stability.
+ * Visualizers removed in the curation pass. Saved looks and show files that
+ * still point at one of these are steered to the closest surviving visualizer
+ * rather than failing to load.
  */
-export const FULLSCREEN_SHADER_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>();
+export const RETIRED_VISUALIZER_IDS: Readonly<Record<string, VisualizerId>> = {
+  // Fullscreen 2D shader family — retired wholesale.
+  silk_wake: 'tidal_sanctuary',
+  tide_veil: 'tidal_sanctuary',
+  halo_rain: 'cosmic_mandala',
+  mist_spiral: 'flow_field',
+  night_bloom: 'cosmic_mandala',
+  ink_bloom: 'flow_field',
+  opal_slick: 'tidal_sanctuary',
+  frost_bloom: 'cosmic_mandala',
+  thunderhead: 'tidal_sanctuary',
+  // Particle and creature scenes.
+  anima: 'liquid_blob',
+  particle_storm: 'flow_field',
+  ember_drift: 'flow_field',
+  murmuration: 'flow_field',
+  jellyfish_bloom: 'liquid_blob',
+  moth_ballet: 'flow_field',
+  glowworm_grotto: 'star_field',
+  paper_lanterns: 'star_field',
+  koi_pond: 'tidal_sanctuary',
+  // Geometry and terrain scenes.
+  outrun_grid: 'infinite_tunnel',
+  liquid_chrome: 'liquid_blob',
+  dune_sea: 'tidal_sanctuary',
+  rainforest_reverie: 'tidal_sanctuary',
+  alien_planet: 'tidal_sanctuary',
+  mandelbrot_zoom: 'liquid_blob',
+  // Retired before this pass.
+  spectral_tunnel: 'infinite_tunnel',
+};
+
+/**
+ * Maps any stored visualizer id onto one that still exists. Returns null for
+ * ids that were never valid, so callers can tell "retired" from "garbage".
+ */
+export function resolveVisualizerId(id: string): VisualizerId | null {
+  if (id in VISUALIZERS) return id as VisualizerId;
+  return RETIRED_VISUALIZER_IDS[id] ?? null;
+}
 
 export interface VisualizerSceneProps {
   analyser: AnalyserHandle | null;
@@ -196,32 +188,6 @@ export interface VisualizerDefinition {
  * See CONTRIBUTING.md.
  */
 export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
-  // The `defaults` blocks below are starting points — tune freely. They're
-  // applied whenever the user switches TO that preset; omitted fields keep
-  // the user's current values.
-  //
-  // Framing philosophy (the Pulse Update): every preset should OWN the
-  // frame at its defaults — subject filling most of the screen at the
-  // default camera distance (z≈3.1, fov 50) — with real glow (bloom ≥ 0.5)
-  // so the first impression is close, bright, and alive. Wheel zoom is the
-  // escape hatch for establishing shots, not the default state.
-  anima: {
-    id: 'anima',
-    label: 'Anima',
-    hint: 'The living creature \u2014 aurora curtains + soul core, listens with you.',
-    Scene: AnimaScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.8,
-      scale: 1,
-      anima: 1,
-      aura: 0.4,
-      cameraMode: 'still',
-      bloomIntensity: 0.55,
-      cameraDistance: 1,
-      lightLevel: 1,
-    },
-  },
   flow_field: {
     id: 'flow_field',
     label: 'Flow Field',
@@ -254,23 +220,6 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       smoothness: 0.6,
       scale: 0.85,
       bassShake: 0.8,
-      cameraMode: 'cinematic',
-      cinematicSpeed: 1,
-      bloomIntensity: 1.1,
-      cameraDistance: 1,
-      lightLevel: 1,
-    },
-  },
-  particle_storm: {
-    id: 'particle_storm',
-    label: 'Particle Storm',
-    hint: 'Frequency-driven swarm. Punchy energy for big drops.',
-    Scene: ParticleStormScene,
-    defaults: {
-      speed: 1.2,
-      smoothness: 0.45,
-      scale: 1,
-      bassShake: 1.2,
       cameraMode: 'cinematic',
       cinematicSpeed: 1,
       bloomIntensity: 1.1,
@@ -347,39 +296,6 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       lightLevel: 1,
     },
   },
-  outrun_grid: {
-    id: 'outrun_grid',
-    label: 'Outrun Grid',
-    hint: 'Synthwave horizon grid with a pulsing sun \u2014 producer-nightdrive vibes.',
-    Scene: OutrunGridScene,
-    defaults: {
-      speed: 1.2,
-      smoothness: 0.5,
-      scale: 1,
-      bassShake: 0.8,
-      cameraMode: 'still',
-      bloomIntensity: 0.7,
-      cameraDistance: 1,
-      lightLevel: 1,
-    },
-  },
-  liquid_chrome: {
-    id: 'liquid_chrome',
-    label: 'Liquid Chrome',
-    hint: 'Metallic blob morphing with bass and beats \u2014 high-gloss centerpiece.',
-    Scene: LiquidChromeScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.6,
-      scale: 0.9,
-      bassShake: 1,
-      cameraMode: 'cinematic',
-      cinematicSpeed: 1,
-      bloomIntensity: 0.8,
-      cameraDistance: 1,
-      lightLevel: 1,
-    },
-  },
   liquid_blob: {
     id: 'liquid_blob',
     label: 'Lava Choir',
@@ -405,376 +321,6 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       lightLevel: 1,
     },
   },
-  ember_drift: {
-    id: 'ember_drift',
-    label: 'Ember Drift',
-    hint: 'Rising warm ashfield — lifts on swell, inhales on gather, flares on impact, ticks on hats.',
-    Scene: EmberDriftScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.65,
-      scale: 1.05,
-      bassShake: 0.45,
-      anima: 0.6,
-      aura: 0.35,
-      cameraMode: 'drift',
-      bloomIntensity: 0.95,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  silk_wake: {
-    id: 'silk_wake',
-    label: 'Silk Wake',
-    hint: 'Braided light ribbons — fold on gather, flare on impact, warm trails in afterglow.',
-    Scene: SilkWakeScene,
-    // Fullscreen braid owns the frame via its own clip-space quad; still
-    // camera keeps the sheet stable while the shader does the motion.
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.35,
-      anima: 0.55,
-      aura: 0.3,
-      cameraMode: 'still',
-      bloomIntensity: 0.85,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  tide_veil: {
-    id: 'tide_veil',
-    label: 'Tide Veil',
-    hint: 'Soft caustic light-sheet — rolls with swell, folds before the beat, holds warm afterglow.',
-    Scene: TideVeilScene,
-    // Fullscreen veil owns the frame via its own clip-space quad; still
-    // camera keeps the sheet stable while the shader does the motion.
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.35,
-      anima: 0.6,
-      aura: 0.25,
-      cameraMode: 'still',
-      bloomIntensity: 0.75,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  halo_rain: {
-    id: 'halo_rain',
-    label: 'Halo Rain',
-    hint: 'Concentric luminous rings drifting like celestial rain — inhale before the beat, flare on impact, tick on hats.',
-    Scene: HaloRainScene,
-    // Fullscreen sheet owns the frame via clip-space quad; still camera
-    // keeps the rain stable while the shader does the motion.
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.35,
-      anima: 0.55,
-      aura: 0.3,
-      cameraMode: 'still',
-      bloomIntensity: 0.8,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  mist_spiral: {
-    id: 'mist_spiral',
-    label: 'Mist Spiral',
-    hint: 'Rising mist coils around a vertical axis — inhale on gather, flare on impact, mote glitter on hats.',
-    Scene: MistSpiralScene,
-    // Fullscreen mist sheet owns the frame via clip-space quad; still
-    // camera keeps the column stable while the shader does the motion.
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.35,
-      anima: 0.55,
-      aura: 0.3,
-      cameraMode: 'still',
-      bloomIntensity: 0.8,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  night_bloom: {
-    id: 'night_bloom',
-    label: 'Night Bloom',
-    hint: 'Radial soft-light petals — open on swell, inhale on gather, flare on impact, mote glitter on hats.',
-    Scene: NightBloomScene,
-    // Fullscreen bloom owns the frame via clip-space quad; still camera
-    // keeps the flower stable while the shader does the motion.
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.35,
-      anima: 0.55,
-      aura: 0.3,
-      cameraMode: 'still',
-      bloomIntensity: 0.85,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  ink_bloom: {
-    id: 'ink_bloom',
-    label: 'Ink Bloom',
-    hint: 'Dark still water from above — kick blooms curling ink plumes, snare shears, hats sparkle, gather draws center, tenderness pales to milk.',
-    Scene: InkBloomScene,
-    // Fullscreen ink sheet owns the frame via clip-space quad; still camera
-    // keeps the water stable while the shader does the motion.
-    defaults: {
-      speed: 1,
-      smoothness: 0.72,
-      scale: 1,
-      bassShake: 0.3,
-      anima: 0.5,
-      aura: 0.25,
-      cameraMode: 'still',
-      bloomIntensity: 0.7,
-      cameraDistance: 1,
-      lightLevel: 1.0,
-    },
-  },
-  opal_slick: {
-    id: 'opal_slick',
-    label: 'Opal Slick',
-    hint: 'Dark rain puddle close-up — thin-film rainbow sheen swirls; kick ripples bend the film, snare shears, hats glint, gather pulls center, tenderness milkens to pearl.',
-    Scene: OpalSlickScene,
-    // Fullscreen oil-film sheet owns the frame via clip-space quad; still camera
-    // keeps the puddle stable while the shader does the motion.
-    defaults: {
-      speed: 1,
-      smoothness: 0.74,
-      scale: 1,
-      bassShake: 0.28,
-      anima: 0.45,
-      aura: 0.22,
-      cameraMode: 'still',
-      bloomIntensity: 0.65,
-      cameraDistance: 1,
-      lightLevel: 1.0,
-    },
-  },
-  paper_lanterns: {
-    id: 'paper_lanterns',
-    label: 'Paper Lanterns',
-    hint: 'Night flotilla over dark water — lanterns bob with buoyant inertia; kick flares lift, snare gusts sway, hats tick embers, gather draws center, tenderness honey-warms.',
-    Scene: PaperLanternsScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.68,
-      scale: 1.05,
-      bassShake: 0.4,
-      anima: 0.55,
-      aura: 0.32,
-      cameraMode: 'drift',
-      bloomIntensity: 1.05,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  jellyfish_bloom: {
-    id: 'jellyfish_bloom',
-    label: 'Jellyfish Bloom',
-    hint: 'Bioluminescent jellies in dark water — bells contract on gather and thrust on kick; tentacles trail with lagged inertia; snare gusts, hat plankton, tender moonlight, holdBreath hang.',
-    Scene: JellyfishBloomScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1.05,
-      bassShake: 0.35,
-      anima: 0.5,
-      aura: 0.38,
-      cameraMode: 'drift',
-      bloomIntensity: 1.1,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  murmuration: {
-    id: 'murmuration',
-    label: 'Murmuration',
-    hint: 'Starling flock at dusk — curl-noise ribbon with banked turns; gather banks tighter, kick pulses a contract-expand wave, snare shears, hats glint wingtips, tenderness golden-hour, holdBreath still wings.',
-    Scene: MurmurationScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.72,
-      scale: 1.05,
-      bassShake: 0.32,
-      anima: 0.55,
-      aura: 0.28,
-      cameraMode: 'drift',
-      bloomIntensity: 0.85,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  thunderhead: {
-    id: 'thunderhead',
-    label: 'Thunderhead',
-    hint: 'Night cumulonimbus lit from within — kick lightning pockets, snare rain shear, hat static, gather swell, tension tower, drop sky-split, tender moon rim, holdBreath stillness.',
-    Scene: ThunderheadScene,
-    // Fullscreen storm owns the frame via clip-space quad; still camera
-    // keeps the horizon stable while the shader does the weather.
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.4,
-      anima: 0.55,
-      aura: 0.28,
-      cameraMode: 'still',
-      bloomIntensity: 0.9,
-      cameraDistance: 1,
-      lightLevel: 1.0,
-    },
-  },
-  glowworm_grotto: {
-    id: 'glowworm_grotto',
-    label: 'Glowworm Grotto',
-    hint: 'Dark limestone cavern of bioluminescent silk threads — kick cascades light down varying clusters, snare sways with lagged inertia, hats wink, gather inhales, tension lengthens, drop blazes, tender amber, holdBreath embers.',
-    Scene: GlowwormGrottoScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.72,
-      scale: 1.05,
-      bassShake: 0.32,
-      anima: 0.5,
-      aura: 0.35,
-      cameraMode: 'drift',
-      bloomIntensity: 1.05,
-      cameraDistance: 1,
-      lightLevel: 1.0,
-    },
-  },
-  dune_sea: {
-    id: 'dune_sea',
-    label: 'Dune Sea',
-    hint: 'Moonlit desert — kick sand plumes off varying crests, snare wind shear, hat mica glints, gather dune swell, tension haze, drop sandstorm, tender honey moonlight, holdBreath hangs grains mid-air.',
-    Scene: DuneSeaScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1.05,
-      bassShake: 0.38,
-      anima: 0.5,
-      aura: 0.32,
-      cameraMode: 'drift',
-      bloomIntensity: 0.95,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  moth_ballet: {
-    id: 'moth_ballet',
-    label: 'Moth Ballet',
-    hint: 'Lone candle in darkness — moths spiral in lagged banked orbits; kick flares and surges inward, snare scatters, hats wink wing glints, gather tightens, tension gutters taller, drop bursts then re-gathers, tenderness honey-slows, holdBreath hangs mid-wingbeat.',
-    Scene: MothBalletScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.72,
-      scale: 1.05,
-      bassShake: 0.3,
-      anima: 0.55,
-      aura: 0.28,
-      cameraMode: 'drift',
-      bloomIntensity: 1.1,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-    },
-  },
-  koi_pond: {
-    id: 'koi_pond',
-    label: 'Koi Pond',
-    hint: 'Midnight pond from above — glowing koi brushstrokes under black-mirror water; kick flicks tails and rings ripples, snare scatters, hats dimple, gather curves center, tension tightens and darkens, drop breaches one koi, tenderness milks the moon, holdBreath hangs mid-glide over glass.',
-    Scene: KoiPondScene,
-    defaults: {
-      speed: 1,
-      smoothness: 0.74,
-      scale: 1.05,
-      bassShake: 0.28,
-      anima: 0.5,
-      aura: 0.3,
-      cameraMode: 'drift',
-      bloomIntensity: 1.0,
-      cameraDistance: 1,
-      lightLevel: 1.0,
-    },
-  },
-  frost_bloom: {
-    id: 'frost_bloom',
-    label: 'Frost Bloom',
-    hint: 'Night glass frost — dendrite crystals accrete with the music; kick spurts new branches, snare cracks a shear line, hats spark prism tips, gather braces, tension needle-freezes, drop flash-freezes the pane, tenderness thaws wet, holdBreath holds mid-sparkle.',
-    Scene: FrostBloomScene,
-    // Fullscreen frost pane owns the frame via clip-space quad; still camera
-    // keeps the glass stable while the shader grows the crystals.
-    defaults: {
-      speed: 1,
-      smoothness: 0.72,
-      scale: 1,
-      bassShake: 0.3,
-      anima: 0.5,
-      aura: 0.25,
-      cameraMode: 'still',
-      bloomIntensity: 0.75,
-      cameraDistance: 1,
-      lightLevel: 1.0,
-    },
-  },
-  rainforest_reverie: {
-    id: 'rainforest_reverie',
-    label: 'Rainforest Reverie',
-    hint: "iq's Rainforest, ported with permission — fog breathes on bass, wind stirs the canopy, tenderness lays a warm mist, the sun bursts through on the drop.",
-    Scene: RainforestReverieScene,
-    presetControls: ['turbulence', 'density'],
-    // The port is already tone-mapped + vignetted — bloom and aura must stay
-    // near zero or they milk the painting over. Rig camera still (the shader
-    // owns the shot).
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.35,
-      anima: 0.55,
-      aura: 0.05,
-      cameraMode: 'still',
-      bloomIntensity: 0.12,
-      cameraDistance: 1,
-      lightLevel: 1,
-      turbulence: 1,
-      density: 1,
-    },
-  },
-  alien_planet: {
-    id: 'alien_planet',
-    label: 'Alien Planet',
-    hint: 'A raymarched valley of alien canopy — mist breathes on bass, light rings roll on kick, the sun bursts through on release.',
-    Scene: AlienPlanetScene,
-    presetControls: ['turbulence', 'density'],
-    // Clip-space canopy owns framing via scale; still camera keeps it stable.
-    defaults: {
-      speed: 1,
-      smoothness: 0.7,
-      scale: 1,
-      bassShake: 0.35,
-      anima: 0.55,
-      aura: 0.25,
-      cameraMode: 'still',
-      bloomIntensity: 0.65,
-      cameraDistance: 1,
-      lightLevel: 1.05,
-      turbulence: 1,
-      density: 1,
-    },
-  },
   tidal_sanctuary: {
     id: 'tidal_sanctuary',
     label: 'Tidal Sanctuary',
@@ -797,20 +343,23 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
       density: 0.75,
     },
   },
-  mandelbrot_zoom: {
-    id: 'mandelbrot_zoom',
-    label: 'Mandelbulb',
-    hint: 'A living 3D fractal — grows more ornate as the music swells, morphs shape on drops. Fly around it.',
-    Scene: MandelbrotZoomScene,
+  plasma_globe: {
+    id: 'plasma_globe',
+    label: 'Plasma Globe',
+    hint: 'The novelty plasma ball — filaments reach for the glass and re-strike on every kick. Built light enough to stay smooth without a graphics card.',
+    Scene: PlasmaGlobeScene,
     defaults: {
       speed: 1,
-      smoothness: 0.7,
-      scale: 1.15,
-      bassShake: 0.4,
-      cameraMode: 'cinematic',
-      cinematicSpeed: 1,
-      bloomIntensity: 0.75,
+      smoothness: 0.55,
+      scale: 1.05,
+      bassShake: 0.35,
+      cameraMode: 'orbit',
       cameraDistance: 1,
+      // Deliberately restrained: this one earns its look from line work, not
+      // from post, and bloom is the most expensive thing in the chain.
+      bloomIntensity: 0.55,
+      aura: 0,
+      anima: 0.5,
       lightLevel: 1,
     },
   },

@@ -24,6 +24,7 @@ export type ControlKey =
   | 'speed'
   | 'anima'
   | 'colorLife'
+  | 'saturation'
   | 'bloomIntensity'
   | 'lightLevel'
   | 'aura'
@@ -81,9 +82,9 @@ export interface ToggleControlDef {
 export const TOGGLE_CONTROL_SCHEMA: readonly ToggleControlDef[] = [
   {
     key: 'highlightProtection',
-    label: 'Highlight protection',
+    label: 'Filmic highlights',
     fallback: true,
-    hint: 'Preserves color and detail when bright effects would otherwise clip to white',
+    hint: 'Rolls bright light off toward white like film, so loud moments keep getting brighter instead of flattening out',
     group: 'effects',
   },
 ];
@@ -160,6 +161,16 @@ export const CONTROL_SCHEMA: ControlDef[] = [
   },
 
   // ---- Color & light ----
+  {
+    key: 'saturation',
+    label: 'Saturation',
+    min: 0,
+    max: 2,
+    step: 0.05,
+    fallback: 1.1,
+    hint: 'How much colour survives the brightest moments — 0 is monochrome',
+    group: 'color',
+  },
   {
     key: 'colorLife',
     label: 'Color life',

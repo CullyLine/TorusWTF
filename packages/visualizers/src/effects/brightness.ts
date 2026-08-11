@@ -9,9 +9,6 @@ export const MAX_LIGHT_SIGNAL = 1.25;
 export const MAX_REACTIVE_LIGHT_INTENSITY = 8;
 export const MAX_FLASH_LIGHT_BOOST = 1.35;
 
-export const HIGHLIGHT_GUARD_THRESHOLD = 0.82;
-export const HIGHLIGHT_GUARD_KNEE = 0.16;
-
 function clampFinite(value: number, min: number, max: number, fallback = min): number {
   if (Number.isNaN(value)) return fallback;
   if (value === Number.POSITIVE_INFINITY) return max;
@@ -68,30 +65,4 @@ export function calculateBoundedBloomIntensity({
     clampFinite(flash, 0, 1) * 0.25;
 
   return Math.min(MAX_BLOOM_INTENSITY, base * Math.min(response, 2.25));
-}
-
-/**
- * Hue-preserving soft-knee compression used by the final highlight guard.
- * Scaling all channels by the same factor preserves RGB ratios while the
- * asymptotic ceiling (threshold + knee) keeps the display from clipping.
- */
-export function compressHighlightRgb(
-  rgb: readonly [number, number, number],
-  threshold = HIGHLIGHT_GUARD_THRESHOLD,
-  knee = HIGHLIGHT_GUARD_KNEE,
-): [number, number, number] {
-  const safeThreshold = clampFinite(threshold, 0, 1, HIGHLIGHT_GUARD_THRESHOLD);
-  const safeKnee = clampFinite(knee, 1e-4, Math.max(1e-4, 1 - safeThreshold), HIGHLIGHT_GUARD_KNEE);
-  const color = rgb.map((channel) => (Number.isFinite(channel) ? channel : 0)) as [
-    number,
-    number,
-    number,
-  ];
-  const peak = Math.max(0, color[0], color[1], color[2]);
-  if (peak <= safeThreshold) return color;
-
-  const excess = peak - safeThreshold;
-  const compressedPeak = safeThreshold + excess / (1 + excess / safeKnee);
-  const scale = compressedPeak / peak;
-  return [color[0] * scale, color[1] * scale, color[2] * scale];
 }

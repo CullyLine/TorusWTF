@@ -11,45 +11,22 @@ interface PresetPickerProps {
 const PRESET_IDS = Object.keys(VISUALIZERS) as VisualizerId[];
 
 const PRESET_COLORS: Record<VisualizerId, string> = {
-  anima: '#FBBF24',
   flow_field: '#38BDF8',
   torus_field: '#FF2D95',
-  particle_storm: '#22D3CE',
   infinite_tunnel: '#F7E08C',
   volumetric_waveform: '#A78BFA',
   cosmic_mandala: '#E879F9',
   star_field: '#60A5FA',
-  outrun_grid: '#FB7185',
-  liquid_chrome: '#C4B5FD',
   liquid_blob: '#F472B6',
-  ember_drift: '#FB923C',
-  silk_wake: '#F9A8D4',
-  tide_veil: '#5EEAD4',
-  halo_rain: '#A5B4FC',
-  mist_spiral: '#8EB4C8',
-  night_bloom: '#F0A8C0',
-  ink_bloom: '#7B8CDE',
-  opal_slick: '#9B8CFF',
-  paper_lanterns: '#F5B86A',
-  jellyfish_bloom: '#5EEAD4',
-  murmuration: '#C4A484',
-  thunderhead: '#7B8DB8',
-  glowworm_grotto: '#3DDC97',
-  dune_sea: '#C4A882',
-  moth_ballet: '#E8A060',
-  koi_pond: '#F0A070',
-  frost_bloom: '#A8C8E8',
-  rainforest_reverie: '#4ADE80',
-  alien_planet: '#C084FC',
   tidal_sanctuary: '#22D3EE',
-  mandelbrot_zoom: '#34D399',
+  plasma_globe: '#B388FF',
 };
 
 export function PresetPicker({ active, onChange, onRandom }: PresetPickerProps) {
   return (
     <section className="rounded-xl border border-torus-border bg-torus-surface p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-medium text-torus-fg-dim">Preset</h2>
+        <h2 className="text-sm font-medium text-torus-fg-dim">Visualizer</h2>
         <button type="button" onClick={onRandom} className="text-xs text-torus-mid hover:underline">
           Random
         </button>

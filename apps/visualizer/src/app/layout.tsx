@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     siteName: 'torus visualizer',
     title: 'torus visualizer — turn any audio into 3D visuals',
     description:
-      'Capture audio from Spotify, Ableton, Splice, a file, or your mic in real time. A growing library of reactive 3D presets. Free, no signup.',
+      'Capture audio from Spotify, Ableton, Splice, a file, or your mic in real time. A curated set of reactive 3D visualizers. Free, no signup.',
   },
   twitter: {
     card: 'summary_large_image',

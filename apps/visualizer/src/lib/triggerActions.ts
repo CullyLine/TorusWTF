@@ -1,6 +1,6 @@
 /**
  * Trigger mapping — the contract between input sources (audio one-shots,
- * MIDI notes, keyboard) and the actions they fire (preset changes, visual
+ * MIDI notes, keyboard) and the actions they fire (visualizer changes, visual
  * impulses). Inspired by nw_wrld's channel/method trigger routing, adapted
  * to TorusFM's continuous-visual model.
  *
@@ -72,9 +72,9 @@ export const TRIGGER_SOURCE_LABELS: Record<TriggerSourceKind, string> = {
 };
 
 export const TRIGGER_ACTION_LABELS: Record<TriggerActionKind, string> = {
-  nextPreset: 'Next preset',
-  prevPreset: 'Previous preset',
-  randomPreset: 'Random preset',
+  nextPreset: 'Next visualizer',
+  prevPreset: 'Previous visualizer',
+  randomPreset: 'Random visualizer',
   randomPalette: 'Random palette',
   randomShader: 'Random screen shader',
   hueKick: 'Color kick',

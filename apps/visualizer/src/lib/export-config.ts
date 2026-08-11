@@ -68,21 +68,75 @@ export function bitrateFor(res: ExportResolution): number {
   }
 }
 
-export function pickRecorderMimeType(): string {
+/**
+ * Returns null when the browser supports none of the candidates, so the
+ * caller can say so instead of handing `MediaRecorder` a type it already
+ * knows is unsupported and letting the constructor throw.
+ */
+export function pickRecorderMimeType(): string | null {
   const candidates = [
     'video/webm;codecs=vp9,opus',
     'video/webm;codecs=vp8,opus',
     'video/webm',
     'video/mp4',
   ];
+  if (typeof MediaRecorder === 'undefined') return null;
   for (const mime of candidates) {
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(mime)) {
-      return mime;
-    }
+    if (MediaRecorder.isTypeSupported(mime)) return mime;
   }
-  return 'video/webm';
+  return null;
 }
 
 export function fileExtensionForMime(mime: string): string {
   return mime.includes('mp4') ? 'mp4' : 'webm';
+}
+
+/**
+ * Live recording draws through a `requestAnimationFrame` compositor, so it
+ * cannot produce more frames per second than the display refreshes —
+ * `captureStream(fps)` is only a hint. Anything above this is honest only on
+ * the offline pre-render path, which steps frames itself.
+ */
+export const MAX_REALTIME_FPS: ExportFps = 60;
+
+export function isFpsRealtimeCapable(fps: ExportFps): boolean {
+  return fps <= MAX_REALTIME_FPS;
+}
+
+/**
+ * Largest square texture a resolution needs. Compared against the driver's
+ * limit before a big export is attempted, because failing at allocation time
+ * looks to the user like the export silently not working.
+ */
+export function exportExceedsGpuLimits(
+  width: number,
+  height: number,
+  maxTextureSize: number,
+): boolean {
+  return Math.max(width, height) > maxTextureSize;
+}
+/**
+ * Resolves once the WebGL canvas has actually reached the requested export
+ * dimensions. React has to re-render and R3F has to resize the drawing
+ * buffer, so starting the recorder in the same tick captures preview-sized
+ * frames. Gives up after a few frames rather than blocking the export.
+ */
+export function waitForCanvasSize(
+  canvas: HTMLCanvasElement,
+  width: number,
+  height: number,
+  timeoutMs = 1500,
+): Promise<void> {
+  return new Promise((resolve) => {
+    const started = performance.now();
+    const check = () => {
+      const ready = canvas.width === width && canvas.height === height;
+      if (ready || performance.now() - started > timeoutMs) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
 }

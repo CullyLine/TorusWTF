@@ -3,7 +3,7 @@ import {
   BACKGROUND_MODES,
   DEFAULT_EMITTER_SETTINGS,
   DEFAULT_SCREEN_EFFECT_SETTINGS,
-  VISUALIZERS,
+  resolveVisualizerId,
   sanitizeEmitterSettings,
   sanitizeModRoutings,
   sanitizeScreenEffectSettings,
@@ -191,14 +191,14 @@ function parsePreset(
   if (typeof value !== 'string') {
     return { ok: false, error: 'Show file is missing a valid preset id.' };
   }
-  const migrated = value === 'spectral_tunnel' ? 'infinite_tunnel' : value;
-  if (!(migrated in VISUALIZERS)) {
+  const resolved = resolveVisualizerId(value);
+  if (!resolved) {
     return {
       ok: false,
       error: `Unknown preset "${value}".`,
     };
   }
-  return { ok: true, preset: migrated as VisualizerId };
+  return { ok: true, preset: resolved };
 }
 
 function parsePalette(

@@ -201,4 +201,37 @@ describe('screen effect controls', () => {
     expect(effect.mix).toBe(0.001);
     effect.dispose();
   });
+
+  // ScreenStylePass constructs the effect with mix 0 and raises it from
+  // useFrame every frame. If that setter ever stopped reaching the uniform,
+  // a style would stay selected in the UI while rendering nothing at all —
+  // exactly the "screen styles stopped working" failure, and invisible to
+  // tests that only check shader source strings.
+  it('writes the live wet amount through to the shader uniform', () => {
+    const effect = new ScreenStyleEffect('matrix', 0);
+    const uniform = (effect as unknown as { uniforms: Map<string, { value: number }> }).uniforms.get(
+      'mixAmount',
+    );
+    expect(uniform?.value).toBe(0);
+    effect.mix = 0.8;
+    expect(uniform?.value).toBeCloseTo(0.8, 6);
+    effect.dispose();
+  });
+
+  it('keeps the live wet amount across a frame update', () => {
+    const effect = new ScreenStyleEffect('matrix', 0);
+    effect.mix = 0.65;
+    effect.updateFrame({
+      time: 1.5,
+      palette: { bass: '#ff0000', mid: '#00ff00', high: '#0000ff' },
+      metrics: DEFAULT_METRICS,
+      cameraNear: 0.1,
+      cameraFar: 100,
+    });
+    const uniform = (effect as unknown as { uniforms: Map<string, { value: number }> }).uniforms.get(
+      'mixAmount',
+    );
+    expect(uniform?.value).toBeCloseTo(0.65, 6);
+    effect.dispose();
+  });
 });

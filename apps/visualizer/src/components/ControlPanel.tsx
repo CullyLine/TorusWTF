@@ -62,16 +62,7 @@ const BACKGROUND_LABELS: Record<BackgroundMode, string> = {
 // composites additively instead of replacing the scene.
 const FULLSCREEN_PRESETS: ReadonlySet<VisualizerId> = new Set<VisualizerId>([
   'liquid_blob',
-  'silk_wake',
-  'tide_veil',
-  'halo_rain',
-  'mist_spiral',
-  'night_bloom',
-  'ink_bloom',
-  'opal_slick',
-  'frost_bloom',
-  'anima',
-  'thunderhead',
+  'tidal_sanctuary',
 ]);
 
 export function ControlPanel({
@@ -186,7 +177,7 @@ export function ControlPanel({
         {presetSliders.length > 0 ? (
           <details open className="space-y-3 border-t border-torus-border pt-3">
             <summary className={sectionSummary}>
-              This preset
+              This visualizer
               {sectionChevron}
             </summary>
             {presetSliders.map(renderSlider)}
@@ -279,7 +270,7 @@ export function ControlPanel({
           ) : null}
           {background.mode !== 'none' && FULLSCREEN_PRESETS.has(activePreset) ? (
             <p className="text-[10px] text-torus-fg-faint">
-              This preset fills the whole frame, so the background sits hidden behind it.
+              This visualizer fills the whole frame, so the background sits hidden behind it.
               Try it with Torus Field, Galaxy Garden, or Cosmic Mandala.
             </p>
           ) : null}

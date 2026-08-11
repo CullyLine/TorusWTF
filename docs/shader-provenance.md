@@ -1,37 +1,28 @@
 # Visual shader provenance
 
-The Mad Scientist visual pack uses original Torus GLSL except for the
-licensed port and the MIT-licensed galaxy geometry dependency described
-below. Shadertoy links were otherwise used only as visual references: no
-Shadertoy source, constants, camera setup, shader structure, or equations
-were copied, translated, or vendored.
+Every visualizer ships original Torus GLSL except for the MIT-licensed galaxy
+geometry dependency described below. Shadertoy links were used only as visual
+references: no Shadertoy source, constants, camera setup, shader structure, or
+equations were copied, translated, or vendored.
 
-## Licensed port
-
-- Rainforest Reverie (`rainforest_reverie`) is a direct port of Inigo
-  Quilez's "Rainforest" (<https://www.shadertoy.com/view/4ttSWf>, Image +
-  Buffer A passes), used with the author's permission obtained by the
-  project owner in July 2026. The original copyright notice is preserved in
-  `packages/visualizers/src/presets/RainforestReverie.tsx`, and every
-  TorusFM modification (audio reactivity, tier caps, uniform-based
-  reprojection camera, palette grade) is tagged `[TorusFM]` in the source.
-  This permission is specific to this project — the shader code cannot be
-  reused elsewhere under this repository's license.
+The one licensed port this project carried — Inigo Quilez's "Rainforest",
+used with the author's permission — was removed in the curation pass along
+with the Alien Planet clean-room sibling. Neither ships any more, so the
+project no longer carries a shader licence obligation beyond the dependency
+below.
 
 ## Clean-room visual references
 
 - Lava Choir and Bubble Melt:
   <https://www.shadertoy.com/view/3sySRK>
-- Alien Planet (formerly the clean-room "Rainforest Reverie"):
-  <https://www.shadertoy.com/view/4ttSWf>
+- Sea Glass and Tidal Sanctuary:
+  <https://www.shadertoy.com/view/Ms2SD1>
 - Octagram Bloom:
   <https://www.shadertoy.com/view/tlVGDt>
 - Pyramid Cathedral:
   <https://www.shadertoy.com/view/tsXBzS>
 - Creation Well:
   <https://www.shadertoy.com/view/XsXXDn>
-- Sea Glass and Tidal Sanctuary:
-  <https://www.shadertoy.com/view/Ms2SD1>
 
 Firefly Hug and Velvet Aurora were designed without an external shader
 reference.
