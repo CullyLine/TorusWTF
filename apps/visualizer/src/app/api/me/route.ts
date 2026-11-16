@@ -37,7 +37,7 @@ export async function PATCH(req: Request) {
     const next = parsed.data.handle.toLowerCase().trim();
     if (!isValidHandle(next)) {
       return NextResponse.json(
-        { error: 'Handle must be 3–32 characters: lowercase letters, digits, _ or -.' },
+        { error: 'A handle is 3 to 32 characters and can use lowercase letters, digits, _ and -.' },
         { status: 400 },
       );
     }

@@ -5,47 +5,33 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Route } from 'next';
 import { BrandMark } from '@/components/BrandMark';
+import { cx } from '@/components/ui/controls';
 import { useSessionUser } from '@/hooks/useSessionUser';
 import { detectOS } from '@/lib/platform';
 
 /**
- * AppLauncher — the always-present, out-of-the-way connector for the torus
- * "constellation". A small donut glyph pinned to the top-left of every page
- * that expands into an accordion of the torus apps plus the account controls
- * (sign in, or profile / settings / license / sign out). Summon with a click
- * or Cmd/Ctrl+K, dismiss with Esc / outside click. Uninvasive by design.
+ * The torus mark in the top-left corner of every page. It opens a menu with
+ * the torus apps and the account links (sign in, or profile, settings, and
+ * sign out). Open it with a click or Cmd/Ctrl+K. Close it with Esc or a click
+ * outside.
  */
 
 interface AppEntry {
+  /** Null for an app that is announced but not built yet. */
   href: Route | null;
   name: string;
-  glyph: string;
   hint: string;
-  soon?: boolean;
 }
 
 const APPS: AppEntry[] = [
-  { href: '/' as Route, name: 'Visualizer', glyph: '\u25ce', hint: 'Turn any audio into 3D visuals' },
-  {
-    href: '/conductor' as Route,
-    name: 'Conductor',
-    glyph: '\u25a6',
-    hint: 'SoundFont DAW \u2014 compose music',
-  },
-  {
-    href: '/transcriber' as Route,
-    name: 'Transcriber',
-    glyph: '\u266b',
-    hint: 'Audio \u2192 MIDI, in your browser',
-  },
-  {
-    href: null,
-    name: 'Stem Separation',
-    glyph: '\u2261',
-    hint: 'Split a track into stems',
-    soon: true,
-  },
+  { href: '/' as Route, name: 'Visualizer', hint: 'Turn audio into 3D visuals' },
+  { href: '/conductor' as Route, name: 'Conductor', hint: 'Sketch music with a SoundFont DAW' },
+  { href: '/transcriber' as Route, name: 'Transcriber', hint: 'Convert audio to MIDI' },
+  { href: null, name: 'Stem separation', hint: 'Split a track into stems. Not built yet' },
 ];
+
+const itemClass =
+  'block rounded-md px-3 py-2 text-left text-[13px] text-torus-fg-dim transition-colors hover:bg-torus-raised hover:text-torus-fg';
 
 export function AppLauncher() {
   const [open, setOpen] = useState(false);
@@ -60,7 +46,7 @@ export function AppLauncher() {
     setMounted(true);
   }, []);
 
-  // Move focus into the panel on open; hand it back to the trigger on close.
+  // Move focus into the menu when it opens, and back to the button when it closes.
   useEffect(() => {
     if (open) {
       panelRef.current?.focus();
@@ -82,6 +68,7 @@ export function AppLauncher() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // The Discord sign-in popup posts this message when it finishes.
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
@@ -117,36 +104,26 @@ export function AppLauncher() {
 
   if (!mounted) return null;
 
-  const modKey = detectOS() === 'mac' ? '\u2318' : 'Ctrl+';
-
-  const menuItem =
-    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-torus-fg-dim transition-colors hover:bg-white/5 hover:text-torus-fg';
+  const shortcut = detectOS() === 'mac' ? 'Cmd+K' : 'Ctrl+K';
+  const close = () => setOpen(false);
 
   return (
-    <div ref={rootRef} className="fixed left-4 top-4 z-40">
+    <div ref={rootRef} className="fixed left-3 top-2.5 z-40">
       <button
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={`Open torus apps (${modKey}K)`}
+        aria-label={`Open the torus menu (${shortcut})`}
         aria-expanded={open}
-        title={`torus apps (${modKey}K)`}
-        className={`relative grid h-9 w-9 place-items-center rounded-full border bg-torus-bg/70 backdrop-blur-sm transition ${
+        title={`torus menu (${shortcut})`}
+        className={cx(
+          'grid h-9 w-9 place-items-center rounded-full border bg-torus-panel transition-colors',
           open
-            ? 'border-torus-border-strong opacity-100'
-            : 'border-torus-border opacity-70 hover:opacity-100 hover:border-torus-border-strong'
-        }`}
+            ? 'border-torus-border-strong'
+            : 'border-torus-border hover:border-torus-border-strong',
+        )}
       >
         <BrandMark size={20} sparkle={false} />
-        {loaded && user?.hasLicense ? (
-          <span
-            className="absolute -right-0.5 -top-0.5 text-[10px] text-torus-high drop-shadow"
-            title="Production License"
-            aria-hidden
-          >
-            ✦
-          </span>
-        ) : null}
       </button>
 
       {open ? (
@@ -155,160 +132,100 @@ export function AppLauncher() {
           tabIndex={-1}
           role="dialog"
           aria-label="torus apps and account"
-          className="absolute left-0 mt-2 w-72 overflow-hidden rounded-2xl border border-torus-border-strong bg-torus-bg/95 shadow-2xl backdrop-blur-sm outline-none"
+          className="absolute left-0 mt-2 w-72 rounded-md border border-torus-border-strong bg-torus-panel outline-none"
         >
-          <div className="flex items-center justify-between border-b border-torus-border px-4 py-3">
-            <span className="text-sm font-medium text-torus-fg-dim">torus apps</span>
-            <span className="text-[10px] text-torus-fg-faint">{modKey}K</span>
-          </div>
-          <ul className="p-2">
+          <p className="flex items-center justify-between border-b border-torus-border px-4 py-2.5 text-xs text-torus-fg-faint">
+            <span>Apps</span>
+            <span>{shortcut}</span>
+          </p>
+          <ul className="p-1.5">
             {APPS.map((app) => {
               const active = isActive(app.href);
-              const inner = (
+              const body = (
                 <>
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
-                    {app.glyph}
+                  <span className="flex items-center justify-between gap-2 font-medium text-torus-fg">
+                    {app.name}
+                    {active ? (
+                      <span className="text-[11px] font-normal text-torus-mid">You are here</span>
+                    ) : null}
                   </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      {app.name}
-                      {app.soon ? (
-                        <span className="rounded-full border border-torus-border px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-torus-fg-faint">
-                          soon
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="truncate text-[11px] text-torus-fg-faint">{app.hint}</span>
-                  </span>
-                  {active ? <span className="ml-auto text-[10px] text-torus-mid">current</span> : null}
+                  <span className="block text-[11px] text-torus-fg-faint">{app.hint}</span>
                 </>
               );
-
-              if (app.href === null) {
-                return (
-                  <li key={app.name}>
-                    <div
-                      className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-torus-fg-faint opacity-70"
-                      aria-disabled
-                    >
-                      {inner}
-                    </div>
-                  </li>
-                );
-              }
-
               return (
                 <li key={app.name}>
-                  <Link
-                    href={app.href}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
-                      active
-                        ? 'bg-torus-mid/10 text-torus-fg'
-                        : 'text-torus-fg-dim hover:bg-white/5 hover:text-torus-fg'
-                    }`}
-                  >
-                    {inner}
-                  </Link>
+                  {app.href === null ? (
+                    <div className="px-3 py-2 text-[13px] opacity-60" aria-disabled="true">
+                      {body}
+                    </div>
+                  ) : (
+                    <Link
+                      href={app.href}
+                      aria-current={active ? 'page' : undefined}
+                      className={cx(itemClass, active && 'bg-torus-raised')}
+                    >
+                      {body}
+                    </Link>
+                  )}
                 </li>
               );
             })}
           </ul>
 
-          <div className="border-t border-torus-border p-2">
+          <div className="border-t border-torus-border p-1.5">
             {!loaded ? (
-              <div className="px-3 py-2.5 text-[11px] text-torus-fg-faint">{'\u2026'}</div>
+              <p className="px-3 py-2 text-[11px] text-torus-fg-faint">Checking sign-in</p>
             ) : !user ? (
-              <Link href="/signin" className={menuItem} onClick={() => setOpen(false)}>
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
-                  {'\u21aa'}
-                </span>
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-sm font-medium text-torus-fg">Sign in</span>
-                  <span className="truncate text-[11px] text-torus-fg-faint">
-                    Claim your handle & manage your license
-                  </span>
+              <Link href="/signin" className={itemClass} onClick={close}>
+                <span className="font-medium text-torus-fg">Sign in</span>
+                <span className="block text-[11px] text-torus-fg-faint">
+                  Optional. An account gives you a handle and a profile.
                 </span>
               </Link>
             ) : (
               <>
                 <div className="flex items-center gap-3 px-3 py-2">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-torus-border bg-torus-bg text-sm text-torus-fg-dim">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full border border-torus-border bg-torus-bg text-xs text-torus-fg-dim">
                     {user.avatarUrl ? (
                       <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <span>{user.handle.charAt(0).toUpperCase()}</span>
                     )}
                   </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="truncate text-sm font-medium text-torus-fg">
-                      @{user.handle}
-                    </span>
-                    <span className="text-[11px] text-torus-fg-faint">
-                      {user.hasLicense ? 'Production License \u2726' : 'Free account'}
-                    </span>
+                  <span className="min-w-0 truncate text-[13px] font-medium text-torus-fg">
+                    @{user.handle}
                   </span>
                 </div>
                 <Link
                   href={`/u/${encodeURIComponent(user.handle)}` as Route}
-                  className={menuItem}
-                  onClick={() => setOpen(false)}
+                  className={itemClass}
+                  onClick={close}
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
-                    {'\u25c9'}
-                  </span>
-                  <span className="text-sm font-medium">Profile</span>
+                  Profile
                 </Link>
-                <Link
-                  href={'/settings' as Route}
-                  className={menuItem}
-                  onClick={() => setOpen(false)}
-                >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
-                    {'\u2699'}
-                  </span>
-                  <span className="text-sm font-medium">Settings</span>
+                <Link href={'/settings' as Route} className={itemClass} onClick={close}>
+                  Settings
                 </Link>
-                {!user.hasLicense ? (
-                  <Link
-                    href={'/license' as Route}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-torus-high transition-colors hover:bg-white/5"
-                    onClick={() => setOpen(false)}
-                  >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-mid/30 bg-torus-bg text-lg">
-                      {'\u2726'}
-                    </span>
-                    <span className="font-medium">Get Production License</span>
-                  </Link>
-                ) : null}
                 <button
                   type="button"
                   onClick={() => void signOut()}
-                  className={`w-full text-left ${menuItem}`}
+                  className={cx(itemClass, 'w-full')}
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-torus-border bg-torus-bg text-lg">
-                    {'\u23fb'}
-                  </span>
-                  <span className="text-sm font-medium">Sign out</span>
+                  Sign out
                 </button>
               </>
             )}
           </div>
 
-          <div className="flex items-center gap-3 border-t border-torus-border px-4 py-2.5 text-[11px] text-torus-fg-faint">
-            <Link
-              href={'/about' as Route}
-              className="hover:text-torus-fg"
-              onClick={() => setOpen(false)}
-            >
-              About torus
+          <div className="flex items-center gap-4 border-t border-torus-border px-4 py-2.5 text-[11px] text-torus-fg-faint">
+            <Link href={'/about' as Route} className="hover:text-torus-fg" onClick={close}>
+              About
             </Link>
-            <span aria-hidden>·</span>
-            <Link
-              href={'/principles' as Route}
-              className="hover:text-torus-fg"
-              onClick={() => setOpen(false)}
-            >
+            <Link href={'/principles' as Route} className="hover:text-torus-fg" onClick={close}>
               Principles
+            </Link>
+            <Link href={'/privacy' as Route} className="hover:text-torus-fg" onClick={close}>
+              Privacy
             </Link>
           </div>
         </div>

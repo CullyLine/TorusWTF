@@ -96,7 +96,7 @@ function PromptToast({
     <div
       role="dialog"
       aria-label={item.message}
-      className="pointer-events-auto w-full max-w-sm rounded-lg border border-torus-border-strong bg-torus-bg/95 p-3 shadow-lg backdrop-blur-sm motion-safe:animate-[toast-in_200ms_ease-out]"
+      className="pointer-events-auto w-full max-w-sm rounded-md border border-torus-border-strong bg-torus-panel p-3 motion-safe:animate-[toast-in_200ms_ease-out]"
     >
       <p className="mb-2 text-sm text-torus-fg">{item.message}</p>
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
@@ -136,7 +136,7 @@ function MessageToast({ item, onDismiss }: { item: ToastMessage; onDismiss: (id:
   return (
     <div
       role={item.variant === 'error' ? 'alert' : 'status'}
-      className={`pointer-events-auto w-full max-w-sm rounded-lg border px-4 py-3 text-sm shadow-lg backdrop-blur-sm motion-safe:animate-[toast-in_200ms_ease-out] ${VARIANT_STYLES[item.variant]}`}
+      className={`pointer-events-auto w-full max-w-sm rounded-md border px-4 py-3 text-sm motion-safe:animate-[toast-in_200ms_ease-out] ${VARIANT_STYLES[item.variant]}`}
     >
       {item.message}
     </div>

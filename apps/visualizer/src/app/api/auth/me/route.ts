@@ -8,7 +8,6 @@ import {
   invalidateSession,
   SESSION_COOKIE_NAME,
 } from '@/lib/auth';
-import { hasLicense } from '@/lib/license';
 
 const DeleteBody = z.object({
   confirmHandle: z.string().min(1),
@@ -24,7 +23,7 @@ function readSessionToken(req: Request): string | null {
   return null;
 }
 
-/** GET /api/auth/me — current session user for client UI (account menu, export gating). */
+/** GET /api/auth/me returns the signed-in user for the account menu, or null. */
 export async function GET(req: Request) {
   const discordAuth = Boolean(
     process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET,
@@ -38,7 +37,6 @@ export async function GET(req: Request) {
       id: user.id,
       handle: user.handle,
       avatarUrl: user.avatarUrl,
-      hasLicense: hasLicense(user),
     },
     discordAuth,
   });

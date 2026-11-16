@@ -1,9 +1,10 @@
 import Link from 'next/link';
+import { SiteFooter } from '@/components/SiteFooter';
 import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
   title: 'about',
-  description: 'What torus is: 3D visuals for your audio, plus a few sharp tools for music.',
+  description: 'torus turns audio into 3D visuals you can export as video. Free, in your browser.',
 };
 
 export default function AboutPage() {
@@ -11,101 +12,73 @@ export default function AboutPage() {
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-20">
       <img
         src="/torus-mascot.png"
-        alt="The torus mascot — a doughnut made of audio waveforms"
-        className="mx-auto mb-8 w-full max-w-md rounded-2xl"
+        alt="The torus mascot, a doughnut made of audio waveforms"
+        className="mx-auto mb-8 w-full max-w-md rounded-md"
       />
       <h1 className="text-3xl font-semibold tracking-tight">about torus</h1>
 
       <section className="mt-8 space-y-5 text-sm leading-relaxed text-torus-fg-dim">
         <p>
-          <strong className="text-torus-fg">torus is 3D visuals for your audio.</strong> Point it at
-          Spotify, Ableton, Splice, a file, or your mic and watch the sound turn into something you
-          want to look at. Tweak it, then export for Reels, Shorts, a release, or a live set.
+          <strong className="text-torus-fg">torus turns audio into 3D visuals.</strong> Play a file,
+          use your mic, or capture the sound from Spotify, Ableton, or any other app. Adjust the
+          look, then export it as video.
         </p>
         <p>
-          The visualizer is the heart of it. Around that we’re building a small set of sharp tools
-          for people who make music — a SoundFont DAW (<Link href="/conductor" className="underline">Conductor</Link>),
-          an in-browser audio-to-MIDI{' '}
+          Two more music tools run in the same app.{' '}
+          <Link href="/conductor" className="underline">
+            Conductor
+          </Link>{' '}
+          is a SoundFont DAW for sketching ideas, and{' '}
           <Link href="/transcriber" className="underline">
             Transcriber
-          </Link>
-          , and stem separation on the way. One roof, no fuss.
+          </Link>{' '}
+          converts audio to MIDI. Stem separation is planned.
         </p>
-        <p>
-          The name is <strong>torus</strong> — the shape of a loop, and yes, a doughnut. Sound goes
-          in, energy comes around. The mascot is, quite literally, a donut made of waveforms.
-        </p>
+        <p>A torus is the shape of a doughnut, so the mascot is a doughnut made of waveforms.</p>
       </section>
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold">how it works</h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-torus-fg-dim">
+        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-torus-fg-dim">
           <li>
-            <strong className="text-torus-fg">Capture</strong> — grab audio from a tab, a file, or
-            your mic. No signup.
+            <strong className="text-torus-fg">Add audio.</strong> Drop a file, turn on your mic, or
+            share a tab or your desktop audio. You do not need an account.
           </li>
           <li>
-            <strong className="text-torus-fg">Shape</strong> — pick a visualizer, tune the reactivity,
-            colors, and camera until it feels right.
+            <strong className="text-torus-fg">Shape the look.</strong> Pick a visualizer, then set
+            how it reacts, its colors, and the camera.
           </li>
           <li>
-            <strong className="text-torus-fg">Export</strong> — render a clip for socials or your
-            portfolio. Free exports are watermarked and capped; the{' '}
-            <Link href="/license" className="underline">
-              Production License
-            </Link>{' '}
-            lifts the caps and adds commercial-use rights.
+            <strong className="text-torus-fg">Export.</strong> Record in real time, or pre-render an
+            MP4 at up to 4K and 240 fps. Exports are free and yours to use, including commercially.
           </li>
-        </ul>
+        </ol>
       </section>
 
       <section className="mt-10">
-        <h2 className="text-lg font-semibold">what it is not</h2>
-        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-torus-fg-dim">
-          <li>not an ad-funded platform</li>
-          <li>not an algorithmic feed</li>
-          <li>not a data broker</li>
-          <li>not a subscription treadmill — one honest, optional upgrade</li>
-        </ul>
+        <h2 className="text-lg font-semibold">what it costs</h2>
+        <p className="mt-3 text-sm text-torus-fg-dim">
+          Nothing. There are no ads, no paid tier, and no data sales. Your audio is analyzed and
+          rendered in your browser and never uploaded. The{' '}
+          <Link href="/principles" className="underline">
+            principles
+          </Link>{' '}
+          page lists what torus commits to.
+        </p>
       </section>
 
       <p className="mt-12 text-xs text-torus-fg-faint">
-        Read the{' '}
-        <Link href="/principles" className="underline">
-          principles
-        </Link>
-        . Best-effort service, made with care. Questions?{' '}
+        Questions?{' '}
         <a href={mailto(SUPPORT_EMAIL)} className="underline">
           {SUPPORT_EMAIL}
         </a>
-        .
       </p>
 
       <p className="mt-4 text-xs text-torus-fg-faint">
-        Demo audio: &ldquo;Despresso Shots&rdquo; by CullyLine, used with permission.
+        Demo audio: &quot;Despresso Shots&quot; by CullyLine, used with permission.
       </p>
 
-      <p className="mt-10 text-xs text-torus-fg-faint">
-        <Link href="/" className="hover:text-torus-fg">
-          Home
-        </Link>
-        {' · '}
-        <Link href="/about" className="hover:text-torus-fg">
-          About
-        </Link>
-        {' · '}
-        <Link href="/principles" className="hover:text-torus-fg">
-          Principles
-        </Link>
-        {' · '}
-        <Link href="/privacy" className="hover:text-torus-fg">
-          Privacy
-        </Link>
-        {' · '}
-        <Link href="/terms" className="hover:text-torus-fg">
-          Terms
-        </Link>
-      </p>
+      <SiteFooter />
     </main>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 
 interface SettingsUser {
   id: string;
@@ -11,7 +10,6 @@ interface SettingsUser {
   avatarUrl: string | null;
   bio: string | null;
   customSubdomain: string | null;
-  hasLicense: boolean;
 }
 
 interface SettingsFormProps {
@@ -39,7 +37,6 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
   const deletePanelRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
 
-  const licensed = initialUser.hasLicense;
   const normalizedConfirmHandle = confirmHandle.replace(/^@/, '').toLowerCase();
   const confirmMatches =
     normalizedConfirmHandle === initialUser.handle.toLowerCase();
@@ -113,7 +110,6 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
 
   async function saveSubdomain(e: React.FormEvent) {
     e.preventDefault();
-    if (!licensed) return;
     setSubBusy(true);
     setSubError(null);
     setSubOk(false);
@@ -175,7 +171,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
                 type="email"
                 value={initialUser.email}
                 readOnly
-                className="mt-1 w-full rounded-lg border border-torus-border bg-torus-surface/50 px-3 py-2 text-sm text-torus-fg-dim"
+                className="mt-1 w-full rounded-md border border-torus-border bg-torus-raised px-3 py-2 text-sm text-torus-fg-dim"
               />
             </label>
           ) : null}
@@ -185,7 +181,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
               type="text"
               value={handle}
               onChange={(e) => setHandle(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-torus-border-strong bg-torus-surface px-3 py-2 font-mono text-sm"
+              className="mt-1 w-full rounded-md border border-torus-border-strong bg-torus-surface px-3 py-2 font-mono text-sm"
               autoComplete="username"
             />
             <span className="mt-1 block text-xs text-torus-fg-faint">
@@ -199,7 +195,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
               onChange={(e) => setBio(e.target.value)}
               maxLength={500}
               rows={4}
-              className="mt-1 w-full rounded-lg border border-torus-border-strong bg-torus-surface px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-torus-border-strong bg-torus-surface px-3 py-2 text-sm"
             />
           </label>
           <label className="block text-sm">
@@ -209,7 +205,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
               value={avatarUrl}
               onChange={(e) => setAvatarUrl(e.target.value)}
               placeholder="https://..."
-              className="mt-1 w-full rounded-lg border border-torus-border-strong bg-torus-surface px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-torus-border-strong bg-torus-surface px-3 py-2 text-sm"
             />
           </label>
           {profileError ? <p className="text-sm text-torus-bass">{profileError}</p> : null}
@@ -217,7 +213,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
           <button
             type="submit"
             disabled={profileBusy}
-            className="rounded-full bg-torus-fg px-5 py-2 text-sm font-medium text-torus-bg disabled:opacity-50"
+            className="rounded-md bg-torus-fg px-5 py-2 text-sm font-medium text-torus-bg disabled:opacity-50"
           >
             {profileBusy ? 'Saving…' : 'Save profile'}
           </button>
@@ -227,31 +223,20 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
       <section>
         <h2 className="text-lg font-semibold">Custom subdomain</h2>
         <p className="mt-2 text-sm text-torus-fg-dim">
-          {licensed ? (
-            'Point a subdomain at your profile — a Production License perk.'
-          ) : (
-            <>
-              Custom subdomains are a{' '}
-              <Link href="/license" className="text-torus-mid underline">
-                Production License
-              </Link>{' '}
-              perk.
-            </>
-          )}
+          Point a subdomain at your profile, for example yourname.torus.wtf.
         </p>
         <form onSubmit={(e) => void saveSubdomain(e)} className="mt-4 flex gap-2">
           <input
             type="text"
             value={subdomain}
             onChange={(e) => setSubdomain(e.target.value)}
-            disabled={!licensed}
             placeholder="yourname"
-            className="flex-1 rounded-lg border border-torus-border-strong bg-torus-surface px-3 py-2 font-mono text-sm disabled:opacity-50"
+            className="flex-1 rounded-md border border-torus-border-strong bg-torus-surface px-3 py-2 font-mono text-sm disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={!licensed || subBusy}
-            className="rounded-full border border-torus-border-strong px-4 py-2 text-sm disabled:opacity-50"
+            disabled={subBusy}
+            className="rounded-md border border-torus-border-strong px-4 py-2 text-sm disabled:opacity-50"
           >
             {subBusy ? '…' : 'Save'}
           </button>
@@ -259,14 +244,14 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
         {subError ? <p className="mt-2 text-sm text-torus-bass">{subError}</p> : null}
         {subOk && subdomain.trim() ? (
           <p className="mt-2 text-sm text-torus-mid">
-            Saved — {subdomain.trim()}.torus.wtf
+            Saved. Your profile is at {subdomain.trim()}.torus.wtf
           </p>
         ) : subOk ? (
           <p className="mt-2 text-sm text-torus-mid">Saved.</p>
         ) : null}
       </section>
 
-      <section className="rounded-xl border border-torus-bass/30 p-6">
+      <section className="rounded-md border border-torus-bass/30 p-6">
         <button
           type="button"
           onClick={() => setDangerOpen((v) => !v)}
@@ -277,8 +262,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
         {dangerOpen ? (
           <div className="mt-4 space-y-4 text-sm text-torus-fg-dim">
             <p>
-              Deleting your account is permanent. Your profile, handle, and Production License record
-              are removed. No dark patterns.
+              Deleting your account is permanent. It removes your profile and frees your handle.
             </p>
             <button
               type="button"
@@ -287,7 +271,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
                 setConfirmHandle('');
                 setDeleteError(null);
               }}
-              className="rounded-lg border border-torus-bass/50 px-4 py-3 text-left hover:bg-torus-bass/5"
+              className="rounded-md border border-torus-bass/50 px-4 py-3 text-left hover:bg-torus-bass/5"
             >
               <span className="font-medium text-torus-bass">Delete my account</span>
             </button>
@@ -308,7 +292,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
             role="dialog"
             aria-modal="true"
             aria-labelledby={deleteTitleId}
-            className="w-full max-w-md rounded-xl border border-torus-border-strong bg-torus-bg p-6"
+            className="w-full max-w-md rounded-md border border-torus-border-strong bg-torus-bg p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 id={deleteTitleId} className="text-lg font-semibold">
@@ -323,7 +307,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
               value={confirmHandle}
               onChange={(e) => setConfirmHandle(e.target.value)}
               placeholder={initialUser.handle}
-              className="mt-4 w-full rounded-lg border border-torus-border-strong bg-torus-surface px-3 py-2 font-mono text-sm"
+              className="mt-4 w-full rounded-md border border-torus-border-strong bg-torus-surface px-3 py-2 font-mono text-sm"
               autoComplete="off"
             />
             {deleteError ? <p className="mt-2 text-sm text-torus-bass">{deleteError}</p> : null}
@@ -331,7 +315,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
               <button
                 type="button"
                 onClick={() => setConfirmOpen(false)}
-                className="rounded-full px-4 py-2 text-sm text-torus-fg-dim hover:bg-torus-surface"
+                className="rounded-md px-4 py-2 text-sm text-torus-fg-dim hover:bg-torus-surface"
               >
                 Cancel
               </button>
@@ -339,7 +323,7 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
                 type="button"
                 disabled={deleteBusy || !confirmMatches}
                 onClick={() => void confirmDelete()}
-                className="rounded-full bg-torus-bass px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded-md bg-torus-bass px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
               >
                 {deleteBusy ? 'Deleting…' : 'Confirm delete'}
               </button>

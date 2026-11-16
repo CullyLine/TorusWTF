@@ -14,7 +14,7 @@ export function WelcomeToast() {
   useEffect(() => {
     if (shown.current || searchParams.get('welcome') !== '1') return;
     shown.current = true;
-    toast({ message: 'Signed in — welcome to torus', variant: 'success' });
+    toast({ message: 'You are signed in', variant: 'success' });
     const params = new URLSearchParams(searchParams.toString());
     params.delete('welcome');
     const q = params.toString();

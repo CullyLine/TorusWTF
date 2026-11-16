@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SiteFooter } from '@/components/SiteFooter';
 import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
@@ -13,62 +14,36 @@ export default function TermsPage() {
 
       <section className="mt-8 space-y-4 text-sm leading-relaxed text-torus-fg-dim">
         <p>
-          By using torus you agree to use it lawfully and not to abuse the service. The core
-          visualizer and tools are provided free, as a best-effort service with no SLA.
+          By using torus you agree to use it lawfully and not to abuse the service. torus is free
+          and provided as a best-effort service with no uptime guarantee.
         </p>
         <p>
-          <strong className="text-torus-fg">Your content:</strong> you’re responsible for having the
-          rights to any audio you visualize and to any video you export. torus processes audio
-          locally and claims no ownership of your work.
+          <strong className="text-torus-fg">Your audio.</strong> You are responsible for having the
+          rights to any audio you visualize. torus processes it in your browser and claims no
+          ownership of it.
         </p>
         <p>
-          <strong className="text-torus-fg">Production License:</strong> a one-time, account-bound
-          purchase that unlocks the highest-quality exports, removes the watermark, and grants you
-          permission to use your torus exports commercially. It’s a license to the output you create
-          here — not a transfer of rights to any music you don’t own.
+          <strong className="text-torus-fg">Your exports.</strong> Video and images you export are
+          yours to use, including commercially. That covers the visuals torus generates. It does not
+          give you rights to music you do not own.
         </p>
         <p>
-          <strong className="text-torus-fg">Free exports</strong> are watermarked, capped in
-          resolution and frame rate, and intended for personal, non-commercial use.
-        </p>
-        <p>
-          <strong className="text-torus-fg">Account deletion:</strong> delete your account anytime
-          from{' '}
+          <strong className="text-torus-fg">Accounts.</strong> Accounts are optional. You can delete
+          yours from{' '}
           <Link href="/settings" className="text-torus-mid underline">
             settings
-          </Link>
-          . No dark patterns.
+          </Link>{' '}
+          at any time.
         </p>
         <p>
-          <strong className="text-torus-fg">Contact:</strong> licensing questions or support?{' '}
+          Questions?{' '}
           <a href={mailto(SUPPORT_EMAIL)} className="text-torus-mid underline">
             {SUPPORT_EMAIL}
           </a>
-          .
         </p>
       </section>
 
-      <p className="mt-10 text-xs text-torus-fg-faint">
-        <Link href="/" className="hover:text-torus-fg">
-          Home
-        </Link>
-        {' · '}
-        <Link href="/about" className="hover:text-torus-fg">
-          About
-        </Link>
-        {' · '}
-        <Link href="/principles" className="hover:text-torus-fg">
-          Principles
-        </Link>
-        {' · '}
-        <Link href="/privacy" className="hover:text-torus-fg">
-          Privacy
-        </Link>
-        {' · '}
-        <Link href="/terms" className="hover:text-torus-fg">
-          Terms
-        </Link>
-      </p>
+      <SiteFooter />
     </main>
   );
 }

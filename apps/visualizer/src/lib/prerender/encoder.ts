@@ -5,8 +5,8 @@
  * `mp4-muxer` Muxer with an in-memory ArrayBufferTarget, then returns
  * the final MP4 bytes for download.
  *
- * Video frames are composited onto an offscreen 2D canvas first so we
- * can stamp a watermark (free tier) before encoding.
+ * Video frames are composited onto an offscreen 2D canvas first so the
+ * title card and optional watermark can be drawn before encoding.
  *
  * Browser support: requires `VideoEncoder` + `AudioEncoder` + `AudioData`.
  * Caller is responsible for feature-detecting before constructing this.
@@ -28,7 +28,6 @@ export interface PrerenderEncoderOptions {
   watermark: boolean;
   watermarkImage?: ImageBitmap | null;
   titleOverlay?: TitleOverlay | null;
-  unlocked?: boolean;
 }
 
 export interface PrerenderEncoder {
@@ -56,7 +55,6 @@ export async function createPrerenderEncoder(
   const { width, height, fps, videoBitrate, audioBuffer, watermark } = opts;
   const watermarkImage = opts.watermarkImage ?? null;
   const titleOverlay = opts.titleOverlay ?? null;
-  const unlocked = opts.unlocked ?? false;
   const sampleRate = audioBuffer.sampleRate;
   const channels = Math.min(2, audioBuffer.numberOfChannels);
 
@@ -163,7 +161,7 @@ export async function createPrerenderEncoder(
 
       ctx.clearRect(0, 0, width, height);
       ctx.drawImage(sourceCanvas, 0, 0, width, height);
-      if (titleOverlay) drawTitleOverlay(ctx, width, height, titleOverlay, unlocked);
+      if (titleOverlay) drawTitleOverlay(ctx, width, height, titleOverlay);
       if (watermark) drawWatermark(ctx, width, height, watermarkImage ?? null);
 
       // VideoFrame timestamp is in microseconds.

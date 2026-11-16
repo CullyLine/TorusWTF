@@ -41,7 +41,6 @@ describe('factory visual reset', () => {
       savedPresets,
       audioPreference: { volume: 0.42, sourceKind: 'file' },
       exportPreference: { resolution: '4k', fps: 60 },
-      license: { unlocked: true },
       watermark,
     });
 
@@ -53,7 +52,6 @@ describe('factory visual reset', () => {
     expect(reset.savedPresets).toBe(savedPresets);
     expect(reset.audioPreference).toEqual({ volume: 0.42, sourceKind: 'file' });
     expect(reset.exportPreference).toEqual({ resolution: '4k', fps: 60 });
-    expect(reset.license).toEqual({ unlocked: true });
     expect(reset.watermark).toBe(watermark);
   });
 });

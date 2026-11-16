@@ -1,9 +1,9 @@
-import Link from 'next/link';
+import { SiteFooter } from '@/components/SiteFooter';
 import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
   title: 'principles',
-  description: 'The contract that defines what torus will and will not do.',
+  description: 'What torus will and will not do.',
 };
 
 export default function PrinciplesPage() {
@@ -11,8 +11,8 @@ export default function PrinciplesPage() {
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-20">
       <h1 className="text-3xl font-semibold tracking-tight">principles</h1>
       <p className="mt-3 text-sm text-torus-fg-dim">
-        A short, honest contract with the people who use torus. Every feature has to justify itself
-        against this list.
+        These are the commitments torus makes to the people who use it. A feature that breaks one
+        does not ship.
       </p>
 
       <section className="mt-10">
@@ -20,58 +20,32 @@ export default function PrinciplesPage() {
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-torus-fg-dim">
           <li>show ads or sponsored placements</li>
           <li>sell or rent your data</li>
-          <li>run an engagement-bait algorithmic feed</li>
+          <li>run an algorithmic feed built to keep you scrolling</li>
           <li>load third-party trackers by default</li>
-          <li>use dark patterns in sign-up, billing, or account deletion</li>
-          <li>gate the core tools behind a subscription</li>
+          <li>use dark patterns in sign-up or account deletion</li>
+          <li>require an account to use the tools</li>
         </ul>
       </section>
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold">we will always</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-torus-fg-dim">
-          <li>keep the core visualizer and tools free</li>
-          <li>keep paid features cosmetic or quality-of-life — never the essentials</li>
-          <li>charge once, plainly, when we charge at all (the Production License)</li>
-          <li>let you delete your account and data, no hoops</li>
-          <li>treat accessibility bugs like real bugs</li>
-          <li>be honest about uptime — best-effort, no false promises</li>
+          <li>keep the visualizer, Conductor, and Transcriber free, exports included</li>
+          <li>process your audio in your browser, without uploading or storing it</li>
+          <li>let you delete your account and its data from settings</li>
+          <li>treat accessibility bugs like any other bug</li>
+          <li>describe uptime plainly: this is a best-effort service with no guarantee</li>
         </ul>
       </section>
 
       <p className="mt-12 text-xs text-torus-fg-faint">
-        The only thing we ever ask money for is the optional{' '}
-        <Link href="/license" className="underline">
-          Production License
-        </Link>{' '}
-        — a one-time unlock for high-quality, commercial-ready exports. Reach us at{' '}
+        Questions?{' '}
         <a href={mailto(SUPPORT_EMAIL)} className="underline">
           {SUPPORT_EMAIL}
         </a>
-        .
       </p>
 
-      <p className="mt-10 text-xs text-torus-fg-faint">
-        <Link href="/" className="hover:text-torus-fg">
-          Home
-        </Link>
-        {' · '}
-        <Link href="/about" className="hover:text-torus-fg">
-          About
-        </Link>
-        {' · '}
-        <Link href="/principles" className="hover:text-torus-fg">
-          Principles
-        </Link>
-        {' · '}
-        <Link href="/privacy" className="hover:text-torus-fg">
-          Privacy
-        </Link>
-        {' · '}
-        <Link href="/terms" className="hover:text-torus-fg">
-          Terms
-        </Link>
-      </p>
+      <SiteFooter />
     </main>
   );
 }

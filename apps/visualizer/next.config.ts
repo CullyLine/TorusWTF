@@ -54,6 +54,13 @@ const config: NextConfig = {
     }
     return webpackConfig;
   },
+  async redirects() {
+    // The paid license was retired. Old links to its pages land on the app.
+    return [
+      { source: '/license', destination: '/', permanent: false },
+      { source: '/unlock', destination: '/', permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

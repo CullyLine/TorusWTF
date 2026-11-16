@@ -1,141 +1,109 @@
-# torus visualizer
+# torus app
 
-Turn any audio into beautiful 3D visuals and export for Reels, Shorts, and portfolios.
+The Next.js app behind [torus.wtf](https://torus.wtf). It contains the visualizer, Conductor, Transcriber, and optional accounts. The repository [README](../../README.md) covers setup.
 
-Sibling app to [torus.wtf](../web) — lives at `visualizer.torus.wtf` in production. Currently deployed at `torus-fm-visualizer.vercel.app` until DNS is migrated.
+## Visualizer
 
-## What's in the box
+### Audio sources
 
-### Audio sources (3)
+- **File.** Drop an MP3, WAV, FLAC, OGG, Opus, M4A, or AAC file.
+- **Mic.** A microphone or line-in, through `getUserMedia`.
+- **Desktop.** Audio from Spotify, Ableton, or any other app, through `getDisplayMedia`. This needs Chrome or Edge. A dialog explains the steps for each operating system.
+- **YouTube.** Plays a video in an embed and captures the tab's audio.
 
-- **File** — drag-and-drop any local MP3, WAV, FLAC, OGG, Opus, M4A, or AAC
-- **Mic** — microphone or line-in via `getUserMedia({ audio: true })`
-- **Desktop** — capture audio from Spotify, Ableton, Splice, or any other app via Chrome/Edge tab/system audio sharing (`getDisplayMedia({ audio: true })`). A first-run modal walks the user through the OS-specific flow.
+Audio never leaves the browser.
 
-### Visualizers (8)
+### Visualizers
 
-Curated down from 32 — the library is deliberately small so every entry is
-worth shipping. Retired ids still load: they resolve to the closest surviving
-visualizer via `resolveVisualizerId`.
+The set is kept small on purpose. Retired ids still load, because `resolveVisualizerId` maps each one to its closest replacement.
 
-| ID                    | Name                | Vibe                                                                                                                 |
-| --------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `flow_field`          | Flow Field          | Quarter-million particles riding living currents — stir with the cursor                                              |
-| `torus_field`         | Torus Field         | Flowing torus with bass-reactive bloom, the brand signature                                                          |
-| `cosmic_mandala`      | Cosmic Mandala      | Nested rings that each dance on their own band                                                                       |
-| `infinite_tunnel`     | Tunnel              | Infinite segmented tunnel — bass explodes the walls, mids drive pyramid teeth, flow-field particles ride the current |
-| `volumetric_waveform` | Volumetric Waveform | The song's EQ as a ribbon in 3D — the only literal one                                                               |
-| `tidal_sanctuary`     | Tidal Sanctuary     | Audio-reactive ocean with low-band depth, mid-band water, and high-band foam                                         |
-| `star_field`          | Galaxy Garden       | Dimensional spiral galaxy with bass lensing, drop shockwaves, and shimmer glints                                     |
-| `liquid_blob`         | Lava Choir          | Raymarched harmonic lava orbs that breathe and fuse with the music                                                   |
+| Id                    | Name                | What it draws                                               |
+| --------------------- | ------------------- | ----------------------------------------------------------- |
+| `flow_field`          | Flow Field          | Particles that follow a flow field you can stir by cursor   |
+| `torus_field`         | Torus Field         | A flowing torus that blooms on bass                         |
+| `infinite_tunnel`     | Tunnel              | A segmented tunnel whose walls react to each frequency band |
+| `volumetric_waveform` | Volumetric Waveform | The spectrum as a ribbon in 3D                              |
+| `cosmic_mandala`      | Cosmic Mandala      | Nested rings, one per frequency band                        |
+| `star_field`          | Galaxy Garden       | A spiral galaxy with shockwaves on drops                    |
+| `liquid_blob`         | Lava Choir          | Raymarched lava orbs that merge with the music              |
+| `tidal_sanctuary`     | Tidal Sanctuary     | An ocean with depth, water, and foam on separate bands      |
+| `plasma_globe`        | Plasma Globe        | A plasma globe built to a fixed performance budget          |
 
-### UI features
+The presets and the rendering engine live in [`packages/visualizers`](../../packages/visualizers). The control panel is generated from `controlSchema.ts`, so a new slider needs no UI code.
 
-- **Full-bleed viewport** — visuals take the whole screen below the header. Controls float on the left as a translucent glass panel that auto-hides when the cursor is idle (3s) or leaves the window.
-- **Mad-scientist controls** — Gain, Bass/Mid/High mix, Bloom, Speed, and Smoothness with 5x slider headroom. Double-click any value above a slider to type any number with no clamp (out-of-range values display in the bass accent and the slider thumb pins at its nearest edge). Smoothness eases the audio metrics over time so visuals don't snap pointy at high gain.
-- **Custom 3-band palette** (unlocked tier) — bass/mid/high colors persist per preset
-- **Smart palette from image** — extract a bass/mid/high palette from any image, and auto-match it to a track's embedded cover art on upload (sampled in-browser, never uploaded)
-- **Title card** — lower-third track/artist overlay burned into exports only; auto-filled from embedded ID3/MP4/FLAC tags. Free renders a brand bottom-left card; unlocked adds position, color, and opacity
-- **Saved presets** (unlocked tier) — stash settings combinations to localStorage
-- **Snapshot** — PNG of the current frame
-- **BPM detection** — optional overlay using a fast tempogram on file sources
-- **Hardware acceleration warning** — dismissible banner detects software WebGL rendering
-- **Feedback button** — pre-fills a GitHub issue with category/title/body
+### Controls
 
-### Free vs paid
+- Sliders for reactivity, color, light, camera, and each visualizer's own parameters. Double-click a value to type a number outside the slider's range.
+- Palettes: built-in sets, three custom colors, or colors extracted from an image. A file with embedded cover art sets the palette on load.
+- Screen styles and a particle emitter layer.
+- Triggers fire one-shot actions from the music or from MIDI notes. Modulations route a continuous signal, such as vocals or drums, to any control.
+- Saved presets and show files. A show file holds the whole look and can be exported and imported as JSON.
+- A projector window mirrors the output for a second display.
 
-| Feature                       | Free                   | Full ($10 one-time)                             |
-| ----------------------------- | ---------------------- | ----------------------------------------------- |
-| All 8 visualizers + live preview | Yes                 | Yes                                             |
-| Export length                 | Unlimited              | Unlimited                                       |
-| Export resolution             | 720p                   | Up to 4K                                        |
-| Export FPS                    | 30                     | Up to 240                                       |
-| Watermark on exports          | Small corner mark      | Optional — off, default badge, or your own logo |
-| Pre-rendered MP4 (file/WTF)   | Yes (watermarked)      | Yes                                             |
-| Smart palette from image      | Yes                    | Yes                                             |
-| Title card on exports         | Bottom-left brand card | Position + color + opacity                      |
-| Custom 3-band palette         | —                      | Yes                                             |
-| Saved presets                 | —                      | Yes                                             |
-| Future visualizers            | —                      | Free forever                                    |
+Settings persist in `localStorage`.
 
-Live preview is never watermarked.
+### Export
 
-## Quick start
+- **Record.** Captures the live canvas with `MediaRecorder` to WebM, or MP4 where the browser supports it. Works for every source. Limited to the display's refresh rate, about 60 fps.
+- **Pre-render.** Renders an uploaded file frame by frame with WebCodecs and muxes an MP4 with `mp4-muxer`. This is the only path that produces 120 and 240 fps. It needs Chrome, Edge, or Firefox 130 or newer.
+- **Snapshot.** Saves the current frame as a PNG.
 
-From the monorepo root:
+Resolutions go from 720p to 4K in four aspect ratios. A title card and a corner watermark can be burned into exports. The watermark is on by default, and you can turn it off or replace it with your own logo.
 
-```powershell
-pnpm install
-pnpm --filter @torus/visualizer dev
+### Keyboard shortcuts
+
+| Key                 | Action                        |
+| ------------------- | ----------------------------- |
+| `Space`             | Play or pause (file source)   |
+| `←` / `→`           | Skip 5 seconds (file source)  |
+| `Shift` + `←` / `→` | Skip 15 seconds (file source) |
+| `F`                 | Fullscreen                    |
+| `H`                 | Show or hide the controls     |
+| `R`                 | Random visualizer             |
+| `?`                 | Show the shortcut list        |
+
+### Page layout and code
+
+The page has a top bar, a sidebar of controls, and the stage. The sidebar has four tabs in the order a new user needs them: Audio, Look, Automate, Export. On a phone the sidebar becomes a sheet under the stage.
+
+```
+src/components/studio/   The page: VisualizerApp, top bar, tabs, transport bar, empty state, dialogs
+src/components/panels/   One file per sidebar panel
+src/components/ui/       Form controls and icons shared by every panel and by Conductor and Transcriber
+src/hooks/useLook.ts             The look: visualizer, palette, sliders, effects, triggers, modulations
+src/hooks/useExportSettings.ts   Export format and watermark
+src/hooks/useStudioSource.ts     Choosing the audio: file, demo, mic, desktop, YouTube
+src/hooks/useStudioExport.ts     Recording, rendering, and snapshots
 ```
 
-Open <http://localhost:3000>.
+`VisualizerApp` owns the audio source and the layout and passes state from those hooks to the panels. A panel builds its controls from `components/ui/controls.tsx` and does not carry its own styles for sliders, selects, or buttons. Colors and type are defined once in `src/app/globals.css`.
 
-### Building locally (with WTF prefetch)
+## Conductor and Transcriber
 
-```powershell
-pnpm --filter @torus/visualizer build
-```
+Conductor (`/conductor`) is a SoundFont DAW built on `spessasynth_lib`. Transcriber (`/transcriber`) converts audio to MIDI with Spotify's `basic-pitch` model. Both run in the browser.
 
-This runs `scripts/fetch-demos.mjs` first, which downloads the latest 10 public tracks from the configured SoundCloud account into `public/demos/`. If SoundCloud is unreachable, the build continues without WTF tracks (button hides itself in the UI).
+The `dev` and `build` scripts first copy the SoundFont worklet, the `basic-pitch` model, and the `libsonare` WebAssembly files into `public/`. The copy lines in the console are expected.
 
-### Demo audio attribution
+## Accounts
 
-`public/demo.mp3` ("Try with demo audio") is **"Despresso Shots" by CullyLine**, used with permission. It ships as a 160 kbps MP3 encoded from the master in `assets/`, and is fetched only when someone presses the demo button, so it does not affect page load.
+Accounts are optional and nothing in the tools requires one. Sign-in is by magic link or Discord. An account has a handle, a profile at `/u/<handle>`, and an optional `<name>.torus.wtf` subdomain. Sessions are HttpOnly cookies. The schema is in [`packages/db`](../../packages/db).
 
 ## Environment variables
 
-Add to the root `.env`:
+All of these are optional in development. [`.env.example`](../../.env.example) documents each one.
 
-```env
-# Polar.sh — Production License checkout (account-bound, one-time $10)
-POLAR_API_KEY=
-POLAR_PRODUCTION_LICENSE_PRODUCT_ID=
-POLAR_WEBHOOK_SECRET=
-
-# Optional — base URL used in OG metadata / canonical URLs
-NEXT_PUBLIC_SITE_URL=https://visualizer.torus.wtf
-```
-
-### Manual Polar setup
-
-1. Create a product: **torus visualizer — full unlock**
-2. Type: one-time, $10 USD
-3. Enable **license keys** as a benefit
-4. Copy product ID → `POLAR_PRODUCTION_LICENSE_PRODUCT_ID`
-5. Set webhook endpoint to `https://your-domain/api/license/webhook` and copy the secret → `POLAR_WEBHOOK_SECRET`
-6. Reuse `POLAR_API_KEY` from torus.wtf if already set
+| Variable                                     | Purpose                                          |
+| -------------------------------------------- | ------------------------------------------------ |
+| `DATABASE_URL`, `DATABASE_AUTH_TOKEN`        | libSQL database for accounts                     |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`     | The same, as set by the Vercel Turso integration |
+| `PUBLIC_URL`, `NEXT_PUBLIC_SITE_URL`         | Base URL for sign-in links and page metadata     |
+| `SMTP_*`                                     | Email for magic links and the feedback form      |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Discord sign-in                                  |
 
 ## Deploy
 
-Vercel-first. Project root in the Vercel dashboard should point at `apps/visualizer`. Build command and install command are wired in `apps/visualizer/vercel.json`.
+The Vercel project root is `apps/visualizer`. [`vercel.json`](./vercel.json) sets the install and build commands.
 
-```
-Build:   pnpm --filter @torus/visualizer build
-Install: pnpm install --frozen-lockfile --filter @torus/visualizer...
-Output:  apps/visualizer/.next
-```
+## Demo audio
 
-Point the production domain (`visualizer.torus.wtf` once DNS migrates) as a custom domain on the Vercel project.
-
-## Export format
-
-Two export paths:
-
-- **Record (real-time)** — captures the live canvas via `MediaRecorder` to WebM (VP9 + Opus), or MP4 (H.264 + AAC) when `MediaRecorder.isTypeSupported('video/mp4; codecs="avc1, mp4a.40.2"')` returns true. Works for every source.
-- **Pre-render (file / WTF only)** — renders the whole track frame-by-frame offline (offline FFT + BPM prescan + WebCodecs `VideoEncoder`/`AudioEncoder` muxed with `mp4-muxer`) into a broadcast-quality MP4 without playing it through in real time. Needs a WebCodecs-capable browser (Chrome/Edge or Firefox 130+); falls back to Record elsewhere.
-
-## Keyboard shortcuts
-
-| Key                   | Action                     |
-| --------------------- | -------------------------- |
-| `Space`               | Play / pause (file source) |
-| `F`                   | Fullscreen viewport        |
-| `R`                   | Random preset              |
-| `←` / `→`             | Seek ±5s (file source)     |
-| `Shift+←` / `Shift+→` | Seek ±15s (file source)    |
-| `?`                   | Show shortcuts modal       |
-
-## License
-
-AGPL-3.0-or-later (monorepo root). The visualizer shares `@torus/visualizers` with the torus.wtf clip-sharing app, so any improvement to a preset benefits both.
+`public/demo.mp3` is "Despresso Shots" by CullyLine, used with permission. The app fetches it only when someone presses the demo button.

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SiteFooter } from '@/components/SiteFooter';
 import { SUPPORT_EMAIL, mailto } from '@/lib/constants';
 
 export const metadata = {
@@ -13,68 +14,51 @@ export default function PrivacyPage() {
 
       <section className="mt-8 space-y-4 text-sm leading-relaxed text-torus-fg-dim">
         <p>
-          torus collects as little as possible. No ads, no data sales, no third-party analytics by
-          default. See{' '}
+          torus has no ads, sells no data, and loads no third-party analytics by default. The{' '}
           <Link href="/principles" className="text-torus-mid underline">
-            our principles
+            principles
           </Link>{' '}
-          for the full contract.
+          page lists every commitment.
         </p>
         <p>
           <strong className="text-torus-fg">Your audio stays on your device.</strong> Capture,
-          analysis, and rendering happen in your browser. We don’t upload or store the audio you
-          visualize.
+          analysis, and rendering happen in your browser. torus does not upload or store the audio
+          you visualize.
         </p>
         <p>
-          <strong className="text-torus-fg">Accounts:</strong> if you sign in, we store your email
-          (or Discord id), a handle, and an HttpOnly session cookie. That’s it. No tracking cookies.
+          <strong className="text-torus-fg">Your settings stay in your browser.</strong> Looks,
+          saved presets, and export options are kept in local storage on your device.
         </p>
         <p>
-          <strong className="text-torus-fg">Email:</strong> magic-link sign-in is sent via the
-          operator’s SMTP. We don’t send marketing or nag campaigns.
+          <strong className="text-torus-fg">Accounts are optional.</strong> If you sign in, torus
+          stores your email or Discord id, your handle, and the profile details you add. An HttpOnly
+          session cookie keeps you signed in. There are no tracking cookies.
         </p>
         <p>
-          <strong className="text-torus-fg">Payments:</strong> the Production License is processed by
-          Polar. We store only whether your account is licensed and the order id — never card
-          details.
+          <strong className="text-torus-fg">Email is for sign-in only.</strong> torus sends the
+          sign-in link you ask for and no marketing.
         </p>
         <p>
-          You can delete your account and its data anytime from{' '}
+          <strong className="text-torus-fg">Past purchases.</strong> torus used to sell a one-time
+          license through Polar. If you bought one, your account still holds the purchase date and
+          order id. torus never received your card details.
+        </p>
+        <p>
+          You can delete your account and all of its data from{' '}
           <Link href="/settings" className="text-torus-mid underline">
             settings
           </Link>
           .
         </p>
         <p>
-          <strong className="text-torus-fg">Contact:</strong> questions about privacy or your data?{' '}
+          Questions about privacy or your data?{' '}
           <a href={mailto(SUPPORT_EMAIL)} className="text-torus-mid underline">
             {SUPPORT_EMAIL}
           </a>
-          .
         </p>
       </section>
 
-      <p className="mt-10 text-xs text-torus-fg-faint">
-        <Link href="/" className="hover:text-torus-fg">
-          Home
-        </Link>
-        {' · '}
-        <Link href="/about" className="hover:text-torus-fg">
-          About
-        </Link>
-        {' · '}
-        <Link href="/principles" className="hover:text-torus-fg">
-          Principles
-        </Link>
-        {' · '}
-        <Link href="/privacy" className="hover:text-torus-fg">
-          Privacy
-        </Link>
-        {' · '}
-        <Link href="/terms" className="hover:text-torus-fg">
-          Terms
-        </Link>
-      </p>
+      <SiteFooter />
     </main>
   );
 }

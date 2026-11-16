@@ -1,80 +1,62 @@
-# Contributing to torus.wtf
+# Contributing to torus
 
-First — thank you. torus.wtf is a passion project, and every PR matters.
+Thanks for helping. This page covers setup, what gets merged, and the conventions the code follows.
 
-## Dev setup (one command after prereqs)
+## Setup
 
-**Prereqs:**
-
-- Node 22+
-- pnpm 10+
-- Docker (for local Redis + MinIO)
+You need Node 22 or newer and pnpm 10 or newer. No Docker and no external services.
 
 ```bash
-git clone https://github.com/YOUR_ORG/torus.git
-cd torus
+git clone https://github.com/CullyLine/TorusWTF.git
+cd TorusWTF
 pnpm install
-cd infra && docker compose up -d && cd ..
 cp .env.example .env
 pnpm db:migrate
 pnpm dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>. The [README](./README.md#repository-layout) explains where things live.
 
-## Project structure
+## What gets merged
 
-See [README.md](./README.md#repo-layout).
+Read [PRINCIPLES.md](./PRINCIPLES.md) first. A pull request that breaks a principle is closed. That rules out ads, trackers, engagement feeds, and putting any feature behind a payment or an account.
 
-## What we accept
+Welcome without prior discussion:
 
-Read [`PRINCIPLES.md`](./PRINCIPLES.md) first. **Any PR that violates the principles will be closed** — no algorithmic feeds, no engagement metrics surfaced to users, no tracking pixels, no premium-gating core features, no AI training on user clips, etc.
+- Bug fixes.
+- Accessibility improvements.
+- Documentation.
+- New visualizers. Each one is a single React Three Fiber component in `packages/visualizers/src/presets/` plus an entry in `packages/visualizers/src/registry.ts`. Declare its sliders in `controlSchema.ts` so the control panel renders them. Do not build custom UI for one visualizer.
 
-Beyond that, we welcome:
+Open an issue before you start on:
 
-- **Bug fixes** — always.
-- **Accessibility improvements** — always. We treat a11y bugs like security bugs.
-- **New 3D visualizer presets** — these are perfect first contributions. Each preset is a single self-contained R3F component in `packages/visualizers/src/presets/`. Add yours, register it in the manifest, and ship a PR.
-- **New Storage drivers** — implementing the `Storage` interface from `packages/storage` for a new provider (Cloudflare R2 with native API, Backblaze B2 native, etc.).
-- **Translations / i18n** — when we add i18n infrastructure.
-- **Documentation** — always welcome.
+- Changes to `PRINCIPLES.md`.
+- Database schema changes.
+- Sign-in or session changes.
+- New runtime dependencies.
 
-## What needs design discussion first
+## Conventions
 
-Open an issue before you start coding for:
+- TypeScript in strict mode. Do not use `any` without a comment that says why.
+- Format with Prettier (`pnpm format`) and lint with ESLint (`pnpm lint`).
+- Add Vitest tests for new logic. Keep logic in plain functions so it can be tested without rendering.
+- Write comments that explain why the code is the way it is. Do not describe what the next line does.
+- Every visualizer must handle the `high`, `mid`, and `low` device tiers and respect `prefers-reduced-motion`.
+- Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
 
-- Any change that touches `PRINCIPLES.md`
-- New community features (votes, comments, moderation)
-- Data model changes
-- Auth / session changes
-- Anything affecting the public API or share URL format
+## Before you open a pull request
 
-## Style & conventions
-
-- **Conventional Commits** for commit messages (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`, etc.)
-- TypeScript everywhere. No `any` without justification.
-- Prettier for formatting (run `pnpm format`).
-- ESLint for linting (`pnpm lint`).
-- Test coverage for new features (Vitest).
-- Comments only for non-obvious intent. No narration of what the code does.
-
-## Pull request checklist
-
-- [ ] `pnpm lint` passes
 - [ ] `pnpm typecheck` passes
+- [ ] `pnpm lint` passes
 - [ ] `pnpm test` passes
 - [ ] New behavior has tests
-- [ ] User-facing changes update [README.md](./README.md) or relevant docs
-- [ ] You've read [`PRINCIPLES.md`](./PRINCIPLES.md)
-
-## Good first issues
-
-Look for the [`good-first-issue`](https://github.com/YOUR_ORG/torus/labels/good-first-issue) label on GitHub. Visualizer presets and Storage drivers are typically marked.
+- [ ] User-facing changes are reflected in the README or the app's README
+- [ ] For visual changes, the description says how to see the change: the route, the visualizer, and the kind of audio to play
 
 ## License
 
-By contributing, you agree your contributions will be licensed under the [AGPL-3.0-or-later](./LICENSE).
+By contributing you agree that your contributions are licensed under [AGPL-3.0-or-later](./LICENSE).
 
 ## Code of conduct
 
-See [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md). TL;DR: be kind, give credit, assume good faith, lift others up. Producers helping producers.
+See [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).

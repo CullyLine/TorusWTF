@@ -24,7 +24,7 @@ Autonomous improvement loop for the visualizer. One **Architect** run each morni
 4. Never add analytics, tracking, third-party SDKs, ad scripts, telemetry, or any external script tag.
 5. Never break the torus.wtf clip player (`apps/web/src/components/ClipPlayer.tsx` + `VisualizerViewport.tsx`). New `@torus/visualizers` props must be optional and default to current behavior.
 6. Never break the `VisualizerSceneProps` contract — additions must be optional props that existing presets can ignore.
-7. Never gate live preview behind the paid unlock. Only export quality / format / extras are paid.
+7. Never put a feature behind a payment or an account. torus is free.
 8. Respect `prefers-reduced-motion` in any new animated UI.
 9. New runtime dependencies only if small, well-justified in the PR body, and license-compatible (AGPL). Prefer zero.
 

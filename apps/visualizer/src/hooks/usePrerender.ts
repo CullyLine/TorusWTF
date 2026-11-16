@@ -53,7 +53,6 @@ export interface PrerenderStartOptions {
   watermark: boolean;
   watermarkImage?: ImageBitmap | null;
   titleOverlay?: TitleOverlay | null;
-  unlocked?: boolean;
   background?: BackgroundSettings;
 }
 
@@ -245,7 +244,6 @@ export function usePrerender(): PrerenderHookResult {
         watermark: options.watermark,
         watermarkImage: options.watermarkImage,
         titleOverlay: options.titleOverlay,
-        unlocked: options.unlocked,
       });
 
       // ---- Stage 6: Render + encode every frame ----

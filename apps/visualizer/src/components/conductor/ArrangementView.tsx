@@ -1,5 +1,6 @@
 'use client';
 
+import { CloseIcon, MoreIcon } from '@/components/ui/icons';
 import {
   useEffect,
   useMemo,
@@ -63,7 +64,15 @@ interface ClipMenu {
 }
 
 /** Inline silhouette of a clip's notes, scaled to fill the clip rectangle. */
-function ClipSilhouette({ notes, lengthTick, color }: { notes: Note[]; lengthTick: number; color: string }) {
+function ClipSilhouette({
+  notes,
+  lengthTick,
+  color,
+}: {
+  notes: Note[];
+  lengthTick: number;
+  color: string;
+}) {
   if (notes.length === 0 || lengthTick <= 0) return null;
   let lo = Infinity;
   let hi = -Infinity;
@@ -112,10 +121,7 @@ export function ArrangementView({
     return Math.max(0, Math.min(project.tracks.length - 1, idx));
   };
 
-  const hasClips = useMemo(
-    () => project.tracks.some((t) => t.clips.length > 0),
-    [project.tracks],
-  );
+  const hasClips = useMemo(() => project.tracks.some((t) => t.clips.length > 0), [project.tracks]);
   const atTrackLimit = project.tracks.length >= MAX_TRACKS;
 
   useEffect(() => {
@@ -175,7 +181,10 @@ export function ArrangementView({
   const onClipPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!drag) return;
     (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    if (drag.mode === 'move' && (drag.start !== drag.origStart || drag.toTrackId !== drag.trackId)) {
+    if (
+      drag.mode === 'move' &&
+      (drag.start !== drag.origStart || drag.toTrackId !== drag.trackId)
+    ) {
       dispatch({
         type: 'moveClip',
         trackId: drag.trackId,
@@ -185,7 +194,12 @@ export function ArrangementView({
       });
       setSelected({ trackId: drag.toTrackId, clipId: drag.clipId });
     } else if (drag.mode === 'resize' && drag.length !== drag.origLength) {
-      dispatch({ type: 'resizeClip', trackId: drag.trackId, clipId: drag.clipId, lengthTick: drag.length });
+      dispatch({
+        type: 'resizeClip',
+        trackId: drag.trackId,
+        clipId: drag.clipId,
+        lengthTick: drag.length,
+      });
     }
     setDrag(null);
   };
@@ -193,7 +207,13 @@ export function ArrangementView({
   const onLaneDoubleClick = (e: ReactMouseEvent<HTMLDivElement>, track: Track) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const tick = snapTick(pxToTick(e.clientX - rect.left), TICKS_PER_BAR);
-    dispatch({ type: 'addClip', trackId: track.id, startTick: Math.max(0, tick), lengthTick: TICKS_PER_BAR, name: 'Clip' });
+    dispatch({
+      type: 'addClip',
+      trackId: track.id,
+      startTick: Math.max(0, tick),
+      lengthTick: TICKS_PER_BAR,
+      name: 'Clip',
+    });
   };
 
   // --- Ruler: click to seek, drag to set loop region -----------------------
@@ -259,269 +279,299 @@ export function ArrangementView({
 
   return (
     <>
-    <div className="relative flex-1 overflow-auto bg-torus-bg">
-      {!hasClips ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-1/2 z-10 mx-auto max-w-md -translate-y-1/2 px-6"
-          aria-hidden
-        >
-          <div className="rounded-xl border border-torus-border bg-torus-surface/80 px-4 py-3 text-center text-sm text-torus-fg-dim backdrop-blur-sm">
-            Double-click the timeline to add a clip, then double-click the clip to draw notes — or Import MIDI.
-          </div>
-        </div>
-      ) : null}
-      <div className="relative" style={{ width: TRACK_HEADER_W + timelineWidth }}>
-        {/* Ruler row */}
-        <div className="sticky top-0 z-20 flex" style={{ height: RULER_H }}>
+      <div className="torus-scroll relative flex-1 overflow-auto bg-torus-bg">
+        {!hasClips ? (
           <div
-            className="sticky left-0 z-30 shrink-0 border-b border-r border-torus-border bg-torus-bg"
-            style={{ width: TRACK_HEADER_W }}
-          />
-          <div
-            className="relative border-b border-torus-border bg-torus-bg"
-            style={{ width: timelineWidth }}
-            onPointerDown={onRulerPointerDown}
-            onPointerMove={onRulerPointerMove}
-            onPointerUp={onRulerPointerUp}
+            className="pointer-events-none absolute inset-x-0 top-1/2 z-10 mx-auto max-w-md -translate-y-1/2 px-6"
+            aria-hidden
           >
-            {Array.from({ length: barCount }, (_, i) => (
-              <span
-                key={i}
-                className="absolute top-0 select-none pl-1 text-[10px] text-torus-fg-faint"
-                style={{ left: i * PX_PER_BAR }}
-              >
-                {i + 1}
-              </span>
-            ))}
-            {playback.loop.enabled ? (
-              <div
-                className="pointer-events-none absolute top-0 bottom-0 bg-torus-mid/20"
-                style={{
-                  left: tickToPx(playback.loop.startTick),
-                  width: tickToPx(playback.loop.endTick - playback.loop.startTick),
-                }}
-              />
-            ) : null}
+            <div className="rounded-md border border-torus-border bg-torus-panel px-4 py-3 text-center text-[13px] text-torus-fg-dim">
+              Double-click the timeline to add a clip, then double-click the clip to draw notes. You
+              can also import a MIDI file.
+            </div>
           </div>
-        </div>
-
-        {/* Track rows */}
-        <div ref={rowsRef}>
-        {project.tracks.map((track) => {
-          const isDropTarget =
-            !!drag && drag.mode === 'move' && drag.toTrackId === track.id && drag.trackId !== track.id;
-          return (
-          <div key={track.id} className="flex" style={{ height: LANE_H }}>
-            {/* Header */}
+        ) : null}
+        <div className="relative" style={{ width: TRACK_HEADER_W + timelineWidth }}>
+          {/* Ruler row */}
+          <div className="sticky top-0 z-20 flex" style={{ height: RULER_H }}>
             <div
-              className="sticky left-0 z-10 flex shrink-0 flex-col gap-1 border-b border-r border-torus-border bg-torus-bg px-2 py-1.5"
+              className="sticky left-0 z-30 shrink-0 border-b border-r border-torus-border bg-torus-panel"
+              style={{ width: TRACK_HEADER_W }}
+            />
+            <div
+              className="relative border-b border-torus-border bg-torus-panel"
+              style={{ width: timelineWidth }}
+              onPointerDown={onRulerPointerDown}
+              onPointerMove={onRulerPointerMove}
+              onPointerUp={onRulerPointerUp}
+            >
+              {Array.from({ length: barCount }, (_, i) => (
+                <span
+                  key={i}
+                  className="absolute top-0 select-none pl-1 text-[11px] tabular-nums text-torus-fg-faint"
+                  style={{ left: i * PX_PER_BAR }}
+                >
+                  {i + 1}
+                </span>
+              ))}
+              {playback.loop.enabled ? (
+                <div
+                  className="pointer-events-none absolute top-0 bottom-0 bg-torus-mid/20"
+                  style={{
+                    left: tickToPx(playback.loop.startTick),
+                    width: tickToPx(playback.loop.endTick - playback.loop.startTick),
+                  }}
+                />
+              ) : null}
+            </div>
+          </div>
+
+          {/* Track rows */}
+          <div ref={rowsRef}>
+            {project.tracks.map((track) => {
+              const isDropTarget =
+                !!drag &&
+                drag.mode === 'move' &&
+                drag.toTrackId === track.id &&
+                drag.trackId !== track.id;
+              return (
+                <div key={track.id} className="flex" style={{ height: LANE_H }}>
+                  {/* Header */}
+                  <div
+                    className="sticky left-0 z-10 flex shrink-0 flex-col gap-1 border-b border-r border-torus-border bg-torus-panel px-2 py-1.5"
+                    style={{ width: TRACK_HEADER_W }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className="h-3 w-3 shrink-0 rounded-sm"
+                        style={{ background: track.color }}
+                      />
+                      <input
+                        value={track.name}
+                        onChange={(e) =>
+                          dispatch({ type: 'renameTrack', trackId: track.id, name: e.target.value })
+                        }
+                        className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-xs font-medium outline-none hover:border-torus-border focus:border-torus-border-strong"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirmDeleteTrackId === track.id) {
+                            dispatch({ type: 'removeTrack', trackId: track.id });
+                            setConfirmDeleteTrackId(null);
+                          } else {
+                            setConfirmDeleteTrackId(track.id);
+                          }
+                        }}
+                        aria-label={
+                          confirmDeleteTrackId === track.id
+                            ? 'Click again to confirm delete'
+                            : 'Remove track'
+                        }
+                        title={
+                          confirmDeleteTrackId === track.id
+                            ? 'Click again to remove'
+                            : 'Remove track'
+                        }
+                        className={`rounded p-0.5 ${
+                          confirmDeleteTrackId === track.id
+                            ? 'bg-torus-bass text-torus-bg'
+                            : 'text-torus-fg-faint hover:text-torus-bass'
+                        }`}
+                      >
+                        <CloseIcon width="12" height="12" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onChangeInstrument(track.id)}
+                        className="min-w-0 flex-1 truncate rounded border border-torus-border bg-torus-raised px-1.5 py-0.5 text-left text-[11px] text-torus-fg-dim hover:border-torus-border-strong hover:text-torus-fg"
+                        title={track.preset.name}
+                      >
+                        {track.preset.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => dispatch({ type: 'toggleMute', trackId: track.id })}
+                        aria-label="Mute track"
+                        title="Mute"
+                        aria-pressed={track.mute}
+                        className={`grid h-5 w-5 place-items-center rounded text-[11px] font-medium ${
+                          track.mute
+                            ? 'bg-torus-bass text-torus-bg'
+                            : 'bg-torus-raised text-torus-fg-dim hover:text-torus-fg'
+                        }`}
+                      >
+                        M
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => dispatch({ type: 'toggleSolo', trackId: track.id })}
+                        aria-label="Solo track"
+                        title="Solo"
+                        aria-pressed={track.solo}
+                        className={`grid h-5 w-5 place-items-center rounded text-[11px] font-medium ${
+                          track.solo
+                            ? 'bg-torus-high text-torus-bg'
+                            : 'bg-torus-raised text-torus-fg-dim hover:text-torus-fg'
+                        }`}
+                      >
+                        S
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lane */}
+                  <div
+                    className={`relative border-b border-torus-border ${
+                      isDropTarget ? 'ring-2 ring-inset ring-torus-mid/70' : ''
+                    }`}
+                    style={{ width: timelineWidth, backgroundImage: LANE_BG }}
+                    onDoubleClick={(e) => onLaneDoubleClick(e, track)}
+                  >
+                    {track.clips.map((clip) => {
+                      const { start, length } = clipDisplay(clip);
+                      const isSel = selected?.clipId === clip.id;
+                      return (
+                        <div
+                          key={clip.id}
+                          onPointerDown={(e) => onClipPointerDown(e, track, clip, 'move')}
+                          onPointerMove={onClipPointerMove}
+                          onPointerUp={onClipPointerUp}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            onEditClip(track.id, clip.id);
+                          }}
+                          onContextMenu={(e) => openMenu(e, track, clip)}
+                          className={`group absolute top-1 bottom-1 cursor-grab overflow-hidden rounded-md border text-[11px] active:cursor-grabbing ${
+                            isSel ? 'border-white/70' : 'border-white/20'
+                          }`}
+                          style={{
+                            left: tickToPx(start),
+                            width: Math.max(6, tickToPx(length)),
+                            background: `${track.color}33`,
+                            boxShadow: isSel ? `inset 0 0 0 1px ${track.color}` : undefined,
+                          }}
+                        >
+                          <ClipSilhouette
+                            notes={clip.notes}
+                            lengthTick={clip.lengthTick}
+                            color={track.color}
+                          />
+                          <span className="pointer-events-none absolute left-1 top-0.5 max-w-[85%] truncate rounded-sm bg-torus-bg/80 px-1 text-torus-fg">
+                            {clip.name}
+                          </span>
+                          {isSel ? (
+                            <div className="absolute right-0.5 top-0.5 flex gap-0.5">
+                              <button
+                                type="button"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => openMenu(e, track, clip)}
+                                aria-label="Clip options"
+                                className="grid h-4 w-5 place-items-center rounded bg-torus-bg text-torus-fg-dim hover:text-torus-fg"
+                              >
+                                <MoreIcon width="12" height="12" />
+                              </button>
+                            </div>
+                          ) : null}
+                          <div
+                            onPointerDown={(e) => onClipPointerDown(e, track, clip, 'resize')}
+                            onPointerMove={onClipPointerMove}
+                            onPointerUp={onClipPointerUp}
+                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* New instrument row */}
+          <div className="flex" style={{ height: LANE_H }}>
+            <div
+              className="sticky left-0 z-10 flex shrink-0 items-center border-r border-torus-border bg-torus-panel px-2"
               style={{ width: TRACK_HEADER_W }}
             >
-              <div className="flex items-center gap-1.5">
-                <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: track.color }} />
-                <input
-                  value={track.name}
-                  onChange={(e) => dispatch({ type: 'renameTrack', trackId: track.id, name: e.target.value })}
-                  className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-xs font-medium outline-none hover:border-torus-border focus:border-torus-border-strong"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirmDeleteTrackId === track.id) {
-                      dispatch({ type: 'removeTrack', trackId: track.id });
-                      setConfirmDeleteTrackId(null);
-                    } else {
-                      setConfirmDeleteTrackId(track.id);
-                    }
-                  }}
-                  aria-label={
-                    confirmDeleteTrackId === track.id ? 'Click again to confirm delete' : 'Remove track'
-                  }
-                  className={
-                    confirmDeleteTrackId === track.id
-                      ? 'text-torus-bass'
-                      : 'text-torus-fg-faint hover:text-torus-bass'
-                  }
-                >
-                  {'\u2715'}
-                </button>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => onChangeInstrument(track.id)}
-                  className="min-w-0 flex-1 truncate rounded border border-torus-border bg-torus-surface px-1.5 py-0.5 text-left text-[11px] text-torus-fg-dim hover:text-torus-fg"
-                  title={track.preset.name}
-                >
-                  {track.preset.name}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'toggleMute', trackId: track.id })}
-                  aria-label="Mute track"
-                  aria-pressed={track.mute}
-                  className={`grid h-5 w-5 place-items-center rounded text-[10px] ${
-                    track.mute ? 'bg-torus-bass/30 text-torus-bass' : 'bg-torus-surface text-torus-fg-faint hover:text-torus-fg'
-                  }`}
-                >
-                  M
-                </button>
-                <button
-                  type="button"
-                  onClick={() => dispatch({ type: 'toggleSolo', trackId: track.id })}
-                  aria-label="Solo track"
-                  aria-pressed={track.solo}
-                  className={`grid h-5 w-5 place-items-center rounded text-[10px] ${
-                    track.solo ? 'bg-torus-high/30 text-torus-high' : 'bg-torus-surface text-torus-fg-faint hover:text-torus-fg'
-                  }`}
-                >
-                  S
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={onNewInstrument}
+                disabled={atTrackLimit}
+                title={atTrackLimit ? 'Track limit reached (16)' : undefined}
+                className="w-full rounded-md border border-dashed border-torus-border-strong px-2 py-2 text-xs text-torus-fg-dim transition-colors hover:border-torus-mid hover:text-torus-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-torus-border-strong disabled:hover:text-torus-fg-dim"
+              >
+                {atTrackLimit ? 'Track limit reached (16)' : 'Add an instrument'}
+              </button>
             </div>
-
-            {/* Lane */}
-            <div
-              className={`relative border-b border-torus-border ${
-                isDropTarget ? 'ring-2 ring-inset ring-torus-mid/70' : ''
-              }`}
-              style={{ width: timelineWidth, backgroundImage: LANE_BG }}
-              onDoubleClick={(e) => onLaneDoubleClick(e, track)}
-            >
-              {track.clips.map((clip) => {
-                const { start, length } = clipDisplay(clip);
-                const isSel = selected?.clipId === clip.id;
-                return (
-                  <div
-                    key={clip.id}
-                    onPointerDown={(e) => onClipPointerDown(e, track, clip, 'move')}
-                    onPointerMove={onClipPointerMove}
-                    onPointerUp={onClipPointerUp}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      onEditClip(track.id, clip.id);
-                    }}
-                    onContextMenu={(e) => openMenu(e, track, clip)}
-                    className={`group absolute top-1 bottom-1 cursor-grab overflow-hidden rounded-md border text-[11px] active:cursor-grabbing ${
-                      isSel ? 'border-white/70' : 'border-white/20'
-                    }`}
-                    style={{
-                      left: tickToPx(start),
-                      width: Math.max(6, tickToPx(length)),
-                      background: `${track.color}33`,
-                      boxShadow: isSel ? `inset 0 0 0 1px ${track.color}` : undefined,
-                    }}
-                  >
-                    <ClipSilhouette notes={clip.notes} lengthTick={clip.lengthTick} color={track.color} />
-                    <span className="pointer-events-none absolute left-1.5 top-0.5 max-w-[85%] truncate text-torus-fg-dim drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">
-                      {clip.name}
-                    </span>
-                    {isSel ? (
-                      <div className="absolute right-0.5 top-0.5 flex gap-0.5">
-                        <button
-                          type="button"
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={(e) => openMenu(e, track, clip)}
-                          aria-label="Clip options"
-                          className="grid h-4 w-5 place-items-center rounded bg-black/50 text-[11px] leading-none text-torus-fg-dim hover:text-torus-fg"
-                        >
-                          {'\u22ef'}
-                        </button>
-                      </div>
-                    ) : null}
-                    <div
-                      onPointerDown={(e) => onClipPointerDown(e, track, clip, 'resize')}
-                      onPointerMove={onClipPointerMove}
-                      onPointerUp={onClipPointerUp}
-                      className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize"
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            <div style={{ width: timelineWidth }} />
           </div>
-          );
-        })}
-        </div>
 
-        {/* New instrument row */}
-        <div className="flex" style={{ height: LANE_H }}>
+          {/* Playhead */}
           <div
-            className="sticky left-0 z-10 flex shrink-0 items-center border-r border-torus-border bg-torus-bg px-2"
-            style={{ width: TRACK_HEADER_W }}
+            className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-torus-high"
+            style={{ left: TRACK_HEADER_W + tickToPx(playback.playheadTick) }}
+          />
+        </div>
+      </div>
+
+      {/* Clip context menu */}
+      {menu && menuTarget ? (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onPointerDown={() => setMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu(null);
+            }}
+          />
+          <div
+            role="menu"
+            className="fixed z-50 min-w-44 overflow-hidden rounded-md border border-torus-border-strong bg-torus-panel py-1 text-xs"
+            style={{ left: menu.x, top: menu.y }}
           >
             <button
               type="button"
-              onClick={onNewInstrument}
-              disabled={atTrackLimit}
-              title={atTrackLimit ? 'Track limit reached (16)' : undefined}
-              className="w-full rounded-lg border border-dashed border-torus-border px-2 py-2 text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-torus-border disabled:hover:text-torus-fg-dim"
+              onClick={() => {
+                dispatch({ type: 'duplicateClip', trackId: menu.trackId, clipId: menu.clipId });
+                setMenu(null);
+              }}
+              role="menuitem"
+              className="block w-full px-3 py-1.5 text-left text-torus-fg-dim hover:bg-torus-raised hover:text-torus-fg"
             >
-              {atTrackLimit ? 'Track limit reached (16)' : '+ New Instrument'}
+              Duplicate
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                pullChordsToNewTrack(menuTarget.track, menuTarget.clip);
+                setMenu(null);
+              }}
+              disabled={menuTarget.clip.notes.length === 0 || project.tracks.length >= MAX_TRACKS}
+              role="menuitem"
+              className="block w-full px-3 py-1.5 text-left text-torus-fg-dim hover:bg-torus-raised hover:text-torus-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-torus-fg-dim"
+            >
+              Pull chords to new track
+            </button>
+            <div className="my-1 h-px bg-torus-border" />
+            <button
+              type="button"
+              onClick={() => {
+                dispatch({ type: 'removeClip', trackId: menu.trackId, clipId: menu.clipId });
+                setSelected(null);
+                setMenu(null);
+              }}
+              role="menuitem"
+              className="block w-full px-3 py-1.5 text-left text-torus-bass hover:bg-torus-raised"
+            >
+              Delete
             </button>
           </div>
-          <div style={{ width: timelineWidth }} />
-        </div>
-
-        {/* Playhead */}
-        <div
-          className="pointer-events-none absolute top-0 bottom-0 z-30 w-px bg-torus-high"
-          style={{ left: TRACK_HEADER_W + tickToPx(playback.playheadTick) }}
-        />
-      </div>
-    </div>
-
-    {/* Clip context menu */}
-    {menu && menuTarget ? (
-      <>
-        <div
-          className="fixed inset-0 z-40"
-          onPointerDown={() => setMenu(null)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setMenu(null);
-          }}
-        />
-        <div
-          className="fixed z-50 min-w-44 overflow-hidden rounded-lg border border-torus-border bg-torus-surface py-1 text-xs shadow-xl shadow-black/40"
-          style={{ left: menu.x, top: menu.y }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              dispatch({ type: 'duplicateClip', trackId: menu.trackId, clipId: menu.clipId });
-              setMenu(null);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-torus-fg-dim hover:bg-white/5 hover:text-torus-fg"
-          >
-            Duplicate
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              pullChordsToNewTrack(menuTarget.track, menuTarget.clip);
-              setMenu(null);
-            }}
-            disabled={menuTarget.clip.notes.length === 0 || project.tracks.length >= MAX_TRACKS}
-            className="block w-full px-3 py-1.5 text-left text-torus-fg-dim hover:bg-white/5 hover:text-torus-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-torus-fg-dim"
-          >
-            Pull chords to new track
-          </button>
-          <div className="my-1 h-px bg-torus-border" />
-          <button
-            type="button"
-            onClick={() => {
-              dispatch({ type: 'removeClip', trackId: menu.trackId, clipId: menu.clipId });
-              setSelected(null);
-              setMenu(null);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-torus-bass/90 hover:bg-torus-bass/10 hover:text-torus-bass"
-          >
-            Delete
-          </button>
-        </div>
-      </>
-    ) : null}
+        </>
+      ) : null}
     </>
   );
 }

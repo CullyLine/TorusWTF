@@ -1,5 +1,7 @@
 'use client';
 
+import { Button, cx, inputClass } from '@/components/ui/controls';
+import { CloseIcon } from '@/components/ui/icons';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { DEFAULT_SOUNDFONT_ID, type PresetInfo, type SoundfontInfo } from '@/lib/conductor/engine';
 import type { PresetRef } from '@/lib/conductor/project';
@@ -51,7 +53,8 @@ export function InstrumentPicker({
   }, [presets, query]);
 
   useEffect(() => {
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = panelRef.current?.querySelector<HTMLElement>(
       'button, [href], input, [tabindex]:not([tabindex="-1"])',
     );
@@ -88,7 +91,7 @@ export function InstrumentPicker({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -99,20 +102,20 @@ export function InstrumentPicker({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-torus-border-strong bg-torus-bg shadow-2xl"
+        className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-md border border-torus-border-strong bg-torus-panel"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 border-b border-torus-border px-4 py-3">
-          <span id={titleId} className="text-sm font-medium">
+          <span id={titleId} className="text-sm font-semibold">
             {title}
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="text-torus-fg-faint hover:text-torus-fg"
+            className="rounded-md p-1 text-torus-fg-dim hover:bg-torus-raised hover:text-torus-fg"
             aria-label="Close"
           >
-            {'\u2715'}
+            <CloseIcon />
           </button>
         </div>
 
@@ -120,38 +123,46 @@ export function InstrumentPicker({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={'Search presets\u2026'}
-            className="w-full rounded-lg border border-torus-border bg-torus-surface px-3 py-2 text-sm outline-none placeholder:text-torus-fg-faint focus:border-torus-border-strong"
+            placeholder="Search instruments"
+            aria-label="Search instruments"
+            className={cx(inputClass, 'w-full')}
           />
           <p className="mt-1.5 text-[11px] text-torus-fg-faint">
             {loading
-              ? 'Loading soundfont\u2026'
-              : `${filtered.length} presets \u00b7 ${soundfonts.map((s) => s.name).join(', ') || 'no soundfont'}`}
+              ? 'Loading the SoundFont'
+              : `${filtered.length} instruments from ${soundfonts.map((s) => s.name).join(', ') || 'no SoundFont'}`}
           </p>
         </div>
 
-        <ul className="flex-1 overflow-y-auto p-2">
-          {filtered.map((p) => (
-            <li key={`${p.bankMSB}-${p.bankLSB}-${p.program}`}>
+        <ul className="torus-scroll flex-1 overflow-y-auto p-1.5">
+          {filtered.map((p, index) => (
+            // A SoundFont can hold several presets on one bank and program,
+            // so the position is part of the key.
+            <li key={`${p.bankMSB}-${p.bankLSB}-${p.program}-${index}`}>
               <button
                 type="button"
                 onClick={() => onPick(presetToRef(p))}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-torus-fg-dim transition-colors hover:bg-white/5 hover:text-torus-fg"
+                className="flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-left text-[13px] text-torus-fg-dim transition-colors hover:bg-torus-raised hover:text-torus-fg"
               >
-                <span className="w-14 shrink-0 font-mono text-[11px] text-torus-fg-faint">
+                <span
+                  className="w-12 shrink-0 text-[11px] tabular-nums text-torus-fg-faint"
+                  title="Bank and program number"
+                >
                   {p.bankMSB}:{p.program}
                 </span>
                 <span className="truncate">{p.name}</span>
                 {p.isDrum ? (
-                  <span className="ml-auto rounded bg-torus-bass/20 px-1.5 py-0.5 text-[10px] text-torus-bass">
-                    drum
+                  <span className="ml-auto rounded bg-torus-raised px-1.5 py-0.5 text-[11px] text-torus-fg-dim">
+                    Drums
                   </span>
                 ) : null}
               </button>
             </li>
           ))}
           {!loading && filtered.length === 0 ? (
-            <li className="px-3 py-6 text-center text-sm text-torus-fg-faint">No matching presets</li>
+            <li className="px-3 py-6 text-center text-[13px] text-torus-fg-faint">
+              No instrument matches that search
+            </li>
           ) : null}
         </ul>
 
@@ -167,13 +178,9 @@ export function InstrumentPicker({
               e.target.value = '';
             }}
           />
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="w-full rounded-lg border border-torus-border bg-torus-surface px-3 py-2 text-sm text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg"
-          >
-            + Load soundfont (.sf2 / .sf3 / .dls)
-          </button>
+          <Button className="w-full" onClick={() => fileRef.current?.click()}>
+            Load a SoundFont file (.sf2, .sf3, .dls)
+          </Button>
         </div>
       </div>
     </div>

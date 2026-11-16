@@ -47,7 +47,7 @@ export function createFactoryLookState(): FactoryLookState {
 
 /**
  * Pure reset model used by tests and non-React callers. Unknown fields are
- * preserved by design: saved presets, audio/export preferences, licensing,
+ * preserved by design: saved presets, audio/export preferences,
  * and watermark state are outside the factory visual look.
  */
 export function resetToFactoryLook<T extends object>(

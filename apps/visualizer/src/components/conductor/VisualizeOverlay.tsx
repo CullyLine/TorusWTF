@@ -11,9 +11,9 @@ interface VisualizeOverlayProps {
 const PALETTE = { bass: '#ff2d95', mid: '#22d3ce', high: '#f7e08c' };
 
 /**
- * Fullscreen visualizer driven by Conductor's own AnalyserNode (the bridge from
- * the plan). Wraps the engine analyser in the visualizer's AnalyserHandle shape
- * and passes it as analyserOverride — no separate audio plumbing needed.
+ * A fullscreen visualizer driven by Conductor's own AnalyserNode. It wraps the
+ * engine's analyser in the `AnalyserHandle` shape the visualizer expects and
+ * passes it as `analyserOverride`, so no extra audio routing is needed.
  */
 export function VisualizeOverlay({ onClose }: VisualizeOverlayProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -41,7 +41,8 @@ export function VisualizeOverlay({ onClose }: VisualizeOverlayProps) {
   }, []);
 
   useEffect(() => {
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus();
 
     const onKey = (e: KeyboardEvent) => {
@@ -70,7 +71,7 @@ export function VisualizeOverlay({ onClose }: VisualizeOverlayProps) {
         type="button"
         onClick={onClose}
         aria-label="Close visualizer"
-        className="absolute right-4 top-4 z-10 rounded-lg border border-torus-border bg-torus-bg/70 px-3 py-1.5 text-xs text-torus-fg-dim backdrop-blur-sm hover:text-torus-fg"
+        className="absolute right-4 top-4 z-10 rounded-md border border-torus-border-strong bg-torus-panel px-3 py-1.5 text-xs text-torus-fg hover:bg-torus-raised"
       >
         Close visualizer
       </button>

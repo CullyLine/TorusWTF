@@ -14,9 +14,6 @@
     "test": "vitest run --passWithNoTests",
     "clean": "rimraf dist .turbo .tsbuildinfo"
   },
-  "dependencies": {
-    "zod": "^3.24.1"
-  },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "eslint": "^9.17.0",

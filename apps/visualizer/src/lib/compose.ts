@@ -1,7 +1,6 @@
 /**
- * Composites the R3F WebGL canvas onto an offscreen 2D canvas each frame.
- * Optionally draws a corner watermark for free-tier exports and a
- * lower-third title overlay.
+ * Composites the R3F WebGL canvas onto an offscreen 2D canvas each frame,
+ * then draws the optional title overlay and corner watermark on top.
  */
 
 import type { TitleOverlay } from '@/lib/storage';
@@ -14,14 +13,19 @@ export interface CompositorHandle {
   stop: () => void;
 }
 
+export interface CompositorOptions {
+  width: number;
+  height: number;
+  /** Draw the corner watermark. */
+  watermark: boolean;
+  /** Custom watermark logo. The default `torus.wtf` badge is drawn when null. */
+  watermarkImage?: WatermarkImage | null;
+  titleOverlay?: TitleOverlay | null;
+}
+
 export function createCompositor(
   sourceCanvas: HTMLCanvasElement,
-  width: number,
-  height: number,
-  watermark: boolean,
-  titleOverlay?: TitleOverlay | null,
-  unlocked = false,
-  watermarkImage: WatermarkImage | null = null,
+  { width, height, watermark, watermarkImage = null, titleOverlay = null }: CompositorOptions,
 ): CompositorHandle {
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -35,7 +39,7 @@ export function createCompositor(
     ctx.drawImage(sourceCanvas, 0, 0, width, height);
 
     if (titleOverlay) {
-      drawTitleOverlay(ctx, width, height, titleOverlay, unlocked);
+      drawTitleOverlay(ctx, width, height, titleOverlay);
     }
 
     if (watermark) {
@@ -108,16 +112,13 @@ export function drawTitleOverlay(
   width: number,
   height: number,
   overlay: TitleOverlay,
-  unlocked: boolean,
 ): void {
   const title = overlay.title.trim();
   const subtitle = overlay.subtitle.trim();
   if (!overlay.enabled || (!title && !subtitle)) return;
 
-  // Free tier is clamped to brand defaults; paid unlocks customization.
-  const position = unlocked ? overlay.position : 'bottom-left';
-  const textColor = unlocked ? overlay.textColor : '#f5f5fa';
-  const bgOpacity = unlocked ? Math.max(0, Math.min(1, overlay.bgOpacity)) : 0.55;
+  const { position, textColor } = overlay;
+  const bgOpacity = Math.max(0, Math.min(1, overlay.bgOpacity));
 
   const titleSize = Math.max(16, Math.round(width * 0.03));
   const subtitleSize = Math.round(titleSize * 0.62);

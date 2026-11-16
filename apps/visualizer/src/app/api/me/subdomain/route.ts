@@ -4,7 +4,6 @@ import { and, eq, not } from 'drizzle-orm';
 import { db, users } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { isReservedHandle } from '@/lib/reserved-handles';
-import { hasLicense } from '@/lib/license';
 
 const Body = z.object({
   subdomain: z
@@ -15,16 +14,10 @@ const Body = z.object({
     .nullable(),
 });
 
-/** POST /api/me/subdomain — claim a vanity subdomain. A Production License perk. */
+/** POST /api/me/subdomain claims `<name>.torus.wtf` for the signed-in user, or releases it with null. */
 export async function POST(req: Request) {
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });
-  if (!hasLicense(user)) {
-    return NextResponse.json(
-      { error: 'Custom subdomains are a Production License perk.' },
-      { status: 402 },
-    );
-  }
 
   const body = Body.safeParse(await req.json().catch(() => ({})));
   if (!body.success) {

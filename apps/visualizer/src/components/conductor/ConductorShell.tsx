@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { Button } from '@/components/ui/controls';
 import { useToast } from '@/hooks/useToast';
+import { isEditableTarget, isKeyboardFocusedControl } from '@/lib/keyboard';
 import { useConductor } from '@/lib/conductor/store';
 import { conductorEngine } from '@/lib/conductor/engine';
 import { downloadProjectMidi } from '@/lib/conductor/midiExport';
@@ -70,7 +72,10 @@ export function ConductorShell() {
   }, [playback]);
 
   const openNewInstrument = useCallback(() => setPicker({ open: true, trackId: null }), []);
-  const openChangeInstrument = useCallback((trackId: string) => setPicker({ open: true, trackId }), []);
+  const openChangeInstrument = useCallback(
+    (trackId: string) => setPicker({ open: true, trackId }),
+    [],
+  );
 
   const handlePick = useCallback(
     (preset: PresetRef) => {
@@ -113,16 +118,7 @@ export function ConductorShell() {
     if (editing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== ' ' && e.code !== 'Space') return;
-      const target = e.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable ||
-          target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT')
-      ) {
-        return;
-      }
+      if (isEditableTarget(e.target) || isKeyboardFocusedControl(e.target)) return;
       e.preventDefault();
       if (!engine.ready || engine.loading) return;
       playback.toggle();
@@ -132,11 +128,13 @@ export function ConductorShell() {
   }, [editing, engine.ready, engine.loading, playback]);
 
   const editingClip = editing
-    ? project.tracks
+    ? (project.tracks
         .find((t) => t.id === editing.trackId)
-        ?.clips.find((c) => c.id === editing.clipId) ?? null
+        ?.clips.find((c) => c.id === editing.clipId) ?? null)
     : null;
-  const editingTrack = editing ? project.tracks.find((t) => t.id === editing.trackId) ?? null : null;
+  const editingTrack = editing
+    ? (project.tracks.find((t) => t.id === editing.trackId) ?? null)
+    : null;
 
   const loadProgress = engine.loadProgress;
   const progressPct =
@@ -168,18 +166,21 @@ export function ConductorShell() {
       />
 
       {engine.loading ? (
-        <div className="border-b border-torus-border bg-torus-surface/50 px-4 py-2 text-xs text-torus-fg-dim">
+        <div
+          role="status"
+          className="border-b border-torus-border bg-torus-panel px-4 py-2 text-xs text-torus-fg-dim"
+        >
           <div className="flex items-center gap-3">
-            <span>Loading instruments…</span>
+            <span>Loading instruments</span>
             {loadProgress ? (
-              <span className="font-mono tabular-nums text-torus-fg-faint">
+              <span className="tabular-nums text-torus-fg-faint">
                 {formatBytes(loadProgress.loaded)}
                 {loadProgress.total ? ` / ${formatBytes(loadProgress.total)}` : ''}
                 {progressPct !== null ? ` (${progressPct}%)` : ''}
               </span>
             ) : null}
           </div>
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-torus-border">
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-torus-border-strong">
             <div
               className={`h-full rounded-full bg-torus-mid transition-all ${
                 progressPct === null ? 'w-1/3 motion-safe:animate-pulse' : ''
@@ -191,15 +192,14 @@ export function ConductorShell() {
       ) : null}
 
       {engine.error ? (
-        <div className="flex flex-wrap items-center gap-3 border-b border-torus-bass/40 bg-torus-bass/10 px-4 py-2 text-xs text-torus-bass">
-          <span>Soundfont failed to load: {engine.error}</span>
-          <button
-            type="button"
-            onClick={engine.retry}
-            className="rounded-lg border border-torus-bass/50 bg-torus-bass/15 px-2.5 py-1 text-torus-bass transition-colors hover:bg-torus-bass/25"
-          >
-            Retry
-          </button>
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 border-b border-torus-border bg-torus-panel px-4 py-2 text-xs text-torus-bass"
+        >
+          <span>The SoundFont did not load: {engine.error}</span>
+          <Button size="sm" variant="danger" onClick={engine.retry}>
+            Try again
+          </Button>
         </div>
       ) : null}
 
