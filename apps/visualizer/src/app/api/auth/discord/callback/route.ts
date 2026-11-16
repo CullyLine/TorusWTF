@@ -95,7 +95,7 @@ export async function GET(req: Request) {
   if (isPopup) {
     headers.set('Content-Type', 'text/html; charset=utf-8');
     return new NextResponse(
-      `<!DOCTYPE html><html><body><p>Signed in — you can close this window.</p><script>
+      `<!DOCTYPE html><html><body><p>Signed in. You can close this window.</p><script>
         try {
           if (window.opener) {
             window.opener.postMessage({ type: 'torus-auth-success' }, window.location.origin);

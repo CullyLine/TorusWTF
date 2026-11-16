@@ -124,7 +124,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-lg rounded-xl border border-torus-border bg-torus-surface p-5 shadow-xl"
+        className="relative z-10 w-full max-w-lg rounded-md border border-torus-border bg-torus-surface p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id={titleId} className="text-lg font-semibold text-torus-fg">
@@ -136,7 +136,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
         </p>
 
         {sent ? (
-          <p className="mt-6 text-sm text-torus-high">Thanks — we got it.</p>
+          <p className="mt-6 text-sm text-torus-high">Thanks. Your feedback was sent.</p>
         ) : (
           <>
             <div className="mt-4 space-y-3">
@@ -147,7 +147,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Short summary"
-                  className="mt-1 w-full rounded-lg border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
+                  className="mt-1 w-full rounded-md border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
                 />
               </label>
 
@@ -188,7 +188,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
                   onChange={(e) => setBody(e.target.value.slice(0, MAX_CHARS))}
                   rows={8}
                   placeholder="Describe the bug or feature request..."
-                  className="w-full resize-y rounded-lg border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
+                  className="w-full resize-y rounded-md border border-torus-border bg-torus-bg px-3 py-2 text-sm text-torus-fg"
                 />
               </label>
             </div>
@@ -199,7 +199,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40"
+                className="rounded-md border border-torus-border px-4 py-2 text-sm text-torus-fg-dim hover:border-torus-mid/40"
               >
                 Cancel
               </button>
@@ -209,7 +209,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
                 disabled={
                   busy || (body.trim().length === 0 && title.trim().length === 0)
                 }
-                className="rounded-lg bg-torus-mid px-4 py-2 text-sm font-medium text-torus-bg disabled:opacity-40"
+                className="rounded-md bg-torus-mid px-4 py-2 text-sm font-medium text-torus-bg disabled:opacity-40"
               >
                 {busy ? 'Sending…' : 'Send feedback'}
               </button>
@@ -217,7 +217,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
           </>
         )}
 
-        <p className="mt-4 text-[10px] text-torus-fg-faint">
+        <p className="mt-4 text-[11px] text-torus-fg-faint">
           Or email{' '}
           <a href={`mailto:${SUPPORT_EMAIL}`} className="text-torus-mid underline">
             {SUPPORT_EMAIL}

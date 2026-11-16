@@ -147,7 +147,7 @@ export default function ProjectorPage() {
       ) : null}
 
       {!look || !live ? (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#0a0b1e]/80 text-center backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-torus-bg/90 text-center">
           <Logo size={40} href={null} color="var(--color-torus-mid)" />
           <div>
             <p className="text-sm font-medium text-torus-fg">
@@ -156,10 +156,10 @@ export default function ProjectorPage() {
             <p className="mt-1 max-w-xs text-xs text-torus-fg-dim">
               {look
                 ? 'Play audio in the studio window to resume.'
-                : 'Keep the torus visualizer open in another window and start some audio — this projector mirrors it.'}
+                : 'Keep the torus visualizer open in another window and start some audio. This window mirrors it.'}
             </p>
           </div>
-          <p className="text-[10px] text-torus-fg-faint">Double-click for fullscreen</p>
+          <p className="text-[11px] text-torus-fg-faint">Double-click for fullscreen</p>
         </div>
       ) : null}
     </div>

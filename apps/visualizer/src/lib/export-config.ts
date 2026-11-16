@@ -9,13 +9,6 @@ const RESOLUTION_HEIGHT: Record<ExportResolution, number> = {
   '4k': 2160,
 };
 
-export const RESOLUTION_SIZES: Record<ExportResolution, { width: number; height: number }> = {
-  '720p': { width: 1280, height: 720 },
-  '1080p': { width: 1920, height: 1080 },
-  '1440p': { width: 2560, height: 1440 },
-  '4k': { width: 3840, height: 2160 },
-};
-
 export function dimensionsFor(
   res: ExportResolution,
   aspect: AspectRatio = '16:9',
@@ -33,27 +26,21 @@ export function dimensionsFor(
   }
 }
 
-export const ASPECT_OPTIONS: { id: AspectRatio; label: string; icon: string }[] = [
-  { id: '16:9', label: '16:9', icon: '▭' },
-  { id: '9:16', label: '9:16', icon: '▯' },
-  { id: '1:1', label: '1:1', icon: '□' },
-  { id: '4:5', label: '4:5', icon: '▯' },
+export const ASPECT_OPTIONS: { id: AspectRatio; label: string }[] = [
+  { id: '16:9', label: '16:9' },
+  { id: '9:16', label: '9:16' },
+  { id: '1:1', label: '1:1' },
+  { id: '4:5', label: '4:5' },
 ];
 
 export type ExportFps = 30 | 60 | 120 | 240;
 
-export const FREE_MAX_RES: ExportResolution = '720p';
-export const FREE_MAX_FPS: ExportFps = 30;
+export const EXPORT_RESOLUTIONS: readonly ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
+export const EXPORT_FPS_OPTIONS: readonly ExportFps[] = [30, 60, 120, 240];
 
-export function isResolutionLocked(res: ExportResolution, unlocked: boolean): boolean {
-  if (unlocked) return false;
-  return res !== FREE_MAX_RES;
-}
-
-export function isFpsLocked(fps: ExportFps, unlocked: boolean): boolean {
-  if (unlocked) return false;
-  return fps > FREE_MAX_FPS;
-}
+/** Export settings for a first visit. 30 fps records in real time on most hardware. */
+export const DEFAULT_EXPORT_RESOLUTION: ExportResolution = '1080p';
+export const DEFAULT_EXPORT_FPS: ExportFps = 30;
 
 export function bitrateFor(res: ExportResolution): number {
   switch (res) {

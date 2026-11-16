@@ -3,15 +3,22 @@ import type { createClient as CreateNativeClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql/web';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 import { existsSync, mkdirSync } from 'node:fs';
+// Namespace import on purpose. Webpack rewrites a named `createRequire` import
+// into its own bundled require, which cannot load the native bridge below.
+import * as nodeModule from 'node:module';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import * as schema from './schema';
 
 declare const __non_webpack_require__: NodeRequire | undefined;
 
 /**
- * Load the native libsql client for local `file:` DBs via a tiny on-disk CJS
- * bridge. Webpack stubs `createRequire` in the RSC bundle; `__non_webpack_require__`
- * is the escape hatch that calls real Node `require`.
+ * Loads the native libsql client for local `file:` databases through a small
+ * CJS bridge file, so webpack never bundles the native bindings.
+ *
+ * Inside the Next.js server bundle, `__non_webpack_require__` is webpack's
+ * handle to the real Node `require`. Everywhere else (the migrate script,
+ * tests) this file runs as an ES module, which has no `require`, so one is
+ * created from this module's URL.
  */
 function loadNativeCreateClient(): typeof CreateNativeClient {
   const root = findRepoRoot(process.cwd());
@@ -22,9 +29,7 @@ function loadNativeCreateClient(): typeof CreateNativeClient {
   const nodeRequire =
     typeof __non_webpack_require__ === 'function'
       ? __non_webpack_require__
-      : // Outside webpack (tests / migrate script).
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require;
+      : nodeModule.createRequire(import.meta.url);
   const mod = nodeRequire(bridge) as { createClient: typeof CreateNativeClient };
   return mod.createClient;
 }

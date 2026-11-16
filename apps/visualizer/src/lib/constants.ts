@@ -1,4 +1,4 @@
-/** Customer-facing support address (Polar, license help, general contact). */
+/** Public support address. */
 export const SUPPORT_EMAIL = 'support@torus.wtf';
 
 /** In-app feedback form destination. */

@@ -9,9 +9,8 @@ import { sql } from 'drizzle-orm';
  *   - All timestamps are integer Unix ms (milliseconds since epoch).
  *   - Foreign keys are enabled at connection time, see ./client.ts.
  *
- * Scope: accounts, sessions, and the one-time Production License. Clip hosting
- * and community tables were removed in 0.1 — the product is the visualizer plus
- * the Conductor / Transcriber tools, with lightweight profiles on top.
+ * Scope: optional accounts and their sessions. The visualizer, Conductor, and
+ * Transcriber run in the browser and store nothing here.
  */
 
 // ---------- Users + sessions ----------
@@ -27,16 +26,19 @@ export const users = sqliteTable(
     role: text('role', { enum: ['user', 'admin'] })
       .notNull()
       .default('user'),
-    /** Polar customer id, set on first checkout (idempotency / support lookups). */
-    paymentCustomerId: text('payment_customer_id'),
-    /**
-     * One-time Production License. Null = unlicensed; a timestamp (Unix ms) =
-     * the moment the $10 license was granted. Account-bound, site-wide perks.
+    /*
+     * Records from the retired Production License, a one-time purchase sold
+     * through Polar until torus became free. Nothing writes these columns any
+     * more. They are kept so past purchases stay on record, and
+     * `productionLicenseAt` drives the "Early supporter" profile badge.
      */
+    /** Polar customer id from the buyer's checkout. */
+    paymentCustomerId: text('payment_customer_id'),
+    /** When the license was bought (Unix ms), or null. */
     productionLicenseAt: integer('production_license_at'),
-    /** Polar order id for the license purchase (support / idempotency). */
+    /** Polar order id for that purchase. */
     productionLicenseOrderId: text('production_license_order_id'),
-    /** Custom profile subdomain — a Production License perk. */
+    /** Vanity subdomain: `<customSubdomain>.torus.wtf` shows this user's profile. */
     customSubdomain: text('custom_subdomain'),
     discordId: text('discord_id'),
     isBanned: integer('is_banned', { mode: 'boolean' }).notNull().default(false),

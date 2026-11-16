@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUserFromCookies } from '@/lib/auth';
-import { hasLicense } from '@/lib/license';
+import { isEarlySupporter } from '@/lib/supporter';
 import { SettingsForm } from './SettingsForm';
 
 export const metadata = {
@@ -17,7 +17,9 @@ export default async function SettingsPage() {
       <h1 className="text-3xl font-semibold tracking-tight">settings</h1>
       <p className="mt-2 text-sm text-torus-fg-dim">
         @{user.handle}
-        {hasLicense(user) ? <span className="ml-2 text-torus-high">Production License ✦</span> : null}
+        {isEarlySupporter(user) ? (
+          <span className="ml-2 text-torus-high">Early supporter</span>
+        ) : null}
       </p>
       <SettingsForm
         initialUser={{
@@ -27,7 +29,6 @@ export default async function SettingsPage() {
           avatarUrl: user.avatarUrl,
           bio: user.bio,
           customSubdomain: user.customSubdomain,
-          hasLicense: hasLicense(user),
         }}
       />
     </main>

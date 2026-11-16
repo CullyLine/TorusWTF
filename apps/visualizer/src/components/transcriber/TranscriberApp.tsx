@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import type { Route } from 'next';
 import { conductorEngine } from '@/lib/conductor/engine';
@@ -31,12 +39,15 @@ import {
   type ChordSegment,
   type ChordVoicing,
 } from '@/lib/transcriber/chords';
+import { TopBar } from '@/components/TopBar';
+import { Button, Hint, Segmented, SliderField, cx, inputClass } from '@/components/ui/controls';
+import { PlayIcon, StopIcon } from '@/components/ui/icons';
 import { useToast } from '@/hooks/useToast';
 import { useMidiPreview } from './useMidiPreview';
 
 const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.flac,.ogg,.opus,.m4a,.aac';
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.flac', '.ogg', '.opus', '.m4a', '.aac']);
-const INVALID_AUDIO_MSG = 'Please choose an audio file (MP3, WAV, FLAC, OGG, M4A).';
+const INVALID_AUDIO_MSG = 'That is not an audio file. Choose an MP3, WAV, FLAC, OGG, or M4A.';
 
 function isAudioFile(file: File): boolean {
   if (file.type.startsWith('audio/')) return true;
@@ -47,6 +58,32 @@ function isAudioFile(file: File): boolean {
 
 type Status = 'idle' | 'working' | 'done' | 'error';
 type Mode = 'transcribe' | 'find' | 'chords';
+
+const MODE_OPTIONS: ReadonlyArray<{ value: Mode; label: string }> = [
+  { value: 'transcribe', label: 'Transcribe' },
+  { value: 'find', label: 'Find a MIDI' },
+  { value: 'chords', label: 'Chords' },
+];
+
+const MODE_DESCRIPTIONS: Record<Mode, string> = {
+  transcribe:
+    "Convert audio to MIDI in your browser with Spotify's Basic Pitch model. Your file never leaves this device.",
+  find: 'Search the BitMidi archive for a ready-made MIDI of a popular song. These are often more accurate than a transcription.',
+  chords:
+    'Extract the chord progression from a song, including 7ths, 9ths, sus and add chords, and slash-chord inversions. The analysis runs in your browser, so your file never leaves this device.',
+};
+
+const SPLIT_OPTIONS: ReadonlyArray<{ value: SplitMode; label: string }> = [
+  { value: 'none', label: 'Single track' },
+  { value: 'range', label: 'Bass, mid, lead' },
+];
+
+const VOICING_OPTIONS: ReadonlyArray<{ value: ChordVoicing; label: string }> = [
+  { value: 'block', label: 'Block' },
+  { value: 'arp', label: 'Arpeggio' },
+];
+
+const TIER_LABELS = { match: 'Match', maybe: 'Maybe', weak: 'Weak' } as const;
 
 interface FoundMidi {
   project: ConductorProject;
@@ -89,7 +126,10 @@ export function TranscriberApp() {
 
   // "Chords" mode.
   const [chordStatus, setChordStatus] = useState<Status>('idle');
-  const [chordProgress, setChordProgress] = useState<ChordProgress>({ fraction: 0, phase: 'decoding' });
+  const [chordProgress, setChordProgress] = useState<ChordProgress>({
+    fraction: 0,
+    phase: 'decoding',
+  });
   const [chordError, setChordError] = useState<string | null>(null);
   const [chords, setChords] = useState<ChordSegment[] | null>(null);
   const [voicing, setVoicing] = useState<ChordVoicing>('block');
@@ -101,7 +141,10 @@ export function TranscriberApp() {
 
   const parts = useMemo(() => (notes ? splitNotes(notes, split) : []), [notes, split]);
   const project = useMemo(
-    () => (notes ? partsToProject(parts, { bpm, name: file ? baseName(file.name) : 'Transcription' }) : null),
+    () =>
+      notes
+        ? partsToProject(parts, { bpm, name: file ? baseName(file.name) : 'Transcription' })
+        : null,
     [notes, parts, bpm, file],
   );
 
@@ -197,7 +240,7 @@ export function TranscriberApp() {
     if (!project || noteCount === 0) return;
     preview.stop();
     saveProject(project);
-    toast({ message: 'Sent to Conductor', variant: 'success' });
+    toast({ message: 'Opened in Conductor', variant: 'success' });
     router.push('/conductor' as Route);
   }, [project, noteCount, preview, router, toast]);
 
@@ -206,7 +249,7 @@ export function TranscriberApp() {
     else if (project) {
       void preview.play(project).catch(() => {
         toast({
-          message: 'Preview unavailable — instruments are still loading.',
+          message: 'The preview is not ready yet. Instruments are still loading.',
           variant: 'error',
         });
       });
@@ -264,7 +307,7 @@ export function TranscriberApp() {
     else
       void preview.play(found.project).catch(() => {
         toast({
-          message: 'Preview unavailable — instruments are still loading.',
+          message: 'The preview is not ready yet. Instruments are still loading.',
           variant: 'error',
         });
       });
@@ -288,7 +331,7 @@ export function TranscriberApp() {
     if (!found) return;
     preview.stop();
     saveProject(found.project);
-    toast({ message: 'Sent to Conductor', variant: 'success' });
+    toast({ message: 'Opened in Conductor', variant: 'success' });
     router.push('/conductor' as Route);
   }, [found, preview, router, toast]);
 
@@ -314,7 +357,7 @@ export function TranscriberApp() {
     else
       void preview.play(chordProject).catch(() => {
         toast({
-          message: 'Preview unavailable — instruments are still loading.',
+          message: 'The preview is not ready yet. Instruments are still loading.',
           variant: 'error',
         });
       });
@@ -340,317 +383,229 @@ export function TranscriberApp() {
     if (!chordProject) return;
     preview.stop();
     saveProject(chordProject);
-    toast({ message: 'Sent to Conductor', variant: 'success' });
+    toast({ message: 'Opened in Conductor', variant: 'success' });
     router.push('/conductor' as Route);
   }, [chordProject, preview, router, toast]);
 
   return (
-    <main className="min-h-dvh bg-torus-bg text-torus-fg">
-      <div className="mx-auto max-w-2xl px-4 py-16 md:py-20">
-        <header className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight">Transcriber</h1>
-          <p className="mt-2 text-sm text-torus-fg-dim">
-            {mode === 'transcribe'
-              ? "Turn audio into MIDI, right in your browser. Powered by Spotify's Basic Pitch — your file never leaves this device."
-              : mode === 'find'
-                ? 'Grab a ready-made MIDI for popular songs from the BitMidi archive — often far more accurate than transcription.'
-                : 'Pull the chord progression out of a song — 7ths, 9ths, sus/add, and slash-chord inversions — analyzed right here in your browser, so your file never leaves this device.'}
-          </p>
-        </header>
+    <div className="flex min-h-dvh flex-col bg-torus-bg text-torus-fg">
+      <TopBar app="transcriber" />
 
-        {/* Mode toggle */}
-        <div className="mb-5 flex gap-1.5">
-          <ModeButton active={mode === 'transcribe'} onClick={() => switchMode('transcribe')}>
-            Transcribe
-          </ModeButton>
-          <ModeButton active={mode === 'find'} onClick={() => switchMode('find')}>
-            Find MIDI
-          </ModeButton>
-          <ModeButton active={mode === 'chords'} onClick={() => switchMode('chords')}>
-            Chords
-          </ModeButton>
-        </div>
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8 md:py-12">
+        <Segmented ariaLabel="Tool" value={mode} options={MODE_OPTIONS} onChange={switchMode} />
+        <p className="mt-4 text-sm leading-relaxed text-torus-fg-dim">{MODE_DESCRIPTIONS[mode]}</p>
 
         {mode !== 'find' ? (
           <>
-        {/* Drop zone (shared by Transcribe + Chords) */}
-        <section
-          role="button"
-          aria-label="Choose or drop an audio file"
-          tabIndex={0}
-          onClick={() => inputRef.current?.click()}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click();
-          }}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={handleDrop}
-          className="flex min-h-[120px] cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-torus-border-strong bg-torus-surface/50 px-4 py-8 text-center transition hover:border-torus-mid/50"
-        >
-          <p className="text-sm text-torus-fg">{file ? file.name : 'Drop an audio file, or click to choose'}</p>
-          <p className="mt-1 text-xs text-torus-fg-faint">MP3, WAV, FLAC, OGG, Opus, M4A</p>
-          <input
-            ref={inputRef}
-            type="file"
-            accept={AUDIO_ACCEPT}
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) acceptFile(f);
-              e.target.value = '';
-            }}
-          />
-        </section>
-
-        {/* Analysis options (Transcribe) */}
-        {mode === 'transcribe' && file ? (
-          <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
-            <h2 className="mb-3 text-sm font-medium text-torus-fg-dim">Detection</h2>
-            <div className="space-y-4">
-              <SliderRow
-                label="Onset sensitivity"
-                value={analysis.onsetThreshold}
-                min={0.05}
-                max={0.95}
-                step={0.05}
-                format={(v) => v.toFixed(2)}
-                onChange={(v) => updateAnalysis({ onsetThreshold: v })}
-                hint="Higher = fewer, more confident note starts"
-              />
-              <SliderRow
-                label="Note confidence"
-                value={analysis.frameThreshold}
-                min={0.05}
-                max={0.95}
-                step={0.05}
-                format={(v) => v.toFixed(2)}
-                onChange={(v) => updateAnalysis({ frameThreshold: v })}
-                hint="Higher = stricter; drops faint/ghost notes"
-              />
-              <SliderRow
-                label="Min note length"
-                value={analysis.minNoteLengthMs}
-                min={30}
-                max={500}
-                step={10}
-                format={(v) => `${Math.round(v)} ms`}
-                onChange={(v) => updateAnalysis({ minNoteLengthMs: v })}
-                hint="Removes very short blips"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void runTranscription()}
-              disabled={status === 'working'}
-              className="mt-4 w-full rounded-full bg-torus-mid px-4 py-2.5 text-sm font-semibold text-torus-bg transition hover:opacity-90 disabled:opacity-50"
+            {/* The drop zone is shared by Transcribe and Chords. */}
+            <div
+              role="button"
+              aria-label="Choose or drop an audio file"
+              tabIndex={0}
+              onClick={() => inputRef.current?.click()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  inputRef.current?.click();
+                }
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              className="mt-5 cursor-pointer rounded-md border border-dashed border-torus-border-strong px-4 py-8 text-center hover:border-torus-mid"
             >
-              {status === 'working'
-                ? `${TRANSCRIBE_PHASE_LABELS[progress.phase]} ${Math.round(progress.fraction * 100)}%`
-                : notes
-                  ? stale
-                    ? 'Re-transcribe (settings changed)'
-                    : 'Re-transcribe'
-                  : 'Transcribe to MIDI'}
-            </button>
-
-            {status === 'working' ? (
-              <div className="mt-3">
-                <p className="mb-1.5 text-xs text-torus-fg-faint">
-                  {TRANSCRIBE_PHASE_LABELS[progress.phase]}
-                </p>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-torus-border">
-                  <div
-                    className="h-full rounded-full bg-torus-mid transition-[width]"
-                    style={{ width: `${Math.max(2, Math.round(progress.fraction * 100))}%` }}
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {error ? <p className="mt-3 text-xs text-torus-bass">{error}</p> : null}
-          </section>
-        ) : null}
-
-        {/* Result (Transcribe) */}
-        {mode === 'transcribe' && notes !== null && project ? (
-          <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-torus-fg-dim">Result</h2>
-              <span className="text-xs text-torus-fg-faint">
-                {noteCount} notes · {project.tracks.length} track{project.tracks.length === 1 ? '' : 's'}
-              </span>
-            </div>
-
-            {noteCount === 0 ? (
-              <p className="mt-4 text-sm text-torus-fg-dim">
-                No notes detected — try lowering Note confidence, or use a recording with a clearer
-                melody.
+              <p className="truncate text-sm text-torus-fg">
+                {file ? file.name : 'Drop an audio file, or click to choose one'}
               </p>
-            ) : (
-              <>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <span className="mb-1.5 block text-xs text-torus-fg-dim">Instruments</span>
-                    <div className="flex gap-1.5">
-                      <SplitButton active={split === 'none'} onClick={() => setSplit('none')}>
-                        Single track
-                      </SplitButton>
-                      <SplitButton active={split === 'range'} onClick={() => setSplit('range')}>
-                        Bass / Mid / Lead
-                      </SplitButton>
-                    </div>
-                  </div>
-                  <SliderRow
-                    label="Tempo"
-                    value={bpm}
-                    min={40}
-                    max={240}
-                    step={1}
-                    format={(v) => `${Math.round(v)} BPM`}
-                    onChange={(v) => setBpm(Math.round(v))}
-                    hint="Used when laying notes onto the grid"
+              <p className="mt-1 text-xs text-torus-fg-faint">
+                {file ? 'Click to choose a different file' : 'MP3, WAV, FLAC, OGG, Opus, M4A'}
+              </p>
+              <input
+                ref={inputRef}
+                type="file"
+                accept={AUDIO_ACCEPT}
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) acceptFile(f);
+                  e.target.value = '';
+                }}
+              />
+            </div>
+
+            {mode === 'transcribe' && file ? (
+              <Card title="Detection">
+                <div className="space-y-4">
+                  <TunedSlider
+                    label="Onset sensitivity"
+                    value={analysis.onsetThreshold}
+                    min={0.05}
+                    max={0.95}
+                    step={0.05}
+                    readout={analysis.onsetThreshold.toFixed(2)}
+                    onChange={(v) => updateAnalysis({ onsetThreshold: v })}
+                    hint="Higher values keep fewer, more confident note starts."
+                  />
+                  <TunedSlider
+                    label="Note confidence"
+                    value={analysis.frameThreshold}
+                    min={0.05}
+                    max={0.95}
+                    step={0.05}
+                    readout={analysis.frameThreshold.toFixed(2)}
+                    onChange={(v) => updateAnalysis({ frameThreshold: v })}
+                    hint="Higher values are stricter and drop faint notes."
+                  />
+                  <TunedSlider
+                    label="Shortest note"
+                    value={analysis.minNoteLengthMs}
+                    min={30}
+                    max={500}
+                    step={10}
+                    readout={`${Math.round(analysis.minNoteLengthMs)} ms`}
+                    onChange={(v) => updateAnalysis({ minNoteLengthMs: v })}
+                    hint="Notes shorter than this are removed."
                   />
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={togglePreview}
-                    className="rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-sm font-medium text-torus-mid transition hover:bg-torus-mid/20"
-                  >
-                    {preview.playing ? '■ Stop' : '▶ Preview'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-                  >
-                    Download .mid
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSendToConductor}
-                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-                  >
-                    Send to Conductor →
-                  </button>
-                </div>
-              </>
-            )}
+                {/* Once a result is current, the next step is in the Result card. */}
+                <Button
+                  variant={notes && !stale ? 'secondary' : 'primary'}
+                  className="mt-4 w-full"
+                  onClick={() => void runTranscription()}
+                  disabled={status === 'working'}
+                >
+                  {status === 'working'
+                    ? `${TRANSCRIBE_PHASE_LABELS[progress.phase]} ${Math.round(progress.fraction * 100)}%`
+                    : notes
+                      ? stale
+                        ? 'Transcribe again with the new settings'
+                        : 'Transcribe again'
+                      : 'Transcribe to MIDI'}
+                </Button>
 
-            <div className={`mt-5 flex ${noteCount === 0 ? '' : 'flex-wrap gap-2'}`}>
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className={`rounded-full px-3 py-2 text-xs text-torus-fg-faint transition hover:text-torus-fg-dim ${noteCount > 0 ? 'ml-auto' : ''}`}
+                {status === 'working' ? <ProgressBar fraction={progress.fraction} /> : null}
+                {error ? <p className="mt-3 text-xs text-torus-bass">{error}</p> : null}
+              </Card>
+            ) : null}
+
+            {mode === 'transcribe' && notes !== null && project ? (
+              <Card
+                title="Result"
+                aside={`${noteCount} ${noteCount === 1 ? 'note' : 'notes'} on ${project.tracks.length} ${
+                  project.tracks.length === 1 ? 'track' : 'tracks'
+                }`}
               >
-                New file
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {/* Chords analysis + result */}
-        {mode === 'chords' && file ? (
-          <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-torus-fg-dim">Chords</h2>
-              {chords && chords.length > 0 ? (
-                <span className="text-xs text-torus-fg-faint">
-                  {chords.length} chord{chords.length === 1 ? '' : 's'}
-                </span>
-              ) : null}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => void runChordDetection()}
-              disabled={chordStatus === 'working'}
-              className="mt-3 w-full rounded-full bg-torus-mid px-4 py-2.5 text-sm font-semibold text-torus-bg transition hover:opacity-90 disabled:opacity-50"
-            >
-              {chordStatus === 'working'
-                ? `${CHORD_PHASE_LABELS[chordProgress.phase]} ${Math.round(chordProgress.fraction * 100)}%`
-                : chords
-                  ? 'Re-detect chords'
-                  : 'Find chords'}
-            </button>
-
-            {chordStatus === 'working' ? (
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-torus-border">
-                <div
-                  className="h-full rounded-full bg-torus-mid transition-[width]"
-                  style={{ width: `${Math.max(2, Math.round(chordProgress.fraction * 100))}%` }}
-                />
-              </div>
-            ) : null}
-
-            {chordError ? <p className="mt-3 text-xs text-torus-bass">{chordError}</p> : null}
-
-            {chords !== null && chordStatus !== 'working' ? (
-              chords.length === 0 ? (
-                <p className="mt-4 text-sm text-torus-fg-dim">
-                  No clear chords found — try a song with stronger harmony, or use Transcribe for
-                  melodic lines.
-                </p>
-              ) : (
-                <>
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {chords.map((c) => (
-                      <span
-                        key={`${c.startSec.toFixed(3)}-${c.label}`}
-                        title={`${c.startSec.toFixed(1)}s – ${c.endSec.toFixed(1)}s`}
-                        className="rounded-md border border-torus-border bg-torus-bg/40 px-2 py-1 text-xs text-torus-fg"
-                      >
-                        {c.label}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="mt-4">
-                    <span className="mb-1.5 block text-xs text-torus-fg-dim">Voicing</span>
-                    <div className="flex gap-1.5">
-                      <SplitButton active={voicing === 'block'} onClick={() => setVoicing('block')}>
-                        Block
-                      </SplitButton>
-                      <SplitButton active={voicing === 'arp'} onClick={() => setVoicing('arp')}>
-                        Arpeggio
-                      </SplitButton>
+                {noteCount === 0 ? (
+                  <p className="text-sm text-torus-fg-dim">
+                    No notes detected. Lower Note confidence, or use a recording with a clearer
+                    melody.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <span className="mb-1 block text-xs text-torus-fg-dim">Tracks</span>
+                        <Segmented
+                          ariaLabel="Tracks"
+                          value={split}
+                          options={SPLIT_OPTIONS}
+                          onChange={setSplit}
+                        />
+                      </div>
+                      <TunedSlider
+                        label="Tempo"
+                        value={bpm}
+                        min={40}
+                        max={240}
+                        step={1}
+                        readout={`${Math.round(bpm)} BPM`}
+                        onChange={(v) => setBpm(Math.round(v))}
+                        hint="Used to place the notes on the grid."
+                      />
                     </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={previewChords}
-                      className="rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-sm font-medium text-torus-mid transition hover:bg-torus-mid/20"
-                    >
-                      {preview.playing ? '■ Stop' : '▶ Preview'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={downloadChords}
-                      className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-                    >
-                      Download .mid
-                    </button>
-                    <button
-                      type="button"
-                      onClick={sendChordsToConductor}
-                      className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-                    >
-                      Send to Conductor →
-                    </button>
-                  </div>
-                </>
-              )
+                    <MidiActions
+                      playing={preview.playing}
+                      onTogglePreview={togglePreview}
+                      onDownload={handleDownload}
+                      onOpenInConductor={handleSendToConductor}
+                    />
+                  </>
+                )}
+              </Card>
             ) : null}
-          </section>
-        ) : null}
+
+            {mode === 'chords' && file ? (
+              <Card
+                title="Chords"
+                aside={
+                  chords && chords.length > 0
+                    ? `${chords.length} ${chords.length === 1 ? 'chord' : 'chords'}`
+                    : undefined
+                }
+              >
+                <Button
+                  variant={chords && chords.length > 0 ? 'secondary' : 'primary'}
+                  className="w-full"
+                  onClick={() => void runChordDetection()}
+                  disabled={chordStatus === 'working'}
+                >
+                  {chordStatus === 'working'
+                    ? `${CHORD_PHASE_LABELS[chordProgress.phase]} ${Math.round(chordProgress.fraction * 100)}%`
+                    : chords
+                      ? 'Find chords again'
+                      : 'Find chords'}
+                </Button>
+
+                {chordStatus === 'working' ? (
+                  <ProgressBar fraction={chordProgress.fraction} />
+                ) : null}
+                {chordError ? <p className="mt-3 text-xs text-torus-bass">{chordError}</p> : null}
+
+                {chords !== null && chordStatus !== 'working' ? (
+                  chords.length === 0 ? (
+                    <p className="mt-4 text-sm text-torus-fg-dim">
+                      No clear chords found. Try a song with stronger harmony, or use Transcribe for
+                      a melody.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="mt-4 flex flex-wrap gap-1.5">
+                        {chords.map((c) => (
+                          <span
+                            key={`${c.startSec.toFixed(3)}-${c.label}`}
+                            title={`${c.startSec.toFixed(1)}s to ${c.endSec.toFixed(1)}s`}
+                            className="rounded-md bg-torus-raised px-2 py-1 text-xs text-torus-fg"
+                          >
+                            {c.label}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 max-w-xs">
+                        <span className="mb-1 block text-xs text-torus-fg-dim">Voicing</span>
+                        <Segmented
+                          ariaLabel="Voicing"
+                          value={voicing}
+                          options={VOICING_OPTIONS}
+                          onChange={setVoicing}
+                        />
+                      </div>
+
+                      <MidiActions
+                        playing={preview.playing}
+                        onTogglePreview={previewChords}
+                        onDownload={downloadChords}
+                        onOpenInConductor={sendChordsToConductor}
+                      />
+                    </>
+                  )
+                ) : null}
+              </Card>
+            ) : null}
           </>
         ) : (
           <>
-            {/* Search */}
-            <section className="rounded-xl border border-torus-border bg-torus-surface/60 p-4">
+            <Card title="Search">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -659,31 +614,30 @@ export function TranscriberApp() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void runSearch();
                   }}
-                  placeholder="Song name — e.g. Queen Bohemian Rhapsody"
-                  className="min-w-0 flex-1 rounded-full border border-torus-border bg-torus-bg px-4 py-2 text-sm text-torus-fg placeholder:text-torus-fg-faint focus:border-torus-mid/50 focus:outline-none"
+                  placeholder="Artist and song title"
+                  aria-label="Song to search for"
+                  className={cx(inputClass, 'min-w-0 flex-1 py-2')}
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   onClick={() => void runSearch()}
                   disabled={searching || query.trim().length < 2}
-                  className="shrink-0 rounded-full bg-torus-mid px-4 py-2 text-sm font-semibold text-torus-bg transition hover:opacity-90 disabled:opacity-50"
                 >
-                  {searching ? 'Searching…' : 'Search'}
-                </button>
+                  {searching ? 'Searching' : 'Search'}
+                </Button>
               </div>
-              <p className="mt-2 text-xs text-torus-fg-faint">
-                Community-made MIDIs from BitMidi — best for popular &amp; classic songs. Not found?
-                Switch to Transcribe audio.
-              </p>
+              <Hint className="mt-2">
+                BitMidi hosts community-made MIDIs, mostly of popular and classic songs. If your
+                song is not there, use Transcribe.
+              </Hint>
               {searchError ? <p className="mt-3 text-xs text-torus-bass">{searchError}</p> : null}
-            </section>
+            </Card>
 
-            {/* Results */}
             {results !== null ? (
-              <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
+              <Card title="Results">
                 {results.length === 0 ? (
                   <p className="text-sm text-torus-fg-dim">
-                    No matches found. Try a simpler query, e.g. just “artist song”.
+                    No matches. Try a shorter search, such as the artist and the song title.
                   </p>
                 ) : (
                   <ul className="space-y-1.5">
@@ -695,157 +649,139 @@ export function TranscriberApp() {
                             type="button"
                             onClick={() => void pickResult(r)}
                             disabled={loadingId !== null}
-                            className="flex w-full items-center gap-3 rounded-lg border border-torus-border bg-torus-bg/40 px-3 py-2 text-left transition hover:border-torus-mid/40 disabled:opacity-50"
+                            className="flex w-full items-center gap-3 rounded-md border border-torus-border bg-torus-bg px-3 py-2 text-left transition-colors hover:border-torus-border-strong disabled:opacity-50"
                           >
-                            <span
-                              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                tier === 'match'
-                                  ? 'bg-torus-mid/20 text-torus-mid'
-                                  : tier === 'maybe'
-                                    ? 'bg-torus-border text-torus-fg-dim'
-                                    : 'text-torus-fg-faint'
-                              }`}
-                            >
-                              {tier === 'match' ? 'Match' : tier === 'maybe' ? 'Maybe' : '—'}
-                            </span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-sm text-torus-fg">{r.name}</span>
-                              <span className="block text-[11px] text-torus-fg-faint">
-                                {r.views.toLocaleString()} views · {r.plays.toLocaleString()} plays
+                              <span className="block text-[11px] tabular-nums text-torus-fg-faint">
+                                {r.views.toLocaleString()} views, {r.plays.toLocaleString()} plays
                               </span>
                             </span>
-                            {loadingId === r.id ? (
-                              <span className="shrink-0 text-xs text-torus-fg-faint">Loading…</span>
-                            ) : null}
+                            <span
+                              className={cx(
+                                'shrink-0 text-xs',
+                                tier === 'match'
+                                  ? 'font-medium text-torus-mid'
+                                  : 'text-torus-fg-faint',
+                              )}
+                            >
+                              {loadingId === r.id ? 'Loading' : TIER_LABELS[tier]}
+                            </span>
                           </button>
                         </li>
                       );
                     })}
                   </ul>
                 )}
-              </section>
+              </Card>
             ) : null}
 
-            {/* Selected MIDI */}
             {found ? (
-              <section className="mt-5 rounded-xl border border-torus-border bg-torus-surface/60 p-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-medium text-torus-fg-dim">Selected</h2>
-                  <span className="text-xs text-torus-fg-faint">
-                    {found.project.tracks.length} track{found.project.tracks.length === 1 ? '' : 's'}{' '}
-                    · {found.project.bpm} BPM
-                  </span>
-                </div>
-                <p className="mt-2 truncate text-sm text-torus-fg">{found.name}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={previewFound}
-                    className="rounded-full border border-torus-mid/40 bg-torus-mid/10 px-4 py-2 text-sm font-medium text-torus-mid transition hover:bg-torus-mid/20"
-                  >
-                    {preview.playing ? '■ Stop' : '▶ Preview'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={downloadFound}
-                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-                  >
-                    Download .mid
-                  </button>
-                  <button
-                    type="button"
-                    onClick={sendFoundToConductor}
-                    className="rounded-full border border-torus-border px-4 py-2 text-sm font-medium text-torus-fg-dim transition hover:border-torus-border-strong hover:text-torus-fg"
-                  >
-                    Send to Conductor →
-                  </button>
-                </div>
-              </section>
+              <Card
+                title="Selected"
+                aside={`${found.project.tracks.length} ${
+                  found.project.tracks.length === 1 ? 'track' : 'tracks'
+                } at ${found.project.bpm} BPM`}
+              >
+                <p className="truncate text-sm text-torus-fg">{found.name}</p>
+                <MidiActions
+                  playing={preview.playing}
+                  onTogglePreview={previewFound}
+                  onDownload={downloadFound}
+                  onOpenInConductor={sendFoundToConductor}
+                />
+              </Card>
             ) : null}
           </>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
 
-interface SliderRowProps {
+interface CardProps {
+  title: string;
+  /** A short summary shown at the right of the title. */
+  aside?: string;
+  children: ReactNode;
+}
+
+/** One step of the page: a titled block with its controls and result. */
+function Card({ title, aside, children }: CardProps) {
+  return (
+    <section className="mt-5 rounded-md border border-torus-border bg-torus-panel p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-[13px] font-semibold text-torus-fg">{title}</h2>
+        {aside ? <span className="text-xs tabular-nums text-torus-fg-faint">{aside}</span> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+interface TunedSliderProps {
   label: string;
   value: number;
   min: number;
   max: number;
   step: number;
-  format: (v: number) => string;
-  onChange: (v: number) => void;
-  hint?: string;
+  /** The value as text, with its unit. */
+  readout: string;
+  onChange: (value: number) => void;
+  hint: string;
 }
 
-function SliderRow({ label, value, min, max, step, format, onChange, hint }: SliderRowProps) {
+/** A slider with its effect spelled out underneath. */
+function TunedSlider({ readout, hint, ...slider }: TunedSliderProps) {
   return (
-    <label className="block">
-      <span className="mb-1 flex items-center justify-between text-xs">
-        <span className="text-torus-fg-dim">{label}</span>
-        <span className="tabular-nums text-torus-fg-faint">{format(value)}</span>
-      </span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-torus-mid"
+    <div>
+      <SliderField {...slider} readout={<span className="tabular-nums">{readout}</span>} />
+      <Hint className="mt-1">{hint}</Hint>
+    </div>
+  );
+}
+
+function ProgressBar({ fraction }: { fraction: number }) {
+  return (
+    <div
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(fraction * 100)}
+      className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-torus-border-strong"
+    >
+      <div
+        className="h-full bg-torus-mid transition-[width]"
+        style={{ width: `${Math.max(2, Math.round(fraction * 100))}%` }}
       />
-      {hint ? <span className="mt-0.5 block text-[10px] text-torus-fg-faint">{hint}</span> : null}
-    </label>
+    </div>
   );
 }
 
-function SplitButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-        active
-          ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
-          : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong'
-      }`}
-    >
-      {children}
-    </button>
-  );
+interface MidiActionsProps {
+  playing: boolean;
+  onTogglePreview: () => void;
+  onDownload: () => void;
+  onOpenInConductor: () => void;
 }
 
-function ModeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
+/** What you can do with a finished MIDI: hear it, save it, or keep editing it. */
+function MidiActions({
+  playing,
+  onTogglePreview,
+  onDownload,
+  onOpenInConductor,
+}: MidiActionsProps) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex-1 rounded-full px-4 py-2 text-sm font-medium transition ${
-        active
-          ? 'bg-torus-mid/20 text-torus-mid border border-torus-mid/40'
-          : 'border border-torus-border text-torus-fg-dim hover:border-torus-border-strong'
-      }`}
-    >
-      {children}
-    </button>
+    <div className="mt-5 flex flex-wrap gap-2">
+      <Button onClick={onTogglePreview}>
+        {playing ? <StopIcon /> : <PlayIcon />}
+        {playing ? 'Stop' : 'Preview'}
+      </Button>
+      <Button onClick={onDownload}>Download .mid</Button>
+      <Button variant="primary" onClick={onOpenInConductor}>
+        Open in Conductor
+      </Button>
+    </div>
   );
 }

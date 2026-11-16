@@ -191,7 +191,8 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   flow_field: {
     id: 'flow_field',
     label: 'Flow Field',
-    hint: 'A quarter-million particles riding living currents \u2014 chaos that flows into collective motion. Stir it with your cursor.',
+    hint:
+      'A quarter of a million particles follow a flow field. Move your cursor over them to stir it.',
     Scene: FlowFieldScene,
     presetControls: ['turbulence', 'trailLength', 'density', 'vortexAmount', 'interactStrength'],
     defaults: {
@@ -213,7 +214,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   torus_field: {
     id: 'torus_field',
     label: 'Torus Field',
-    hint: 'Sacred-geometry energy flow \u2014 the brand signature.',
+    hint: 'A wireframe torus with particles streaming through it. Bass makes it bloom.',
     Scene: TorusFieldScene,
     defaults: {
       speed: 1,
@@ -230,7 +231,8 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   infinite_tunnel: {
     id: 'infinite_tunnel',
     label: 'Tunnel',
-    hint: 'An infinite tunnel rushing past \u2014 walls explode on bass, pyramids bite on mids, souls ride the current.',
+    hint:
+      'A tunnel you fly through without end. Bass pushes the walls out and mids raise spikes along them.',
     Scene: InfiniteTunnelScene,
     presetControls: ['turbulence', 'density', 'vortexAmount'],
     defaults: {
@@ -250,7 +252,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   volumetric_waveform: {
     id: 'volumetric_waveform',
     label: 'Volumetric Waveform',
-    hint: 'The waveform extruded into 3D \u2014 minimal, universal.',
+    hint: 'The frequency spectrum drawn as a ribbon in 3D. The most literal view of the sound.',
     Scene: VolumetricWaveformScene,
     defaults: {
       speed: 1,
@@ -266,7 +268,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   cosmic_mandala: {
     id: 'cosmic_mandala',
     label: 'Cosmic Mandala',
-    hint: 'Sacred-geometry rings in radial symmetry \u2014 brand-aligned calm power.',
+    hint: 'Nested rings in radial symmetry. Each ring moves with its own frequency band.',
     Scene: CosmicMandalaScene,
     defaults: {
       speed: 1,
@@ -282,7 +284,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   star_field: {
     id: 'star_field',
     label: 'Galaxy Garden',
-    hint: 'Dimensional spiral galaxy with a black-hole core — bass lensing, drop shockwaves, shimmer glints.',
+    hint: 'A spiral galaxy around a dark core. Bass bends the light and drops send out shockwaves.',
     Scene: StarFieldScene,
     defaults: {
       speed: 1,
@@ -299,7 +301,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   liquid_blob: {
     id: 'liquid_blob',
     label: 'Lava Choir',
-    hint: 'Sculptural choir of breathing lava orbs — fused voices, hot harmonic rims.',
+    hint: 'Glowing lava orbs that stretch and merge with the harmony.',
     Scene: LiquidBlobScene,
     presetControls: ['inflate', 'appendages', 'subSpheres'],
     // Orthographic in-shader camera; framing is entirely from `scale`.
@@ -324,7 +326,8 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   tidal_sanctuary: {
     id: 'tidal_sanctuary',
     label: 'Tidal Sanctuary',
-    hint: 'A living ocean height-field — swells on bass, crest pulses on kick, foam on shimmer, glassy in silence.',
+    hint:
+      'An ocean surface. Bass raises swells, kicks pulse the crests, highs add foam, and silence leaves it glassy.',
     Scene: TidalSanctuaryScene,
     presetControls: ['turbulence', 'density'],
     // Clip-space ocean owns framing via scale; still camera keeps the sea stable.
@@ -346,7 +349,8 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   plasma_globe: {
     id: 'plasma_globe',
     label: 'Plasma Globe',
-    hint: 'The novelty plasma ball — filaments reach for the glass and re-strike on every kick. Built light enough to stay smooth without a graphics card.',
+    hint:
+      'A plasma ball whose filaments strike the glass on every kick. Light enough to run without a dedicated graphics card.',
     Scene: PlasmaGlobeScene,
     defaults: {
       speed: 1,

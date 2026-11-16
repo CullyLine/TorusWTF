@@ -1,5 +1,7 @@
 'use client';
 
+import { Button, cx, inputClass } from '@/components/ui/controls';
+import { PauseIcon, PlayIcon, SkipBackIcon } from '@/components/ui/icons';
 import { useConductor } from '@/lib/conductor/store';
 import { PPQ } from '@/lib/conductor/project';
 import { NOTE_NAMES, SCALE_IDS, SCALE_LABELS, type ScaleId } from '@/lib/conductor/scales';
@@ -15,12 +17,26 @@ interface TransportBarProps {
   onVisualize?: () => void;
 }
 
+/** Formats a tick as `bar.beat`, counting both from 1. */
 function formatPosition(tick: number): string {
   const bar = Math.floor(tick / TICKS_PER_BAR) + 1;
   const beat = Math.floor((tick % TICKS_PER_BAR) / PPQ) + 1;
   return `${bar}.${beat}`;
 }
 
+const compactField = cx(inputClass, 'px-2 py-1 text-xs');
+const iconButton =
+  'grid h-8 w-8 shrink-0 place-items-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40';
+
+function Divider() {
+  return <div className="mx-1 h-6 w-px bg-torus-border" aria-hidden="true" />;
+}
+
+/**
+ * Conductor's top bar: the project name, playback, tempo and key, and MIDI
+ * import and export. It leaves room on the left for the app launcher, which
+ * is fixed to the corner of every page.
+ */
 export function TransportBar({
   playback,
   engineReady,
@@ -34,48 +50,45 @@ export function TransportBar({
   const transportDisabled = !engineReady || engineLoading;
 
   return (
-    <header className="flex flex-wrap items-center gap-3 border-b border-torus-border bg-torus-bg/80 py-2 pl-14 pr-3 backdrop-blur-sm">
+    <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-torus-border bg-torus-panel py-2 pl-[3.75rem] pr-3">
+      <h1 className="text-sm font-semibold tracking-tight text-torus-fg">
+        torus <span className="font-normal text-torus-fg-faint">conductor</span>
+      </h1>
+
       <input
         value={project.name}
         onChange={(e) => dispatch({ type: 'renameProject', name: e.target.value })}
         aria-label="Project name"
-        className="w-32 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium outline-none hover:border-torus-border focus:border-torus-border-strong"
+        className="w-36 rounded-md border border-transparent bg-transparent px-2 py-1 text-[13px] font-medium text-torus-fg hover:border-torus-border focus:border-torus-border-strong"
       />
 
-      <div className="mx-1 h-6 w-px bg-torus-border" />
+      <Divider />
 
-      {isPlaying ? (
-        <button
-          type="button"
-          onClick={pause}
-          disabled={transportDisabled}
-          aria-label="Pause"
-          className="grid h-8 w-8 place-items-center rounded-lg border border-torus-mid/50 bg-torus-mid/15 text-sm text-torus-mid transition-colors hover:border-torus-mid/70 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {'\u23f8'}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => play()}
-          disabled={transportDisabled}
-          aria-label="Play"
-          className="grid h-8 w-8 place-items-center rounded-lg border border-torus-border bg-torus-surface text-sm text-torus-fg transition-colors hover:border-torus-border-strong disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {'\u25b6'}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={isPlaying ? pause : () => play()}
+        disabled={transportDisabled}
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+        title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+        className={cx(iconButton, 'bg-torus-fg text-torus-bg hover:bg-white')}
+      >
+        {isPlaying ? <PauseIcon /> : <PlayIcon />}
+      </button>
       <button
         type="button"
         onClick={stopAndRewind}
         disabled={transportDisabled}
-        aria-label="Stop and rewind"
-        className="grid h-8 w-8 place-items-center rounded-lg border border-torus-border bg-torus-surface text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg disabled:cursor-not-allowed disabled:opacity-40"
+        aria-label="Stop and go back to the start"
+        title="Stop and go back to the start"
+        className={cx(iconButton, 'text-torus-fg-dim hover:bg-torus-raised hover:text-torus-fg')}
       >
-        {'\u23ee'}
+        <SkipBackIcon />
       </button>
 
-      <span className="ml-1 w-12 font-mono text-sm tabular-nums text-torus-fg-dim">
+      <span
+        className="w-10 text-[13px] tabular-nums text-torus-fg-dim"
+        title="Position as bar.beat"
+      >
         {formatPosition(playheadTick)}
       </span>
 
@@ -83,18 +96,19 @@ export function TransportBar({
         type="button"
         onClick={() => setLoopEnabled(!loop.enabled)}
         aria-pressed={loop.enabled}
-        className={`rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+        className={cx(
+          'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
           loop.enabled
-            ? 'border-torus-mid/50 bg-torus-mid/15 text-torus-mid'
-            : 'border-torus-border bg-torus-surface text-torus-fg-dim hover:text-torus-fg'
-        }`}
+            ? 'border-torus-mid bg-torus-raised text-torus-fg'
+            : 'border-torus-border text-torus-fg-dim hover:border-torus-border-strong hover:text-torus-fg',
+        )}
       >
         Loop
       </button>
 
-      <div className="mx-1 h-6 w-px bg-torus-border" />
+      <Divider />
 
-      <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
+      <label className="flex items-center gap-1.5 text-xs text-torus-fg-dim">
         BPM
         <input
           type="number"
@@ -102,34 +116,29 @@ export function TransportBar({
           max={300}
           value={project.bpm}
           onChange={(e) => dispatch({ type: 'setBpm', bpm: Number(e.target.value) })}
-          className="w-16 rounded-md border border-torus-border bg-torus-surface px-2 py-1 text-sm tabular-nums text-torus-fg outline-none focus:border-torus-border-strong"
+          className={cx(compactField, 'w-16 tabular-nums')}
         />
       </label>
-
-      <div className="mx-1 h-6 w-px bg-torus-border" />
-
-      <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
+      <label className="flex items-center gap-1.5 text-xs text-torus-fg-dim">
         Key
         <select
           value={project.key.tonic}
           onChange={(e) => dispatch({ type: 'setKey', key: { tonic: Number(e.target.value) } })}
-          aria-label="Project key"
-          className="rounded-md border border-torus-border bg-torus-surface px-1.5 py-1 text-xs text-torus-fg outline-none focus:border-torus-border-strong"
+          className={compactField}
         >
-          {NOTE_NAMES.map((n, i) => (
-            <option key={n} value={i}>
-              {n}
+          {NOTE_NAMES.map((name, index) => (
+            <option key={name} value={index}>
+              {name}
             </option>
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
+      <label className="flex items-center gap-1.5 text-xs text-torus-fg-dim">
         Scale
         <select
           value={project.key.scale}
           onChange={(e) => dispatch({ type: 'setKey', key: { scale: e.target.value as ScaleId } })}
-          aria-label="Project scale"
-          className="rounded-md border border-torus-border bg-torus-surface px-1.5 py-1 text-xs text-torus-fg outline-none focus:border-torus-border-strong"
+          className={compactField}
         >
           {SCALE_IDS.map((id) => (
             <option key={id} value={id}>
@@ -141,32 +150,19 @@ export function TransportBar({
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
         {onImportMidi ? (
-          <button
-            type="button"
-            onClick={onImportMidi}
-            className="rounded-lg border border-torus-border bg-torus-surface px-2.5 py-1.5 text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg"
-          >
+          <Button size="sm" onClick={onImportMidi}>
             Import MIDI
-          </button>
+          </Button>
         ) : null}
         {onExportMidi ? (
-          <button
-            type="button"
-            onClick={onExportMidi}
-            className="rounded-lg border border-torus-border bg-torus-surface px-2.5 py-1.5 text-xs text-torus-fg-dim transition-colors hover:border-torus-border-strong hover:text-torus-fg"
-          >
+          <Button size="sm" onClick={onExportMidi}>
             Export MIDI
-          </button>
+          </Button>
         ) : null}
         {onVisualize ? (
-          <button
-            type="button"
-            onClick={onVisualize}
-            disabled={!engineReady}
-            className="rounded-lg border border-torus-mid/40 bg-torus-mid/10 px-2.5 py-1.5 text-xs text-torus-mid transition-colors hover:bg-torus-mid/20 disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          <Button size="sm" variant="primary" onClick={onVisualize} disabled={!engineReady}>
             Visualize
-          </button>
+          </Button>
         ) : null}
       </div>
     </header>

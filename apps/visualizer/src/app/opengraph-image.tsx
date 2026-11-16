@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og';
 
 export const runtime = 'edge';
-export const alt = 'torus visualizer — turn any audio into 3D visuals';
+export const alt = 'torus visualizer: turn any audio into 3D visuals';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -55,8 +55,7 @@ export default function OpengraphImage() {
               lineHeight: 1.3,
             }}
           >
-            Spotify · Ableton · Splice · mic — eight reactive visualizers,
-            instant export.
+            Works with files, your mic, Spotify, and Ableton. Exports video up to 4K.
           </div>
         </div>
 

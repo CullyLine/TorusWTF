@@ -1,22 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  FREE_MAX_FPS,
-  FREE_MAX_RES,
+  DEFAULT_EXPORT_FPS,
+  DEFAULT_EXPORT_RESOLUTION,
+  EXPORT_FPS_OPTIONS,
+  EXPORT_RESOLUTIONS,
   MAX_REALTIME_FPS,
   bitrateFor,
   dimensionsFor,
   exportExceedsGpuLimits,
   fileExtensionForMime,
-  isFpsLocked,
   isFpsRealtimeCapable,
-  isResolutionLocked,
   pickRecorderMimeType,
-  type ExportFps,
-  type ExportResolution,
 } from './export-config';
 
-const RESOLUTIONS: ExportResolution[] = ['720p', '1080p', '1440p', '4k'];
-const FPS: ExportFps[] = [30, 60, 120, 240];
+const RESOLUTIONS = EXPORT_RESOLUTIONS;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -43,23 +40,18 @@ describe('dimensionsFor', () => {
   });
 });
 
-describe('licence gating', () => {
-  it('locks everything above the free tier until unlocked', () => {
-    for (const res of RESOLUTIONS) {
-      expect(isResolutionLocked(res, false)).toBe(res !== FREE_MAX_RES);
-      expect(isResolutionLocked(res, true)).toBe(false);
-    }
-    for (const fps of FPS) {
-      expect(isFpsLocked(fps, false)).toBe(fps > FREE_MAX_FPS);
-      expect(isFpsLocked(fps, true)).toBe(false);
-    }
+describe('export defaults', () => {
+  it('starts on settings the pickers offer and live recording can produce', () => {
+    expect(EXPORT_RESOLUTIONS).toContain(DEFAULT_EXPORT_RESOLUTION);
+    expect(EXPORT_FPS_OPTIONS).toContain(DEFAULT_EXPORT_FPS);
+    expect(isFpsRealtimeCapable(DEFAULT_EXPORT_FPS)).toBe(true);
   });
 });
 
 describe('isFpsRealtimeCapable', () => {
   it('admits that live recording cannot exceed the refresh rate', () => {
-    // Sold as a licensed feature, but the compositor draws on
-    // requestAnimationFrame, so anything above this is pre-render only.
+    // The compositor draws on requestAnimationFrame, so anything above this
+    // is pre-render only.
     expect(isFpsRealtimeCapable(30)).toBe(true);
     expect(isFpsRealtimeCapable(MAX_REALTIME_FPS)).toBe(true);
     expect(isFpsRealtimeCapable(120)).toBe(false);

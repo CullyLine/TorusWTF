@@ -34,4 +34,12 @@ export default tseslint.config(
       'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
     },
   },
+  {
+    // CommonJS files have no `import`, so `require` is the only option there.
+    files: ['**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 );

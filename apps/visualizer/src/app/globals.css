@@ -1,21 +1,41 @@
 @import 'tailwindcss';
 @import '@torus/ui/styles.css';
 
+/*
+ * Design tokens.
+ *
+ * The interface is flat and solid so the visualizer is the only colorful thing
+ * on screen. Surfaces are opaque (no blur, no translucency), there is one
+ * accent color, and text colors are chosen to pass WCAG AA (4.5:1) on every
+ * surface below.
+ */
 @theme {
+  /* Surfaces, darkest to lightest. */
   --color-torus-bg: #0a0b1e;
+  --color-torus-panel: #11132a;
+  --color-torus-raised: #1a1d3a;
+  /* Older name for the panel color, still used by Conductor and Transcriber. */
+  --color-torus-surface: #11132a;
+
+  /* Text. Contrast on panel: 16.9, 9.2, 5.7. */
   --color-torus-fg: #f5f5fa;
-  --color-torus-fg-dim: rgba(245, 245, 250, 0.65);
-  --color-torus-fg-faint: rgba(245, 245, 250, 0.35);
-  --color-torus-surface: rgba(255, 255, 255, 0.04);
-  --color-torus-border: rgba(255, 255, 255, 0.08);
-  --color-torus-border-strong: rgba(255, 255, 255, 0.18);
+  --color-torus-fg-dim: #b6b8cc;
+  --color-torus-fg-faint: #8b8ea6;
+
+  --color-torus-border: #272b4d;
+  --color-torus-border-strong: #3d4270;
+
+  /*
+   * `mid` is the interface accent. `bass` marks recording, errors, and
+   * destructive actions. `high` marks warnings. The three also color the
+   * frequency bands wherever audio is drawn.
+   */
   --color-torus-bass: #ff2d95;
   --color-torus-mid: #22d3ce;
   --color-torus-high: #f7e08c;
 
-  --font-sans:
-    'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 html,
@@ -28,6 +48,65 @@ body {
   outline: 2px solid var(--color-torus-mid);
   outline-offset: 2px;
   border-radius: 2px;
+}
+
+/*
+ * Range inputs. The component sets `--fill` to the value's position so the
+ * track left of the thumb takes the accent color in every browser.
+ */
+.torus-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+.torus-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--color-torus-mid) var(--fill, 0%),
+    var(--color-torus-border-strong) var(--fill, 0%)
+  );
+}
+.torus-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-torus-fg);
+}
+.torus-range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-torus-border-strong);
+}
+.torus-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-torus-mid);
+}
+.torus-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-torus-fg);
+}
+.torus-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Thin scrollbars that match the panel instead of the browser default. */
+.torus-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-torus-border-strong) transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

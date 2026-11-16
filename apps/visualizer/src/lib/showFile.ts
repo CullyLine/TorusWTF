@@ -100,7 +100,7 @@ export function parseShowFile(text: string): ParseShowResult {
   try {
     parsed = JSON.parse(text);
   } catch {
-    return { ok: false, error: "Couldn't read that file — it isn't valid JSON." };
+    return { ok: false, error: "Couldn't read that file. It isn't valid JSON." };
   }
 
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

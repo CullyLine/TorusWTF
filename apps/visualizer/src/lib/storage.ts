@@ -7,8 +7,6 @@ import type {
 } from '@torus/visualizers';
 import type { WaveformPalette } from '@torus/shared';
 
-export const LICENSE_STORAGE_KEY = 'torus-visualizer-license';
-export const LICENSE_VERIFIED_AT_KEY = 'torus-visualizer-license-verified-at';
 export const SAVED_PRESETS_KEY = 'torus-visualizer-saved-presets';
 export const PRESET_KEY = 'torus-visualizer-preset';
 // Palette + controls keys are versioned: the Pulse Update rebuilt the
@@ -28,7 +26,7 @@ export const WATERMARK_KEY = 'torus-visualizer-watermark';
 export const BACKGROUND_KEY = 'torus-visualizer-background';
 export const SCREEN_EFFECT_KEY = 'torus-visualizer-screen-effect';
 export const EMITTER_KEY = 'torus-visualizer-emitter';
-export const HERO_SEEN_KEY = 'torus-visualizer-hero-seen';
+export const CONTROLS_OPEN_KEY = 'torus-visualizer-controls-open';
 
 /** Reactive backdrop behind the preset. `none` = current behavior. */
 export interface BackgroundSettings {
@@ -48,11 +46,7 @@ export type OverlayPosition =
   | 'top-left'
   | 'top-right';
 
-/**
- * Lower-third title card burned into exports (not the live preview).
- * `position`, `textColor`, and `bgOpacity` are paid-tier customizations;
- * free exports are clamped to bottom-left / brand defaults at draw time.
- */
+/** Title card burned into exports. The live preview never shows it. */
 export interface TitleOverlay {
   enabled: boolean;
   title: string;
@@ -72,11 +66,7 @@ export const DEFAULT_TITLE_OVERLAY: TitleOverlay = {
   bgOpacity: 0.55,
 };
 
-/**
- * Export watermark settings. Free tier ignores these at draw time —
- * `show` is forced true and the default torus badge is used; only
- * licensed users can hide the watermark or substitute their own image.
- */
+/** Export watermark settings. On by default; anyone can turn it off or use their own logo. */
 export interface WatermarkSettings {
   show: boolean;
   /** Downscaled PNG data URL of a user-supplied logo, or null for the default badge. */
@@ -270,6 +260,48 @@ export const DEFAULT_CONTROLS: VisualizerControls = {
   bloomIntensity: 0.9,
   cameraMode: 'flow',
 };
+
+/**
+ * Rebuilds the slider state from a saved look. Older saves predate some
+ * controls, so each missing field falls back to the value that control had
+ * before it existed. That keeps an old save looking the way it did.
+ */
+export function controlsFromSavedPreset(saved: SavedPreset): VisualizerControls {
+  return {
+    reactivity: saved.reactivity,
+    bassMix: saved.bassMix,
+    midMix: saved.midMix,
+    highMix: saved.highMix,
+    speed: saved.speed,
+    smoothness: saved.smoothness ?? 0,
+    scale: saved.scale ?? 1,
+    bassShake: saved.bassShake ?? 0,
+    depthOfField: saved.depthOfField ?? 0,
+    bassMaxHz: saved.bassMaxHz ?? 250,
+    midMaxHz: saved.midMaxHz ?? 2000,
+    anima: saved.anima ?? 0.5,
+    aura: saved.aura ?? 0.4,
+    cinematicSpeed: saved.cinematicSpeed ?? 1,
+    energy: saved.energy ?? 0,
+    inflate: saved.inflate ?? 0.5,
+    appendages: saved.appendages ?? 4,
+    subSpheres: saved.subSpheres ?? 6,
+    turbulence: saved.turbulence ?? 1,
+    trailLength: saved.trailLength ?? 1,
+    density: saved.density ?? 1,
+    vortexAmount: saved.vortexAmount ?? 0.25,
+    interactStrength: saved.interactStrength ?? 1,
+    cameraDistance: saved.cameraDistance ?? 1,
+    lightLevel: saved.lightLevel ?? 1,
+    highlightProtection: saved.highlightProtection ?? true,
+    autoGain: saved.autoGain ?? true,
+    colorLife: saved.colorLife ?? 0.6,
+    saturation: saved.saturation ?? 1.1,
+    linger: saved.linger ?? 0.3,
+    bloomIntensity: saved.bloomIntensity,
+    cameraMode: saved.cameraMode,
+  };
+}
 
 export function loadSavedPresets(): SavedPreset[] {
   if (typeof window === 'undefined') return [];

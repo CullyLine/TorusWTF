@@ -67,10 +67,8 @@ export function MagicLinkSentNotice({
         </a>
         {!devMail.sent ? (
           <p style={{ margin: '10px 0 0', fontSize: 12, opacity: 0.75 }}>
-            SMTP was unreachable — start Mailhog with{' '}
-            <code style={{ fontSize: 11 }}>
-              docker compose -f infra/docker-compose.yml up -d mailhog
-            </code>
+            The mail server could not be reached. Run an SMTP catcher such as Mailhog on port
+            1025 to test email delivery.
           </p>
         ) : null}
         {onUseDifferentEmail ? (
@@ -107,7 +105,7 @@ export function MagicLinkSentNotice({
       }}
     >
       <p style={{ margin: 0 }}>
-        Check your inbox — a sign-in link was sent to {email || 'your email'}.
+        Check your inbox. A sign-in link was sent to {email || 'your email'}.
       </p>
       <p style={{ margin: '8px 0 0', fontSize: 12, opacity: 0.85 }}>
         The link expires in {expiresMinutes} minutes. Check your spam folder if it doesn&apos;t

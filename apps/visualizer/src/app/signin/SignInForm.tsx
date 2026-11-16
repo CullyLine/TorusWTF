@@ -48,7 +48,7 @@ export function SignInForm({ initialError, nextPath }: SignInFormProps) {
 
   if (sent) {
     return (
-      <div className="rounded-2xl border border-torus-border-strong bg-torus-surface p-5">
+      <div className="rounded-md border border-torus-border-strong bg-torus-surface p-5">
         <MagicLinkSentNotice
           email={email}
           devMail={devMail}
@@ -71,14 +71,14 @@ export function SignInForm({ initialError, nextPath }: SignInFormProps) {
         autoComplete="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        className="rounded-full border border-torus-border-strong bg-transparent px-5 py-3 text-sm text-torus-fg outline-none focus:border-torus-mid"
+        className="rounded-md border border-torus-border-strong bg-transparent px-5 py-3 text-sm text-torus-fg outline-none focus:border-torus-mid"
         placeholder="you@example.com"
         disabled={busy}
       />
       <button
         type="submit"
         disabled={busy || !email}
-        className="rounded-full bg-torus-fg px-5 py-3 text-sm font-medium text-torus-bg transition disabled:opacity-50"
+        className="rounded-md bg-torus-fg px-5 py-3 text-sm font-medium text-torus-bg transition disabled:opacity-50"
       >
         {busy ? 'sending…' : 'send sign-in link'}
       </button>

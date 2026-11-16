@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  spessasynth_lib>spessasynth_core: 4.3.12
+
 importers:
 
   .:
@@ -177,10 +180,6 @@ importers:
         version: 2.1.9(@types/node@22.19.19)(lightningcss@1.32.0)
 
   packages/shared:
-    dependencies:
-      zod:
-        specifier: ^3.24.1
-        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

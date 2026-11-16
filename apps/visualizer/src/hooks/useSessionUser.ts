@@ -6,8 +6,6 @@ export interface SessionUser {
   id: string;
   handle: string;
   avatarUrl: string | null;
-  /** True when the account holds a one-time Production License. */
-  hasLicense: boolean;
 }
 
 export function useSessionUser(enabled = true) {
@@ -38,13 +36,6 @@ export function useSessionUser(enabled = true) {
   useEffect(() => {
     if (!enabled) return;
     void refresh();
-  }, [enabled, refresh]);
-
-  useEffect(() => {
-    if (!enabled) return;
-    const onLicense = () => void refresh();
-    window.addEventListener('torus-license-granted', onLicense);
-    return () => window.removeEventListener('torus-license-granted', onLicense);
   }, [enabled, refresh]);
 
   const openDiscordPopup = useCallback(() => {

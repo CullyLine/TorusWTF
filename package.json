@@ -37,6 +37,9 @@
     "typescript": "^5.7.3"
   },
   "pnpm": {
+    "overrides": {
+      "spessasynth_lib>spessasynth_core": "4.3.12"
+    },
     "onlyBuiltDependencies": [
       "esbuild",
       "msgpackr-extract",

@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * Custom-subdomain routing.
  *
  * If a request hits `yourname.torus.wtf`, we rewrite to `/u/yourname` so
- * licensed profiles get a vanity URL. Apex domain + reserved subdomains
+ * profiles can have a vanity URL. Apex domain + reserved subdomains
  * (www, api, conductor, etc.) pass through unchanged.
  *
  * `app/u/[handle]/page.tsx` looks up by custom subdomain first, then handle.

@@ -52,12 +52,12 @@ export async function POST(req: Request) {
     await sendMagicLinkEmail({ to: email, loginUrl, expiresMinutes: EXPIRES_MIN });
     sent = true;
     if (isDevMailCapture()) {
-      console.info('[auth] magic link (dev mail capture) →', loginUrl);
+      console.info('[auth] magic link (dev mail capture):', loginUrl);
     }
   } catch (err) {
     console.error('[auth] magic link send failed:', (err as Error).message);
     if (isDevMailCapture()) {
-      console.info('[auth] magic link (SMTP failed, use this URL locally) →', loginUrl);
+      console.info('[auth] magic link (SMTP failed, use this URL locally):', loginUrl);
     }
   }
 
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
     expiresMinutes: number;
     devMail?: { inboxUrl: string; loginUrl: string; sent: boolean };
   } = {
-    message: 'Check your email — we sent you a sign-in link.',
+    message: 'Check your email. We sent you a sign-in link.',
     expiresMinutes: EXPIRES_MIN,
   };
 

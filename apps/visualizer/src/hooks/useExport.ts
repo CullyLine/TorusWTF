@@ -15,7 +15,7 @@ import type { TitleOverlay } from '@/lib/storage';
 
 export type ExportState = 'idle' | 'recording' | 'rendering';
 
-export function useExport(unlocked: boolean) {
+export function useExport() {
   const [state, setState] = useState<ExportState>('idle');
   const [elapsedSec, setElapsedSec] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -92,16 +92,13 @@ export function useExport(unlocked: boolean) {
       failedRef.current = false;
 
       const { width, height } = dimensionsFor(opts.resolution, opts.aspect ?? '16:9');
-      const watermark = unlocked ? (opts.watermark ?? true) : true;
-      const compositor = createCompositor(
-        opts.glCanvas,
+      const compositor = createCompositor(opts.glCanvas, {
         width,
         height,
-        watermark,
-        opts.titleOverlay ?? null,
-        unlocked,
-        unlocked ? opts.watermarkImage ?? null : null,
-      );
+        watermark: opts.watermark ?? true,
+        watermarkImage: opts.watermarkImage,
+        titleOverlay: opts.titleOverlay,
+      });
       compositorRef.current = compositor;
 
       let recorder: MediaRecorder;
@@ -181,7 +178,7 @@ export function useExport(unlocked: boolean) {
         }
       }
     },
-    [state, stop, unlocked],
+    [state, stop],
   );
 
   return { state, elapsedSec, start, stop };

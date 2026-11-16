@@ -1,5 +1,6 @@
 'use client';
 
+import { Button, cx, inputClass } from '@/components/ui/controls';
 import {
   useEffect,
   useId,
@@ -109,7 +110,8 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
   };
 
   useEffect(() => {
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = panelRef.current?.querySelector<HTMLElement>(
       'button, [href], input, select, [tabindex]:not([tabindex="-1"])',
     );
@@ -149,7 +151,10 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
 
   const onGridPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const tick = Math.max(0, Math.min(clip.lengthTick - snap, snapTo(prPxToTick(e.clientX - rect.left), snap)));
+    const tick = Math.max(
+      0,
+      Math.min(clip.lengthTick - snap, snapTo(prPxToTick(e.clientX - rect.left), snap)),
+    );
     const pitch = maybeSnapPitch(yToPitch(e.clientY - rect.top));
     dispatch({
       type: 'addNote',
@@ -186,7 +191,10 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
     if (!drag) return;
     const deltaTick = prPxToTick(e.clientX - drag.startX);
     if (drag.mode === 'move') {
-      const start = Math.max(0, Math.min(clip.lengthTick - drag.origDur, snapTo(drag.origStart + deltaTick, snap)));
+      const start = Math.max(
+        0,
+        Math.min(clip.lengthTick - drag.origDur, snapTo(drag.origStart + deltaTick, snap)),
+      );
       const pitch = maybeSnapPitch(drag.origPitch - Math.round((e.clientY - drag.startY) / ROW_H));
       if (pitch !== drag.pitch) preview(pitch);
       setDrag({ ...drag, start, pitch });
@@ -216,7 +224,8 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
   }, []);
 
   const noteDisplay = (note: Note) => {
-    if (drag && drag.noteId === note.id) return { start: drag.start, dur: drag.dur, pitch: drag.pitch };
+    if (drag && drag.noteId === note.id)
+      return { start: drag.start, dur: drag.dur, pitch: drag.pitch };
     return { start: note.startTick, dur: note.durationTick, pitch: note.pitch };
   };
 
@@ -226,11 +235,12 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-40 flex flex-col bg-torus-bg/95 backdrop-blur-sm"
+      className="fixed inset-0 z-40 flex flex-col bg-torus-bg"
     >
-      <div className="flex flex-wrap items-center gap-3 border-b border-torus-border px-4 py-2.5">
+      {/* Left padding clears the app launcher, which is fixed to the corner. */}
+      <div className="flex min-h-14 flex-wrap items-center gap-3 border-b border-torus-border bg-torus-panel py-2 pl-[3.75rem] pr-3">
         <span className="h-3 w-3 rounded-sm" style={{ background: track.color }} />
-        <span id={titleId} className="text-sm font-medium">
+        <span id={titleId} className="text-[13px] font-semibold">
           {clip.name}
         </span>
         <span className="text-xs text-torus-fg-faint">{track.name}</span>
@@ -238,8 +248,8 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
         <div className="mx-1 h-5 w-px bg-torus-border" />
 
         <span
-          className="rounded-md border border-torus-border bg-torus-surface px-2 py-1 text-xs text-torus-fg-dim"
-          title="Set the key in the transport bar"
+          className="rounded-md bg-torus-raised px-2 py-1 text-xs text-torus-fg-dim"
+          title="The project key. Change it in the top bar."
         >
           {NOTE_NAMES[key.tonic]} {SCALE_LABELS[key.scale]}
         </span>
@@ -247,10 +257,11 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
           type="button"
           onClick={() => dispatch({ type: 'setScaleLock', locked: !scaleLock })}
           aria-pressed={scaleLock}
-          className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+          title="Only allow notes that belong to the project scale"
+          className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
             scaleLock
-              ? 'border-torus-mid/50 bg-torus-mid/15 text-torus-mid'
-              : 'border-torus-border bg-torus-surface text-torus-fg-dim hover:text-torus-fg'
+              ? 'border-torus-mid bg-torus-raised text-torus-fg'
+              : 'border-torus-border text-torus-fg-dim hover:border-torus-border-strong hover:text-torus-fg'
           }`}
         >
           Lock to scale
@@ -258,12 +269,12 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
 
         <div className="mx-1 h-5 w-px bg-torus-border" />
 
-        <label className="flex items-center gap-1.5 text-xs text-torus-fg-faint">
+        <label className="flex items-center gap-1.5 text-xs text-torus-fg-dim">
           Snap
           <select
             value={snap}
             onChange={(e) => setSnap(Number(e.target.value))}
-            className="rounded-md border border-torus-border bg-torus-surface px-1.5 py-1 text-xs text-torus-fg outline-none"
+            className={cx(inputClass, 'px-2 py-1 text-xs')}
           >
             {SNAP_OPTIONS.map((o) => (
               <option key={o.label} value={o.ticks}>
@@ -273,17 +284,13 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
           </select>
         </label>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="ml-auto rounded-md border border-torus-border bg-torus-surface px-3 py-1 text-xs text-torus-fg-dim hover:text-torus-fg"
-        >
+        <Button size="sm" variant="primary" className="ml-auto" onClick={onClose}>
           Done
-        </button>
+        </Button>
       </div>
 
       {/* Editor */}
-      <div ref={scrollRef} className="relative flex-1 overflow-auto">
+      <div ref={scrollRef} className="torus-scroll relative flex-1 overflow-auto">
         <div className="relative flex" style={{ height: GRID_H, width: KEY_W + gridWidth }}>
           {/* Piano keys */}
           <div className="sticky left-0 z-10 shrink-0" style={{ width: KEY_W }}>
@@ -297,8 +304,8 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
                   onPointerDown={() => {
                     if (!disabled) preview(p);
                   }}
-                  className={`flex items-center justify-end border-b border-black/40 pr-1.5 text-[9px] ${
-                    black ? 'bg-[#0c0d22] text-torus-fg-faint' : 'bg-[#15172e] text-torus-fg-dim'
+                  className={`flex items-center justify-end border-b border-torus-bg pr-1.5 text-[11px] leading-none ${
+                    black ? 'bg-torus-bg text-torus-fg-faint' : 'bg-torus-raised text-torus-fg-dim'
                   } ${tonic ? 'font-semibold text-torus-mid' : ''} ${disabled ? 'opacity-35' : ''}`}
                   style={{ height: ROW_H }}
                 >
@@ -366,7 +373,12 @@ export function PianoRoll({ track, clip, playback, onClose }: PianoRollProps) {
                   onPointerUp={onNotePointerUp}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
-                    dispatch({ type: 'removeNote', trackId: track.id, clipId: clip.id, noteId: note.id });
+                    dispatch({
+                      type: 'removeNote',
+                      trackId: track.id,
+                      clipId: clip.id,
+                      noteId: note.id,
+                    });
                   }}
                   className={`absolute cursor-grab rounded-sm active:cursor-grabbing ${isSel ? 'z-10' : ''}`}
                   style={{
