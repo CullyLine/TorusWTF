@@ -1,15 +1,9 @@
-export function takeSnapshot(
-  canvas: HTMLCanvasElement,
-  mime: string = 'image/png',
-): Promise<Blob> {
+export function takeSnapshot(canvas: HTMLCanvasElement, mime: string = 'image/png'): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) resolve(blob);
-        else reject(new Error('Failed to capture snapshot'));
-      },
-      mime,
-    );
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Failed to capture snapshot'));
+    }, mime);
   });
 }
 

@@ -79,8 +79,7 @@ export async function prescanBpm(opts: BpmPrescanOptions): Promise<BpmPrescanRes
     fluxHistory.push(flux);
     if (fluxHistory.length > maxFluxSamples) fluxHistory.shift();
 
-    const meanFlux =
-      fluxHistory.reduce((a, b) => a + b, 0) / Math.max(1, fluxHistory.length);
+    const meanFlux = fluxHistory.reduce((a, b) => a + b, 0) / Math.max(1, fluxHistory.length);
     const threshold = 0.008 + meanFlux * 1.4;
 
     if (flux > threshold && tSec - lastOnset > ONSET_MIN_GAP) {

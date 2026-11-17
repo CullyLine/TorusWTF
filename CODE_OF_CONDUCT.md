@@ -1,42 +1,32 @@
-# Code of Conduct
+# Code of conduct
 
-## TL;DR
+Be kind. Give credit. Assume good faith.
 
-Be kind. Give credit. Assume good faith. Lift others up. Producers helping producers.
+These rules apply to everyone who takes part in torus, in issues, pull requests, and anywhere else the project is discussed. Everyone is welcome here, whatever their age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
 
-## The full version
+## Please do
 
-We are committed to making participation in torus.wtf a respectful, welcoming experience for everyone — regardless of age, body size, disability, ethnicity, gender identity and expression, level of experience, nationality, personal appearance, race, religion, or sexual identity and orientation.
+- Use welcoming language.
+- Respect opinions and experiences that differ from yours.
+- Accept criticism of your work gracefully, and give it kindly.
+- Credit other people's work when you build on it.
+- Help newcomers.
 
-### Expected behavior
+## Please do not
 
-- Use welcoming and inclusive language
-- Be respectful of differing viewpoints and experiences
-- Gracefully accept constructive criticism
-- Focus on what is best for the community
-- Show empathy towards other community members
-- Credit other people's work when you build on it
-- Help newcomers — remember when you were one
+- Harass, intimidate, or discriminate against anyone.
+- Use sexual language or imagery, or give unwelcome sexual attention.
+- Insult people or attack them personally.
+- Share someone's private information without their permission.
+- Claim someone else's audio or work as your own.
+- Post spam, scams, or advertising.
 
-### Unacceptable behavior
+## If someone breaks these rules
 
-- Harassment, intimidation, or discrimination in any form
-- Sexualized language or imagery, or unwelcome sexual attention
-- Trolling, insulting/derogatory comments, personal or political attacks
-- Public or private harassment
-- Publishing others' private information without explicit permission
-- Doxxing
-- Stealing other people's audio or claiming it as your own
-- Spam, scams, or commercial solicitation
+Email `conduct@torus.wtf`. Reports are read promptly and kept private.
 
-### Enforcement
+The maintainers may remove comments, code, and other contributions that break these rules. They may also ban a person for a time or for good.
 
-Maintainers are responsible for clarifying standards and are expected to take fair corrective action in response to any unacceptable behavior. They have the right to remove, edit, or reject comments, commits, code, issues, and contributions that violate this Code of Conduct, and to ban temporarily or permanently any contributor for behaviors they deem inappropriate, threatening, offensive, or harmful.
-
-### Reporting
-
-Report unacceptable behavior to `conduct@torus.wtf` (or DM a maintainer on Discord). All complaints will be reviewed promptly and confidentially. The maintainer team is obligated to maintain confidentiality with regard to the reporter of an incident.
-
-### Attribution
+## Credit
 
 Adapted from the [Contributor Covenant](https://www.contributor-covenant.org/), version 2.1.

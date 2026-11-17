@@ -33,7 +33,7 @@ export function BubbleEmitter({
   const lastSpawnRevisionRef = useRef(-1);
   // Soften kit accents on mid/low so the overlay stays a texture over the preset.
   const kitAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.65;
-  // Phrase-echo train amp — same tier curve as preset echoes (0.7 / 0.9 / 1).
+  // Phrase-echo train amp. Same tier curve as preset echoes (0.7 / 0.9 / 1).
   const echoAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
 
   const pool = useMemo(

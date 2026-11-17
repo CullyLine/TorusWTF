@@ -40,11 +40,7 @@ export const DEFAULT_BACKGROUND: BackgroundSettings = {
   intensity: 0.6,
 };
 
-export type OverlayPosition =
-  | 'bottom-left'
-  | 'bottom-center'
-  | 'top-left'
-  | 'top-right';
+export type OverlayPosition = 'bottom-left' | 'bottom-center' | 'top-left' | 'top-right';
 
 /** Title card burned into exports. The live preview never shows it. */
 export interface TitleOverlay {
@@ -53,7 +49,7 @@ export interface TitleOverlay {
   subtitle: string;
   position: OverlayPosition;
   textColor: string;
-  /** Background bar opacity, 0–1. */
+  /** Background bar opacity, 0 to 1. */
   bgOpacity: number;
 }
 
@@ -163,7 +159,7 @@ export interface VisualizerControls {
    * 1 = plush fused choir. Only the legacy `liquid_blob` preset ID uses it.
    */
   inflate?: number;
-  /** Lava Choir: number of persistent harmonic voices (0–10). */
+  /** Lava Choir: number of persistent harmonic voices (0 to 10). */
   appendages?: number;
   /**
    * Lava Choir: max transient high-frequency voices that bloom on shimmer
@@ -201,7 +197,7 @@ export interface VisualizerControls {
   autoGain?: boolean;
   /**
    * Living-color amount 0..1. 0 = the palette stays exactly as picked;
-   * 1 = full breathing color — hue drifts at the music's pace, saturation
+   * 1 = full breathing color. Hue drifts at the music's pace, saturation
    * and brightness swell with loudness, drops kick the palette around the
    * color wheel. Default 0.6.
    */
@@ -209,7 +205,7 @@ export interface VisualizerControls {
   saturation?: number;
   /**
    * How long big moments echo after they pass, 0..1. Scales only the release
-   * side of the musical envelopes (attack stays instant) — 0 is the old
+   * side of the musical envelopes (attack stays instant). 0 is the old
    * tight feel, 1 lets peaks take ~3x longer to fade. Default 0.3.
    */
   linger?: number;

@@ -13,7 +13,7 @@ interface BrandMarkProps {
 }
 
 /**
- * torus brand mark — a minimal but cosmic doughnut. A single bold ring with a
+ * torus brand mark. A minimal but cosmic doughnut. A single bold ring with a
  * violet→cyan→magenta sweep and a small sparkle, poking at the fact that the
  * site mascot is, literally, a donut. Pure SVG so it scales and recolors
  * cleanly for the accordion toggle, favicon, and anywhere a logo is needed.

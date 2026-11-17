@@ -1,5 +1,5 @@
 /**
- * Visual impulses — one-shot commands fired INTO the scene from outside the
+ * Visual impulses. One-shot commands fired INTO the scene from outside the
  * canvas (trigger mappings, MIDI notes, keyboard, projector sync).
  *
  * The app writes a strength (usually 1) into a field; the consumer inside
@@ -8,17 +8,14 @@
  * free and off the React render path, matching how metrics flow.
  */
 
-import {
-  advanceToNextCinematicShot,
-  type CinematicState,
-} from './dsp/cinematic';
+import { advanceToNextCinematicShot, type CinematicState } from './dsp/cinematic';
 
 export interface VisualImpulses {
   /** Living-palette hue jolt (same feel as an automatic drop kick). */
   hueKick: number;
   /** One-shot camera FOV punch-in. */
   camPunch: number;
-  /** One-shot focus rack — blur thump. */
+  /** One-shot focus rack. Blur thump. */
   dofPunch: number;
   /** One-shot bloom surge. */
   bloomPulse: number;

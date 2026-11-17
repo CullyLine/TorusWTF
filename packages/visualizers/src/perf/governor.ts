@@ -3,7 +3,7 @@
  *
  * Measured on a machine with no usable GPU, frame rate tracks pixel count
  * almost exactly: the same scene runs at 8fps at 1280x720, 38fps at 640x360
- * and 60fps at 320x180. Almost none of that is scene complexity — it is fill
+ * and 60fps at 320x180. Almost none of that is scene complexity. It is fill
  * rate and the per-pixel post chain. Resolution is therefore the one knob
  * worth turning automatically, and it is also the cheapest: `setDpr` does not
  * recreate the GL context, recompile shaders or reallocate geometry the way

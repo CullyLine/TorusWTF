@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-/** Reactive matchMedia — `false` during SSR / first paint. */
+/** Reactive matchMedia. `false` during SSR / first paint. */
 export function useMediaQuery(query: string): boolean {
   const [matches, setMatches] = useState(false);
 

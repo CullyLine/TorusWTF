@@ -33,7 +33,7 @@ describe('tidal sanctuary tier budgets', () => {
       expect(mid[key]).toBeGreaterThanOrEqual(low[key]);
       expect(low[key]).toBeGreaterThan(0);
     }
-    // Low tier must retain a complete ocean — not a flat empty plane.
+    // Low tier must retain a complete ocean. Not a flat empty plane.
     expect(low.traceSteps).toBeGreaterThanOrEqual(16);
     expect(low.refineSteps).toBeGreaterThanOrEqual(3);
     expect(low.waveOctaves).toBeGreaterThanOrEqual(3);
@@ -55,10 +55,7 @@ describe('tidal sanctuary palette-band mapping', () => {
       'deep',
     );
     expect(
-      mapWaterSampleToPaletteColor(
-        { depthFactor: 0.9, foamAmount: 0.04, crestStrength: 0 },
-        OCEAN,
-      ),
+      mapWaterSampleToPaletteColor({ depthFactor: 0.9, foamAmount: 0.04, crestStrength: 0 }, OCEAN),
     ).toBe(OCEAN.bass);
     expect(
       mapWaterSampleToPaletteColor(

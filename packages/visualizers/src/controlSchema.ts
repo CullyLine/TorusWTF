@@ -1,12 +1,12 @@
 /**
- * Schema-driven control definitions — the single source of truth for every
+ * Schema-driven control definitions. The single source of truth for every
  * numeric control the visualizer exposes.
  *
  * The control panel renders directly from this schema (label, range, hint,
  * grouping), presets declare which extra controls they own via
  * `presetControls` in the registry, and fallback values live here instead of
  * being scattered through UI code. Adding a preset with custom sliders means
- * adding defs here and listing their keys in the registry entry — no panel
+ * adding defs here and listing their keys in the registry entry, no panel
  * changes.
  *
  * Inspired by nw_wrld's `static methods` option schema, adapted to TorusFM's
@@ -105,8 +105,8 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 4,
     step: 0.05,
     fallback: 1.1,
-    hint: 'How big the visuals move with the audio',
-    hintAutoGain: 'How big the visuals move — fine-tune on top of auto sensitivity',
+    hint: 'How much the visuals move with the audio.',
+    hintAutoGain: 'How much the visuals move. It trims the result of auto sensitivity.',
     group: 'feel',
   },
   {
@@ -116,7 +116,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 2,
     step: 0.05,
     fallback: 0.45,
-    hint: 'Extra snap on hits — drums land harder without raising the quiet parts',
+    hint: 'Makes hits stronger. Drums land harder and the quiet parts stay the same.',
     group: 'feel',
   },
   {
@@ -126,7 +126,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 0.95,
     step: 0.01,
     fallback: 0.6,
-    hint: 'How silkily motion glides between hits — hits still land instantly',
+    hint: 'How smoothly motion glides between hits. Hits still land instantly.',
     group: 'feel',
   },
   {
@@ -136,7 +136,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 1,
     step: 0.01,
     fallback: 0.3,
-    hint: 'How long big moments echo after they pass — hits still land instantly',
+    hint: 'How long big moments echo after they pass. Hits still land instantly.',
     group: 'feel',
   },
   {
@@ -156,7 +156,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 1,
     step: 0.01,
     fallback: 0.5,
-    hint: 'How alive the scene stays between beats — breathing, drifting attention',
+    hint: 'How much the scene keeps moving between beats.',
     group: 'feel',
   },
 
@@ -168,7 +168,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 2,
     step: 0.05,
     fallback: 1.1,
-    hint: 'How much colour survives the brightest moments — 0 is monochrome',
+    hint: 'How much color is kept in the brightest moments. 0 is monochrome.',
     group: 'color',
   },
   {
@@ -188,7 +188,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 3,
     step: 0.05,
     fallback: 1,
-    hint: 'Bloom around bright areas — swells with the music',
+    hint: 'Glow around bright areas. It swells with the music.',
     group: 'color',
   },
   {
@@ -248,7 +248,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 2.5,
     step: 0.05,
     fallback: 1,
-    hint: 'How far the camera sits from the center — it never gets close enough to clip into the scene',
+    hint: 'How far the camera sits from the center. It never gets close enough to cut into the scene.',
     group: 'framing',
   },
   {
@@ -268,7 +268,7 @@ export const CONTROL_SCHEMA: ControlDef[] = [
     max: 2,
     step: 0.05,
     fallback: 0,
-    hint: 'Focus blur that kicks with heavy bass — pairs with Shake',
+    hint: 'Focus blur that kicks in on heavy bass. It works well with Shake.',
     group: 'framing',
   },
   {

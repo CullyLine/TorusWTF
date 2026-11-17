@@ -1,7 +1,7 @@
 /**
  * Macro-dynamics: silence / tension / drop detection as musical events.
  *
- * These are heuristic-only — there's no ML — but they encode the patterns
+ * These are heuristic-only, there's no ML, but they encode the patterns
  * that humans recognize as silence, building tension, and that climactic
  * moment when the bass drops.
  *
@@ -77,9 +77,7 @@ export function updateMacro(
     state.silenceCounter = Math.max(0, state.silenceCounter - delta * 4);
   }
   const silenceTarget =
-    state.silenceCounter > 0.4
-      ? Math.min(1, (state.silenceCounter - 0.4) * 2)
-      : 0;
+    state.silenceCounter > 0.4 ? Math.min(1, (state.silenceCounter - 0.4) * 2) : 0;
   state.silence = state.silence * 0.85 + silenceTarget * 0.15;
 
   // ---- Centroid history (for tension) ----

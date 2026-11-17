@@ -67,8 +67,8 @@ export function MagicLinkSentNotice({
         </a>
         {!devMail.sent ? (
           <p style={{ margin: '10px 0 0', fontSize: 12, opacity: 0.75 }}>
-            The mail server could not be reached. Run an SMTP catcher such as Mailhog on port
-            1025 to test email delivery.
+            The mail server could not be reached. Run an SMTP catcher such as Mailhog on port 1025
+            to test email delivery.
           </p>
         ) : null}
         {onUseDifferentEmail ? (

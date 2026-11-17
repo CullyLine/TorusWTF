@@ -1,28 +1,28 @@
 # Principles
 
-These are the commitments torus makes to the people who use it. A feature that breaks one does not ship.
+These are the promises torus makes to the people who use it. A feature that breaks one does not get built.
 
-## Who this is for
+## Who torus is for
 
-torus is for producers, musicians, and anyone who wants a video of their audio. The goal is a good tool that stays good. Growth, engagement numbers, and fundraising are not goals.
+Producers, musicians, and anyone who wants a video of their audio. The goal is a good tool that stays good. Growth, time spent in the app, and raising money are not goals.
 
-## We will never
+## torus will never
 
-- Show ads, sponsored placements, or paid "featured" slots.
+- Show ads or sponsored content.
 - Sell or rent your data.
-- Run an algorithmic feed built to keep you scrolling.
-- Load third-party trackers by default.
-- Use dark patterns in sign-up or account deletion.
+- Build a feed designed to keep you scrolling.
+- Load tracking tools from other companies by default.
+- Use tricks that make signing up easy and leaving hard.
 - Require an account to use the tools.
 
-## We will always
+## torus will always
 
 - Keep the visualizer, Conductor, and Transcriber free, exports included.
-- Process your audio in your browser, without uploading or storing it.
+- Keep your audio on your device. torus does not upload or store it.
 - Let you delete your account and its data from settings.
-- Treat accessibility bugs like any other bug.
-- Describe uptime plainly: this is a best-effort service with no guarantee.
+- Treat a bug that blocks people with disabilities like any other bug.
+- Be honest about reliability. torus is run on a best-effort basis, with no promise that it is always online.
 
 ## History
 
-Until late 2026 torus sold an optional one-time Production License that raised export limits and removed the watermark. It was retired and those features are now free for everyone. Accounts that bought a license show an "Early supporter" badge on their profile.
+Until late 2026 torus sold an optional one-time Production License that raised export limits and removed the watermark. It was retired, and those features are now free for everyone. Accounts that bought a license show an "Early supporter" badge on their profile.

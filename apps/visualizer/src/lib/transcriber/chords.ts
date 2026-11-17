@@ -14,14 +14,14 @@ import type { Mode, PitchClass } from '@libraz/libsonare';
 import { decodeToMono22k } from './transcribe';
 
 /**
- * chords.ts — browser-side audio → chord progression, fully local (the file
+ * chords.ts. Browser-side audio → chord progression, fully local (the file
  * never leaves the device, same as the note transcriber).
  *
  * Detection is delegated to libsonare (Apache-2.0, WASM): an NNLS chromagram
  * fed through a Viterbi/HMM decoder against a rich chord dictionary, with a
  * separate bass chromagram for inversions and a key-context bias. That gives us
- * 7th / 9th / sus / add / dim / half-dim chords plus slash-chord inversions —
- * the soul / future-bass palette — which a plain 12-bin template matcher can't
+ * 7th / 9th / sus / add / dim / half-dim chords plus slash-chord inversions,
+ * the soul / future-bass palette, which a plain 12-bin template matcher can't
  * reach (a folded chroma throws away the bass register entirely).
  *
  * The 2.9 MB WASM binary is copied to /public/libsonare by a prefetch script
@@ -34,8 +34,8 @@ const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 
 
 // Project/MIDI output is time-based; bpm only sets the tick grid.
 const CHORD_BPM = 120;
-const CHORD_BODY_MIDI = 48; // C3 — the chord body sits here.
-const CHORD_BASS_MIDI = 36; // C2 — the detected bass / inversion note sits here.
+const CHORD_BODY_MIDI = 48; // C3. The chord body sits here.
+const CHORD_BASS_MIDI = 36; // C2. The detected bass / inversion note sits here.
 
 /**
  * libsonare ChordQuality enum values (mirrored locally so we don't pull the
@@ -75,7 +75,7 @@ const QUALITY_SUFFIX: Record<number, string> = {
   10: 'add9',
   11: 'm(add9)',
   12: 'dim7',
-  13: 'm7♭5',
+  13: 'm7b5',
   14: 'maj9',
   15: '9',
 };
@@ -90,7 +90,7 @@ export interface ChordSegment {
   /** Display label, e.g. "Cmaj7", "Am7", "G/B". */
   label: string;
   rootPc: number; // 0..11 (C=0)
-  bassPc: number; // 0..11 — lowest sounding pitch class (drives inversions)
+  bassPc: number; // 0..11. Lowest sounding pitch class (drives inversions)
   quality: number; // libsonare ChordQuality enum (0..15)
 }
 
@@ -304,7 +304,10 @@ export function chordsToProject(
 }
 
 /** Build a standard .mid file (single chord track) from a progression. */
-export function chordsToMidi(segments: ChordSegment[], voicing: ChordVoicing = 'block'): Uint8Array {
+export function chordsToMidi(
+  segments: ChordSegment[],
+  voicing: ChordVoicing = 'block',
+): Uint8Array {
   const midi = new Midi();
   midi.header.setTempo(CHORD_BPM);
   const track = midi.addTrack();

@@ -15,7 +15,7 @@
  *
  * This module applies the ACES filmic curve (Stephen Hill's RRT+ODT fit)
  * instead. It keeps climbing across the whole range, and it desaturates as
- * it approaches white, which is how the eye reads "bright" — a light source
+ * it approaches white, which is how the eye reads "bright". A light source
  * blows out toward white rather than sitting at maximum colour.
  *
  * The GLSL below mirrors this TypeScript exactly so the maths can be unit
@@ -103,7 +103,7 @@ const LUMA = [0.2126, 0.7152, 0.0722] as const;
 /**
  * Luminance-preserving saturation, applied after the curve.
  *
- * A filmic curve necessarily desaturates as it approaches white — that is
+ * A filmic curve necessarily desaturates as it approaches white, that is
  * what makes a highlight read as light rather than paint. Applied to an
  * additive renderer where most of the frame is already bright, it also
  * costs chroma in the mid-tones, which is where the colour actually lives.

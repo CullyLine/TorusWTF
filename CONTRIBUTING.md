@@ -1,62 +1,54 @@
-# Contributing to torus
+# Helping with torus
 
-Thanks for helping. This page covers setup, what gets merged, and the conventions the code follows.
+Thank you for wanting to help. You do not need to write code to be useful.
 
-## Setup
+## Report a problem or suggest an idea
 
-You need Node 22 or newer and pnpm 10 or newer. No Docker and no external services.
+The quickest way is the Feedback button at the top of [torus.wtf](https://torus.wtf). You can also [open an issue](https://github.com/CullyLine/TorusWTF/issues/new/choose) on GitHub.
 
-```bash
-git clone https://github.com/CullyLine/TorusWTF.git
-cd TorusWTF
-pnpm install
-cp .env.example .env
-pnpm db:migrate
-pnpm dev
-```
+A good report says:
 
-Open <http://localhost:3000>. The [README](./README.md#repository-layout) explains where things live.
+- what you did
+- what happened
+- what you expected to happen
+- which browser and device you used
 
-## What gets merged
+## Change the code
 
-Read [PRINCIPLES.md](./PRINCIPLES.md) first. A pull request that breaks a principle is closed. That rules out ads, trackers, engagement feeds, and putting any feature behind a payment or an account.
+1. Get torus running on your computer. The [README](./README.md#for-developers) has the four commands.
+2. Make your change on a new branch.
+3. Run the checks:
 
-Welcome without prior discussion:
+   ```bash
+   pnpm format
+   pnpm typecheck
+   pnpm lint
+   pnpm test
+   ```
 
-- Bug fixes.
-- Accessibility improvements.
-- Documentation.
-- New visualizers. Each one is a single React Three Fiber component in `packages/visualizers/src/presets/` plus an entry in `packages/visualizers/src/registry.ts`. Declare its sliders in `controlSchema.ts` so the control panel renders them. Do not build custom UI for one visualizer.
+4. Open a pull request and say what you changed and why. For a visual change, say how to see it: the page, the visualizer, and what kind of music to play.
 
-Open an issue before you start on:
+[apps/visualizer/README.md](./apps/visualizer/README.md) explains how the code is organized. A new visualizer is a good first change.
 
-- Changes to `PRINCIPLES.md`.
-- Database schema changes.
-- Sign-in or session changes.
-- New runtime dependencies.
+## What gets accepted
 
-## Conventions
+Read [PRINCIPLES.md](./PRINCIPLES.md) first. A change that breaks one of those promises will not be merged. That rules out ads, trackers, and putting any feature behind a payment or an account.
 
-- TypeScript in strict mode. Do not use `any` without a comment that says why.
-- Format with Prettier (`pnpm format`) and lint with ESLint (`pnpm lint`).
-- Add Vitest tests for new logic. Keep logic in plain functions so it can be tested without rendering.
-- Write comments that explain why the code is the way it is. Do not describe what the next line does.
-- Every visualizer must handle the `high`, `mid`, and `low` device tiers and respect `prefers-reduced-motion`.
-- Use [Conventional Commits](https://www.conventionalcommits.org) for commit messages: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`.
+Please open an issue to talk it over before you start on any of these:
 
-## Before you open a pull request
+- a change to `PRINCIPLES.md`
+- a change to the database tables
+- a change to sign-in
+- a new library the app depends on
 
-- [ ] `pnpm typecheck` passes
-- [ ] `pnpm lint` passes
-- [ ] `pnpm test` passes
-- [ ] New behavior has tests
-- [ ] User-facing changes are reflected in the README or the app's README
-- [ ] For visual changes, the description says how to see the change: the route, the visualizer, and the kind of audio to play
+## Code rules
 
-## License
+- Write TypeScript. Avoid `any`, and leave a comment explaining why when you cannot.
+- Add a test for new logic. Tests use Vitest.
+- Write comments that explain why the code is the way it is, not what the next line does.
+- A visualizer must still run on slow devices and respect the "reduce motion" setting.
+- Start commit messages with `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, or `chore:`.
 
-By contributing you agree that your contributions are licensed under [AGPL-3.0-or-later](./LICENSE).
+## The fine print
 
-## Code of conduct
-
-See [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
+Your contribution is licensed under [AGPL-3.0-or-later](./LICENSE), like the rest of torus. Everyone taking part follows the [code of conduct](./CODE_OF_CONDUCT.md).

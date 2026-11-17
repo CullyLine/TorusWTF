@@ -1,10 +1,10 @@
 /**
- * Flow-field math core — the "Flow Field Update" engine.
+ * Flow-field math core. The "Flow Field Update" engine.
  *
  * Divergence-free 3D flow built from the curl of value noise with analytic
  * gradients (no finite differences, 3 noise evaluations per curl sample).
  * Curl fields never compress or pile particles up: they loop, spiral and
- * river together — local chaos, global coherence.
+ * river together. Local chaos, global coherence.
  *
  * This is the CPU twin of `flowGlsl.ts`. Both implement the same math so a
  * JS-advected preset and a GPU-simulated preset read the same currents.
@@ -34,7 +34,7 @@ function hash(ix: number, iy: number, iz: number, seed: number): number {
   return s - Math.floor(s);
 }
 
-/** Scratch for noised() — avoids allocation in hot loops. */
+/** Scratch for noised(). Avoids allocation in hot loops. */
 interface NoiseGrad {
   v: number;
   gx: number;
@@ -84,14 +84,22 @@ function noised(x: number, y: number, z: number, seed: number, out: NoiseGrad): 
   const k6 = a - b - e + f;
   const k7 = -a + b + c - d + e - f - g + h;
 
-  out.v = k0 + k1 * ux + k2 * uy + k3 * uz + k4 * ux * uy + k5 * uy * uz + k6 * uz * ux + k7 * ux * uy * uz;
+  out.v =
+    k0 +
+    k1 * ux +
+    k2 * uy +
+    k3 * uz +
+    k4 * ux * uy +
+    k5 * uy * uz +
+    k6 * uz * ux +
+    k7 * ux * uy * uz;
   out.gx = dux * (k1 + k4 * uy + k6 * uz + k7 * uy * uz);
   out.gy = duy * (k2 + k4 * ux + k5 * uz + k7 * uz * ux);
   out.gz = duz * (k3 + k5 * uy + k6 * ux + k7 * ux * uy);
 }
 
 // ---------------------------------------------------------------------------
-// Curl noise — the divergence-free heart
+// Curl noise. The divergence-free heart
 // ---------------------------------------------------------------------------
 
 // Domain offsets decorrelate the three potential components.
@@ -136,7 +144,7 @@ export function addVortex(out: Vec3Like, x: number, y: number, z: number, streng
 }
 
 /**
- * Attractor/repulsor well — your FlowField Magnet, generalized. Positive
+ * Attractor/repulsor well. Your FlowField Magnet, generalized. Positive
  * strength pulls, negative flings. Smooth falloff, no singularity.
  */
 export function addWell(
@@ -155,7 +163,7 @@ export function addWell(
   const dy = cy - y;
   const dz = cz - z;
   const d2 = dx * dx + dy * dy + dz * dz;
-  const falloff = radius * radius / (radius * radius + d2);
+  const falloff = (radius * radius) / (radius * radius + d2);
   const inv = 1 / (Math.sqrt(d2) + 0.12);
   const s = strength * falloff * inv;
   out.x += dx * s;
@@ -168,11 +176,11 @@ export function addWell(
 // ---------------------------------------------------------------------------
 
 export interface FlowParams {
-  /** Monotonic accumulated time — never tie this to raw energy. */
+  /** Monotonic accumulated time. Never tie this to raw energy. */
   time: number;
   /** Spatial frequency. Lower = big slow eddies, higher = tight vortices. */
   fieldScale: number;
-  /** Second-octave gain 0..1 — fine turbulent detail. */
+  /** Second-octave gain 0..1. Fine turbulent detail. */
   turbulence: number;
   /** Overall field velocity multiplier. */
   swirl: number;
@@ -182,7 +190,7 @@ export interface FlowParams {
   vortex: number;
   /** Vertical buoyancy bias (warm tracks rise, cold tracks sink). */
   buoyancy: number;
-  /** Field seed — rotates on drops so the current reorganizes. */
+  /** Field seed. Rotates on drops so the current reorganizes. */
   seed: number;
 }
 
@@ -226,7 +234,7 @@ const curlScratch: Vec3Like = { x: 0, y: 0, z: 0 };
 
 /**
  * Full composed flow sample: multi-octave curl + vortex + buoyancy, with
- * per-band domain offsets. `band` is 0 (bass), 1 (mid), 2 (high) — particles
+ * per-band domain offsets. `band` is 0 (bass), 1 (mid), 2 (high), particles
  * in different bands ride different currents until convergence pulls
  * bandSpread → 0 and the swarm moves as one.
  *

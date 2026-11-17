@@ -1,6 +1,6 @@
-# torus visualizer — execution roadmap
+# torus visualizer, execution roadmap
 
-A sequential, opinionated build queue for items 1–19 of the post-v1 plan.
+A sequential, opinionated build queue for items 1 to 19 of the post-v1 plan.
 Composer 2.5 reads this file, picks the **next unchecked item from the top**, ships it as a single PR, then checks the box in the same PR. Keep working until all boxes are checked or you hit a blocker that needs human input.
 
 ---
@@ -31,11 +31,11 @@ pnpm install                                   # if you touched deps
 pnpm --filter @torus/visualizer typecheck
 pnpm --filter @torus/visualizer lint
 pnpm --filter @torus/visualizer build
-pnpm --filter @torus/web typecheck             # regression check — sacred
-pnpm --filter @torus/visualizers typecheck     # regression check — sacred
+pnpm --filter @torus/web typecheck             # regression check, sacred
+pnpm --filter @torus/visualizers typecheck     # regression check, sacred
 ```
 
-All five must pass clean before you open the PR. Pre-existing lint *warnings* in other packages are fine; new *errors* anywhere are not.
+All five must pass clean before you open the PR. Pre-existing lint _warnings_ in other packages are fine; new _errors_ anywhere are not.
 
 ---
 
@@ -57,7 +57,7 @@ All five must pass clean before you open the PR. Pre-existing lint *warnings* in
 
 Items appear in the order Composer should ship them. The "(was #N in original list)" tag preserves traceability to the spec discussion.
 
-### Foundations — ship these first, later items depend on them
+### Foundations. Ship these first, later items depend on them
 
 #### - [x] shipped 1. Toast notifications (was #7)
 
@@ -71,7 +71,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 - Add `apps/visualizer/src/components/Toast.tsx`
 - Add `apps/visualizer/src/hooks/useToast.ts`
-- Modify `apps/visualizer/src/app/layout.tsx` — mount provider
+- Modify `apps/visualizer/src/app/layout.tsx`, mount provider
 - Modify any current caller of `window.prompt` / `window.alert` to use the new toast (`apps/visualizer/src/components/VisualizerApp.tsx` `handleSavePreset` and surrounding UX)
 
 **Implementation notes:**
@@ -102,11 +102,11 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 - Add `apps/visualizer/src/hooks/usePersistedState.ts`
 - Modify `apps/visualizer/src/components/VisualizerApp.tsx`
-- Modify `apps/visualizer/src/lib/storage.ts` — add new keys
+- Modify `apps/visualizer/src/lib/storage.ts`. Add new keys
 
 **Implementation notes:**
 
-- New hook `usePersistedState<T>(key: string, initial: T): [T, Setter]` that reads from `localStorage` on mount (SSR-safe — return `initial` until hydrated) and writes on change with a small debounce (200ms).
+- New hook `usePersistedState<T>(key: string, initial: T): [T, Setter]` that reads from `localStorage` on mount (SSR-safe, return `initial` until hydrated) and writes on change with a small debounce (200ms).
 - Replace `useState` for `preset`, `palette`, `controls`, `resolution`, `fps`, `sourceKind` in `VisualizerApp.tsx`.
 - Add new keys to `storage.ts`:
   - `torus-visualizer-preset`
@@ -115,13 +115,13 @@ Items appear in the order Composer should ship them. The "(was #N in original li
   - `torus-visualizer-export-resolution`
   - `torus-visualizer-export-fps`
 - For paid-only settings (1080p+, 60fps+), if user is no longer unlocked, downgrade silently to free max on load.
-- Do NOT persist the audio source itself (object URLs / streams) — only the *kind* of source last used.
+- Do NOT persist the audio source itself (object URLs / streams). Only the _kind_ of source last used.
 
 **Acceptance criteria:**
 
-- Set bass slider to 0.3, refresh — slider is still 0.3.
-- Change palette to "Cool ocean", refresh — palette is still ocean.
-- Lock a paid resolution, "deactivate" license in code, refresh — resolution clamps to 720p.
+- Set bass slider to 0.3, refresh. Slider is still 0.3.
+- Change palette to "Cool ocean", refresh. Palette is still ocean.
+- Lock a paid resolution, "deactivate" license in code, refresh. Resolution clamps to 720p.
 - No SSR hydration mismatch errors in console.
 
 ---
@@ -136,9 +136,9 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 **Files:**
 
-- Add `apps/visualizer/src/lib/snapshot.ts` — `takeSnapshot(canvas, mime?): Blob`
-- Modify `apps/visualizer/src/components/ExportPanel.tsx` — add "Snapshot PNG" secondary button
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — wire the button to `glCanvasRef`
+- Add `apps/visualizer/src/lib/snapshot.ts`, `takeSnapshot(canvas, mime?): Blob`
+- Modify `apps/visualizer/src/components/ExportPanel.tsx`, add "Snapshot PNG" secondary button
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`. Wire the button to `glCanvasRef`
 
 **Implementation notes:**
 
@@ -155,7 +155,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-### Quick wins — high user value, low risk
+### Quick wins. High user value, low risk
 
 #### - [x] shipped 4. Audio file scrubber + timeline (was #2)
 
@@ -168,21 +168,21 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 **Files:**
 
 - Add `apps/visualizer/src/components/Scrubber.tsx`
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — render scrubber under the viewport when source is file
-- Modify `apps/visualizer/src/hooks/useAudioSource.ts` — expose `currentTime`, `duration`, `seek(t)`
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`, render scrubber under the viewport when source is file
+- Modify `apps/visualizer/src/hooks/useAudioSource.ts`, expose `currentTime`, `duration`, `seek(t)`
 
 **Implementation notes:**
 
 - Listens to `timeupdate`, `durationchange`, `loadedmetadata` on the file's `HTMLAudioElement`.
 - Click anywhere on the bar to seek. Drag to scrub. Keyboard: ← / → seek ±5s, Shift+← / Shift+→ ±15s.
 - Display formatted time `M:SS / M:SS` on the right.
-- Visual: thin progress bar in brand colors, taller hit target (~32px) for easy clicking, no gradient bling — minimal.
+- Visual: thin progress bar in brand colors, taller hit target (~32px) for easy clicking, no gradient bling, minimal.
 - Hidden in mic and tab modes.
 
 **Acceptance criteria:**
 
 - Drop a 1-minute track, click middle of scrubber → audio jumps to ~30s and visualizer keeps reacting.
-- Keyboard left/right arrow seeks (but only when not focused in an input — guard like the existing Space shortcut does).
+- Keyboard left/right arrow seeks (but only when not focused in an input, guard like the existing Space shortcut does).
 - No layout shift when switching from file to mic source.
 
 ---
@@ -197,10 +197,10 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 **Files:**
 
-- Modify `apps/visualizer/src/lib/export-config.ts` — add `AspectRatio` type + sizes
-- Modify `apps/visualizer/src/components/ExportPanel.tsx` — add aspect selector
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — pass aspect to canvas during export
-- Modify `apps/visualizer/src/hooks/useExport.ts` — compute export `{width, height}` from `resolution × aspect`
+- Modify `apps/visualizer/src/lib/export-config.ts`, add `AspectRatio` type + sizes
+- Modify `apps/visualizer/src/components/ExportPanel.tsx`, add aspect selector
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`, pass aspect to canvas during export
+- Modify `apps/visualizer/src/hooks/useExport.ts`, compute export `{width, height}` from `resolution × aspect`
 
 **Implementation notes:**
 
@@ -228,9 +228,9 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 **Files:**
 
-- Add `apps/visualizer/public/demo.mp3` — a short (15–20s), royalty-free loop. **Until a real asset is curated, use a placeholder generated from a public-domain source — record an `AudioContext`-generated tone sequence if no asset is available. Note in the PR description that a real curated loop should replace it before launch.**
-- Modify `apps/visualizer/src/components/AudioSourcePicker.tsx` — add "Try with demo audio" link under the dropzone
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — handler that fetches `/demo.mp3` as a `File` and calls `handleFile`
+- Add `apps/visualizer/public/demo.mp3`. A short (15 to 20s), royalty-free loop. **Until a real asset is curated, use a placeholder generated from a public-domain source. Record an `AudioContext`-generated tone sequence if no asset is available. Note in the PR description that a real curated loop should replace it before launch.**
+- Modify `apps/visualizer/src/components/AudioSourcePicker.tsx`, add "Try with demo audio" link under the dropzone
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`, handler that fetches `/demo.mp3` as a `File` and calls `handleFile`
 
 **Implementation notes:**
 
@@ -257,7 +257,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 **Files:**
 
 - Add `apps/visualizer/src/components/EmptyStateHero.tsx`
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — render `EmptyStateHero` in the viewport when `!audio.source`
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`. Render `EmptyStateHero` in the viewport when `!audio.source`
 
 **Implementation notes:**
 
@@ -313,7 +313,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 **Files:**
 
 - Add `apps/visualizer/src/components/ShortcutsModal.tsx`
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — register `?` key, manage open state
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`. Register `?` key, manage open state
 
 **Implementation notes:**
 
@@ -330,7 +330,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
 
 ---
 
-### New presets — independent, ship in any order
+### New presets. Independent, ship in any order
 
 Each new preset is a single self-contained R3F file under `packages/visualizers/src/presets/` + one entry in `packages/visualizers/src/registry.ts`. The visualizer app picks them up automatically via the registry. Add a brand color to `PRESET_COLORS` in `apps/visualizer/src/components/PresetPicker.tsx`.
 
@@ -339,7 +339,7 @@ For every preset:
 - Export a `<Name>Scene` component implementing `VisualizerSceneProps`.
 - Use `useMetricsRef()` for audio data, not `analyser` directly (same pattern as existing presets).
 - Provide three tier counts (low/mid/high) for any particle/geometry budget.
-- Self-contained — no shared shader files, no external assets.
+- Self-contained. No shared shader files, no external assets.
 - Add to `VisualizerId` union + `VISUALIZERS` registry.
 - Smoke-test in the visualizer app: drop a track, switch to the new preset, verify it reacts.
 
@@ -386,7 +386,7 @@ For every preset:
 
 **Implementation notes:**
 
-- Particles distributed along a logarithmic spiral (2–3 arms). Mild rotation.
+- Particles distributed along a logarithmic spiral (2 to 3 arms). Mild rotation.
 - Bass causes arms to wind tighter; energy controls overall brightness; high triggers tiny "twinkle" bursts on a random subset of particles.
 - Tier scaling: 2k / 6k / 14k particles.
 
@@ -415,7 +415,7 @@ For every preset:
 
 - Horizontal infinite grid scrolling toward the camera, sun-circle on the horizon, mountain silhouette mid-distance.
 - Sun pulses with bass. Grid line color cycles with palette. Mountain silhouette wobbles with mid.
-- Use a single large `planeGeometry` with a custom `shaderMaterial` (inline GLSL) for the grid — perf > geometry approach.
+- Use a single large `planeGeometry` with a custom `shaderMaterial` (inline GLSL) for the grid. Perf > geometry approach.
 - Tier scaling: shader-only, so vary fragment branches and bloom intensity.
 
 **Acceptance criteria:**
@@ -443,7 +443,7 @@ For every preset:
 
 - Single central blob (`icosahedronGeometry` with high subdivision) with `meshStandardMaterial` (metalness 1, roughness 0.15).
 - Vertex shader displacement using 3D noise driven by bass + beat.
-- No HDR environment to keep deps minimal — rely on the existing `SceneRig` lights. Document in a comment that an `Environment` from drei would look better and is a v2 enhancement.
+- No HDR environment to keep deps minimal. Rely on the existing `SceneRig` lights. Document in a comment that an `Environment` from drei would look better and is a v2 enhancement.
 - Tier scaling: 32 / 64 / 128 subdivisions.
 
 **Acceptance criteria:**
@@ -453,7 +453,7 @@ For every preset:
 
 ---
 
-### Advanced export — biggest paid-tier value drivers
+### Advanced export. Biggest paid-tier value drivers
 
 #### - [x] shipped 14. Pre-render export mode for file sources (was #15)
 
@@ -466,8 +466,8 @@ For every preset:
 **Files:**
 
 - Add `apps/visualizer/src/lib/prerender.ts`
-- Modify `apps/visualizer/src/hooks/useExport.ts` — branch on `mode: 'realtime' | 'prerender'`
-- Modify `apps/visualizer/src/components/ExportPanel.tsx` — add mode toggle (paid only, file mode only)
+- Modify `apps/visualizer/src/hooks/useExport.ts`, branch on `mode: 'realtime' | 'prerender'`
+- Modify `apps/visualizer/src/components/ExportPanel.tsx`, add mode toggle (paid only, file mode only)
 
 **Implementation notes:**
 
@@ -475,11 +475,11 @@ For every preset:
   1. Pause audio playback. Disconnect existing audio graph briefly.
   2. Decode the file via `AudioContext.decodeAudioData` → `AudioBuffer`.
   3. Create an `OfflineAudioContext` matching the file (sample rate × length × channels).
-  4. For each video frame at the target FPS: seek the audio playhead, run the analyser on the `OfflineAudioContext`'s analyser node OR — simpler v1 — feed the same bands by sampling the frequency data of the file pre-computed in chunks.
+  4. For each video frame at the target FPS: seek the audio playhead, run the analyser on the `OfflineAudioContext`'s analyser node OR, simpler v1, feed the same bands by sampling the frequency data of the file pre-computed in chunks.
   5. Render one R3F frame, `canvas.toBlob('image/png')` → append to a frame queue.
-  6. Mux the PNG frames + the original audio with `MediaRecorder` driven by a `requestAnimationFrame` loop on an offscreen canvas at the target FPS, OR — if item 15 (ffmpeg.wasm) has already shipped — pipe to ffmpeg.wasm for proper MP4.
+  6. Mux the PNG frames + the original audio with `MediaRecorder` driven by a `requestAnimationFrame` loop on an offscreen canvas at the target FPS, OR, if item 15 (ffmpeg.wasm) has already shipped, pipe to ffmpeg.wasm for proper MP4.
 - Show a progress bar (rendered frames / total frames). Allow cancel.
-- v1 of pre-render acceptable behavior: 2–5x faster than real-time. Document the speed-up in the PR.
+- v1 of pre-render acceptable behavior: 2 to 5x faster than real-time. Document the speed-up in the PR.
 - DO NOT pre-render mic or tab sources (continue using real-time path for those).
 - Lock the mode toggle behind `useUnlock()`.
 
@@ -509,10 +509,10 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 
 **Files:**
 
-- `apps/visualizer/package.json` — add `@ffmpeg/ffmpeg` and `@ffmpeg/util`. Pin to current major (`^0.12.x` family). Mark `onlyBuiltDependencies` in root `package.json` only if needed.
-- Add `apps/visualizer/src/lib/ffmpeg.ts` — lazy-load wrapper
-- Modify `apps/visualizer/src/hooks/useExport.ts` — after WebM blob produced, optionally transcode to MP4
-- Modify `apps/visualizer/src/components/ExportPanel.tsx` — format select: WebM (default, free) or MP4 (paid)
+- `apps/visualizer/package.json`. Add `@ffmpeg/ffmpeg` and `@ffmpeg/util`. Pin to current major (`^0.12.x` family). Mark `onlyBuiltDependencies` in root `package.json` only if needed.
+- Add `apps/visualizer/src/lib/ffmpeg.ts`, lazy-load wrapper
+- Modify `apps/visualizer/src/hooks/useExport.ts`, after WebM blob produced, optionally transcode to MP4
+- Modify `apps/visualizer/src/components/ExportPanel.tsx`. Format select: WebM (default, free) or MP4 (paid)
 
 **Implementation notes:**
 
@@ -537,21 +537,21 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 
 **Tier:** Free (basic), paid (custom positioning + color).
 **Scope:** ~180 LOC.
-**Dependencies:** Item 5 (aspect ratios — overlay positioning depends on aspect).
+**Dependencies:** Item 5 (aspect ratios, overlay positioning depends on aspect).
 
 **Files:**
 
 - Add `apps/visualizer/src/components/TitleOverlayPanel.tsx`
-- Modify `apps/visualizer/src/lib/compose.ts` — accept optional `titleOverlay` config and draw it during compositing
-- Modify `apps/visualizer/src/hooks/useExport.ts` — thread through the config
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — wire up state + persist via item 2
+- Modify `apps/visualizer/src/lib/compose.ts`, accept optional `titleOverlay` config and draw it during compositing
+- Modify `apps/visualizer/src/hooks/useExport.ts`, thread through the config
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`. Wire up state + persist via item 2
 
 **Implementation notes:**
 
 - Inputs: Title (string), Subtitle (string), Show/hide toggle.
 - Free: bottom-left position, brand font (system fallback), white text on a translucent torus-indigo background bar, 8% of width tall.
 - Paid: position picker (4 corners + bottom-center), text color, background opacity.
-- Title overlay is drawn on the compositing canvas (`compose.ts`) — appears in exports only, not in live preview. The live preview shows a small "Title: X" indicator in the sidebar instead.
+- Title overlay is drawn on the compositing canvas (`compose.ts`). Appears in exports only, not in live preview. The live preview shows a small "Title: X" indicator in the sidebar instead.
 - Empty title = no overlay drawn.
 
 **Acceptance criteria:**
@@ -575,8 +575,8 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 **Files:**
 
 - Add `apps/visualizer/src/lib/extractPalette.ts`
-- Modify `apps/visualizer/src/components/ControlPanel.tsx` — add "Extract from image…" button under palette section
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — wire file input
+- Modify `apps/visualizer/src/components/ControlPanel.tsx`, add "Extract from image…" button under palette section
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`, wire file input
 
 **Implementation notes:**
 
@@ -585,7 +585,7 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 - Hand-rolled simple k-means or median-cut quantizer to find 3 dominant colors. No external deps.
 - Sort the 3 colors by luminance: lowest → bass, mid → mid, highest → high. Tweak if it produces dull results: prefer most-saturated colors.
 - On success, apply to `palette` state + show "Palette extracted from <filename>" success toast.
-- File handle is discarded immediately after sampling — no upload, no storage.
+- File handle is discarded immediately after sampling. No upload, no storage.
 
 **Acceptance criteria:**
 
@@ -611,14 +611,14 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 
 **Implementation notes:**
 
-- Hook reads the existing analyser via `getTimeDomainData`, applies a simple onset-detection over a rolling 8s window (energy flux + autocorrelation in the 60–180 BPM band).
+- Hook reads the existing analyser via `getTimeDomainData`, applies a simple onset-detection over a rolling 8s window (energy flux + autocorrelation in the 60 to 180 BPM band).
 - Quantize to nearest integer BPM. Smooth over 4s.
 - Display: small "120 BPM" pill in the bottom-left of the viewport (under or near the file-name display). Toggleable via a sidebar setting persisted by item 2 (default: off).
-- For mic/tab sources, BPM may be noisy or unstable — that's fine, show "—" if confidence is low.
+- For mic/tab sources, BPM may be noisy or unstable. That is fine. Show a placeholder if confidence is low.
 
 **Acceptance criteria:**
 
-- Drop a 128 BPM track → indicator shows 126–130 within a few seconds.
+- Drop a 128 BPM track → indicator shows 126 to 130 within a few seconds.
 - Toggling off hides the indicator.
 - Setting persists across reloads.
 
@@ -634,9 +634,9 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 
 **Files:**
 
-- Modify `apps/visualizer/src/lib/storage.ts` — add `thumbnail?: string` (data URL) to `SavedPreset`
-- Modify `apps/visualizer/src/components/ControlPanel.tsx` — capture thumbnail on save + render grid
-- Modify `apps/visualizer/src/components/VisualizerApp.tsx` — wire `glCanvasRef` into the save flow
+- Modify `apps/visualizer/src/lib/storage.ts`, add `thumbnail?: string` (data URL) to `SavedPreset`
+- Modify `apps/visualizer/src/components/ControlPanel.tsx`, capture thumbnail on save + render grid
+- Modify `apps/visualizer/src/components/VisualizerApp.tsx`. Wire `glCanvasRef` into the save flow
 
 **Implementation notes:**
 
@@ -656,7 +656,7 @@ ffmpeg.wasm remains a possible future fallback for browsers without WebCodecs.
 
 #### - [x] shipped 20. Desktop audio source
 
-**Why:** Producers want to visualize Spotify, Ableton, Splice, or any desktop app in real time without uploading files. The existing Tab capture already supports this via Entire Screen + Share system audio on Windows/Linux Chrome — users just don't know.
+**Why:** Producers want to visualize Spotify, Ableton, Splice, or any desktop app in real time without uploading files. The existing Tab capture already supports this via Entire Screen + Share system audio on Windows/Linux Chrome. Users just don't know.
 
 **Tier:** Free.
 **Scope:** ~200 LOC.
@@ -725,7 +725,7 @@ Every PR Composer opens should use this body structure:
 ```markdown
 ## What
 
-<1–2 sentence summary>
+<1 to 2 sentence summary>
 
 ## Why
 
@@ -733,8 +733,8 @@ Every PR Composer opens should use this body structure:
 
 ## Changes
 
-- <file> — <what changed>
-- <file> — <what changed>
+- <file>, <what changed>
+- <file>, <what changed>
 
 ## How to test
 
@@ -796,7 +796,7 @@ Every PR Composer opens should use this body structure:
 - 2026-05-26 | Item 20 (Desktop audio source) | commit 85b4068, PR #1
 - 2026-05-26 | Item 21 (Mandelbrot Zoom) | commit 5ae5b2d, PR #2
 - 2026-05-29 | Item 14 (Pre-render MP4 export) | commit d37d250
-- 2026-05-29 | Item 15 (MP4 export — via WebCodecs, not ffmpeg.wasm) | commit d37d250
+- 2026-05-29 | Item 15 (MP4 export, via WebCodecs, not ffmpeg.wasm) | commit d37d250
 - 2026-05-29 | Item 17 (Smart palette from album art / image) | branch feat/v2-export-extras
 - 2026-05-29 | Item 16 (Lower-third title card) | branch feat/v2-export-extras, PR #7
 - 2026-05-29 | Item 17 (Smart palette) | branch feat/v2-export-extras, PR #7

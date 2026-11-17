@@ -11,18 +11,18 @@ export default function PrinciplesPage() {
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-20">
       <h1 className="text-3xl font-semibold tracking-tight">principles</h1>
       <p className="mt-3 text-sm text-torus-fg-dim">
-        These are the commitments torus makes to the people who use it. A feature that breaks one
-        does not ship.
+        These are the promises torus makes to the people who use it. A feature that breaks one does
+        not get built.
       </p>
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold">we will never</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-torus-fg-dim">
-          <li>show ads or sponsored placements</li>
+          <li>show ads or sponsored content</li>
           <li>sell or rent your data</li>
-          <li>run an algorithmic feed built to keep you scrolling</li>
-          <li>load third-party trackers by default</li>
-          <li>use dark patterns in sign-up or account deletion</li>
+          <li>build a feed designed to keep you scrolling</li>
+          <li>load tracking tools from other companies by default</li>
+          <li>use tricks that make signing up easy and leaving hard</li>
           <li>require an account to use the tools</li>
         </ul>
       </section>
@@ -31,10 +31,12 @@ export default function PrinciplesPage() {
         <h2 className="text-lg font-semibold">we will always</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-torus-fg-dim">
           <li>keep the visualizer, Conductor, and Transcriber free, exports included</li>
-          <li>process your audio in your browser, without uploading or storing it</li>
+          <li>keep your audio on your device, without uploading or storing it</li>
           <li>let you delete your account and its data from settings</li>
-          <li>treat accessibility bugs like any other bug</li>
-          <li>describe uptime plainly: this is a best-effort service with no guarantee</li>
+          <li>treat a bug that blocks people with disabilities like any other bug</li>
+          <li>
+            be honest about reliability: torus is best-effort, with no promise it is always online
+          </li>
         </ul>
       </section>
 

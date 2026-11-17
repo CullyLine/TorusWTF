@@ -1,5 +1,5 @@
 /**
- * Cinematic camera — beat-locked authored shot sequence.
+ * Cinematic camera. Beat-locked authored shot sequence.
  *
  * The camera flies through a fixed list of "shots", each lasting a whole
  * number of beats. Shot transitions happen on beat boundaries so the cuts
@@ -92,7 +92,7 @@ export const CINEMATIC_SHOTS: Shot[] = [
   },
   {
     // Formerly "push-through-zero" (ended at z=-0.6, flying THROUGH the
-    // scene). Crossing the origin put the camera inside the preset — the
+    // scene). Crossing the origin put the camera inside the preset, the
     // whole frame filled with geometry. Now it pushes in close and stops
     // just outside the safe radius, keeping the drama without the clip.
     name: 'push-in-close',
@@ -157,11 +157,7 @@ export function advanceToNextCinematicShot(state: CinematicState): void {
     cycleBeats += CINEMATIC_SHOTS[i]!.beats;
   }
 
-  if (
-    !Number.isFinite(state.beatsElapsed) ||
-    !Number.isFinite(cycleBeats) ||
-    cycleBeats <= 0
-  ) {
+  if (!Number.isFinite(state.beatsElapsed) || !Number.isFinite(cycleBeats) || cycleBeats <= 0) {
     state.beatsElapsed = 0;
     return;
   }

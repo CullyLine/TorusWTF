@@ -1,6 +1,6 @@
 /**
  * Pure tier budgets + palette-band mapping for Tidal Sanctuary.
- * No Math.random — every classification is deterministic from sample metrics.
+ * No Math.random. Every classification is deterministic from sample metrics.
  */
 
 export type TidalTier = 'high' | 'mid' | 'low';
@@ -43,7 +43,7 @@ export interface TidalPalette {
 
 export interface WaterSampleMetrics {
   /**
-   * 0..1 optical / geometric depth attenuation — troughs and far water sit high.
+   * 0..1 optical / geometric depth attenuation. Troughs and far water sit high.
    * Deep water must dominate when this is elevated and foam is quiet.
    */
   depthFactor: number;

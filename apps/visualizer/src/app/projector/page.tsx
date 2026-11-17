@@ -17,7 +17,7 @@ const VisualizerCanvas = dynamic(
 );
 
 /**
- * The projector — a chromeless render surface meant to live on a second
+ * The projector. A chromeless render surface meant to live on a second
  * screen (venue projector, capture card, stream overlay). No audio, no
  * controls: the main studio window streams state + metrics over a
  * BroadcastChannel and this window just draws. Double-click for fullscreen.
@@ -70,7 +70,7 @@ export default function ProjectorPage() {
     };
   }, [impulses]);
 
-  // Hide the cursor once the pointer settles — this window IS the show.
+  // Hide the cursor once the pointer settles. This window IS the show.
   useEffect(() => {
     let timeout = 0;
     const onMove = () => {

@@ -1,5 +1,5 @@
 /**
- * Anima — the always-living layer.
+ * Anima. The always-living layer.
  *
  * Three drivers that run regardless of audio:
  *  - heartbeat: slow 3-5 second sine that gives the scene a subtle breath
@@ -60,8 +60,8 @@ export function updateAnima(
   out.heartbeat = Math.sin(elapsedSec * hbFreq * 2 * Math.PI);
 
   // Drift: max ~0.5 deg yaw, ~0.3 deg pitch. Different seeds so they decorrelate.
-  out.driftYaw = smoothNoise(elapsedSec, 1) * (0.5 * Math.PI / 180);
-  out.driftPitch = smoothNoise(elapsedSec, 7) * (0.3 * Math.PI / 180);
+  out.driftYaw = smoothNoise(elapsedSec, 1) * ((0.5 * Math.PI) / 180);
+  out.driftPitch = smoothNoise(elapsedSec, 7) * ((0.3 * Math.PI) / 180);
 
   // Shimmer: extremely slow walk over [0, 1]. Centered at 0.5.
   out.shimmer = 0.5 + smoothNoise(elapsedSec * 0.05, 13) * 0.5;

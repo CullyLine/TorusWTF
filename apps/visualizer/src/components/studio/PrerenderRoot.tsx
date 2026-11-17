@@ -19,7 +19,7 @@ import type { BackgroundSettings, VisualizerControls } from '@/lib/storage';
  * Offscreen R3F canvas used by the pre-render pipeline. Rendered into a
  * fixed-position container far off-screen at the exact export dimensions.
  *
- * The R3F frame loop is set to `'never'` — the orchestrator calls
+ * The R3F frame loop is set to `'never'`. The orchestrator calls
  * `state.advance(songTimeSec)` once per output frame, which invokes every
  * `useFrame` callback (AudioMetricsProvider, SceneRig, the preset) and
  * then renders to the WebGL canvas. The canvas is created with

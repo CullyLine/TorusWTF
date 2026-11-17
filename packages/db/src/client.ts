@@ -90,7 +90,10 @@ function createLibsqlClient(url: string, authToken?: string): Client {
   // Force plain HTTPS for remote Turso. The `libsql://` scheme makes the client
   // negotiate a WebSocket/hrana connection, which is unreliable on serverless
   // runtimes (it surfaced as auth 401s on Vercel); HTTP works everywhere.
-  const httpUrl = url.replace(/^libsql:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://').replace(/^wss:\/\//i, 'https://');
+  const httpUrl = url
+    .replace(/^libsql:\/\//i, 'https://')
+    .replace(/^ws:\/\//i, 'http://')
+    .replace(/^wss:\/\//i, 'https://');
   return createRemoteClient({ url: httpUrl, authToken });
 }
 
@@ -108,7 +111,10 @@ function createLibsqlClient(url: string, authToken?: string): Client {
  */
 function resolveConnection(databaseUrl?: string): { url: string; authToken?: string } {
   if (databaseUrl) {
-    return { url: databaseUrl, authToken: process.env.DATABASE_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN };
+    return {
+      url: databaseUrl,
+      authToken: process.env.DATABASE_AUTH_TOKEN ?? process.env.TURSO_AUTH_TOKEN,
+    };
   }
   if (process.env.DATABASE_URL) {
     return {

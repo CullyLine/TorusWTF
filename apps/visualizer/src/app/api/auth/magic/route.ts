@@ -19,7 +19,7 @@ function safeNextPath(raw: string | undefined): string | null {
 const EXPIRES_MIN = 15;
 
 /**
- * POST /api/auth/magic — request a sign-in email.
+ * POST /api/auth/magic. Request a sign-in email.
  * We always return 200 + a generic message to avoid leaking which emails are registered.
  */
 export async function POST(req: Request) {

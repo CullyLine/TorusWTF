@@ -2,7 +2,7 @@ import { WorkletSynthesizer } from 'spessasynth_lib';
 import { MIDIControllers } from 'spessasynth_core';
 
 /**
- * ConductorEngine — a module singleton wrapping a single spessasynth
+ * ConductorEngine. A module singleton wrapping a single spessasynth
  * WorkletSynthesizer (off the main thread). Mirrors the singleton style of
  * the visualizer's audio graph. It owns one AudioContext, the synth, and an
  * AnalyserNode tap so Conductor's output can later drive the visualizer.
@@ -57,7 +57,8 @@ class ConductorEngine {
 
   private async doInit(): Promise<void> {
     const Ctx: typeof AudioContext =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();
     await ctx.audioWorklet.addModule(WORKLET_URL);
     const synth = new WorkletSynthesizer(ctx);
@@ -153,7 +154,10 @@ class ConductorEngine {
   }
 
   /** Selects bank + program on a channel (track). */
-  setChannelPreset(channel: number, preset: { bankMSB: number; bankLSB: number; program: number }): void {
+  setChannelPreset(
+    channel: number,
+    preset: { bankMSB: number; bankLSB: number; program: number },
+  ): void {
     if (!this.synth) return;
     this.synth.controllerChange(channel, MIDIControllers.bankSelect, preset.bankMSB);
     this.synth.controllerChange(channel, MIDIControllers.bankSelectLSB, preset.bankLSB);

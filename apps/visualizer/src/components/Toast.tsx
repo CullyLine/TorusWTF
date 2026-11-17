@@ -22,7 +22,7 @@ export interface PromptOptions {
   message: string;
   placeholder?: string;
   defaultValue?: string;
-  /** Label for the submit button — defaults to "Confirm". */
+  /** Label for the submit button. Defaults to "Confirm". */
   confirmLabel?: string;
 }
 
@@ -127,7 +127,13 @@ function PromptToast({
   );
 }
 
-function MessageToast({ item, onDismiss }: { item: ToastMessage; onDismiss: (id: string) => void }) {
+function MessageToast({
+  item,
+  onDismiss,
+}: {
+  item: ToastMessage;
+  onDismiss: (id: string) => void;
+}) {
   useEffect(() => {
     const timer = window.setTimeout(() => onDismiss(item.id), DISMISS_MS);
     return () => window.clearTimeout(timer);

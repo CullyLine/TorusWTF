@@ -75,7 +75,7 @@ export async function getCurrentUser(req: Request): Promise<User | null> {
   return validateSessionToken(token);
 }
 
-/** Same, but for Server Components — uses next/headers cookies() instead of a Request. */
+/** Same, but for Server Components. Uses next/headers cookies() instead of a Request. */
 export async function getCurrentUserFromCookies(): Promise<User | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE_NAME)?.value;

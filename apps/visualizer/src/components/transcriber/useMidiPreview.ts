@@ -7,7 +7,7 @@ import { projectLengthTicks, type ConductorProject } from '@/lib/conductor/proje
 
 /**
  * Plays a one-off ConductorProject through the shared spessasynth engine so the
- * Transcriber can audition a transcription on the bundled soundfont — the same
+ * Transcriber can audition a transcription on the bundled soundfont, the same
  * sound you'll hear after "Send to Conductor". No persistence, no store.
  */
 export function useMidiPreview() {

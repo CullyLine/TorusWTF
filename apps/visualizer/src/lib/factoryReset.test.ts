@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_EMITTER_SETTINGS, DEFAULT_SCREEN_EFFECT_SETTINGS } from '@torus/visualizers';
 import { createFactoryLookState, resetToFactoryLook } from './factoryReset';
-import {
-  DEFAULT_BACKGROUND,
-  DEFAULT_CONTROLS,
-  DEFAULT_TITLE_OVERLAY,
-} from './storage';
+import { DEFAULT_BACKGROUND, DEFAULT_CONTROLS, DEFAULT_TITLE_OVERLAY } from './storage';
 import { DEFAULT_PALETTE } from './palettes';
 
 describe('factory visual reset', () => {

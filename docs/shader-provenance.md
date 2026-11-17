@@ -5,8 +5,8 @@ geometry dependency described below. Shadertoy links were used only as visual
 references: no Shadertoy source, constants, camera setup, shader structure, or
 equations were copied, translated, or vendored.
 
-The one licensed port this project carried — Inigo Quilez's "Rainforest",
-used with the author's permission — was removed in the curation pass along
+The one licensed port this project carried, Inigo Quilez's "Rainforest",
+used with the author's permission, was removed in the curation pass along
 with the Alien Planet clean-room sibling. Neither ships any more, so the
 project no longer carries a shader licence obligation beyond the dependency
 below.

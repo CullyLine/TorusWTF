@@ -118,7 +118,7 @@ describe('screen shader modules', () => {
       for (const key of SCREEN_UNIFORM_KEYS) {
         expect(fragment.includes(key)).toBe(true);
       }
-      // Only the selected style body is compiled — sibling style entry points stay out.
+      // Only the selected style body is compiled. Sibling style entry points stay out.
       for (const other of CREATIVE_SCREEN_EFFECT_IDS) {
         if (other === id) continue;
         expect(fragment.includes(`${other}Style`)).toBe(false);
@@ -204,14 +204,14 @@ describe('screen effect controls', () => {
 
   // ScreenStylePass constructs the effect with mix 0 and raises it from
   // useFrame every frame. If that setter ever stopped reaching the uniform,
-  // a style would stay selected in the UI while rendering nothing at all —
-  // exactly the "screen styles stopped working" failure, and invisible to
+  // a style would stay selected in the UI while rendering nothing at all.
+  // Exactly the "screen styles stopped working" failure, and invisible to
   // tests that only check shader source strings.
   it('writes the live wet amount through to the shader uniform', () => {
     const effect = new ScreenStyleEffect('matrix', 0);
-    const uniform = (effect as unknown as { uniforms: Map<string, { value: number }> }).uniforms.get(
-      'mixAmount',
-    );
+    const uniform = (
+      effect as unknown as { uniforms: Map<string, { value: number }> }
+    ).uniforms.get('mixAmount');
     expect(uniform?.value).toBe(0);
     effect.mix = 0.8;
     expect(uniform?.value).toBeCloseTo(0.8, 6);
@@ -228,9 +228,9 @@ describe('screen effect controls', () => {
       cameraNear: 0.1,
       cameraFar: 100,
     });
-    const uniform = (effect as unknown as { uniforms: Map<string, { value: number }> }).uniforms.get(
-      'mixAmount',
-    );
+    const uniform = (
+      effect as unknown as { uniforms: Map<string, { value: number }> }
+    ).uniforms.get('mixAmount');
     expect(uniform?.value).toBeCloseTo(0.65, 6);
     effect.dispose();
   });

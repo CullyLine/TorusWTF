@@ -16,7 +16,7 @@ export interface TriggerEngineActions {
 }
 
 interface UseTriggerEngineOptions {
-  /** Master switch — off while there's no audio source. */
+  /** Master switch. Off while there's no audio source. */
   enabled: boolean;
   mappings: TriggerMapping[];
   /** Freshest metrics, mirrored out of the canvas every frame. */
@@ -24,12 +24,12 @@ interface UseTriggerEngineOptions {
   /** Shared impulse object consumed inside the canvas (SceneRig / palette). */
   impulses: VisualImpulses;
   actions: TriggerEngineActions;
-  /** Also called for impulse actions — used to mirror them to the projector. */
+  /** Also called for impulse actions. Used to mirror them to the projector. */
   onImpulse?: (field: keyof VisualImpulses, strength: number) => void;
 }
 
 /**
- * The trigger engine — watches the audio metrics on a rAF loop, derives
+ * The trigger engine. Watches the audio metrics on a rAF loop, derives
  * one-shot events (beat / bar / bass hit / drop) with Schmitt-style
  * hysteresis + cooldowns so nothing double-fires, matches them against the
  * user's mappings, and fires the mapped actions. MIDI notes enter through
@@ -228,7 +228,11 @@ export function useTriggerEngine({
     const strength = 0.5 + e.velocity * 0.7;
     for (const mapping of mappingsRef.current) {
       if (!mapping.enabled || mapping.source !== 'midiNote') continue;
-      if (mapping.midiNote !== null && mapping.midiNote !== undefined && mapping.midiNote !== e.note)
+      if (
+        mapping.midiNote !== null &&
+        mapping.midiNote !== undefined &&
+        mapping.midiNote !== e.note
+      )
         continue;
       const last = lastFireRef.current[mapping.id] ?? 0;
       if (now - last < 0.05) continue;
@@ -238,4 +242,4 @@ export function useTriggerEngine({
   });
 
   return { handleMidiNote: handleMidiNoteRef.current };
-};
+}

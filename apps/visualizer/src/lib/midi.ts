@@ -20,7 +20,7 @@ export interface UseWebMidiResult {
   /** null = listen to all inputs. Persisted to localStorage. */
   activeInputId: string | null;
   setActiveInputId: (id: string | null) => void;
-  /** Most recent note-on — drives the "Learn" button in the UI. */
+  /** Most recent note-on. Drives the "Learn" button in the UI. */
   lastNote: MidiNoteEvent | null;
   /** Ask for MIDI permission and start listening. Idempotent. */
   requestAccess: () => void;
@@ -43,7 +43,7 @@ function writePersistedInputId(id: string | null): void {
       localStorage.setItem(ACTIVE_INPUT_KEY, id);
     }
   } catch {
-    // Storage unavailable — selection just won't survive reload.
+    // Storage unavailable. Selection just won't survive reload.
   }
 }
 
@@ -56,7 +56,7 @@ function listInputs(access: MIDIAccess): { id: string; name: string }[] {
 }
 
 export function useWebMidi(onNoteOn?: (e: MidiNoteEvent) => void): UseWebMidiResult {
-  // Keep SSR and the client's first paint identical — detect MIDI / restore
+  // Keep SSR and the client's first paint identical. Detect MIDI / restore
   // the saved input only after mount (otherwise TriggerPanel hydrates wrong).
   const [supported, setSupported] = useState(false);
   const [enabled, setEnabled] = useState(false);

@@ -137,8 +137,7 @@ export function drawTitleOverlay(
   const subtitleWidth = subtitle ? ctx.measureText(subtitle).width : 0;
 
   const contentWidth = Math.max(titleWidth, subtitleWidth);
-  const contentHeight =
-    (title ? titleSize : 0) + (subtitle ? subtitleSize : 0) + gap;
+  const contentHeight = (title ? titleSize : 0) + (subtitle ? subtitleSize : 0) + gap;
   const boxW = contentWidth + padX * 2;
   const boxH = contentHeight + padY * 2;
 

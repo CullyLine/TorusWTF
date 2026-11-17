@@ -179,7 +179,7 @@ function averageColor(pixels: Rgb[]): Rgb {
 
 /**
  * Choose three colors that spread across the luminance range while
- * preferring populous, saturated swatches — avoids three near-identical
+ * preferring populous, saturated swatches. Avoids three near-identical
  * muddy tones on busy artwork.
  */
 function pickThree(candidates: { color: Rgb; weight: number }[]): Rgb[] {
@@ -258,6 +258,9 @@ function hslToRgb(h: number, s: number, l: number): Rgb {
 }
 
 function toHex({ r, g, b }: Rgb): string {
-  const h = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  const h = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, '0');
   return `#${h(r)}${h(g)}${h(b)}`;
 }

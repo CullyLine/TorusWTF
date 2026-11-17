@@ -4,21 +4,18 @@ about: Something is broken
 labels: [bug]
 ---
 
-**What happened**
-A clear description of what's wrong.
+**What went wrong?**
 
-**Steps to reproduce**
+**What did you do just before it happened?**
 
 1.
 2.
 3.
 
-**Expected behavior**
+**What did you expect to happen?**
 
-**Environment**
+**Your browser and device**
 
-- Browser / device:
-- Instance (torus.wtf or self-hosted):
-- Version / commit (if known):
+For example: Chrome on Windows, or Safari on an iPhone.
 
-**Screenshots / logs (optional)**
+**A screenshot, if you have one**

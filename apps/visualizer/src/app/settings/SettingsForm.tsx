@@ -38,12 +38,12 @@ export function SettingsForm({ initialUser }: SettingsFormProps) {
   const previousFocus = useRef<HTMLElement | null>(null);
 
   const normalizedConfirmHandle = confirmHandle.replace(/^@/, '').toLowerCase();
-  const confirmMatches =
-    normalizedConfirmHandle === initialUser.handle.toLowerCase();
+  const confirmMatches = normalizedConfirmHandle === initialUser.handle.toLowerCase();
 
   useEffect(() => {
     if (!confirmOpen) return;
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = deletePanelRef.current?.querySelector<HTMLElement>(
       'button, [href], input, [tabindex]:not([tabindex="-1"])',
     );

@@ -43,13 +43,13 @@ export interface AudioMetrics {
   /**
    * 0..~1.2 beat-impact envelope: snaps up the instant a hit lands, then
    * decays like a struck bell (~¼s). THE shared "something just hit"
-   * signal — smooth enough to drive scale/light/camera directly with zero
+   * signal. Smooth enough to drive scale/light/camera directly with zero
    * jitter, punchy enough that every kick drum visibly lands.
    */
   impact: number;
   /**
-   * 0..1 slow loudness swell (~⅓s rise, ~2s fall). The scene's breath —
-   * grows through choruses and drops, exhales in verses. Drive bloom,
+   * 0..1 slow loudness swell (~⅓s rise, ~2s fall). The scene's breath.
+   * Grows through choruses and drops, exhales in verses. Drive bloom,
    * exposure, saturation, and scene presence from this.
    */
   swell: number;
@@ -62,18 +62,18 @@ export interface AudioMetrics {
   /**
    * 0..~1.2 kick-drum envelope: fires on low-band transients (the actual
    * kick pattern, not sustained bass), rings down in ~0.16s. The tightest
-   * of the drum trio — drive floor punches and ground shocks from this.
+   * of the drum trio. Drive floor punches and ground shocks from this.
    */
   kick: number;
   /**
    * 0..~1.2 snare/clap envelope: mid-band transients with hi-hat bleed
-   * subtracted, ~0.2s ring-down. The backbeat — drive lateral accents and
+   * subtracted, ~0.2s ring-down. The backbeat. Drive lateral accents and
    * crack-flash moments from this.
    */
   snare: number;
   /**
    * 0..~1.2 hi-hat/cymbal envelope: high-band transients with a very fast
-   * ~0.11s decay — faster and spikier than `shimmer` (which melts slowly).
+   * ~0.11s decay. Faster and spikier than `shimmer` (which melts slowly).
    * Drive tick-tick sparkle rhythm from this.
    */
   hat: number;
@@ -85,7 +85,7 @@ export interface AudioMetrics {
    */
   sectionLevel: number;
   /**
-   * 0..1 lingering warmth after peaks and drops — decays over ~6.5s once
+   * 0..1 lingering warmth after peaks and drops. Decays over ~6.5s once
    * the moment passes. Drive residual saturation/bloom/light from this so
    * big moments leave a visible trace.
    */
@@ -96,9 +96,9 @@ export interface AudioMetrics {
   beatPhase: number;
   /** 0..1 phase within the current 4/4 bar. */
   barPhase: number;
-  /** 0..1 "is there drum content right now" — transient bursts in mid/high. */
+  /** 0..1 "is there drum content right now". Transient bursts in mid/high. */
   drumActivity: number;
-  /** 0..1 "is there vocal content" — energy concentrated in vocal formant range. */
+  /** 0..1 "is there vocal content". Energy concentrated in vocal formant range. */
   vocalActivity: number;
   /** 0..1 sustained bass-band energy (smoother than `bass`). */
   bassActivity: number;
@@ -130,13 +130,13 @@ export interface AudioMetrics {
   moodValence: number;
   /**
    * 0..1 phrase-echo impulse train. When the music opens a gap after a
-   * phrase, the recorded rhythm of the last bars replays here — the visual
+   * phrase, the recorded rhythm of the last bars replays here, the visual
    * answering the music. 0 while the track is speaking.
    */
   echo: number;
   /**
    * 0..1 pre-beat anticipation. Ramps just before each predicted beat and
-   * releases on the hit — the inhale before the downbeat.
+   * releases on the hit. The inhale before the downbeat.
    */
   gather: number;
   /**
@@ -226,7 +226,7 @@ export interface MetricsScales {
   /**
    * Mirror of the freshest metrics for consumers OUTSIDE the canvas (trigger
    * engine, projector broadcast). Updated every frame with the same object
-   * the scene reads — no copying, no allocation.
+   * the scene reads. No copying, no allocation.
    */
   metricsOutRef?: MutableRefObject<AudioMetrics | null>;
   /**
@@ -252,7 +252,7 @@ export interface MetricsScales {
    */
   autoGain?: boolean;
   /**
-   * 0..1 — how long big moments echo after they pass. Scales the RELEASE
+   * 0..1. How long big moments echo after they pass. Scales the RELEASE
    * side only of the musical envelopes (swell, shimmer, impact ring-down,
    * band release, section fall, afterglow fade); attacks stay instant so
    * hits land just as hard. 0 = the old tight feel, 1 = peaks take ~3x
@@ -341,7 +341,7 @@ export function AudioMetricsProvider({
     let leadActivity = 0;
     let centroidHz = 0;
     // Per-band transient flux (drum classification) + pre-AGC level
-    // (song-structure detection — AGC would flatten exactly the loudness
+    // (song-structure detection, AGC would flatten exactly the loudness
     // differences that section detection needs).
     let bassFlux = 0;
     let midFlux = 0;
@@ -377,7 +377,7 @@ export function AudioMetricsProvider({
           // True silence (0 dB output, paused track, dead input) parks the
           // gain at neutral instead of pumping toward AGC_MAX_GAIN. Without
           // this, silence ramps the gain to max and the first sound after
-          // it lands multiplied by 3x (+ punch expansion) — the "blows up
+          // it lands multiplied by 3x (+ punch expansion). The "blows up
           // at exactly 0 dB but fine at 0.01 dB" bug.
           const desired =
             agcEnvRef.current < AGC_SILENCE_LEVEL
@@ -425,7 +425,7 @@ export function AudioMetricsProvider({
         rawLevel = levels.full;
 
         // --- Heuristic stem detection (no ML, just band patterns) ---
-        // Drums: spectral flux at mid/high — transient bursts (snare, hat).
+        // Drums: spectral flux at mid/high. Transient bursts (snare, hat).
         bassFlux = Math.max(0, bass - fluxPrevBassRef.current);
         midFlux = Math.max(0, mid - prevMid.current);
         highFlux = Math.max(0, high - prevHigh.current);
@@ -482,15 +482,15 @@ export function AudioMetricsProvider({
     prevEnergy.current = lerp(prevEnergy.current, energy, Math.min(1, 0.2 * speed));
 
     // --- Pulse envelopes: the shared musical-motion vocabulary ---
-    // Linger stretches ONLY the release side of every envelope below —
-    // attacks stay instant so hits land, but the way back down slows so
+    // Linger stretches ONLY the release side of every envelope below.
+    // Attacks stay instant so hits land, but the way back down slows so
     // moments hang in the air. Impact keeps most of its ring-down (punch
     // must stay punch); the breathier signals stretch further.
     const lingerAmt = Math.max(0, Math.min(1, linger));
     const lingerRelease = 1 + lingerAmt * 2.2;
 
     // Impact: the beat tracker's flux spike is a 1-frame impulse; here it
-    // becomes a struck-bell envelope — instant attack, exponential ring-down.
+    // becomes a struck-bell envelope. Instant attack, exponential ring-down.
     // Presets that scale/flash/kick from `impact` move fluidly by
     // construction instead of each re-inventing its own decay.
     const impactHit = Math.min(1.2, beat);
@@ -499,7 +499,7 @@ export function AudioMetricsProvider({
         ? impactHit
         : impactEnvRef.current * Math.exp(-dtClamped / (IMPACT_DECAY_TAU * (1 + lingerAmt * 0.7)));
 
-    // Swell: asymmetric loudness breath — blooms quickly when the track
+    // Swell: asymmetric loudness breath. Blooms quickly when the track
     // opens up, exhales slowly when it pulls back.
     const swellTarget = Math.min(1, energy * 0.8 + beat * 0.1);
     const swellTau =
@@ -559,7 +559,7 @@ export function AudioMetricsProvider({
     // Live canvases keep the existing wall-clock onset domain.
     const timelineNowSec = simulationTimeRef?.current ?? performance.now() / 1000;
 
-    // Macro state update — silence, tension, dropEvent.
+    // Macro state update. Silence, tension, dropEvent.
     const bpmForMacro = bpmRef?.current ?? null;
     updateMacro(
       macroState.current,
@@ -575,7 +575,7 @@ export function AudioMetricsProvider({
       timelineNowSec,
     );
 
-    // Song structure — where this moment sits vs the song's history, plus
+    // Song structure. Where this moment sits vs the song's history, plus
     // the lingering afterglow of peaks. Fed the pre-AGC level so section
     // dynamics survive auto-gain. Linger stretches how slowly sections and
     // afterglow exhale.
@@ -602,7 +602,7 @@ export function AudioMetricsProvider({
       ),
     );
 
-    // Choreography — turn signals into intent.
+    // Choreography. Turn signals into intent.
     updateChoreography(
       choreographyState.current,
       {
@@ -631,7 +631,7 @@ export function AudioMetricsProvider({
       barPhase = (sinceOnset % barPeriod) / barPeriod;
     }
 
-    // Call and response — phrase echo, pre-beat gather, band convergence.
+    // Call and response. Phrase echo, pre-beat gather, band convergence.
     updateCallResponse(
       callResponseState.current,
       {
@@ -726,11 +726,11 @@ const BAND_PERCEPTUAL_EXPONENT = 0.6;
 // --- Auto-gain (AGC) tuning ---
 const AGC_TARGET = 0.32; // desired motion level the envelope normalizes toward
 const AGC_FLOOR = 0.04; // ignore near-silence so we don't blow up the gain
-const AGC_SILENCE_LEVEL = 0.012; // below this the signal is silence — park gain at 1
+const AGC_SILENCE_LEVEL = 0.012; // below this the signal is silence. Park gain at 1
 const AGC_MIN_GAIN = 0.6;
 const AGC_MAX_GAIN = 3;
-const AGC_ENVELOPE_TAU = 2.5; // seconds — how slowly loudness is tracked
-const AGC_GAIN_TAU = 0.6; // seconds — how slowly the gain itself moves
+const AGC_ENVELOPE_TAU = 2.5; // seconds, how slowly loudness is tracked
+const AGC_GAIN_TAU = 0.6; // seconds, how slowly the gain itself moves
 
 // --- Default punch ---
 // Baseline dynamic-range expansion applied even when the Energy slider is 0,

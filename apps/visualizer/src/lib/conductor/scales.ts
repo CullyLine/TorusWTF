@@ -1,5 +1,5 @@
 /**
- * scales.ts — pure music-theory helpers for Conductor's scale lock + highlight.
+ * scales.ts. Pure music-theory helpers for Conductor's scale lock + highlight.
  * No DOM, no React: trivially unit-testable (see scales.test.ts).
  *
  * Pitches are MIDI note numbers (C-1 = 0, middle C = 60). A "tonic" is a pitch

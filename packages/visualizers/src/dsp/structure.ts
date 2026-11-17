@@ -1,5 +1,5 @@
 /**
- * Song-structure awareness — where does THIS moment sit in THIS song?
+ * Song-structure awareness. Where does THIS moment sit in THIS song?
  *
  * Raw band levels answer "how loud is it right now"; these signals answer
  * "how big is this moment relative to everything the song has done so
@@ -9,7 +9,7 @@
  *  - `sectionLevel` (0..1): the current intensity's percentile against a
  *    rolling ~48s history. 0.9+ = the biggest thing the song has done,
  *    0.2 = a quiet valley. Rises quickly when a section opens up, but
- *    RELEASES SLOWLY (~4s) — so when a chorus ends, the visual state
+ *    RELEASES SLOWLY (~4s). So when a chorus ends, the visual state
  *    eases down instead of snapping. This is the "linger".
  *
  *  - `afterglow` (0..1): the warm hold after a peak. Excited by drops and

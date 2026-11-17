@@ -1,20 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createImpulses } from '@torus/visualizers';
-import {
-  TRIGGER_ACTIONS,
-  applyTriggerImpulse,
-  triggerImpulseField,
-} from './triggerActions';
+import { TRIGGER_ACTIONS, applyTriggerImpulse, triggerImpulseField } from './triggerActions';
 
 describe('effect trigger actions', () => {
   it('exposes random shader, emitter burst, cinematic cut, and focus punch actions', () => {
     expect(TRIGGER_ACTIONS).toEqual(
-      expect.arrayContaining([
-        'randomShader',
-        'emitParticles',
-        'nextCinematicCut',
-        'dofPunch',
-      ]),
+      expect.arrayContaining(['randomShader', 'emitParticles', 'nextCinematicCut', 'dofPunch']),
     );
     expect(triggerImpulseField('emitParticles')).toBe('emitterBurst');
     expect(triggerImpulseField('nextCinematicCut')).toBe('cinematicCut');

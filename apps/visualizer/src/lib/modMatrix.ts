@@ -37,6 +37,6 @@ export function persistModMatrix(routings: ModRouting[]): void {
   try {
     localStorage.setItem(MOD_MATRIX_KEY, JSON.stringify(routings));
   } catch {
-    // Storage full/unavailable — routings just don't survive the reload.
+    // Storage full/unavailable. Routings just don't survive the reload.
   }
 }

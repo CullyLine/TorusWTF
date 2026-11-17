@@ -19,7 +19,7 @@ function syncsafe(n: number): number[] {
   return [(n >>> 21) & 0x7f, (n >>> 14) & 0x7f, (n >>> 7) & 0x7f, n & 0x7f];
 }
 
-describe('readAudioTags — ID3v2.3', () => {
+describe('readAudioTags with ID3v2.3', () => {
   it('extracts title, artist, and PNG cover art', async () => {
     const fakePng = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4];
 
@@ -55,7 +55,7 @@ describe('readAudioTags — ID3v2.3', () => {
   });
 });
 
-describe('readAudioTags — FLAC', () => {
+describe('readAudioTags with FLAC', () => {
   it('extracts title/artist from a VORBIS_COMMENT block', async () => {
     const utf8 = (s: string) => Array.from(enc.encode(s));
     const u32le = (n: number) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];

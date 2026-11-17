@@ -1,7 +1,7 @@
 import type { KeyLock } from './scales';
 
 /**
- * project.ts — Conductor's serializable data model + reducer.
+ * project.ts. Conductor's serializable data model + reducer.
  *
  * Everything is tick-based (PPQ) so the project is tempo-independent and
  * MIDI-friendly. Pure module (no React/DOM); the React store lives in
@@ -120,7 +120,7 @@ export function createDefaultProject(): ConductorProject {
     name: 'Untitled',
     bpm: 120,
     ppq: PPQ,
-    key: { tonic: 3, scale: 'minor' }, // D# minor — a nod to the user's example
+    key: { tonic: 3, scale: 'minor' }, // D# minor. A nod to the user's example
     scaleLock: false,
     tracks: [createTrack(0)],
   };
@@ -152,11 +152,21 @@ export type ConductorAction =
   | { type: 'renameClip'; trackId: string; clipId: string; name: string }
   | { type: 'addNote'; trackId: string; clipId: string; note: Omit<Note, 'id'> }
   | { type: 'addNotes'; trackId: string; clipId: string; notes: Omit<Note, 'id'>[] }
-  | { type: 'updateNote'; trackId: string; clipId: string; noteId: string; patch: Partial<Omit<Note, 'id'>> }
+  | {
+      type: 'updateNote';
+      trackId: string;
+      clipId: string;
+      noteId: string;
+      patch: Partial<Omit<Note, 'id'>>;
+    }
   | { type: 'removeNote'; trackId: string; clipId: string; noteId: string }
   | { type: 'replaceTracks'; tracks: Track[] };
 
-function mapTrack(project: ConductorProject, trackId: string, fn: (t: Track) => Track): ConductorProject {
+function mapTrack(
+  project: ConductorProject,
+  trackId: string,
+  fn: (t: Track) => Track,
+): ConductorProject {
   return { ...project, tracks: project.tracks.map((t) => (t.id === trackId ? fn(t) : t)) };
 }
 
@@ -164,7 +174,10 @@ function mapClip(track: Track, clipId: string, fn: (c: Clip) => Clip): Track {
   return { ...track, clips: track.clips.map((c) => (c.id === clipId ? fn(c) : c)) };
 }
 
-export function conductorReducer(project: ConductorProject, action: ConductorAction): ConductorProject {
+export function conductorReducer(
+  project: ConductorProject,
+  action: ConductorAction,
+): ConductorProject {
   switch (action.type) {
     case 'load':
       return action.project;
@@ -244,7 +257,10 @@ export function conductorReducer(project: ConductorProject, action: ConductorAct
     }
     case 'resizeClip':
       return mapTrack(project, action.trackId, (t) =>
-        mapClip(t, action.clipId, (c) => ({ ...c, lengthTick: Math.max(PPQ / 4, action.lengthTick) })),
+        mapClip(t, action.clipId, (c) => ({
+          ...c,
+          lengthTick: Math.max(PPQ / 4, action.lengthTick),
+        })),
       );
     case 'renameClip':
       return mapTrack(project, action.trackId, (t) =>
@@ -253,7 +269,10 @@ export function conductorReducer(project: ConductorProject, action: ConductorAct
 
     case 'addNote':
       return mapTrack(project, action.trackId, (t) =>
-        mapClip(t, action.clipId, (c) => ({ ...c, notes: [...c.notes, { ...action.note, id: uid('note') }] })),
+        mapClip(t, action.clipId, (c) => ({
+          ...c,
+          notes: [...c.notes, { ...action.note, id: uid('note') }],
+        })),
       );
     case 'addNotes':
       return mapTrack(project, action.trackId, (t) =>
@@ -271,7 +290,10 @@ export function conductorReducer(project: ConductorProject, action: ConductorAct
       );
     case 'removeNote':
       return mapTrack(project, action.trackId, (t) =>
-        mapClip(t, action.clipId, (c) => ({ ...c, notes: c.notes.filter((n) => n.id !== action.noteId) })),
+        mapClip(t, action.clipId, (c) => ({
+          ...c,
+          notes: c.notes.filter((n) => n.id !== action.noteId),
+        })),
       );
     case 'replaceTracks':
       return { ...project, tracks: action.tracks };

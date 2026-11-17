@@ -103,7 +103,7 @@ export function usePrerender(): PrerenderHookResult {
   const [rootMount, setRootMount] = useState<PrerenderRootMount | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Browser-capability check resolved after mount so SSR and the first client
-  // render agree (`false`) — avoids a hydration mismatch on the export button.
+  // render agree (`false`). Avoids a hydration mismatch on the export button.
   const [supported, setSupported] = useState(false);
 
   useEffect(() => {

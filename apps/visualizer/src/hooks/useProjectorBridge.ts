@@ -10,7 +10,7 @@ import {
 } from '@/lib/projectorSync';
 
 interface UseProjectorBridgeOptions {
-  /** Current look — memoize on [preset, palette, controls, background]. */
+  /** Current look. Memoize on [preset, palette, controls, background]. */
   state: ProjectorStatePayload;
   /** Freshest metrics object, mirrored out of the canvas every frame. */
   metricsRef: MutableRefObject<AudioMetrics | null>;
@@ -64,7 +64,7 @@ export function useProjectorBridge({
     channelRef.current?.postMessage({ type: 'state', state } satisfies ProjectorMessage);
   }, [projectorOpen, state]);
 
-  // Metrics stream — one message per animation frame while connected.
+  // Metrics stream. One message per animation frame while connected.
   // ~30 numbers per message; BroadcastChannel handles this easily.
   useEffect(() => {
     if (!projectorOpen) return;

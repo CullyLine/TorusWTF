@@ -31,7 +31,7 @@ function smoothToward(
 
 /**
  * Amber residue mixed into tube colors while afterglow decays.
- * Max mix at afterglow=1 — residual warmth, not a full wash.
+ * Max mix at afterglow=1. Residual warmth, not a full wash.
  */
 const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.58, 0.28);
 const AFTERGLOW_WARMTH_MIX = 0.38;
@@ -51,7 +51,7 @@ function applyAfterglowWarmth(
 }
 
 /**
- * Torus Field — brand torus with kit accents + phrase-echo reverse.
+ * Torus Field. Brand torus with kit accents + phrase-echo reverse.
  *  - gather → shell inhale (existing breath)
  *  - leanIn → mild inward pull on major radius / presence (pre-drop anticipation)
  *  - kick → tube pulse (wire + particle tube radius)
@@ -79,7 +79,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const freqBuf = useRef<Uint8Array>(new Uint8Array(1024));
   const metricsRef = useMetricsRef();
   // Flow Field Update: particles lift off the torus surface along the
-  // shared curl current, then settle back — the energy field made liquid.
+  // shared curl current, then settle back. The energy field made liquid.
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
   const flowTimeRef = useRef(0);
   const flowScratch = useRef<Vec3Like>({ x: 0, y: 0, z: 0 });
@@ -101,9 +101,9 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   // Lean-in anticipation: ease inward so pre-drop tension reads as a held pull.
   // Slower fall than rise so the approach lingers into the drop (Aura-style).
   const leanSmooth = useRef(0);
-  // Hold-breath stillness — freeze continuous flow/spin; kit/echo stay ungated.
+  // Hold-breath stillness. Freeze continuous flow/spin; kit/echo stay ungated.
   const stillnessSmooth = useRef(0);
-  // Convergence lock — phase-align into a crisp ring lattice when bands lock.
+  // Convergence lock. Phase-align into a crisp ring lattice when bands lock.
   const lockSmooth = useRef(0);
 
   const particleCount = tier === 'high' ? 6000 : tier === 'mid' ? 2500 : 800;
@@ -114,9 +114,8 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   const stillAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   // Lock amp: full lattice snap on high; slightly softer on mid/low.
   const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
-  // Soften amber mix on sparse low tier so bloom doesn’t blow out.
-  const warmthMix =
-    (tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1) * AFTERGLOW_WARMTH_MIX;
+  // Soften amber mix on sparse low tier so bloom doesn't blow out.
+  const warmthMix = (tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1) * AFTERGLOW_WARMTH_MIX;
   const sprite = useMemo(() => getDotTexture(), []);
 
   const { positions, baseTheta, basePhi } = useMemo(() => {
@@ -178,7 +177,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const motionMul = 1 - stillness * 0.92;
     // Hat ticks held mid-hang (distinct from ungated kick/snare punches).
     const hatMul = 1 - stillness * 0.95;
-    // Soft hush dim — cool ember ring, distinct from afterglow amber warmth.
+    // Soft hush dim. Cool ember ring, distinct from afterglow amber warmth.
     const emberDim = 1 - stillness * 0.42;
 
     // Smooth kit envelopes so punches feel fluid, not gated snaps.
@@ -222,10 +221,10 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const lock = lockSmooth.current * (1 - stillness * 0.3);
     // Power curve: early lock stays loose; choruses snap into clean rings.
     const lockSnap = lock * lock;
-    // Steadier continuous drive when locked — not frozen (holdBreath owns that).
+    // Steadier continuous drive when locked. Not frozen (holdBreath owns that).
     const lockPace = 1 - lock * 0.38;
 
-    // One reverse drift per echo impulse — arm on quiet, fire on rise.
+    // One reverse drift per echo impulse. Arm on quiet, fire on rise.
     echoSmooth.current = smoothToward(echoSmooth.current, m.echo * echoAmp, dtClamped, 0.05, 0.3);
     const echoNow = echoSmooth.current;
     if (echoNow < 0.08) echoArmed.current = true;
@@ -243,11 +242,11 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const reverseAmt = traveling ? echoSmooth.current * (1 - echoTravel.current) : 0;
     const flowSign = 1 - reverseAmt * 2;
 
-    // Color-temperature linger tracks afterglow — quiet verses leave tubes untinted.
+    // Color-temperature linger tracks afterglow. Quiet verses leave tubes untinted.
     warmthLingerRef.current +=
       (m.afterglow - warmthLingerRef.current) * (1 - Math.exp(-dtClamped / AFTERGLOW_WARMTH_TAU));
 
-    // Section pacing: the field turns with the song's arc — near-still in
+    // Section pacing: the field turns with the song's arc, near-still in
     // valleys, flying at peaks. Tenderness (vocal-led soft passages) eases
     // the pace further so intimate moments feel held, not spun.
     // motionMul suspends continuous drive during holdBreath (kit stays ungated).
@@ -266,15 +265,11 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Gather: the pre-beat inhale pulls the shell in a breath before each
     // predicted hit, so downbeats read as exhale-release.
     // LeanIn: milder section-scale pull (stacks with gather; never replaces it).
-    // Kick: tube pulse — shell thickens/blooms on the kick envelope.
+    // Kick: tube pulse. Shell thickens/blooms on the kick envelope.
     const kickTube = kickSmooth.current * 0.12;
     const leanPull = lean * 0.038;
     const shellBase = 1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 - leanPull;
-    torus.scale.set(
-      shellBase + kickTube * 0.35,
-      shellBase + kickTube,
-      shellBase + kickTube * 0.35,
-    );
+    torus.scale.set(shellBase + kickTube * 0.35, shellBase + kickTube, shellBase + kickTube * 0.35);
     // Continuous spin hangs under stillness; kit snare Z roll stays ungated.
     // lockPace steadies the continuous X roll when bands lock.
     torus.rotation.y += flowSpeed * 0.4;
@@ -292,7 +287,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const torusMat = torus.material;
     if (torusMat && !Array.isArray(torusMat) && 'emissiveIntensity' in torusMat) {
       const sm = torusMat as THREE.MeshStandardMaterial;
-      // Afterglow holds the shell warm for seconds after a peak — the room
+      // Afterglow holds the shell warm for seconds after a peak, the room
       // still ringing after the chorus ends. Kick blooms the tube; snare
       // flashes mid laterally via a short emissive kick.
       // emberDim hushes the shell toward a still coal under holdBreath
@@ -323,8 +318,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // hatMul holds ticks mid-air during holdBreath (thaw restores sparkle).
     // Lock slightly tightens point size so the lattice reads as crisp lines.
     const hatTick = hatSmooth.current * hatMul;
-    pointsMat.size =
-      0.05 + m.swell * 0.05 + m.impact * 0.04 + hatTick * 0.055 - lock * 0.012;
+    pointsMat.size = 0.05 + m.swell * 0.05 + m.impact * 0.04 + hatTick * 0.055 - lock * 0.012;
     // Dim the particle tube toward a still ember ring under hush.
     // Lock lifts opacity a touch so locked rings read denser / cleaner.
     pointsMat.opacity = Math.min(
@@ -367,12 +361,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Continuous curl clock freezes with the field; echo reverse still flips sign.
     // lockPace steadies the curl clock when bands lock (distinct from freeze).
     flowTimeRef.current +=
-      dtClamped *
-      spd *
-      (0.4 + Math.min(m.energy, 1.5) * 0.4) *
-      flowSign *
-      motionMul *
-      lockPace;
+      dtClamped * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4) * flowSign * motionMul * lockPace;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
     // Convergence power-locks bandSpread so choruses read as one lattice
@@ -389,7 +378,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
     // Snare lateral crack amplitude (phase-split L/R across the cloud).
     const snareX = snareSmooth.current * 0.14;
-    // Kick expands the particle tube radius — the ring thickens with the hit.
+    // Kick expands the particle tube radius. The ring thickens with the hit.
     const kickTubeR = kickSmooth.current * 0.18;
     // LeanIn anticipation: ease major radius + tube presence inward (distinct
     // from gather's shell-scale inhale and kick's tube bloom).
@@ -402,12 +391,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       // Theta advance steadies under lock so the lattice holds its phase.
       baseTheta[i] =
         (baseTheta[i]! +
-          delta *
-            spd *
-            (0.15 + m.high * 1.2 + m.impact) *
-            flowSign *
-            motionMul *
-            lockPace) %
+          delta * spd * (0.15 + m.high * 1.2 + m.impact) * flowSign * motionMul * lockPace) %
         (Math.PI * 2);
 
       // Phase-aligned ring lattice: soft-snap phi/theta toward discrete slots
@@ -423,10 +407,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
       // Mid wobble collapses under lock so rings sharpen (loose drift returns).
       const radius =
-        1.4 +
-        m.bass * 0.25 +
-        Math.sin(phi * 3) * m.mid * 0.08 * (1 - lock * 0.92) -
-        leanRadius;
+        1.4 + m.bass * 0.25 + Math.sin(phi * 3) * m.mid * 0.08 * (1 - lock * 0.92) - leanRadius;
       const tube = 0.5 + m.breath * 0.15 + kickTubeR - leanTube;
       const i3 = i * 3;
       setTorusPoint(arr, i3, theta, phi, radius, tube);
@@ -434,7 +415,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       arr[i3] = arr[i3]! + fv.x * flowLift;
       arr[i3 + 1] = arr[i3 + 1]! + fv.y * flowLift;
       arr[i3 + 2] = arr[i3 + 2]! + fv.z * flowLift;
-      // Snare: lateral X crack — alternate sign by particle index.
+      // Snare: lateral X crack. Alternate sign by particle index.
       arr[i3] = arr[i3]! + snareX * (i % 2 === 0 ? 1 : -1);
     }
     posAttr.needsUpdate = true;

@@ -1,22 +1,22 @@
 /**
- * Call and response — the visual answers the music.
+ * Call and response. The visual answers the music.
  *
  * Three signals, all 0..1, derived from the live metrics:
  *
  *  - `echo`: phrase memory. We record the rhythm of the last two bars
  *    (per-16th onset strength on the beat grid). When the music opens a gap
  *    (activity falls after a phrase), the recorded rhythm is replayed as an
- *    impulse train — the visual sings the phrase back into the silence.
+ *    impulse train. The visual sings the phrase back into the silence.
  *
  *  - `gather`: anticipation. With a confident BPM, this ramps just before
- *    each predicted beat and releases on the hit — the inhale before the
+ *    each predicted beat and releases on the hit. The inhale before the
  *    downbeat. Presets use it to pull particles inward pre-beat so the hit
  *    visibly *releases* them.
  *
  *  - `convergence`: how locked-together the bass/mid/high bands currently
  *    are (sliding-window correlation). Choruses and drops converge toward 1;
  *    breakdowns and solos diverge toward 0. The flow core uses it to blend
- *    three per-band fields into one shared current — the "unconscious
+ *    three per-band fields into one shared current, the "unconscious
  *    collective decision" made visible.
  */
 
@@ -136,7 +136,7 @@ export function updateCallResponse(
   state.activityEma += (activityNow - state.activityEma) * Math.min(1, dt * 3);
 
   if (!hasBpm) {
-    // No grid — no phrase memory or anticipation. Decay gracefully.
+    // No grid. No phrase memory or anticipation. Decay gracefully.
     state.echo = Math.max(0, state.echo - dt * 2);
     state.gather = Math.max(0, state.gather - dt * 4);
     return;
@@ -155,7 +155,7 @@ export function updateCallResponse(
   // ---- Record phase: capture onset strength into the current slot ----
   if (!state.echoMode) {
     if (slot !== state.prevSlot) {
-      // Entering a new slot — start fresh so each pass overwrites the last.
+      // Entering a new slot. Start fresh so each pass overwrites the last.
       state.patternFresh[slot] = 0;
     }
     const onset = Math.min(1, input.beat * 0.8 + input.drumActivity * 0.5);

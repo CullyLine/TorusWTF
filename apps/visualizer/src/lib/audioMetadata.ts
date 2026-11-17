@@ -7,7 +7,7 @@
  *   - FLAC VORBIS_COMMENT + PICTURE blocks
  *
  * Anything else (untagged WAV, Ogg, mic/desktop streams) returns an empty
- * result — the manual "Image" field is always available as a fallback.
+ * result. The manual "Image" field is always available as a fallback.
  *
  * Every parser is wrapped so a malformed file degrades to "no tags found"
  * instead of throwing. Cover art is returned as raw bytes + mime so the
@@ -131,7 +131,8 @@ function parseId3v2(bytes: Uint8Array, base = 0): AudioTags {
 
     let frameSize: number;
     if (major === 2) {
-      frameSize = ((bytes[pos + 3] ?? 0) << 16) | ((bytes[pos + 4] ?? 0) << 8) | (bytes[pos + 5] ?? 0);
+      frameSize =
+        ((bytes[pos + 3] ?? 0) << 16) | ((bytes[pos + 4] ?? 0) << 8) | (bytes[pos + 5] ?? 0);
     } else if (major === 4) {
       frameSize = syncSafe(
         bytes[pos + 4] ?? 0,
@@ -242,7 +243,8 @@ function parseFlac(bytes: Uint8Array): AudioTags {
     const header = bytes[pos] ?? 0;
     const isLast = (header & 0x80) !== 0;
     const blockType = header & 0x7f;
-    const length = ((bytes[pos + 1] ?? 0) << 16) | ((bytes[pos + 2] ?? 0) << 8) | (bytes[pos + 3] ?? 0);
+    const length =
+      ((bytes[pos + 1] ?? 0) << 16) | ((bytes[pos + 2] ?? 0) << 8) | (bytes[pos + 3] ?? 0);
     const dataStart = pos + 4;
     if (dataStart + length > bytes.length) break;
     const block = bytes.subarray(dataStart, dataStart + length);

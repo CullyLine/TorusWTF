@@ -27,7 +27,7 @@ export interface ScreenStyleFrameUpdate {
 
 /**
  * One composer effect that compiles a single selected screen-style module.
- * Remount / reconstruct when `style` or `tier` changes — the fragment source
+ * Remount / reconstruct when `style` or `tier` changes. The fragment source
  * is fixed at construction time.
  */
 export class ScreenStyleEffect extends Effect {

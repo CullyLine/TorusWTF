@@ -41,10 +41,7 @@ function tierDefines(tier: DeviceTier): string {
  * Assemble one fragment shader for the selected style + tier.
  * Only this module's source is compiled into the Effect program.
  */
-export function buildScreenFragmentShader(
-  style: CreativeScreenEffectId,
-  tier: DeviceTier,
-): string {
+export function buildScreenFragmentShader(style: CreativeScreenEffectId, tier: DeviceTier): string {
   const module = SCREEN_SHADER_MODULES[style];
   return `${tierDefines(tier)}
 ${SCREEN_SHADER_DECLARATIONS}

@@ -1,7 +1,7 @@
 import type { NoteEventTime } from '@spotify/basic-pitch';
 
 /**
- * transcribe.ts — browser-side audio → notes using Spotify's Basic Pitch
+ * transcribe.ts. Browser-side audio → notes using Spotify's Basic Pitch
  * (TensorFlow.js). Everything runs locally: the file never leaves the machine.
  *
  * The model expects mono audio resampled to 22.05 kHz, so we decode + downmix +
@@ -124,7 +124,7 @@ export async function transcribeFile(
 /** Map raw transcription failures to user-facing messages. */
 export function friendlyTranscribeError(err: unknown): string {
   if (err instanceof DOMException) {
-    return "Couldn't decode that audio file — try MP3 or WAV";
+    return "Couldn't decode that audio file. Try an MP3 or WAV.";
   }
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
@@ -134,7 +134,7 @@ export function friendlyTranscribeError(err: unknown): string {
     lower.includes('encoding') ||
     lower.includes('unable to decode')
   ) {
-    return "Couldn't decode that audio file — try MP3 or WAV";
+    return "Couldn't decode that audio file. Try an MP3 or WAV.";
   }
   if (
     lower.includes('fetch') ||
@@ -143,7 +143,7 @@ export function friendlyTranscribeError(err: unknown): string {
     lower.includes('model.json') ||
     /\b404\b/.test(lower)
   ) {
-    return 'The transcription model failed to load — check your connection and try again.';
+    return 'The transcription model did not load. Check your connection and try again.';
   }
   return msg || 'Transcription failed';
 }

@@ -6,7 +6,7 @@ export interface PalettePreset {
   palette: WaveformPalette;
 }
 
-// Prism is the first-load default of the Pulse Update — a magenta →
+// Prism is the first-load default of the Pulse Update. A magenta →
 // violet → electric-cyan sweep that stays vivid under bloom and cycles
 // beautifully once the living palette starts drifting it.
 export const DEFAULT_PALETTE: WaveformPalette = {

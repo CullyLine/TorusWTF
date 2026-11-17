@@ -30,7 +30,7 @@ describe('paletteFromPixels', () => {
     const grays = [];
     for (let v = 0; v < 256; v += 4) grays.push({ r: v, g: v, b: v });
     const palette = paletteFromPixels(grays);
-    // A light show can't run on gray — each band must carry real color.
+    // A light show can't run on gray. Each band must carry real color.
     expect(chan(hexToRgb(palette.bass))).toBeGreaterThan(40);
     expect(chan(hexToRgb(palette.mid))).toBeGreaterThan(40);
     expect(chan(hexToRgb(palette.high))).toBeGreaterThan(40);

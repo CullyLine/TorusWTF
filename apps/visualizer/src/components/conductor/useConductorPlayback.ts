@@ -55,29 +55,32 @@ export function useConductorPlayback(project: ConductorProject): ConductorPlayba
     setPlayheadTick(0);
   }, [pause]);
 
-  const play = useCallback((fromTick?: number) => {
-    const sched = schedRef.current!;
-    const start = fromTick ?? playheadTick;
-    const currentLoop = loopRef.current;
-    sched.start(projectRef.current, start, currentLoop);
-    setIsPlaying(true);
-    cancelRaf();
+  const play = useCallback(
+    (fromTick?: number) => {
+      const sched = schedRef.current!;
+      const start = fromTick ?? playheadTick;
+      const currentLoop = loopRef.current;
+      sched.start(projectRef.current, start, currentLoop);
+      setIsPlaying(true);
+      cancelRaf();
 
-    const end = projectLengthTicks(projectRef.current);
-    const tickLoop = () => {
-      const t = sched.getTick();
-      setPlayheadTick(t);
-      if (!currentLoop.enabled && end > 0 && t >= end) {
-        sched.stop();
-        setIsPlaying(false);
-        setPlayheadTick(start);
-        rafRef.current = null;
-        return;
-      }
+      const end = projectLengthTicks(projectRef.current);
+      const tickLoop = () => {
+        const t = sched.getTick();
+        setPlayheadTick(t);
+        if (!currentLoop.enabled && end > 0 && t >= end) {
+          sched.stop();
+          setIsPlaying(false);
+          setPlayheadTick(start);
+          rafRef.current = null;
+          return;
+        }
+        rafRef.current = requestAnimationFrame(tickLoop);
+      };
       rafRef.current = requestAnimationFrame(tickLoop);
-    };
-    rafRef.current = requestAnimationFrame(tickLoop);
-  }, [playheadTick]);
+    },
+    [playheadTick],
+  );
 
   const toggle = useCallback(() => {
     if (schedRef.current?.playing) pause();
@@ -98,7 +101,11 @@ export function useConductorPlayback(project: ConductorProject): ConductorPlayba
   }, []);
 
   const setLoopRegion = useCallback((startTick: number, endTick: number) => {
-    setLoop((l) => ({ ...l, startTick: Math.max(0, startTick), endTick: Math.max(startTick + 1, endTick) }));
+    setLoop((l) => ({
+      ...l,
+      startTick: Math.max(0, startTick),
+      endTick: Math.max(startTick + 1, endTick),
+    }));
   }, []);
 
   // Keep playback + the live mix in sync with project edits. While playing this

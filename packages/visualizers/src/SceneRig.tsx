@@ -24,11 +24,7 @@ import {
 } from './effects/brightness';
 import { ScreenStyleEffect } from './effects/ScreenStyleEffect';
 import { SCREEN_EFFECT_REGISTRY, type ScreenEffectId } from './effects/screenEffects';
-import {
-  createCinematicState,
-  updateCinematicCamera,
-  type CinematicState,
-} from './dsp/cinematic';
+import { createCinematicState, updateCinematicCamera, type CinematicState } from './dsp/cinematic';
 import {
   DEFAULT_FLOW_PARAMS,
   flowParamsFromMetrics,
@@ -42,8 +38,8 @@ export type CameraMode = 'still' | 'drift' | 'orbit' | 'dive' | 'cinematic' | 'f
 /**
  * Safe zone around the scene origin. Every preset is anchored at (0,0,0);
  * if the camera gets closer than this the scene fills the whole frame (or
- * the camera ends up inside it). Enforced after ALL camera placement —
- * mode position, bass shake, choreography dollies, and anima heartbeat —
+ * the camera ends up inside it). Enforced after ALL camera placement,
+ * mode position, bass shake, choreography dollies, and anima heartbeat,
  * so no combination of audio spikes can push the camera into the center.
  */
 const SAFE_MIN_CAMERA_DISTANCE = 1.5;
@@ -54,7 +50,7 @@ const SAFE_MIN_CAMERA_DISTANCE = 1.5;
  * long enough that mode switches glide instead of teleport.
  */
 const CAMERA_SPRING_SMOOTH = 0.16;
-/** Default look SmoothDamp — snappy enough for orbit/drift gaze. */
+/** Default look SmoothDamp. Snappy enough for orbit/drift gaze. */
 const LOOK_SPRING_SMOOTH = 0.14;
 /**
  * Cinematic shot cuts jump look-at and pose discontinuously; a longer
@@ -65,58 +61,58 @@ const CINEMATIC_LOOK_SPRING_SMOOTH = 0.28;
 /** Matches look horizon so cinematic body and gaze ease on the same cut. */
 const CINEMATIC_POSE_SPRING_SMOOTH = 0.28;
 
-/** Short SmoothDamp time for FOV punch — punchy but no per-frame stair-steps. */
+/** Short SmoothDamp time for FOV punch. Punchy but no per-frame stair-steps. */
 const FOV_SPRING_SMOOTH = 0.09;
 
 /**
- * Gentle SmoothDamp for Light-level musical breath — chorus lift and
+ * Gentle SmoothDamp for Light-level musical breath. Chorus lift and
  * afterglow linger, slower than FOV so exposure never flashes with kicks.
  */
 const LIGHT_BREATH_SPRING_SMOOTH = 0.28;
 
 /**
- * Short SmoothDamp for impact/bass shake amplitude — tracks kicks without
+ * Short SmoothDamp for impact/bass shake amplitude. Tracks kicks without
  * stair-stepping on raw envelope/FFT frames.
  */
 const SHAKE_AMP_SPRING_SMOOTH = 0.08;
 
 /**
  * Even shorter SmoothDamp for bass-rumble XYZ offsets applied after the pose
- * spring — keeps rumble fluid while still landing on the hit.
+ * spring. Keeps rumble fluid while still landing on the hit.
  */
 const SHAKE_OFFSET_SPRING_SMOOTH = 0.055;
 
 /**
- * Choreography leanIn / release Z dollies — longer than pose spring so
+ * Choreography leanIn / release Z dollies. Longer than pose spring so
  * anticipation and drop exhales glide instead of stair-stepping desiredZ
  * through raw metric envelopes each frame. Quiet settles fully still.
  */
 const CHOREO_Z_SPRING_SMOOTH = 0.22;
 
 /**
- * Phrase-echo parallax sway — slow SmoothDamp so the camera drifts out and
+ * Phrase-echo parallax sway. Slow SmoothDamp so the camera drifts out and
  * home once per gap without snapping. Longer than kit shake; shorter than
  * cinematic cut horizon so it still reads as a reply, not a shot change.
  */
 const ECHO_SWAY_SPRING_SMOOTH = 0.26;
 
 /**
- * Build-up tension coil — FOV tighten + subtle upward creep over seconds
+ * Build-up tension coil. FOV tighten + subtle upward creep over seconds
  * while tension climbs. Far slower than FOV hit punch / leanIn Z so the
  * held breath before a drop reads as anticipation, not a kick.
  */
 const TENSION_COIL_SPRING_SMOOTH = 1.85;
-/** Spring-loose on dropEvent / release — open the frame without a snap. */
+/** Spring-loose on dropEvent / release. Open the frame without a snap. */
 const TENSION_RELEASE_SPRING_SMOOTH = 0.22;
 
 /**
- * Convergence plant — when bass/mid/high lock into one groove, ease the idle
+ * Convergence plant. When bass/mid/high lock into one groove, ease the idle
  * drift/sway floor down so the frame sits in the pocket. Faster than the
  * tension coil (chorus lock, not a long build); slower release so divergence
  * loosens without a snap. Independent of tension coil / leanIn / echo sway.
  */
 const CONVERGENCE_PLANT_SPRING_SMOOTH = 0.38;
-/** Ease back out as bands diverge — a touch slower than the plant-in. */
+/** Ease back out as bands diverge. A touch slower than the plant-in. */
 const CONVERGENCE_LOOSEN_SPRING_SMOOTH = 0.55;
 
 interface ScalarSpring {
@@ -166,7 +162,7 @@ function smoothDampScalar(
   return state.value;
 }
 
-/** Asymmetric EMA — rise/fall taus so hush dims attentively and thaws promptly. */
+/** Asymmetric EMA. rise/fall taus so hush dims attentively and thaws promptly. */
 function smoothToward(
   current: number,
   target: number,
@@ -327,8 +323,7 @@ function ScreenStylePass({
       cameraNear: camera.near,
       cameraFar: camera.far,
     });
-    renderDepthRef.current =
-      wet > 0.001 && usesDepth && !state.gl.getContext().isContextLost();
+    renderDepthRef.current = wet > 0.001 && usesDepth && !state.gl.getContext().isContextLost();
   });
 
   // A small fixed-size prepass supplies depth discontinuities without asking
@@ -428,17 +423,17 @@ export function SceneRig({
   // Light-level musical breath: swell/afterglow multiplier eases via SmoothDamp
   // on top of the user Light level baseline (baseline stays the floor).
   const lightBreathSpringRef = useRef<ScalarSpring>(createScalarSpring());
-  // Impact/bass shake amp + post-pose rumble offsets — SmoothDamp so kick
+  // Impact/bass shake amp + post-pose rumble offsets. SmoothDamp so kick
   // rumble rides the sprung camera without envelope stair-steps.
   const shakeAmpSpringRef = useRef<ScalarSpring>(createScalarSpring());
   const modeShakeOffsetSpringRef = useRef<Spring3>(createSpring3());
   const bassShakeAmpSpringRef = useRef<ScalarSpring>(createScalarSpring());
   const bassShakeOffsetSpringRef = useRef<Spring3>(createSpring3());
-  // leanIn / release Z choreography — SmoothDamp so build anticipation and
+  // leanIn / release Z choreography. SmoothDamp so build anticipation and
   // drop exhales glide; pose spring + shake SmoothDamp stay independent.
   const leanZSpringRef = useRef<ScalarSpring>(createScalarSpring());
   const releaseZSpringRef = useRef<ScalarSpring>(createScalarSpring());
-  // Phrase-echo parallax sway — one-shot lateral look-around per gap.
+  // Phrase-echo parallax sway. One-shot lateral look-around per gap.
   // Arm/fire + travel clock below; SmoothDamp carries the camera out and home.
   const echoSmoothRef = useRef(0);
   const echoTravelRef = useRef(1); // 0..1 traveling; >=1 idle
@@ -447,14 +442,14 @@ export function SceneRig({
   const echoSignRef = useRef(1);
   const echoSwaySpringRef = useRef<ScalarSpring>(createScalarSpring());
   const echoLookSpringRef = useRef<ScalarSpring>(createScalarSpring());
-  // Tension coil — slow FOV tighten + upward Y creep through builds; springs
+  // Tension coil. Slow FOV tighten + upward Y creep through builds; springs
   // loose on dropEvent/release. Independent of FOV hit punch, leanIn Z,
   // cinematic pose cuts, and echo sway.
   const tensionCoilSpringRef = useRef<ScalarSpring>(createScalarSpring());
-  // Convergence plant — SmoothDamp idle-sway floor when bands lock; distinct
+  // Convergence plant. SmoothDamp idle-sway floor when bands lock; distinct
   // from tension coil (FOV/Y), leanIn Z, echo X sway, and kit shake.
   const convergencePlantSpringRef = useRef<ScalarSpring>(createScalarSpring());
-  // DoF kick spring — SmoothDamp so bass/trigger envelopes never write
+  // DoF kick spring. SmoothDamp so bass/trigger envelopes never write
   // focusDistance / bokehScale as raw stair-steps.
   const dofKickSpringRef = useRef<ScalarSpring>(createScalarSpring());
   // Trigger-impulse envelopes: consumed from `impulses` on the frame they
@@ -466,7 +461,7 @@ export function SceneRig({
   // Musical bloom breath: slow chorus/verse envelope (swell + afterglow).
   // Separate from hit flash so kicks punch without owning the glow.
   const bloomBreathRef = useRef(0.55);
-  // Soft hit ring-down for bloom — faster than swell, slower than raw impact.
+  // Soft hit ring-down for bloom. Faster than swell, slower than raw impact.
   const bloomHitRef = useRef(0);
   // Hold-breath hush: eases bloom breath down a notch while the creature listens.
   const bloomHushRef = useRef(0);
@@ -496,7 +491,7 @@ export function SceneRig({
   );
   useEffect(() => () => bloomEffect?.dispose(), [bloomEffect]);
 
-  // Depth of field — constructed directly (like Bloom) so the frame loop
+  // Depth of field. Constructed directly (like Bloom) so the frame loop
   // can rack focusDistance / focusRange / bokehScale with the music.
   // Skipped on low tier; wide rest-state focusRange keeps the frame sharp
   // until a bass/trigger kick narrows it.
@@ -527,7 +522,7 @@ export function SceneRig({
   const animaState = useRef<AnimaState>({ ...NEUTRAL_ANIMA });
   const cinematicState = useRef<CinematicState>(createCinematicState());
   // Flow camera: a virtual anchor advected through the shared curl field.
-  // The camera rides the same current the particles do — drifting, banking,
+  // The camera rides the same current the particles do, drifting, banking,
   // never colliding with the scene (radius is re-normalized every frame).
   const flowAnchorRef = useRef<Vec3Like>({ x: 0.2, y: 0.1, z: 1 });
   const flowCamParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
@@ -560,7 +555,7 @@ export function SceneRig({
     const dtImp = Math.min(delta, 0.1);
 
     // Zero spring velocity on mode change so leftover momentum doesn't
-    // overshoot the new path — position continuity alone handles the glide.
+    // overshoot the new path. Position continuity alone handles the glide.
     if (prevCameraModeRef.current !== cameraMode) {
       camSpringRef.current.vx = 0;
       camSpringRef.current.vy = 0;
@@ -581,10 +576,7 @@ export function SceneRig({
         impulses.camPunch = 0;
       }
       if (impulses.dofPunch > 0.001) {
-        dofPunchEnvRef.current = Math.max(
-          dofPunchEnvRef.current,
-          Math.min(1.5, impulses.dofPunch),
-        );
+        dofPunchEnvRef.current = Math.max(dofPunchEnvRef.current, Math.min(1.5, impulses.dofPunch));
         impulses.dofPunch = 0;
       }
       if (impulses.bloomPulse > 0.001) {
@@ -607,11 +599,11 @@ export function SceneRig({
     const flash = flashEnvRef.current;
 
     // Light-level musical breath: choruses gently lift exposure via swell,
-    // peaks linger on afterglow. SmoothDamp keeps the lift fluid — never a
+    // peaks linger on afterglow. SmoothDamp keeps the lift fluid, never a
     // kick strobe. Multiplier sits on the user Light level so the slider
     // still sets the floor (quiet ≈ 1×, loud lifts a notch).
     // LightLevel runs on every tier (including low), so the breath writes
-    // the exposure pass directly — no need to bake into scene lights.
+    // the exposure pass directly. No need to bake into scene lights.
     const lightBreathTarget = 1 + m.swell * 0.14 + m.afterglow * 0.1;
     const lightBreath = smoothDampScalar(
       lightBreathSpringRef.current,
@@ -627,7 +619,7 @@ export function SceneRig({
     // frame so the living palette breathes through the lighting too.
     //
     // Kit accents: kick punches the bass light, snare cracks the mid light
-    // laterally, hat ticks the high light — discrete drum answers on top of
+    // laterally, hat ticks the high light. Discrete drum answers on top of
     // the continuous swell/impact/shimmer ride. Envelopes already ring down,
     // so accents land as soft hits rather than strobing the whole stage.
     //
@@ -663,35 +655,27 @@ export function SceneRig({
     const flashLightBoost = calculateFlashLightBoost(flash);
     if (bassLight.current) {
       bassLight.current.intensity = clampReactiveLightIntensity(
-        ((0.55 +
-          bassSignal * 2.4 +
-          impactSignal * 2.2 +
-          afterglowSignal * 0.7 +
-          flashLightBoost) *
+        ((0.55 + bassSignal * 2.4 + impactSignal * 2.2 + afterglowSignal * 0.7 + flashLightBoost) *
           keyRimDim +
           kickPunch * 1.6 * kitKeep) *
           STAGE_LIGHT_SCALE,
       );
       bassLight.current.distance = 12 + clampLightSignal(m.breath) * 6 + kickPunch * 2.5;
       bassLight.current.color.set(palette.bass);
-      // Warm amber tilt on key — hue toward red/orange, slight sat ease.
+      // Warm amber tilt on key. Hue toward red/orange, slight sat ease.
       if (tender > 0.001) {
         bassLight.current.color.offsetHSL(-0.04 * tender, -0.07 * tender, 0.025 * tender);
       }
     }
     if (midLight.current) {
       midLight.current.intensity = clampReactiveLightIntensity(
-        ((0.45 +
-          midSignal * 2.0 +
-          swellSignal * 0.8 +
-          afterglowSignal * 0.4 +
-          flashLightBoost) *
+        ((0.45 + midSignal * 2.0 + swellSignal * 0.8 + afterglowSignal * 0.4 + flashLightBoost) *
           fillDim +
           snareCrack * 1.8 * kitKeep) *
           STAGE_LIGHT_SCALE,
       );
       // Lateral crack: snare snaps the mid light outward on its home axis
-      // then the envelope eases it home — a sideways flash, not a strobe.
+      // then the envelope eases it home. A sideways flash, not a strobe.
       midLight.current.position.set(2 + snareCrack * 0.85, 1 + snareCrack * 0.15, 1);
       midLight.current.color.set(palette.mid);
       if (tender > 0.001) {
@@ -723,8 +707,7 @@ export function SceneRig({
     // Tenderness lowers the shake floor so gentle vocals settle the stage;
     // kit / impact can still punch when drums speak (target scales, spring stays).
     const shakeFloor = 1 - tender * 0.55;
-    const shakeTarget =
-      (m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015) * shakeFloor;
+    const shakeTarget = (m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015) * shakeFloor;
     const shake = smoothDampScalar(
       shakeAmpSpringRef.current,
       shakeTarget,
@@ -732,7 +715,7 @@ export function SceneRig({
       SHAKE_AMP_SPRING_SMOOTH,
     );
 
-    // Convergence plant — locked chorus sits the idle drift/sway floor down;
+    // Convergence plant. Locked chorus sits the idle drift/sway floor down;
     // sparse / divergent passages loosen back. SmoothDamp so neither side snaps.
     // Does not touch tension coil, leanIn/release Z, echo sway, or kit accents.
     const plantAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.7;
@@ -747,7 +730,7 @@ export function SceneRig({
       dtCam,
       plantSmooth,
     );
-    // Residual ~22% idle motion at full lock — planted, not frozen.
+    // Residual ~22% idle motion at full lock. Planted, not frozen.
     const idleMul = 1 - plant * 0.78;
 
     // Desired pose for this frame. Modes write here; the spring below eases
@@ -783,7 +766,7 @@ export function SceneRig({
         shakeOxTarget = Math.sin(t * 12.1) * shake * 0.5;
         shakeOyTarget = Math.cos(t * 9.7) * shake * 0.35;
         // The bass push-in eases toward the safe minimum instead of
-        // subtracting linearly — heavy sustained bass (or AGC-boosted
+        // subtracting linearly. Heavy sustained bass (or AGC-boosted
         // quiet audio) can no longer park the camera at the origin.
         {
           const push = m.bass * 1.4 + m.beat * 0.6;
@@ -803,7 +786,7 @@ export function SceneRig({
         lookTargetX = cine.look.x;
         lookTargetY = cine.look.y;
         lookTargetZ = cine.look.z;
-        // Shot cuts jump pose + look discontinuously — zero both velocities
+        // Shot cuts jump pose + look discontinuously. Zero both velocities
         // so the longer cinematic SmoothDamp eases dollies and framing in
         // cleanly (~0.28s) without a whip from residual cut-in momentum.
         if (prevCinematicShotRef.current !== cine.shotIndex) {
@@ -831,9 +814,7 @@ export function SceneRig({
         const fv = flowCamScratch.current;
         sampleFlow(fv, anchor.x * 2.2, anchor.y * 2.2, anchor.z * 2.2, 0, fp);
         // Plant softens the idle current; energy/drop still push when music speaks.
-        const drift =
-          dt *
-          (0.16 * idleMul + m.energy * 0.18 + m.dropEvent * 0.3);
+        const drift = dt * (0.16 * idleMul + m.energy * 0.18 + m.dropEvent * 0.3);
         anchor.x += fv.x * drift;
         anchor.y += fv.y * drift * 0.6; // damp vertical so the horizon stays sane
         anchor.z += fv.z * drift;
@@ -844,11 +825,7 @@ export function SceneRig({
         // Lean into the music: the camera drifts closer as the track
         // swells and eases back out as it exhales. Idle sin wobble plants too.
         const radius =
-          baseZ *
-          (1 -
-            m.swell * 0.09 -
-            m.impact * 0.03 +
-            Math.sin(t * 0.4) * 0.03 * idleMul);
+          baseZ * (1 - m.swell * 0.09 - m.impact * 0.03 + Math.sin(t * 0.4) * 0.03 * idleMul);
         desiredX = anchor.x * radius;
         desiredY = anchor.y * radius;
         desiredZ = anchor.z * radius;
@@ -858,7 +835,7 @@ export function SceneRig({
       default: {
         // A slow lissajous float (actual drifting) + impact-driven shake.
         // Drift amplitude follows the song's section level so quiet
-        // valleys hold nearly still — the camera lingers with the music.
+        // valleys hold nearly still. The camera lingers with the music.
         // Convergence plant further eases the idle floor when bands lock.
         const driftAmp = (0.55 + m.sectionLevel * 0.45) * idleMul;
         desiredX = Math.sin(t * 0.21) * 0.3 * driftAmp;
@@ -901,11 +878,11 @@ export function SceneRig({
       }
     }
 
-    // Choreography — creature emotional motion. Independent of audio reactivity.
+    // Choreography. Creature emotional motion. Independent of audio reactivity.
     // leanIn dollies camera inward; release dollies outward (the exhale);
     // holdBreath dampens motion (the listener's stillness). Targets are
-    // SmoothDamp'd so envelope stair-steps never write desiredZ raw —
-    // anticipation dollies and drop exhales glide; quiet settles still.
+    // SmoothDamp'd so envelope stair-steps never write desiredZ raw.
+    // Anticipation dollies and drop exhales glide; quiet settles still.
     const stillness = 1 - m.holdBreath * 0.85;
     const leanZ = smoothDampScalar(
       leanZSpringRef.current,
@@ -921,30 +898,24 @@ export function SceneRig({
     );
     desiredZ += leanZ + releaseZ;
 
-    // Tension coil — as tension climbs, creep the camera upward a touch
+    // Tension coil. As tension climbs, creep the camera upward a touch
     // (FOV tighten lives with the lens spring below). SmoothDamp over
     // seconds so build-ups hold their breath; dropEvent/release spring
     // the coil loose. leanIn Z, echo X sway, cinematic cuts stay separate.
     const coilAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.7;
-    const releasing =
-      m.dropEvent > 0.12 || m.release > 0.18;
+    const releasing = m.dropEvent > 0.12 || m.release > 0.18;
     const coilTarget = releasing ? 0 : Math.min(1, m.tension) * coilAmp;
     const coilSmooth =
       releasing || coilTarget < tensionCoilSpringRef.current.value
         ? TENSION_RELEASE_SPRING_SMOOTH
         : TENSION_COIL_SPRING_SMOOTH;
-    const coil = smoothDampScalar(
-      tensionCoilSpringRef.current,
-      coilTarget,
-      dtCam,
-      coilSmooth,
-    );
+    const coil = smoothDampScalar(tensionCoilSpringRef.current, coilTarget, dtCam, coilSmooth);
     desiredY += coil * (embedded ? 0.055 : 0.1);
 
-    // Phrase-echo parallax sway — one-shot slow lateral drift-and-return when
+    // Phrase-echo parallax sway. One-shot slow lateral drift-and-return when
     // a phrase gap opens. Arm on quiet, fire on echo rise; SmoothDamp carries
     // the camera out then home. Kit accents, leanIn Z, cinematic pose cuts,
-    // and shake stay on their own springs — this only adds gentle X look-around.
+    // and shake stay on their own springs. This only adds gentle X look-around.
     const echoAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.7;
     echoSmoothRef.current = smoothToward(
       echoSmoothRef.current,
@@ -963,7 +934,7 @@ export function SceneRig({
     prevEchoRef.current = echoNow;
     if (echoTravelRef.current < 1) {
       const bpm = Math.max(60, Math.min(180, m.bpm || 120));
-      // Slightly slower than preset echo travels — a look-around, not a whip.
+      // Slightly slower than preset echo travels. A look-around, not a whip.
       echoTravelRef.current = Math.min(
         1,
         echoTravelRef.current + dtCam * 0.72 * (0.85 + bpm / 180),
@@ -1006,7 +977,7 @@ export function SceneRig({
       lookPitch = a.driftPitch * 0.6 * animaAmp * lookIdle;
     }
 
-    // Safe-zone the *desired* pose before springing — the spring then never
+    // Safe-zone the *desired* pose before springing. The spring then never
     // aims inside the forbidden radius.
     {
       const len = Math.hypot(desiredX, desiredY, desiredZ);
@@ -1034,14 +1005,12 @@ export function SceneRig({
     state.camera.position.set(sprung.x, sprung.y, sprung.z);
 
     // Subwoofer rumble rides ON TOP of the sprung base so kick hits still
-    // land. Amp and XYZ offsets both SmoothDamp — envelope stair-steps never
+    // land. Amp and XYZ offsets both SmoothDamp. Envelope stair-steps never
     // write the camera directly; quiet settles fully still.
     {
       const bassPunch = m.bass * 0.5 + m.impact * 1.3;
       const ampTarget =
-        bassShakeNow > 0
-          ? bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07) * shakeFloor
-          : 0;
+        bassShakeNow > 0 ? bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07) * shakeFloor : 0;
       const amp = smoothDampScalar(
         bassShakeAmpSpringRef.current,
         ampTarget,
@@ -1055,13 +1024,8 @@ export function SceneRig({
       const ozTarget = Math.sin(t * 52.7 + 0.9) * amp * 0.3;
       const off = bassShakeOffsetSpringRef.current;
       springTo(off, oxTarget, oyTarget, ozTarget, dtCam, SHAKE_OFFSET_SPRING_SMOOTH);
-      // Settle snap — once amp and offsets are near rest, kill residual crawl.
-      if (
-        amp === 0 &&
-        Math.abs(off.x) < 1e-5 &&
-        Math.abs(off.y) < 1e-5 &&
-        Math.abs(off.z) < 1e-5
-      ) {
+      // Settle snap. Once amp and offsets are near rest, kill residual crawl.
+      if (amp === 0 && Math.abs(off.x) < 1e-5 && Math.abs(off.y) < 1e-5 && Math.abs(off.z) < 1e-5) {
         off.x = 0;
         off.y = 0;
         off.z = 0;
@@ -1091,14 +1055,7 @@ export function SceneRig({
     // framing glides (~0.28s); other modes keep the snappier default.
     const lookSmooth =
       cameraMode === 'cinematic' ? CINEMATIC_LOOK_SPRING_SMOOTH : LOOK_SPRING_SMOOTH;
-    springTo(
-      lookSpringRef.current,
-      lookTargetX,
-      lookTargetY,
-      lookTargetZ,
-      dtCam,
-      lookSmooth,
-    );
+    springTo(lookSpringRef.current, lookTargetX, lookTargetY, lookTargetZ, dtCam, lookSmooth);
     settleSpring3(lookSpringRef.current, lookTargetX, lookTargetY, lookTargetZ);
     const look = lookSpringRef.current;
     state.camera.lookAt(look.x + lookYaw, look.y + lookPitch, look.z);
@@ -1107,26 +1064,17 @@ export function SceneRig({
     // exhales wider. Tension coil adds a slower couple-degree tighten through
     // builds (coil envelope above); hit punch stays on its short spring.
     // Target is SmoothDamp'd so envelope/FFT stair-steps never write FOV
-    // directly — fluid punch across every preset.
+    // directly. Fluid punch across every preset.
     const cam = state.camera as PerspectiveCamera;
     if (cam.isPerspectiveCamera) {
       if (baseFovRef.current === null) baseFovRef.current = cam.fov;
-      const punchIn = Math.min(
-        7,
-        m.impact * (0.9 + m.swell * 2.1) + camPunchEnvRef.current * 5,
-      );
-      // Couple degrees of FOV tighten from the tension coil — distinct from
+      const punchIn = Math.min(7, m.impact * (0.9 + m.swell * 2.1) + camPunchEnvRef.current * 5);
+      // Couple degrees of FOV tighten from the tension coil, distinct from
       // the punchy hit envelope (punchIn) and afterglow exhale.
       const coilTighten = coil * (embedded ? 1.6 : 2.4);
-      const targetFov =
-        baseFovRef.current - punchIn - coilTighten + m.afterglow * 1.3;
+      const targetFov = baseFovRef.current - punchIn - coilTighten + m.afterglow * 1.3;
       const dtFov = Math.min(Math.max(delta, 0), 0.05);
-      const nextFov = smoothDampScalar(
-        fovSpringRef.current,
-        targetFov,
-        dtFov,
-        FOV_SPRING_SMOOTH,
-      );
+      const nextFov = smoothDampScalar(fovSpringRef.current, targetFov, dtFov, FOV_SPRING_SMOOTH);
       if (Math.abs(cam.fov - nextFov) > 0.005) {
         cam.fov = nextFov;
         cam.updateProjectionMatrix();
@@ -1140,16 +1088,8 @@ export function SceneRig({
     // shake, and safe-zone), so focusDistance tracks the subject.
     if (dofEffect) {
       const dofDrive = m.bass * 0.5 + m.impact * 1.3;
-      const kickTarget = Math.min(
-        1.5,
-        depthOfFieldNow * dofDrive * 0.6 + dofPunchEnvRef.current,
-      );
-      const kick = smoothDampScalar(
-        dofKickSpringRef.current,
-        kickTarget,
-        dtCam,
-        FOV_SPRING_SMOOTH,
-      );
+      const kickTarget = Math.min(1.5, depthOfFieldNow * dofDrive * 0.6 + dofPunchEnvRef.current);
+      const kick = smoothDampScalar(dofKickSpringRef.current, kickTarget, dtCam, FOV_SPRING_SMOOTH);
       const camDist = state.camera.position.length();
       dofEffect.cocMaterial.focusDistance = camDist * (1 - 0.25 * kick);
       dofEffect.cocMaterial.focusRange = Math.max(0.4, 3.0 - 2.2 * kick);
@@ -1161,15 +1101,14 @@ export function SceneRig({
       // afterglow, gather lifts just before the downbeat, and hits flash
       // through a soft ring-down so kicks punch without strobing.
       // HoldBreath / deep silence: ease breath target down a notch so the
-      // shared glow listens with the creature — gather lift + hit flash stay.
+      // shared glow listens with the creature. Gather lift + hit flash stay.
       const hushTarget = Math.min(
         1,
         Math.max(m.holdBreath, m.silence * 0.92) + Math.min(m.holdBreath, m.silence) * 0.15,
       );
       bloomHushRef.current = smoothToward(bloomHushRef.current, hushTarget, dtImp, 0.14, 0.08);
       const hush = bloomHushRef.current;
-      const breathTarget =
-        0.5 + swellSignal * 0.82 + afterglowSignal * 0.5 - hush * 0.22;
+      const breathTarget = 0.5 + swellSignal * 0.82 + afterglowSignal * 0.5 - hush * 0.22;
       // Rise through builds a touch faster than the verse exhale.
       const breathTau = breathTarget > bloomBreathRef.current ? 0.2 : 0.55;
       bloomBreathRef.current +=
@@ -1203,24 +1142,9 @@ export function SceneRig({
   return (
     <>
       <ambientLight intensity={0.14} />
-      <pointLight
-        ref={bassLight}
-        position={[0, -1.5, 2]}
-        color={palette.bass}
-        intensity={1}
-      />
-      <pointLight
-        ref={midLight}
-        position={[2, 1, 1]}
-        color={palette.mid}
-        intensity={0.8}
-      />
-      <pointLight
-        ref={highLight}
-        position={[-2, 0.5, -1]}
-        color={palette.high}
-        intensity={0.6}
-      />
+      <pointLight ref={bassLight} position={[0, -1.5, 2]} color={palette.bass} intensity={1} />
+      <pointLight ref={midLight} position={[2, 1, 1]} color={palette.mid} intensity={0.8} />
+      <pointLight ref={highLight} position={[-2, 0.5, -1]} color={palette.high} intensity={0.6} />
       <spotLight
         ref={keySpotRef}
         position={[0, 4, 0]}

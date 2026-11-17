@@ -64,8 +64,7 @@ describe('advanceGovernor', () => {
   });
 
   it('holds steady in the dead band between the thresholds', () => {
-    const between =
-      (DEFAULT_GOVERNOR_CONFIG.upshiftMs + DEFAULT_GOVERNOR_CONFIG.downshiftMs) / 2;
+    const between = (DEFAULT_GOVERNOR_CONFIG.upshiftMs + DEFAULT_GOVERNOR_CONFIG.downshiftMs) / 2;
     const state = run(between, 2000);
     expect(state.step).toBe(0);
   });

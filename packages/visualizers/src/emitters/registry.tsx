@@ -75,10 +75,7 @@ export function EmitterLayer({
 }: EmitterLayerProps) {
   const metricsRef = useMetricsRef();
   const sharedModulationRef = useModulation() as unknown as EmitterModulationRef;
-  const resolvedSettings = useMemo(
-    () => resolveEmitterSettings(settings, tier),
-    [settings, tier],
-  );
+  const resolvedSettings = useMemo(() => resolveEmitterSettings(settings, tier), [settings, tier]);
   const definition = EMITTER_REGISTRY[resolvedSettings.kind];
   const Renderer = definition.Renderer;
 

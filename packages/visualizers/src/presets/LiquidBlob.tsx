@@ -8,12 +8,12 @@ import { useMetricsRef } from '../metrics';
 import { useModulation } from '../modulation';
 
 /**
- * Lava Choir (stable id: liquid_blob) — orthographic raymarched SDF of a
+ * Lava Choir (stable id: liquid_blob). Orthographic raymarched SDF of a
  * sculptural choir of independently breathing smooth-union orbs.
  *
  * Persistent harmonic voices stand in a shallow arc (bas-relief sculpture);
- * transient smaller voices flare on high/shimmer. Fluid, volcanic, musical —
- * not an anchor blob with appendages.
+ * transient smaller voices flare on high/shimmer. Fluid, volcanic, musical.
+ * Not an anchor blob with appendages.
  *
  * Controls (stored keys preserved):
  *  - inflate → orb puff + smooth-union fusion
@@ -40,7 +40,7 @@ const RAY_STEPS_MID = 64;
 const RAY_STEPS_LOW = 40;
 const FULLSCREEN_TRIANGLE = new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]);
 
-// Hard caps — loop bounds in the SDF, worst-case shader cost.
+// Hard caps. Loop bounds in the SDF, worst-case shader cost.
 const MAX_APPENDAGES = 10;
 const MAX_SUB_SPHERES = 8;
 
@@ -52,7 +52,7 @@ function buildFragmentShader(steps: number): string {
 
 uniform vec2 uResolution;
 uniform float uTime;
-// Monotonic JS-accumulated motion phase — always grows forward.
+// Monotonic JS-accumulated motion phase. Always grows forward.
 uniform float uPhase;
 // Monotonic music-driven phase for choir sway / transient birth paths.
 uniform float uOrbitPhase;
@@ -62,14 +62,14 @@ uniform float uHigh;
 uniform float uEnergy;
 uniform float uBeat;
 uniform float uScale;
-// 0..1 — orb puff + smooth-union fusion. Low = distinct stretching voices;
+// 0..1. Orb puff + smooth-union fusion. Low = distinct stretching voices;
 // high = plush fused choir.
 uniform float uInflate;
 // Persistent voice / orb count. Clamped to MAX_APPENDAGES.
 uniform int uAppendages;
 // Transient high-frequency voice count. Clamped to MAX_SUB_SPHERES.
 uniform int uSubSphereCount;
-// 0..1 shimmer envelope — gates transient voice radius.
+// 0..1 shimmer envelope. Gates transient voice radius.
 uniform float uSubAmount;
 uniform float uBarPhase;
 uniform float uDrop;
@@ -78,11 +78,11 @@ uniform float uGather;
 uniform float uEcho;
 uniform float uEchoTravel;
 uniform float uKick;
-// Seconds since the last kick onset — drives the soft-body settle.
+// Seconds since the last kick onset. Drives the soft-body settle.
 uniform float uKickAge;
 uniform float uSnare;
 uniform float uHat;
-// 0..1 — tender vocal hush: cool toward dark glass, damp heat glow.
+// 0..1. Tender vocal hush: cool toward dark glass, damp heat glow.
 uniform float uTenderness;
 // 1 = paint built-in backdrop on ray miss; 0 = transparent for BackgroundLayer.
 uniform float uBgAlpha;
@@ -104,7 +104,7 @@ float sdSphere(vec3 p, float r) {
  * Bounded ellipsoid distance (iq's approximation).
  *
  * Dividing a sphere's input space by a per-axis scale does NOT give the
- * distance to an ellipsoid — it returns a field that overstates distance
+ * distance to an ellipsoid. It returns a field that overstates distance
  * along the squashed axis and breaks the Lipschitz bound the raymarcher
  * relies on, so the marcher oversteps and the surface tears into pinched,
  * spiky artefacts. That is exactly what the voices were doing whenever a
@@ -118,7 +118,7 @@ float sdEllipsoid(vec3 p, vec3 r) {
 }
 
 /**
- * Damped oscillation after an impact — the jelly wobble that makes a body
+ * Damped oscillation after an impact. The jelly wobble that makes a body
  * read as soft. Deforming space cannot do this; a real decaying spring can.
  */
 float softBodyWobble(float age, float phase) {
@@ -139,7 +139,7 @@ vec3 safeNorm(vec3 v) {
   return v / safeLen(v);
 }
 
-// Soft volcanic domain warp — lava churn without collapsing the SDF.
+// Soft volcanic domain warp. Lava churn without collapsing the SDF.
 vec3 warpSpace(vec3 p, float t) {
   float inhale = 1.0 - uGather * 0.5;
   float w = (0.055 + uMid * 0.04 + uEnergy * 0.025) * inhale;
@@ -150,7 +150,7 @@ vec3 warpSpace(vec3 p, float t) {
 }
 
 // Transient harmonic voices alone (no persistent choir). Returns a huge
-// sentinel when inactive so callers can skip smin — mixing a 1e9 distance
+// sentinel when inactive so callers can skip smin. Mixing a 1e9 distance
 // through smin cancels float32 and zero-fills the field (screen-hit bug).
 float transientField(vec3 p) {
   if (uSubSphereCount <= 0 || uSubAmount < 0.01) return 1e9;
@@ -197,7 +197,7 @@ float sceneInner(vec3 p) {
   // each body answers the kick on its own.
   vec3 pk = p;
 
-  // Magma hearth — deep bass body under the choir (always present). It gets
+  // Magma hearth. Deep bass body under the choir (always present). It gets
   // its own settle, heavier and slower than the voices.
   float hearthWob = softBodyWobble(uKickAge, 0.0) * (0.1 + uKick * 0.06);
   float hearthSy = 1.0 + hearthWob;
@@ -219,11 +219,11 @@ float sceneInner(vec3 p) {
     float n = max(float(voices), 1.0);
     float slot = (fi + 0.5) / n - 0.5;
 
-    // Independent breath per voice — harmonic-ish phase offsets.
+    // Independent breath per voice. Harmonic-ish phase offsets.
     float breath = sin(t * (0.9 + fi * 0.07) + fi * 1.618) * 0.5 + 0.5;
     float lowBias = 1.0 - abs(slot) * 0.55;
 
-    // Arc / riser placement — persistent harmonic choir, not orbiting limbs.
+    // Arc / riser placement. Persistent harmonic choir, not orbiting limbs.
     float span = 1.18 + uBass * 0.1 * lowBias;
     vec3 center = vec3(
       slot * span * 1.35 + sway,
@@ -289,7 +289,7 @@ float scene(vec3 p) {
   vec3 warped = sceneDomain(p);
   float d = sceneInner(warped) * sEff;
 
-  // Traveling surface harmonic — crest walks across the choir face.
+  // Traveling surface harmonic. Crest walks across the choir face.
   if (uEcho > 0.01) {
     float along = warped.x + warped.y * 0.35;
     float crest = (uEchoTravel * 2.4) - 1.2;
@@ -322,7 +322,7 @@ vec3 background(vec2 uv) {
   return mix(lift, deep, smoothstep(0.0, 1.15, r));
 }
 
-// Hue-preserving highlight — brighten along the color, never wash to white.
+// Hue-preserving highlight. Brighten along the color, never wash to white.
 vec3 heatHighlight(vec3 c, float amount) {
   float a = clamp(amount, 0.0, 0.85);
   return c * (1.0 + a) + c * c * (a * 0.35);
@@ -333,7 +333,7 @@ void main() {
   vec2 uv = (fragCoord - 0.5 * uResolution) / uResolution.y;
 
   // Orthographic in-shader camera: per-pixel ray origin on the view plane,
-  // common forward ray — floating bas-relief / sculpture read.
+  // common forward ray. Floating bas-relief / sculpture read.
   float s = max(uScale, 0.05);
   // Leave enough vertical room for repeated smooth unions, especially in
   // portrait exports where the choir must remain a readable silhouette.
@@ -394,11 +394,11 @@ void main() {
     // Heat highlight eases into cooler glass specular on tender passages.
     col = heatHighlight(col, spec * mix(0.55, 0.22, cool));
     col += mix(uColorHigh, vec3(0.22, 0.28, 0.34), cool * 0.85) * fres * mix(0.4, 0.22, cool);
-    // Obsidian cooling sheen — dark glass rim that damps residual glow.
+    // Obsidian cooling sheen. Dark glass rim that damps residual glow.
     col *= mix(1.0, 0.58, cool);
     col += vec3(0.06, 0.08, 0.11) * fres * cool * 0.45;
 
-    // Transient tint at hit — well-defined ascending smoothstep.
+    // Transient tint at hit. Well-defined ascending smoothstep.
     vec3 pInner = sceneDomain(p);
     float subAtHit = transientField(pInner) * sceneScale();
     float subWeight = 1.0 - smoothstep(-0.015, 0.09, subAtHit);
@@ -413,7 +413,7 @@ void main() {
     col += mix(uColorMid, uColorHigh, 0.4) * uSnare * 0.14 * silenceMute;
 
     // Hat: sparse ember-spark ticks on the crust (rim / fresnel cells).
-    // Distinct from kick Y puff and snare lateral shear — brief surface sparks.
+    // Distinct from kick Y puff and snare lateral shear. Brief surface sparks.
     float cell = emberHash(floor(pInner.xy * 18.0 + pInner.z * 7.0));
     float tickSelect = step(0.78, cell);
     float emberSpark = tickSelect * fres * pow(cell, 2.2) * uHat;
@@ -424,7 +424,7 @@ void main() {
 
     float ao = clamp(0.55 + 0.45 * max(0.0, dot(n, V)), 0.0, 1.0);
     col *= ao;
-    // Bound peak brightness — no whiteout at max gain.
+    // Bound peak brightness. No whiteout at max gain.
     col = min(col, vec3(1.85));
   } else {
     col = background(uv) * uBgAlpha;
@@ -487,7 +487,7 @@ export function LiquidBlobScene({
 
   const steps = tier === 'high' ? RAY_STEPS_HIGH : tier === 'mid' ? RAY_STEPS_MID : RAY_STEPS_LOW;
   const fragmentShader = useMemo(() => buildFragmentShader(steps), [steps]);
-  // Low tier still shows the full choir concept — slightly softer accents.
+  // Low tier still shows the full choir concept. Slightly softer accents.
   const echoAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   const gatherAmp = tier === 'low' ? 0.85 : 1;
   const kitAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
@@ -553,7 +553,7 @@ export function LiquidBlobScene({
     const stillness = stillnessSmooth.current;
     const motionMul = 1 - stillness * 0.92;
 
-    // Forward-only phases — never walk backward on energy drops.
+    // Forward-only phases. Never walk backward on energy drops.
     const sectionPace = 0.75 + Math.min(1, Math.max(0, m.sectionLevel)) * 0.45;
     const phaseRate = (0.32 + Math.min(energy, 1.5) * 0.16) * pace * sectionPace * motionMul;
     phaseRef.current += dt * phaseRate;

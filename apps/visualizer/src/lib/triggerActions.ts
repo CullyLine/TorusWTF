@@ -1,10 +1,10 @@
 /**
- * Trigger mapping — the contract between input sources (audio one-shots,
+ * Trigger mapping. The contract between input sources (audio one-shots,
  * MIDI notes, keyboard) and the actions they fire (visualizer changes, visual
  * impulses). Inspired by nw_wrld's channel/method trigger routing, adapted
  * to TorusFM's continuous-visual model.
  *
- * Data model only — the runtime engine lives in `useTriggerEngine`, the
+ * Data model only. The runtime engine lives in `useTriggerEngine`, the
  * mapping UI in `TriggerPanel`, and the MIDI adapter in `lib/midi.ts`.
  */
 
@@ -159,7 +159,7 @@ export function persistTriggerMappings(mappings: TriggerMapping[]): void {
   try {
     localStorage.setItem(TRIGGER_MAPPINGS_KEY, JSON.stringify(mappings));
   } catch {
-    // Storage full/unavailable — mappings just don't survive the reload.
+    // Storage full/unavailable. Mappings just don't survive the reload.
   }
 }
 

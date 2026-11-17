@@ -1,10 +1,5 @@
 import { conductorEngine } from './engine';
-import {
-  audibleTrackIds,
-  ticksToSeconds,
-  secondsToTicks,
-  type ConductorProject,
-} from './project';
+import { audibleTrackIds, ticksToSeconds, secondsToTicks, type ConductorProject } from './project';
 
 /**
  * Lookahead scheduler (Web Audio clock). Converts tick positions to absolute
@@ -203,21 +198,26 @@ export class ConductorScheduler {
       while (this.idx < this.events.length) {
         const ev = this.events[this.idx]!;
         if (ev.tick >= segEndTick) break;
-        const onTime = this.originCtx + ticksToSeconds(ev.tick - this.originTick, this.bpm, this.ppq);
+        const onTime =
+          this.originCtx + ticksToSeconds(ev.tick - this.originTick, this.bpm, this.ppq);
         if (onTime > horizon) {
           blocked = true;
           break;
         }
         const clampedEnd = this.loop.enabled ? Math.min(ev.endTick, this.loop.endTick) : ev.endTick;
-        const offTime = this.originCtx + ticksToSeconds(clampedEnd - this.originTick, this.bpm, this.ppq);
-        conductorEngine.noteOn(ev.channel, ev.pitch, ev.velocity, { time: Math.max(onTime, ctx.currentTime) });
+        const offTime =
+          this.originCtx + ticksToSeconds(clampedEnd - this.originTick, this.bpm, this.ppq);
+        conductorEngine.noteOn(ev.channel, ev.pitch, ev.velocity, {
+          time: Math.max(onTime, ctx.currentTime),
+        });
         conductorEngine.noteOff(ev.channel, ev.pitch, { time: Math.max(offTime, onTime + 0.01) });
         this.idx++;
       }
 
       if (!this.loop.enabled) return;
 
-      const reachedSegEnd = this.idx >= this.events.length || this.events[this.idx]!.tick >= segEndTick;
+      const reachedSegEnd =
+        this.idx >= this.events.length || this.events[this.idx]!.tick >= segEndTick;
       if (blocked || !reachedSegEnd) return;
 
       // Wrap: advance origin to the loop start of the next pass.

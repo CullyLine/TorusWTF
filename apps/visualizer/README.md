@@ -1,109 +1,73 @@
-# torus app
+# How the torus code is organized
 
-The Next.js app behind [torus.wtf](https://torus.wtf). It contains the visualizer, Conductor, Transcriber, and optional accounts. The repository [README](../../README.md) covers setup.
+This page is for people who want to change the code. To use torus, go to [torus.wtf](https://torus.wtf). To run it on your computer, follow the steps in the main [README](../../README.md#for-developers).
 
-## Visualizer
+Everything is one website, built with Next.js. It holds three tools: the visualizer at `/`, Conductor at `/conductor`, and Transcriber at `/transcriber`.
 
-### Audio sources
-
-- **File.** Drop an MP3, WAV, FLAC, OGG, Opus, M4A, or AAC file.
-- **Mic.** A microphone or line-in, through `getUserMedia`.
-- **Desktop.** Audio from Spotify, Ableton, or any other app, through `getDisplayMedia`. This needs Chrome or Edge. A dialog explains the steps for each operating system.
-- **YouTube.** Plays a video in an embed and captures the tab's audio.
-
-Audio never leaves the browser.
-
-### Visualizers
-
-The set is kept small on purpose. Retired ids still load, because `resolveVisualizerId` maps each one to its closest replacement.
-
-| Id                    | Name                | What it draws                                               |
-| --------------------- | ------------------- | ----------------------------------------------------------- |
-| `flow_field`          | Flow Field          | Particles that follow a flow field you can stir by cursor   |
-| `torus_field`         | Torus Field         | A flowing torus that blooms on bass                         |
-| `infinite_tunnel`     | Tunnel              | A segmented tunnel whose walls react to each frequency band |
-| `volumetric_waveform` | Volumetric Waveform | The spectrum as a ribbon in 3D                              |
-| `cosmic_mandala`      | Cosmic Mandala      | Nested rings, one per frequency band                        |
-| `star_field`          | Galaxy Garden       | A spiral galaxy with shockwaves on drops                    |
-| `liquid_blob`         | Lava Choir          | Raymarched lava orbs that merge with the music              |
-| `tidal_sanctuary`     | Tidal Sanctuary     | An ocean with depth, water, and foam on separate bands      |
-| `plasma_globe`        | Plasma Globe        | A plasma globe built to a fixed performance budget          |
-
-The presets and the rendering engine live in [`packages/visualizers`](../../packages/visualizers). The control panel is generated from `controlSchema.ts`, so a new slider needs no UI code.
-
-### Controls
-
-- Sliders for reactivity, color, light, camera, and each visualizer's own parameters. Double-click a value to type a number outside the slider's range.
-- Palettes: built-in sets, three custom colors, or colors extracted from an image. A file with embedded cover art sets the palette on load.
-- Screen styles and a particle emitter layer.
-- Triggers fire one-shot actions from the music or from MIDI notes. Modulations route a continuous signal, such as vocals or drums, to any control.
-- Saved presets and show files. A show file holds the whole look and can be exported and imported as JSON.
-- A projector window mirrors the output for a second display.
-
-Settings persist in `localStorage`.
-
-### Export
-
-- **Record.** Captures the live canvas with `MediaRecorder` to WebM, or MP4 where the browser supports it. Works for every source. Limited to the display's refresh rate, about 60 fps.
-- **Pre-render.** Renders an uploaded file frame by frame with WebCodecs and muxes an MP4 with `mp4-muxer`. This is the only path that produces 120 and 240 fps. It needs Chrome, Edge, or Firefox 130 or newer.
-- **Snapshot.** Saves the current frame as a PNG.
-
-Resolutions go from 720p to 4K in four aspect ratios. A title card and a corner watermark can be burned into exports. The watermark is on by default, and you can turn it off or replace it with your own logo.
-
-### Keyboard shortcuts
-
-| Key                 | Action                        |
-| ------------------- | ----------------------------- |
-| `Space`             | Play or pause (file source)   |
-| `←` / `→`           | Skip 5 seconds (file source)  |
-| `Shift` + `←` / `→` | Skip 15 seconds (file source) |
-| `F`                 | Fullscreen                    |
-| `H`                 | Show or hide the controls     |
-| `R`                 | Random visualizer             |
-| `?`                 | Show the shortcut list        |
-
-### Page layout and code
-
-The page has a top bar, a sidebar of controls, and the stage. The sidebar has four tabs in the order a new user needs them: Audio, Look, Automate, Export. On a phone the sidebar becomes a sheet under the stage.
+## Where things are
 
 ```
-src/components/studio/   The page: VisualizerApp, top bar, tabs, transport bar, empty state, dialogs
-src/components/panels/   One file per sidebar panel
-src/components/ui/       Form controls and icons shared by every panel and by Conductor and Transcriber
-src/hooks/useLook.ts             The look: visualizer, palette, sliders, effects, triggers, modulations
-src/hooks/useExportSettings.ts   Export format and watermark
-src/hooks/useStudioSource.ts     Choosing the audio: file, demo, mic, desktop, YouTube
-src/hooks/useStudioExport.ts     Recording, rendering, and snapshots
+apps/visualizer/src/
+  app/                  One folder per page, plus the sign-in and account routes
+  components/studio/    The visualizer page: layout, stage, playback bar, dialogs
+  components/panels/    The sidebar, one file per panel
+  components/conductor/ Conductor
+  components/transcriber/ Transcriber
+  components/ui/        Buttons, sliders, and icons that every page shares
+  hooks/                State for the visualizer page
+  lib/                  Code with no interface: export, storage, audio tags
+
+packages/
+  visualizers/          The visualizers and the engine that draws them
+  db/                   The database tables for accounts
+  ui/                   The logo and a few shared pieces
+  shared/               A few types and helpers the other packages share
 ```
 
-`VisualizerApp` owns the audio source and the layout and passes state from those hooks to the panels. A panel builds its controls from `components/ui/controls.tsx` and does not carry its own styles for sliders, selects, or buttons. Colors and type are defined once in `src/app/globals.css`.
+## How the visualizer page works
 
-## Conductor and Transcriber
+`VisualizerApp` in `components/studio` lays out the page. It keeps its state in four hooks:
 
-Conductor (`/conductor`) is a SoundFont DAW built on `spessasynth_lib`. Transcriber (`/transcriber`) converts audio to MIDI with Spotify's `basic-pitch` model. Both run in the browser.
+| Hook                | What it holds                                                                  |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `useStudioSource`   | Where the audio comes from: a file, the demo, the microphone, or desktop audio |
+| `useLook`           | The chosen visualizer, colors, sliders, effects, triggers, and modulations     |
+| `useExportSettings` | Video size, frame rate, and watermark                                          |
+| `useStudioExport`   | Recording, rendering, and snapshots                                            |
 
-The `dev` and `build` scripts first copy the SoundFont worklet, the `basic-pitch` model, and the `libsonare` WebAssembly files into `public/`. The copy lines in the console are expected.
+Settings are saved in the browser, so they are still there on the next visit.
 
-## Accounts
+Every panel builds its buttons and sliders from `components/ui/controls.tsx`. Colors and fonts are set once in `src/app/globals.css`.
 
-Accounts are optional and nothing in the tools requires one. Sign-in is by magic link or Discord. An account has a handle, a profile at `/u/<handle>`, and an optional `<name>.torus.wtf` subdomain. Sessions are HttpOnly cookies. The schema is in [`packages/db`](../../packages/db).
+## Add a visualizer
 
-## Environment variables
+1. Create one React Three Fiber component in `packages/visualizers/src/presets/`.
+2. Add it to the list in `packages/visualizers/src/registry.ts`.
+3. Describe its sliders in `controlSchema.ts`. The sidebar draws them for you.
 
-All of these are optional in development. [`.env.example`](../../.env.example) documents each one.
+A visualizer must still run well on slow devices. Each one receives a `tier` of `high`, `mid`, or `low` and should draw less on the lower tiers.
 
-| Variable                                     | Purpose                                          |
-| -------------------------------------------- | ------------------------------------------------ |
-| `DATABASE_URL`, `DATABASE_AUTH_TOKEN`        | libSQL database for accounts                     |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`     | The same, as set by the Vercel Turso integration |
-| `PUBLIC_URL`, `NEXT_PUBLIC_SITE_URL`         | Base URL for sign-in links and page metadata     |
-| `SMTP_*`                                     | Email for magic links and the feedback form      |
-| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Discord sign-in                                  |
+## Settings for your own copy
 
-## Deploy
+torus runs without any of these. Add them to a file named `.env` when you need the feature. [`.env.example`](../../.env.example) explains each one.
 
-The Vercel project root is `apps/visualizer`. [`vercel.json`](./vercel.json) sets the install and build commands.
+| Setting                                      | What it turns on                                        |
+| -------------------------------------------- | ------------------------------------------------------- |
+| `DATABASE_URL`, `DATABASE_AUTH_TOKEN`        | The database that stores accounts                       |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`     | The same, when Vercel's Turso integration sets it up    |
+| `PUBLIC_URL`, `NEXT_PUBLIC_SITE_URL`         | The web address used in sign-in links and link previews |
+| `SMTP_*`                                     | Sending email, for sign-in links and the feedback form  |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Signing in with Discord                                 |
 
-## Demo audio
+## Put it online
 
-`public/demo.mp3` is "Despresso Shots" by CullyLine, used with permission. The app fetches it only when someone presses the demo button.
+torus.wtf runs on [Vercel](https://vercel.com) with a [Turso](https://turso.tech) database.
+
+1. Create a Vercel project and set its root folder to `apps/visualizer`. [`vercel.json`](./vercel.json) holds the build commands.
+2. Connect a Turso database. Either add Vercel's Turso integration, or set `DATABASE_URL` and `DATABASE_AUTH_TOKEN` yourself.
+3. Run `pnpm db:migrate` once against that database to create the tables.
+
+## Credits
+
+- The demo track, `public/demo.mp3`, is "Despresso Shots" by CullyLine, used with permission.
+- [docs/shader-provenance.md](../../docs/shader-provenance.md) lists where the visual ideas came from and the one outside library the visualizers use.
