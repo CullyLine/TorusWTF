@@ -244,7 +244,7 @@ describe('bubble kit accents', () => {
     }
     expect(sheared).toBeGreaterThan(0);
 
-    // Kick still owns the vertical surge — snare should not dominate Y.
+    // Kick still owns the vertical surge. Snare should not dominate Y.
     for (let i = 0; i < 10; i++) {
       if (pool.active[i] !== 1) continue;
       pool.velocities[i * 3] = 0;

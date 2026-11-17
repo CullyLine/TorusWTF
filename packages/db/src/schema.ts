@@ -2,7 +2,7 @@ import { sqliteTable, text, integer, uniqueIndex, index } from 'drizzle-orm/sqli
 import { sql } from 'drizzle-orm';
 
 /**
- * torus.wtf — SQLite schema (libSQL / Turso).
+ * torus.wtf. SQLite schema (libSQL / Turso).
  *
  * Conventions:
  *   - Primary keys are text CUIDs (generated app-side via @torus/shared).
@@ -54,7 +54,7 @@ export const users = sqliteTable(
   ],
 );
 
-/** Previous handles for a user — old /u/<handle> URLs redirect to the current profile. */
+/** Previous handles for a user. Old /u/<handle> URLs redirect to the current profile. */
 export const handleHistory = sqliteTable(
   'handle_history',
   {

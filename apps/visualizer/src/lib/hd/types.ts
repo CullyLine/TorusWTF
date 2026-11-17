@@ -1,5 +1,5 @@
 /**
- * Home Depot internal tool — types.
+ * Home Depot internal tool, types.
  *
  * This module is fully isolated from the rest of torus.wtf. It backs the
  * hidden /hd order-puller page and nothing else.

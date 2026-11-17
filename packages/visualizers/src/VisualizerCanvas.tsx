@@ -37,7 +37,7 @@ import { EmitterLayer } from './emitters/registry';
 import { DEFAULT_EMITTER_SETTINGS } from './emitters/settings';
 import type { EmitterSettings } from './emitters/types';
 
-/** Soft dissolve when switching presets — long enough to read, short enough to stay snappy. */
+/** Soft dissolve when switching presets. Long enough to read, short enough to stay snappy. */
 const PRESET_CROSSFADE_MS = 350;
 
 function usePrefersReducedMotion(): boolean {
@@ -82,7 +82,7 @@ export interface VisualizerCanvasProps {
   forceTier?: 'high' | 'mid' | 'low';
   /** Embedded in the waveform panel (not fullscreen). */
   embedded?: boolean;
-  /** Wheel / pinch zoom — also used to reveal overlay chrome. */
+  /** Wheel / pinch zoom. Also used to reveal overlay chrome. */
   onInteract?: () => void;
   /** Optional export dimensions (width x height in px). */
   exportSize?: { width: number; height: number };
@@ -156,9 +156,9 @@ export interface VisualizerCanvasProps {
   autoGain?: boolean;
   /** Lava Choir: 0 = distinct stretching voices, 1 = plush fused choir. */
   inflate?: number;
-  /** Lava Choir: number of persistent harmonic voices (0–10). */
+  /** Lava Choir: number of persistent harmonic voices (0 to 10). */
   appendages?: number;
-  /** Lava Choir: transient high-frequency harmonic voices (0–8). */
+  /** Lava Choir: transient high-frequency harmonic voices (0 to 8). */
   subSpheres?: number;
   /** Flow Field: fine turbulent detail 0..2. */
   turbulence?: number;
@@ -185,12 +185,12 @@ export interface VisualizerCanvasProps {
   /** Background visibility 0..1. Default 0.6. */
   backgroundIntensity?: number;
   /**
-   * 0..1 — how long big moments echo after they pass. Stretches only the
+   * 0..1. How long big moments echo after they pass. Stretches only the
    * release side of the musical envelopes; hits still land instantly.
    */
   linger?: number;
   /**
-   * Modulation matrix routings — continuous audio-signal → control-value
+   * Modulation matrix routings. Continuous audio-signal → control-value
    * mappings computed per frame inside the canvas. See `modulation.tsx`.
    */
   modMatrix?: ModRouting[];
@@ -200,7 +200,7 @@ export interface VisualizerCanvasProps {
    */
   impulses?: VisualImpulses;
   /**
-   * Receives the freshest AudioMetrics object every frame — for consumers
+   * Receives the freshest AudioMetrics object every frame, for consumers
    * outside the canvas (trigger engine, projector broadcast).
    */
   metricsOutRef?: MutableRefObject<AudioMetrics | null>;
@@ -333,7 +333,7 @@ export function VisualizerCanvas({
       const start = performance.now();
       const tick = (now: number) => {
         const t = Math.min(1, (now - start) / PRESET_CROSSFADE_MS);
-        // Ease-out cubic — quick handoff, soft landing.
+        // Ease-out cubic. Quick handoff, soft landing.
         const eased = 1 - (1 - t) ** 3;
         setGhostOpacity(1 - eased);
         if (t < 1) {
@@ -374,8 +374,8 @@ export function VisualizerCanvas({
 
   // Stable identity, mutated per-frame by LivingPaletteDriver (which reads
   // the base palette fresh each frame). Everything inside the canvas reads
-  // colors from this object so the whole scene — lights, backgrounds,
-  // preset shaders — breathes together.
+  // colors from this object so the whole scene, lights, backgrounds,
+  // preset shaders, breathes together.
   // Intentionally empty deps: identity must stay stable while the driver
   // mutates the fields; the base palette is re-read fresh each frame.
   const livingPalette = useMemo<LivingPaletteTarget>(
@@ -403,7 +403,7 @@ export function VisualizerCanvas({
     externalMetricsRef,
   };
 
-  // Base values the modulation matrix modulates AROUND — the current slider
+  // Base values the modulation matrix modulates AROUND. The current slider
   // positions. Rebuilt on render (slider edits), read per frame by the driver.
   const modBase: ModulatedValues = {
     speed,

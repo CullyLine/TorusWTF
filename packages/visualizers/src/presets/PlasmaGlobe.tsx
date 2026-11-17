@@ -9,7 +9,7 @@ import { useModulation } from '../modulation';
 import { getDotTexture } from '../dotTexture';
 
 /**
- * Plasma Globe — the novelty-shop plasma ball, filaments reaching from a hot
+ * Plasma Globe. The novelty-shop plasma ball, filaments reaching from a hot
  * electrode to the inside of the glass.
  *
  * Built to a performance budget rather than to a look. Everything here is

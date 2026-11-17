@@ -29,7 +29,7 @@ export type VisualizerId =
  * rather than failing to load.
  */
 export const RETIRED_VISUALIZER_IDS: Readonly<Record<string, VisualizerId>> = {
-  // Fullscreen 2D shader family — retired wholesale.
+  // Fullscreen 2D shader family, retired wholesale.
   silk_wake: 'tidal_sanctuary',
   tide_veil: 'tidal_sanctuary',
   halo_rain: 'cosmic_mandala',
@@ -124,7 +124,7 @@ export interface VisualizerSceneProps {
 
 /**
  * Per-preset default slider values, applied when the user switches to the
- * preset. Only the fields listed here change — anything omitted keeps the
+ * preset. Only the fields listed here change. Anything omitted keeps the
  * user's current setting, so audio-response tuning (Gain, band mixes,
  * auto sensitivity) survives preset hopping unless a preset opts in.
  *
@@ -173,7 +173,7 @@ export interface VisualizerDefinition {
   /**
    * Extra controls this preset owns, shown in the "This preset" panel
    * section. Keys must have a `group: 'preset'` def in `CONTROL_SCHEMA`.
-   * The panel renders them generically — new presets never touch UI code.
+   * The panel renders them generically. New presets never touch UI code.
    */
   presetControls?: ControlKey[];
 }

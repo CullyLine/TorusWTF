@@ -1,15 +1,17 @@
 ---
 name: Feature request
-about: Suggest something
+about: Suggest an idea
 labels: [enhancement]
 ---
 
-**What problem are you trying to solve?**
-(Describe the problem, not the proposed solution. Don't say "we should have X" — say "I can't do Y because...")
+**What are you trying to do?**
 
-**Why does this fit PRINCIPLES.md?**
-[Read PRINCIPLES.md](../PRINCIPLES.md). Any feature must justify itself against the no-bullshit charter.
+Describe the goal, not the feature. "I cannot loop one part of a song" helps more than "add a loop button".
 
-**Suggested approach (optional)**
+**How do you do it today, if at all?**
 
-**Alternatives considered (optional)**
+**Your idea for solving it (optional)**
+
+**Does it fit the principles?**
+
+torus keeps a short list of promises in [PRINCIPLES.md](https://github.com/CullyLine/TorusWTF/blob/main/PRINCIPLES.md). Please check that your idea does not break one.

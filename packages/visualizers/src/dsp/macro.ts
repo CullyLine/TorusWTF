@@ -1,7 +1,7 @@
 /**
  * Macro-dynamics: silence / tension / drop detection as musical events.
  *
- * These are heuristic-only — there's no ML — but they encode the patterns
+ * These are heuristic-only, there's no ML, but they encode the patterns
  * that humans recognize as silence, building tension, and that climactic
  * moment when the bass drops.
  *

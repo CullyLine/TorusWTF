@@ -22,7 +22,7 @@ function smoothToward(
 }
 
 /**
- * Volumetric Waveform — living ribbon with gather pinch, kit accents, echo ghost.
+ * Volumetric Waveform. Living ribbon with gather pinch, kit accents, echo ghost.
  *
  * Alive listen:
  *  - holdBreath / deep silence → nearly freeze crest travel, pinch motion,
@@ -63,13 +63,13 @@ export function VolumetricWaveformScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
-  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  // Hold-breath / deep-silence listen gate. freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
-  // Tenderness hush — softens ridges on gentle vocal passages.
+  // Tenderness hush. Softens ridges on gentle vocal passages.
   const tenderSmooth = useRef(0);
-  // LeanIn approach — nearer + crest brighten, distinct from gather pinch.
+  // LeanIn approach. Nearer + crest brighten, distinct from gather pinch.
   const leanSmooth = useRef(0);
-  // DropEvent full-terrain surge — one synchronized lift, bigger than impact bloom.
+  // DropEvent full-terrain surge. One synchronized lift, bigger than impact bloom.
   const dropSmooth = useRef(0);
   const dropTravel = useRef(1); // 0..1 traveling; >=1 idle
   const dropArmed = useRef(true);
@@ -154,7 +154,7 @@ export function VolumetricWaveformScene({
     // Nearly freeze continuous motion; leave a whisper so the form never dies.
     const motionMul = 1 - stillness * 0.92;
 
-    // Tenderness hush — soft rise/fall so ridges ease into softness.
+    // Tenderness hush. Soft rise/fall so ridges ease into softness.
     tenderSmooth.current = smoothToward(
       tenderSmooth.current,
       Math.min(1, m.tenderness),
@@ -179,13 +179,13 @@ export function VolumetricWaveformScene({
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
-    // Drop full-terrain surge — fast attack, lingering settle; bigger than impact bloom.
+    // Drop full-terrain surge. Fast attack, lingering settle; bigger than impact bloom.
     const dropTarget =
       Math.min(1.35, m.dropEvent * 1.05 + m.impact * 0.2 + m.release * 0.12) * dropAmp;
     dropSmooth.current = smoothToward(dropSmooth.current, dropTarget, dt, 0.03, 0.55);
     const drop = dropSmooth.current;
 
-    // One-shot travel for the synchronized ridge lift — fire once per drop rise.
+    // One-shot travel for the synchronized ridge lift. Fire once per drop rise.
     if (drop < 0.1) dropArmed.current = true;
     if (dropArmed.current && drop > 0.35 && prevDrop.current <= 0.35) {
       dropTravel.current = 0;
@@ -229,14 +229,14 @@ export function VolumetricWaveformScene({
       0.1,
     );
 
-    // LeanIn slows the crawl — expectant, not freeze.
+    // LeanIn slows the crawl. Expectant, not freeze.
     const leanPace = 1 - lean * 0.22;
     group.rotation.y += delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2) * motionMul * leanPace;
     // Snare briefly rolls the ribbon on Z so the crease reads in depth, not only X.
     group.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
     // Gather pinches the whole form toward the axis; impact/afterglow bloom out.
     // During holdBreath, nearly freeze scale settling so pinch motion stills.
-    // Drop punch is a half-sine billow — bigger than impact's 0.08, then settles.
+    // Drop punch is a half-sine billow. Bigger than impact's 0.08, then settles.
     const scaleTarget =
       1 -
       gatherSmooth.current * pinchAmt * 0.35 +
@@ -245,16 +245,16 @@ export function VolumetricWaveformScene({
       m.afterglow * 0.04 +
       dropSurge * 0.16;
     scaleSmooth.current = smoothToward(scaleSmooth.current, scaleTarget, pinchDt, 0.045, 0.12);
-    // LeanIn: mild camera-ward pull + presence scale — approach, distinct from gather pinch.
+    // LeanIn: mild camera-ward pull + presence scale. Approach, distinct from gather pinch.
     group.position.z = -lean * 0.55;
     group.scale.setScalar(scaleSmooth.current * (1 + lean * 0.06));
 
     // Advance local phase only while awake so height jitter can freeze.
-    // LeanIn hushes the clock slightly — poised, not still.
+    // LeanIn hushes the clock slightly. Poised, not still.
     phaseRef.current += dt * spd * motionMul * leanPace;
 
-    // The line itself brightens when a lead/vocal carries the moment —
-    // the waveform IS the melody's voice, so give it presence.
+    // The line itself brightens when a lead/vocal carries the moment.
+    // The waveform IS the melody's voice, so give it presence.
     // LeanIn brightens crest lines; drop surge flashes the whole terrain once.
     const lineMat = line.material as THREE.LineBasicMaterial;
     lineMat.opacity = Math.min(
@@ -274,7 +274,7 @@ export function VolumetricWaveformScene({
     const bassC = scratchBass.current.set(palette.bass);
     const midC = scratchMid.current.set(palette.mid);
     const highC = scratchHigh.current.set(palette.high);
-    // Crest brighten on lean (poised) + drop flash — value lift, no hue shift.
+    // Crest brighten on lean (poised) + drop flash. Value lift, no hue shift.
     const crestBoost = 1 + lean * 0.28 + dropSurge * 0.35;
     const vertCount = samples * 2;
     for (let i = 0; i < vertCount; i++) {
@@ -297,7 +297,7 @@ export function VolumetricWaveformScene({
     prevEcho.current = echoNow;
 
     if (crestTravel.current < 1) {
-      // One slow sweep across the ribbon (~0.9–1.2s depending on speed).
+      // One slow sweep across the ribbon (~0.9 to 1.2s depending on speed).
       // Nearly freeze travel during holdBreath so the ghost listens with the form.
       const bpm = m.bpm ?? 120;
       crestTravel.current = Math.min(
@@ -314,7 +314,7 @@ export function VolumetricWaveformScene({
         // and intimate, the song's biggest sections fill the frame.
         // Gather pinches amp toward the axis; impact blooms it open.
         // Kick punches vertical reach (floor thump) without washing the whole frame.
-        // Drop lifts EVERY ridge at once — half-sine surge bigger than impact bloom.
+        // Drop lifts EVERY ridge at once. Half-sine surge bigger than impact bloom.
         // Tenderness softens peakiness so ridges feel held, not jagged.
         const pinch = 1 - gatherSmooth.current * pinchAmt;
         const bloom = 1 + bloomSmooth.current * 0.55;
@@ -425,7 +425,7 @@ export function VolumetricWaveformScene({
 
     if (dust) {
       const mat = dust.material as THREE.PointsMaterial;
-      // Hats glitter the dust field — size/opacity ticks distinct from bass thumps.
+      // Hats glitter the dust field. size/opacity ticks distinct from bass thumps.
       mat.size = 0.035 + m.flow * 0.05 + hatSmooth.current * 0.055;
       mat.opacity = Math.min(
         1,
@@ -455,7 +455,7 @@ export function VolumetricWaveformScene({
         if (i / dustCount > active) continue;
         const i3 = i * 3;
         arr[i3] = ((arr[i3] ?? 0) + (dustVel[i3] ?? 0) * drive * 20) * dustPinch;
-        // Drop surge lifts the dust field with the ridges — one upward billow.
+        // Drop surge lifts the dust field with the ridges. One upward billow.
         arr[i3 + 1] = (arr[i3 + 1] ?? 0) + (dustVel[i3 + 1] ?? 0) * drive * 20 + dropSurge * 0.012;
         arr[i3 + 2] = ((arr[i3 + 2] ?? 0) + (dustVel[i3 + 2] ?? 0) * drive * 20) * dustPinch;
         if (Math.abs(arr[i3 + 1]!) > 2.5) arr[i3 + 1] = 0;

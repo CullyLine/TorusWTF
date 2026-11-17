@@ -11,7 +11,7 @@ import {
   type RefObject,
 } from 'react';
 
-// The default framing is intentionally close — the scene should own the
+// The default framing is intentionally close. The scene should own the
 // frame, not float in the middle of it. Wheel/pinch pulls back when the
 // user wants an establishing view.
 const DEFAULT_DISTANCE = { embedded: 2.8, fullscreen: 3.1 } as const;
@@ -23,7 +23,7 @@ const LIMITS = {
 const WHEEL_SENSITIVITY = 0.0045;
 
 /**
- * Short SmoothDamp time for wheel/pinch framing pulls — fluid ease with no
+ * Short SmoothDamp time for wheel/pinch framing pulls. Fluid ease with no
  * stair-steps, settles cleanly so quiet idle holds still.
  */
 const ZOOM_SPRING_SMOOTH = 0.11;
@@ -66,9 +66,9 @@ function smoothDampZoom(state: ZoomSpring, target: number, dt: number, smoothTim
 }
 
 interface CameraZoomContextValue {
-  /** Smoothed distance — SceneRig / presets read this each frame. */
+  /** Smoothed distance. SceneRig / presets read this each frame. */
   distanceRef: RefObject<number>;
-  /** Gesture target — wheel/pinch write here; SmoothDamp eases toward it. */
+  /** Gesture target. wheel/pinch write here; SmoothDamp eases toward it. */
   targetDistanceRef: RefObject<number>;
   setDistance: (distance: number) => void;
   nudge: (delta: number) => void;
@@ -228,7 +228,7 @@ export function VisualizerZoomSurface({ children, onInteract }: VisualizerZoomSu
       const scale = span / pinchRef.current.lastSpan;
       if (Math.abs(scale - 1) > 0.002) {
         // Scale from the gesture target so pinch tracks continuously while
-        // the smoothed distance eases — never compound off the lagging value.
+        // the smoothed distance eases. Never compound off the lagging value.
         setDistance(targetDistanceRef.current / scale);
         pinchRef.current.lastSpan = span;
       }

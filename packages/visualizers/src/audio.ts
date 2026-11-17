@@ -16,7 +16,7 @@ interface AudioGraph {
   analyser: AnalyserNode;
 }
 
-/** One Web Audio graph per <audio> element — required because createMediaElementSource only works once. */
+/** One Web Audio graph per <audio> element. Required because createMediaElementSource only works once. */
 const graphByAudio = new WeakMap<HTMLAudioElement, AudioGraph>();
 
 function ensureGraph(audio: HTMLAudioElement, fftSize: number): AudioGraph {

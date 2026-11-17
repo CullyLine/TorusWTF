@@ -62,7 +62,7 @@ export interface ScreenPaletteColors {
 
 /**
  * Per-frame inputs for the shared contract. Callers must reuse this object
- * (or call with stack locals) — updates never allocate Colors/Vectors.
+ * (or call with stack locals). Updates never allocate Colors/Vectors.
  */
 export interface ScreenUniformFrameInput {
   time: number;

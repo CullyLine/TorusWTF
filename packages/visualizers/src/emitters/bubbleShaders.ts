@@ -56,7 +56,7 @@ varying float vEcho;
 
 const float TAU = 6.28318530718;
 const vec3 MILK = vec3(0.92, 0.94, 0.98);
-// Cool silver-blue — phrase memory, cooler than hat pops / milk tenderness.
+// Cool silver-blue. Phrase memory, cooler than hat pops / milk tenderness.
 const vec3 ECHO_SILVER = vec3(0.72, 0.84, 1.0);
 
 vec3 paletteRamp(float phase) {
@@ -85,7 +85,7 @@ void main() {
   vec3 paletteColor = paletteRamp(filmPhase);
   vec3 spectrum = 0.52 + 0.48 * cos(TAU * (filmPhase + vec3(0.0, 0.333, 0.667)));
   vec3 filmColor = mix(paletteColor, paletteColor * 0.55 + spectrum * 0.6, 0.48);
-  // Tenderness: milkier film — pull toward pearl, soften spectrum chatter.
+  // Tenderness: milkier film. Pull toward pearl, soften spectrum chatter.
   filmColor = mix(filmColor, mix(filmColor, MILK, 0.55), uTenderness * 0.62);
   // Phrase-echo: cool silver catch-light, distinct from hat micro-pops.
   filmColor = mix(filmColor, ECHO_SILVER, vEcho * (0.62 + uEchoGlint * 0.28));
@@ -94,7 +94,7 @@ void main() {
   float highlight = pow(max(0.0, dot(normal, lightDirection)), 28.0);
   float body = 0.035 + (1.0 - radius) * 0.045;
 
-  // Hat micro-pop: catch-lights on the youngest bubbles only — supporting
+  // Hat micro-pop: catch-lights on the youngest bubbles only, supporting
   // texture over the film, not a full-column flash. Soften under tenderness.
   float young = 1.0 - smoothstep(0.0, 0.2, vLife);
   float hatPop =

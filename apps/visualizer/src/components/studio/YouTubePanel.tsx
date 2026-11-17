@@ -52,7 +52,7 @@ export interface YouTubePanelProps {
 /**
  * Floating mini-player. Lives at the app root (not the sidebar) so the
  * embed keeps playing when the sidebar hides in immersive mode. The URL
- * form lives in AudioSourcePicker — this panel only hosts the embed and
+ * form lives in AudioSourcePicker. This panel only hosts the embed and
  * the capture controls.
  */
 export function YouTubePanel({

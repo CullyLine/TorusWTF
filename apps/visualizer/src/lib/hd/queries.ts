@@ -1,7 +1,7 @@
 /**
  * Home Depot GraphQL operations used by the /hd order-puller tool.
  *
- * These match the operations the homedepot.com website calls — we use the
+ * These match the operations the homedepot.com website calls. We use the
  * same federation gateway endpoint and the same operation names so the
  * responses are identical to what a real customer sees.
  *
@@ -11,11 +11,11 @@
  *
  * If Home Depot ever rejects a query because a field name drifted, the
  * normalizer will fall back to nulls and the UI degrades to "No Home" /
- * "—" rather than failing the whole page.
+ * "n/a" rather than failing the whole page.
  */
 
 /**
- * Deliberately minimal — only fields independently verified to exist
+ * Deliberately minimal. Only fields independently verified to exist
  * across multiple working Home Depot scrapers (cirkit/Apify,
  * scrapyspider, projected1 gist). Speculative fields like
  * `metadata.stores`, `info.classNumber`, `pricing.alternatePriceDisplay`,
@@ -90,7 +90,7 @@ export const SEARCH_MODEL_QUERY = /* GraphQL */ `
 `;
 
 /**
- * Per-product detail query — only used to enrich the aisle/bay we cannot
+ * Per-product detail query. Only used to enrich the aisle/bay we cannot
  * get from searchModel. Asks for the smallest viable surface area.
  *
  * The "primarily-for-aisle" reasoning: searchModel does not expose store

@@ -63,8 +63,8 @@ function pickThumbnail(images: RawImage[] | null | undefined): string | null {
   if (!images?.length) return null;
   // Prefer the primary image. Home Depot returns templates like
   //   https://images.thdstatic.com/.../my-product-{size}.jpg
-  // with `sizes` like ["65","100","145","300","400","600","1000"]
-  // — we want a small one for the list view.
+  // with `sizes` like ["65","100","145","300","400","600","1000"].
+  // We want a small one for the list view.
   const primary = images.find((i) => i?.subType === 'PRIMARY') ?? images[0];
   const url = primary?.url ?? null;
   if (!url) return null;
@@ -81,7 +81,7 @@ function localQuantity(product: RawProduct, storeId: string): number | null {
     // Pickup options surface BOPIS (in-store) inventory at the chosen store.
     if (opt?.type !== 'pickup') continue;
     for (const svc of opt.services ?? []) {
-      // Some accounts call it "bopis", others "pickup" — accept both.
+      // Some accounts call it "bopis", others "pickup", accept both.
       const svcType = svc?.type?.toLowerCase() ?? '';
       if (!['bopis', 'pickup', 'pickupinstore'].includes(svcType)) continue;
       for (const loc of svc.locations ?? []) {

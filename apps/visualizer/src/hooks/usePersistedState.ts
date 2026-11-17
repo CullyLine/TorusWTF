@@ -8,7 +8,7 @@ export function usePersistedState<T>(
   /**
    * Optional guard run against the value read back from localStorage.
    * Return a coerced/clamped value, or `undefined` to fall back to
-   * `initial` — protects the UI from stale or corrupt persisted state.
+   * `initial`. Protects the UI from stale or corrupt persisted state.
    */
   sanitize?: (persisted: unknown) => T | undefined,
 ): [T, Dispatch<SetStateAction<T>>] {

@@ -12,7 +12,7 @@ const PatchBody = z.object({
   handle: z.string().min(3).max(32).optional(),
 });
 
-/** PATCH /api/me — update profile fields for the signed-in user. */
+/** PATCH /api/me. Update profile fields for the signed-in user. */
 export async function PATCH(req: Request) {
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });

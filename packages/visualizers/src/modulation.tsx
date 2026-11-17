@@ -9,14 +9,14 @@ import { EMITTER_CONTROL_KEYS } from './emitters/settings';
 import { VISUALIZERS, type VisualizerId } from './registry';
 
 /**
- * Modulation matrix — the synth-style routing layer that turns any audio
+ * Modulation matrix. The synth-style routing layer that turns any audio
  * signal into a live driver for any visual control.
  *
  * A routing says: take SOURCE (a metric the analysis engine already
- * computes — vocals, kick envelope, song-peak level, afterglow…), shape it
+ * computes, vocals, kick envelope, song-peak level, afterglow…), shape it
  * through a CURVE, smooth it with a fast-attack / SmoothDamp-release
  * envelope (GLIDE), scale it by AMOUNT, and add it to the base value of
- * TARGET (any control from the schema — glow, size, speed, turbulence…).
+ * TARGET (any control from the schema, glow, size, speed, turbulence…).
  * The result is clamped to the control's own min/max so no routing can
  * push a value into broken territory.
  *
@@ -24,7 +24,7 @@ import { VISUALIZERS, type VisualizerId } from './registry';
  * writing final absolute values into a mutable ref shared through
  * `ModulationContext`. Consumers (SceneRig, presets, palette driver, the
  * scene-scale group) read `useModulation().current[key] ?? baseProp` inside
- * their own frame loops — no React re-renders, no allocation.
+ * their own frame loops. No React re-renders, no allocation.
  */
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ export interface ModSourceDef {
 }
 
 /**
- * The user-facing source list — ordered from "raw bands" to "musical
+ * The user-facing source list. Ordered from "raw bands" to "musical
  * understanding" so the panel reads as a story, and doubles as the live
  * signal-meter list.
  */
@@ -73,9 +73,13 @@ export const MOD_SOURCES: ModSourceDef[] = [
   { key: 'high', label: 'Highs', hint: 'Top-end level, right now' },
   { key: 'energy', label: 'Energy', hint: 'Full-spectrum loudness' },
   { key: 'impact', label: 'Hit', hint: 'Snaps on every hit, rings down like a struck bell' },
-  { key: 'swell', label: 'Swell', hint: 'Slow loudness breath — rises fast, exhales over ~2s' },
+  {
+    key: 'swell',
+    label: 'Swell',
+    hint: 'Slow loudness. Rises fast and falls over about 2 seconds',
+  },
   { key: 'shimmer', label: 'Sparkle', hint: 'Hi-hats, cymbals, and sibilance with a slow melt' },
-  { key: 'kick', label: 'Kick drum', hint: 'Low-band transients — the actual kick pattern' },
+  { key: 'kick', label: 'Kick drum', hint: 'Hits in the low band, which follow the kick drum' },
   { key: 'snare', label: 'Snare', hint: 'Mid-band cracks with hat bleed subtracted' },
   { key: 'hat', label: 'Hi-hat', hint: 'Fast top-end ticks, clears before the next 16th' },
   {
@@ -88,7 +92,11 @@ export const MOD_SOURCES: ModSourceDef[] = [
     label: 'Afterglow',
     hint: 'Lingering warmth for seconds after a peak or drop',
   },
-  { key: 'tension', label: 'Build-up', hint: 'Rising tension before a drop — sweeps, snare rolls' },
+  {
+    key: 'tension',
+    label: 'Build-up',
+    hint: 'Rising tension before a drop, such as sweeps and snare rolls',
+  },
   { key: 'dropEvent', label: 'Drop', hint: 'Pulses when a bass drop lands, decays over ~2 beats' },
   {
     key: 'vocalActivity',
@@ -107,16 +115,16 @@ export const MOD_SOURCES: ModSourceDef[] = [
     hint: 'Sustained low-end presence (smoother than Bass)',
   },
   { key: 'gather', label: 'Pre-beat', hint: 'The inhale just before each predicted beat' },
-  { key: 'echo', label: 'Echo', hint: 'Replays the last phrase\u2019s rhythm into quiet gaps' },
+  { key: 'echo', label: 'Echo', hint: 'Replays the rhythm of the last phrase into quiet gaps' },
   {
     key: 'convergence',
     label: 'Lock-in',
-    hint: 'How locked-together the bands are — 1 in choruses',
+    hint: 'How closely the bands move together. It reaches 1 in choruses',
   },
   {
     key: 'silence',
     label: 'Silence',
-    hint: '1 during sustained quiet — great inverted (negative amount)',
+    hint: 'Reaches 1 during sustained quiet. Useful with a negative amount',
   },
 ];
 
@@ -133,7 +141,7 @@ export type ModCurve = 'linear' | 'soft' | 'sharp' | 'gate';
 
 export const MOD_CURVES: { key: ModCurve; label: string; hint: string }[] = [
   { key: 'linear', label: 'Linear', hint: 'Value maps straight through' },
-  { key: 'soft', label: 'Soft', hint: 'Responds early — quiet detail counts' },
+  { key: 'soft', label: 'Soft', hint: 'Responds early, so quiet detail counts' },
   { key: 'sharp', label: 'Sharp', hint: 'Only the peaks matter' },
   { key: 'gate', label: 'Gate', hint: 'Snaps on/off past the halfway point' },
 ];
@@ -142,18 +150,18 @@ export interface ModRouting {
   id: string;
   enabled: boolean;
   source: ModSourceKey;
-  /** Any schema control key — validated against CONTROL_DEFS_BY_KEY at run time. */
+  /** Any schema control key. Validated against CONTROL_DEFS_BY_KEY at run time. */
   target: ControlKey;
   /**
-   * -1..1 — fraction of the target's full slider range added at source = 1.
+   * -1..1. Fraction of the target's full slider range added at source = 1.
    * Negative amounts subtract (e.g. Silence → -Size shrinks in quiet).
    */
   amount: number;
   curve: ModCurve;
   /**
    * Release SmoothDamp time in seconds. Attack is always fast (~30ms) so
-   * hits land; glide only stretches the critically-damped settle back down
-   * — the per-routing "linger" with inertia, not a linear lag.
+   * hits land; glide only stretches the critically-damped settle back down.
+   * The per-routing "linger" with inertia, not a linear lag.
    */
   glide: number;
 }
@@ -213,7 +221,7 @@ interface ModEnvelope {
 
 /**
  * Unity-style SmoothDamp (critically damped). Mutates `state` in place.
- * No overshoot when velocity starts near zero — release settles with inertia
+ * No overshoot when velocity starts near zero. Release settles with inertia
  * instead of a single-tau exponential lag.
  */
 function smoothDampEnvelope(
@@ -230,7 +238,7 @@ function smoothDampEnvelope(
   const temp = (state.velocity + omega * change) * dt;
   state.velocity = (state.velocity - omega * temp) * exp;
   state.value = target + (change + temp) * exp;
-  // Envelope is a unipolar gate — never dip below 0 from residual velocity.
+  // Envelope is a unipolar gate. Never dip below 0 from residual velocity.
   if (state.value < 0) {
     state.value = 0;
     state.velocity = 0;
@@ -250,7 +258,7 @@ const ModulationContext = createContext<MutableRefObject<ModulatedValues>>(FALLB
 
 /**
  * Per-frame modulated control values. `current[key]` is the final absolute
- * value (base + all routings, clamped to the control's range) — undefined
+ * value (base + all routings, clamped to the control's range), undefined
  * when nothing modulates that key, so consumers fall back to their prop.
  */
 export function useModulation(): MutableRefObject<ModulatedValues> {
@@ -259,7 +267,7 @@ export function useModulation(): MutableRefObject<ModulatedValues> {
 
 interface ModulationProviderProps {
   routings: ModRouting[] | undefined;
-  /** Base control values from props/sliders — re-read every frame. */
+  /** Base control values from props/sliders. Re-read every frame. */
   base: ModulatedValues;
   children: ReactNode;
 }

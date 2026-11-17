@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Rewrite the README for people who are not developers: what torus is, how to use it in four steps, and what it costs. Developer setup moves to the bottom
+- Shorten CONTRIBUTING, SECURITY, the code of conduct, and the issue templates, and remove their references to Docker, MinIO, and other parts that no longer exist
+- Format the whole repository with Prettier and check formatting in CI
 - Restyle Conductor and Transcriber on the same controls, top bar, and colors as the visualizer
 - Fix duplicate list keys in Conductor's instrument picker, and stop the app launcher from covering the piano roll's title
 - Redesign the visualizer page. The controls are a docked sidebar with four tabs (Audio, Look, Automate, Export) instead of one long translucent panel that faded out, and playback has one transport bar under the stage
@@ -42,14 +45,14 @@
 - Add Open Graph and Twitter social card images, expand SEO metadata, allow display-capture permissions
 - Bump Next.js to 15.5.18 to address upstream CVEs and move typedRoutes out of experimental
 - Smooth out audio reactivity: raised-cosine crossover bands + perceptual scaling fix band "rubberbanding", auto-gain (AGC) levels any track, default punch and fast-attack/slow-release smoothing keep motion alive (Gain becomes a trim, "Auto sensitivity" toggle added)
-- Add reactive backgrounds behind mesh presets (nebula, star field, aurora, glow) — slow, contrast-capped, reduced-motion aware, with a sidebar selector and intensity slider
+- Add reactive backgrounds behind mesh presets (nebula, star field, aurora, glow). Slow, contrast-capped, reduced-motion aware, with a sidebar selector and intensity slider
 
 ## 0.1.0
 
 - Consolidate the project into a single Next.js app (`apps/visualizer`): visualizer, Conductor, Transcriber, accounts/profiles, and the Production License all under one roof
 - Remove clip hosting, the background worker, object storage, and the VPS/Docker deployment path
 - Switch the database to libSQL (Turso in production, a local SQLite file in dev); trim the schema to accounts, sessions, and license state
-- Add the one-time, account-bound **Production License** ($10): high-quality 1440p exports, high frame rates, watermark removal, commercial-use rights, and a profile badge — wired through Polar checkout + webhook
+- Add the one-time, account-bound **Production License** ($10): high-quality 1440p exports, high frame rates, watermark removal, commercial-use rights, and a profile badge. Wired through Polar checkout + webhook
 - Account-bound export gating: free exports are watermarked and capped; the license lifts the caps site-wide
 - Add a global, uninvasive top-left app accordion and top-right account menu on every page, with a Stem Separation "coming soon" entry
 - New cosmic-doughnut brand mark and favicon

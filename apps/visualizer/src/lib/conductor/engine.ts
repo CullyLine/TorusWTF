@@ -2,7 +2,7 @@ import { WorkletSynthesizer } from 'spessasynth_lib';
 import { MIDIControllers } from 'spessasynth_core';
 
 /**
- * ConductorEngine — a module singleton wrapping a single spessasynth
+ * ConductorEngine. A module singleton wrapping a single spessasynth
  * WorkletSynthesizer (off the main thread). Mirrors the singleton style of
  * the visualizer's audio graph. It owns one AudioContext, the synth, and an
  * AnalyserNode tap so Conductor's output can later drive the visualizer.

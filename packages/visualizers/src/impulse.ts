@@ -1,5 +1,5 @@
 /**
- * Visual impulses — one-shot commands fired INTO the scene from outside the
+ * Visual impulses. One-shot commands fired INTO the scene from outside the
  * canvas (trigger mappings, MIDI notes, keyboard, projector sync).
  *
  * The app writes a strength (usually 1) into a field; the consumer inside
@@ -15,7 +15,7 @@ export interface VisualImpulses {
   hueKick: number;
   /** One-shot camera FOV punch-in. */
   camPunch: number;
-  /** One-shot focus rack — blur thump. */
+  /** One-shot focus rack. Blur thump. */
   dofPunch: number;
   /** One-shot bloom surge. */
   bloomPulse: number;

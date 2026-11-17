@@ -22,7 +22,7 @@ export interface PromptOptions {
   message: string;
   placeholder?: string;
   defaultValue?: string;
-  /** Label for the submit button — defaults to "Confirm". */
+  /** Label for the submit button. Defaults to "Confirm". */
   confirmLabel?: string;
 }
 

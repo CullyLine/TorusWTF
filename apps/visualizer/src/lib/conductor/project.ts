@@ -1,7 +1,7 @@
 import type { KeyLock } from './scales';
 
 /**
- * project.ts — Conductor's serializable data model + reducer.
+ * project.ts. Conductor's serializable data model + reducer.
  *
  * Everything is tick-based (PPQ) so the project is tempo-independent and
  * MIDI-friendly. Pure module (no React/DOM); the React store lives in
@@ -120,7 +120,7 @@ export function createDefaultProject(): ConductorProject {
     name: 'Untitled',
     bpm: 120,
     ppq: PPQ,
-    key: { tonic: 3, scale: 'minor' }, // D# minor — a nod to the user's example
+    key: { tonic: 3, scale: 'minor' }, // D# minor. A nod to the user's example
     scaleLock: false,
     tracks: [createTrack(0)],
   };

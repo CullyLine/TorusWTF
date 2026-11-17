@@ -94,7 +94,7 @@ export async function precomputeFftFrames(
     }
 
     // Center the analysis window on the frame's time position. The live
-    // AnalyserNode reads from "the most recent fftSize samples" — to match
+    // AnalyserNode reads from "the most recent fftSize samples", to match
     // that as closely as possible we sample BACKWARD from the frame's time.
     const centerSample = Math.floor((frame / fps) * sampleRate);
     const startSample = centerSample - fftSize + 1;

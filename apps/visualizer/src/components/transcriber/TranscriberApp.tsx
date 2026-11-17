@@ -111,7 +111,7 @@ export function TranscriberApp() {
   const [analysis, setAnalysis] = useState<TranscribeOptions>(DEFAULT_TRANSCRIBE_OPTIONS);
   const [stale, setStale] = useState(false); // analysis options changed since last run
 
-  // Output options (live — recompute project/MIDI without re-running the model).
+  // Output options (live, recompute project/MIDI without re-running the model).
   const [split, setSplit] = useState<SplitMode>('range');
   const [bpm, setBpm] = useState(120);
 

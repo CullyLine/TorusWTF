@@ -7,11 +7,11 @@ import { useMetricsRef } from './metrics';
 import { getDotTexture } from './dotTexture';
 
 /**
- * BackgroundLayer — the always-subtle reactive backdrop.
+ * BackgroundLayer. The always-subtle reactive backdrop.
  *
  * Every mode is a true 360° environment (sky spheres / spherical star
- * shells), not a flat card: whichever way the camera flies — orbit,
- * cinematic sweeps, flow-riding — the backdrop is there. Shader modes
+ * shells), not a flat card: whichever way the camera flies, orbit,
+ * cinematic sweeps, flow-riding, the backdrop is there. Shader modes
  * compute color from the per-pixel WORLD DIRECTION on an inward-facing
  * sphere, so there are no seams, no edges, and no "back of the set".
  *
@@ -22,27 +22,27 @@ import { getDotTexture } from './dotTexture';
  * camera (anticipation, distinct from gather). `shimmer`/`hat` add a
  * faint glitter distinct from bass swell. `vocalActivity` soft-warms
  * sky tint on voice-led passages; while `afterglow` decays,
- * nebula/aurora/glow bias toward a warmer amber mix on top — intensity
+ * nebula/aurora/glow bias toward a warmer amber mix on top, intensity
  * afterglow stays; this is the color-temperature residue of a big
  * moment. During `holdBreath` / deep `silence` the sky hush eases
  * nebula/aurora drift and dims glitter so every backdrop listens,
- * thawing when music returns — distinct from gather inhale, leanIn
+ * thawing when music returns. Distinct from gather inhale, leanIn
  * pull, and afterglow warmth. On `tenderness`, nebula/aurora/glow
  * drift eases (still breathes) and the sky warm-dims so tender vocals
- * gentle the backdrop without the hush freeze — re-brightening on
+ * gentle the backdrop without the hush freeze, re-brightening on
  * release. Kit accents: `kick` sends a deep pulse from the nebula/glow
  * core and `snare` a brief lateral aurora shear so the sky answers the
- * drums under every preset — subtle, never fighting the foreground;
+ * drums under every preset. Subtle, never fighting the foreground;
  * gather / leanIn / holdBreath / afterglow / tenderness stay distinct.
- * On `convergence`, the sky organizes into coherence — aurora curtains
+ * On `convergence`, the sky organizes into coherence, aurora curtains
  * align into parallel bands, nebula billows ease into one slow shared
- * drift, glow steadies and brightens faintly, star shell spin coheres —
+ * drift, glow steadies and brightens faintly, star shell spin coheres,
  * dissolving back into free drift as the lock fades. Sibling to
  * livingPalette chord lock, SceneRig plant, and Aura shared orbit.
  * On `echo`, replay the last phrase as a one-shot train of cool silver
- * glints sweeping the backdrop — aurora curtains flickering in sequence,
+ * glints sweeping the backdrop, aurora curtains flickering in sequence,
  * nebula billows pulsing faintly, glow halo chasing a cool pulse, star
- * shells glinting — fading as the music returns. The sky's last missing
+ * shells glinting, fading as the music returns. The sky's last missing
  * voice; sibling to Aura phrase-echo (#107). Gather / leanIn / holdBreath /
  * afterglow / tenderness / kit / convergence stay distinct.
  * Honors `prefers-reduced-motion` by freezing the drift. Contrast-capped
@@ -61,7 +61,7 @@ export interface BackgroundLayerProps {
   tier: 'high' | 'mid' | 'low';
 }
 
-// Contrast caps per mode — the hard ceiling on how loud the background can
+// Contrast caps per mode. The hard ceiling on how loud the background can
 // ever get, so it stays a background no matter the intensity slider.
 // (Raised slightly vs the old flat-card versions: the same energy budget
 // spread across a full sky sphere reads dimmer per pixel.)
@@ -72,7 +72,7 @@ const STAR_OPACITY_CAP = 0.68;
 
 /**
  * Amber residue mixed into sky colors while afterglow decays.
- * Max mix at afterglow=1 — visible warmth, not a full wash.
+ * Max mix at afterglow=1. Visible warmth, not a full wash.
  */
 const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.58, 0.28);
 const AFTERGLOW_WARMTH_MIX = 0.42;
@@ -80,7 +80,7 @@ const AFTERGLOW_WARMTH_MIX = 0.42;
 const AFTERGLOW_WARMTH_TAU = 0.35;
 
 /**
- * Softer rose-warm voice tint — sits under afterglow amber so peaks still
+ * Softer rose-warm voice tint. Sits under afterglow amber so peaks still
  * read as the big-moment residue, while vocal verses warm vs instrumental.
  */
 const VOCAL_WARM = new THREE.Color(1.0, 0.7, 0.55);
@@ -90,9 +90,9 @@ const VOCAL_WARMTH_TAU = 0.22;
 /** Lean-in: eager rise, slower settle so anticipation lingers into the drop. */
 const LEAN_RISE_TAU = 0.08;
 const LEAN_FALL_TAU = 0.2;
-/** Max sky-shell scale reduction — pulls nebula/aurora/glow toward camera. */
+/** Max sky-shell scale reduction. Pulls nebula/aurora/glow toward camera. */
 const LEAN_SKY_PULL = 0.06;
-/** Star shell pull — slightly stronger so the approach reads on points. */
+/** Star shell pull. Slightly stronger so the approach reads on points. */
 const LEAN_STAR_PULL = 0.08;
 
 /**
@@ -103,23 +103,23 @@ const STILLNESS_RISE_TAU = 0.14;
 const STILLNESS_FALL_TAU = 0.08;
 /** Nearly freeze nebula/aurora/glow drift + star spin at full hush. */
 const DRIFT_HUSH = 0.92;
-/** Dim hat/shimmer glitter while listening — not gather dim, not lean. */
+/** Dim hat/shimmer glitter while listening. Not gather dim, not lean. */
 const GLITTER_HUSH = 0.88;
 
 /**
- * Tenderness sky soften: ease drift (still breathes — not holdBreath freeze)
+ * Tenderness sky soften: ease drift (still breathes, not holdBreath freeze)
  * and warm-dim glow under tender vocals; re-brightens on release.
  */
 const TENDER_RISE_TAU = 0.12;
 const TENDER_FALL_TAU = 0.22;
-/** Drift ease at full tenderness — far softer than DRIFT_HUSH (0.92). */
+/** Drift ease at full tenderness. Far softer than DRIFT_HUSH (0.92). */
 const DRIFT_TENDER = 0.42;
-/** Warm-dim intensity notch — sky gentles without going dark. */
+/** Warm-dim intensity notch. Sky gentles without going dark. */
 const TENDER_DIM = 0.24;
 /** Soft milk-amber; cooler/milkier than afterglow amber so peaks stay distinct. */
 const TENDER_WARM = new THREE.Color(1.0, 0.74, 0.58);
 const TENDER_WARMTH_MIX = 0.2;
-/** Soften glitter under tenderness — less than holdBreath hush. */
+/** Soften glitter under tenderness. Less than holdBreath hush. */
 const GLITTER_TENDER = 0.35;
 
 /**
@@ -139,7 +139,7 @@ const KIT_SNARE_FALL_TAU = 0.12;
  */
 const LOCK_RISE_TAU = 0.1;
 const LOCK_FALL_TAU = 0.18;
-/** Faint intensity lift while bands lock — coherence, not a swell punch. */
+/** Faint intensity lift while bands lock. Coherence, not a swell punch. */
 const LOCK_BRIGHTEN = 0.1;
 
 /**
@@ -149,7 +149,7 @@ const LOCK_BRIGHTEN = 0.1;
  */
 const ECHO_RISE_TAU = 0.05;
 const ECHO_FALL_TAU = 0.18;
-/** Cool silver after-image — cooler than afterglow amber / tender milk. */
+/** Cool silver after-image. Cooler than afterglow amber / tender milk. */
 const ECHO_SILVER = new THREE.Color(0.58, 0.78, 0.98);
 
 /** Sky sphere radius: far outside every camera path (max ~12 world units). */
@@ -278,7 +278,7 @@ const NOISE_GLSL = /* glsl */ `
 `;
 
 // Sky vertex shader: pass the world-space view direction for this fragment.
-// The sphere is camera-agnostic — direction is (worldPos - cameraPos), so
+// The sphere is camera-agnostic. Direction is (worldPos - cameraPos), so
 // turning or flying the camera reveals the rest of a coherent sky.
 const SKY_VERTEX = /* glsl */ `
   varying vec3 vDir;
@@ -316,7 +316,7 @@ function SkySphere({ matRef, fragment, uniforms }: SkySphereProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Nebula — drifting fbm fog wrapped around the whole sky.
+// Nebula. Drifting fbm fog wrapped around the whole sky.
 // ---------------------------------------------------------------------------
 
 const NEBULA_FRAGMENT = /* glsl */ `
@@ -343,14 +343,14 @@ const NEBULA_FRAGMENT = /* glsl */ `
     float lockSnap = lock * lock;
     float echo = clamp(uEcho, 0.0, 1.0);
     float travel = clamp(uEchoTravel, 0.0, 1.0);
-    // Lean zooms features (sky approaches) — distinct from gather's density inhale.
+    // Lean zooms features (sky approaches). Distinct from gather's density inhale.
     // Kick briefly opens the domain (depth pulse from the fog core).
     float zoom = 1.0 - uLean * 0.28 + kick * 0.07;
     // Snare: brief lateral shear of the fog field (backbeat flick).
     // Lock softens shear so free billows yield to one shared drift.
     vec2 shear = vec2(snare * 0.055 * (1.0 - lock * 0.7) * sign(d.x + 1e-4), 0.0);
     // Free: two opposing drift clocks. Locked: both layers share one slow
-    // advect so the fog reads as one coherent billow (not frozen — hush owns that).
+    // advect so the fog reads as one coherent billow (not frozen, hush owns that).
     vec2 sharedDrift = vec2(uTime * 0.011, uTime * 0.0085);
     vec2 free1 = vec2(uTime * 0.020, uTime * 0.015) + shear;
     vec2 free2 = vec2(-uTime * 0.012, uTime * 0.008) + shear * 1.2;
@@ -360,7 +360,7 @@ const NEBULA_FRAGMENT = /* glsl */ `
     float n1 = fbmDir(d, mix(2.6, 2.05, lock) * zoom, drift1);
     float n2 = fbmDir(d, mix(4.4, 2.35, lockSnap) * zoom, drift2);
     // Gather raises the density floor so fog thins / pulls toward denser
-    // pockets — a pre-beat inhale instead of a flat dim.
+    // pockets. A pre-beat inhale instead of a flat dim.
     // Kick drops the floor so dense cores surge outward (depth pulse).
     float lo = 0.28 + uInhale * 0.16 - kick * 0.1;
     float hi = 0.95 + uInhale * 0.04;
@@ -374,7 +374,7 @@ const NEBULA_FRAGMENT = /* glsl */ `
     // Hat/shimmer glitter: brief high-frequency sparkle, not bass swell.
     float sparkle = noise(d.xy * 38.0 + vec2(uTime * 9.0, uTime * 6.5));
     float glitter = 1.0 + uGlitter * (0.25 + 0.75 * sparkle);
-    // Phrase-echo: cool silver billow pulses sweeping azimuth — memory, not kit.
+    // Phrase-echo: cool silver billow pulses sweeping azimuth. Memory, not kit.
     float azN = atan(d.z, d.x) / 6.2831853 + 0.5;
     float train = abs(azN - travel);
     train = min(train, 1.0 - train);
@@ -384,7 +384,7 @@ const NEBULA_FRAGMENT = /* glsl */ `
     col = mix(col, uEchoColor, clamp(echoGlint * 0.78, 0.0, 0.85));
     // Lean slightly brightens (anticipation), gather dims (inhale).
     // Kick core pulse + snare flank flash stay under the contrast cap.
-    // Lock faint brighten — coherence glow, not kit punch or tension swell.
+    // Lock faint brighten. Coherence glow, not kit punch or tension swell.
     float corePulse = 1.0 + kick * 0.14 * density;
     float flank = smoothstep(0.15, 0.85, abs(d.x)) * (1.0 - abs(d.y) * 0.55);
     float a = density * band * uIntensity * (1.0 - uInhale * 0.28) * (1.0 + uLean * 0.08)
@@ -470,7 +470,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       LOCK_FALL_TAU,
     );
     const lock = lockRef.current * (1 - stillness * 0.3);
-    // Steadier shared clock when locked — not frozen (holdBreath owns that).
+    // Steadier shared clock when locked. Not frozen (holdBreath owns that).
     const lockPace = 1 - lock * 0.38;
     // Phrase-echo: arm on quiet, fire one cool silver billow-pulse train per gap.
     echoSmooth.current = smoothToward(
@@ -496,7 +496,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
     const echoMul = 1 - stillness * 0.55;
-    // Tenderness eases drift without the hush freeze — stack under stillness.
+    // Tenderness eases drift without the hush freeze. Stack under stillness.
     const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
@@ -510,8 +510,8 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       m.tension * 0.42 +
       m.dropEvent * 0.25 +
       m.afterglow * 0.2;
-    // Warm-dim under tenderness — re-brightens on release; not gather dim.
-    // Lock faint brighten — coherence, not tension swell.
+    // Warm-dim under tenderness. Re-brightens on release; not gather dim.
+    // Lock faint brighten. Coherence, not tension swell.
     const tenderDim = 1 - tender * TENDER_DIM;
     mat.uniforms.uIntensity!.value = Math.min(
       NEBULA_CAP,
@@ -545,7 +545,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     mat.uniforms.uInhale!.value = inhaleRef.current;
-    // Dim glitter while listening; soft tenderness soften — distinct from hush.
+    // Dim glitter while listening; soft tenderness soften. Distinct from hush.
     mat.uniforms.uGlitter!.value =
       glitterRef.current * (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     mat.uniforms.uLean!.value = leanRef.current;
@@ -586,7 +586,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Starfield — full spherical shell of stars, twinkle on highs.
+// Starfield. Full spherical shell of stars, twinkle on highs.
 // ---------------------------------------------------------------------------
 
 const STAR_COUNT_HIGH = 1400;
@@ -626,7 +626,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const variance = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       // Uniform random direction (normalized gaussian) × a deep shell
-      // radius — stars surround the camera in every direction.
+      // radius. Stars surround the camera in every direction.
       let x = 0;
       let y = 0;
       let z = 0;
@@ -710,7 +710,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       (Math.min(1, m.vocalActivity) - vocalLingerRef.current) *
       (1 - Math.exp(-dt / VOCAL_WARMTH_TAU));
     if (g && !reducedMotion) {
-      // Very slow whole-sky rotation — hushes with holdBreath; eases on tenderness.
+      // Very slow whole-sky rotation. Hushes with holdBreath; eases on tenderness.
       // Lock collapses Z tumble into one coherent Y drift (shared sky axis).
       g.rotation.y += delta * 0.004 * motionMul * (1 + lock * 0.15);
       g.rotation.z += delta * 0.002 * motionMul * (1 - lock * 0.92);
@@ -830,7 +830,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Aurora — shimmering curtains wrapping the full horizon, bass-driven.
+// Aurora. Shimmering curtains wrapping the full horizon, bass-driven.
 // ---------------------------------------------------------------------------
 
 const AURORA_FRAGMENT = /* glsl */ `
@@ -858,7 +858,7 @@ const AURORA_FRAGMENT = /* glsl */ `
     float echo = clamp(uEcho, 0.0, 1.0);
     float travel = clamp(uEchoTravel, 0.0, 1.0);
     // Horizontal domain (seam-free): the direction's x/z components,
-    // ignoring elevation — curtains wrap 360° around the viewer.
+    // ignoring elevation. Curtains wrap 360° around the viewer.
     // Snare shears the horizon domain laterally (aurora backbeat flick).
     // Lock softens shear so free billow yields to aligned parallel bands.
     vec3 flat3 = normalize(vec3(d.x + snare * 0.08 * (1.0 - lock * 0.75) * sign(d.x + 1e-4), 0.0, d.z) + 1e-4);
@@ -897,7 +897,7 @@ const AURORA_FRAGMENT = /* glsl */ `
     col = mix(col, uEchoColor, clamp(echoGlint * 0.82, 0.0, 0.88));
     shimmer += echoGlint * 0.55;
     // Kick core pulse along denser curtain; snare flank flash at the sides.
-    // Lock faint brighten — aligned bands glow together, not a kit punch.
+    // Lock faint brighten. Aligned bands glow together, not a kit punch.
     float corePulse = 1.0 + kick * 0.12 * curtain;
     float flank = smoothstep(0.2, 0.9, abs(d.x)) * (1.0 - abs(d.y) * 0.4);
     float a = curtain * shimmer * uIntensity * (1.0 - uInhale * 0.38) * (1.0 + uLean * 0.07)
@@ -1085,7 +1085,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Glow — a soft energy source that slowly orbits the sky and breathes.
+// Glow. A soft energy source that slowly orbits the sky and breathes.
 // ---------------------------------------------------------------------------
 
 const GLOW_FRAGMENT = /* glsl */ `
@@ -1241,9 +1241,9 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     const mat = matRef.current;
     if (!mat) return;
     // The energy source drifts around the sky over ~4 minutes and bobs
-    // gently in elevation — walking around it (orbit/flow cameras) works.
+    // gently in elevation. Walking around it (orbit/flow cameras) works.
     // HoldBreath nearly freezes the orbit so the glow listens with the sky.
-    // Tenderness eases the orbit without freezing — still breathes.
+    // Tenderness eases the orbit without freezing, still breathes.
     // Lock steadies azimuth crawl + elevation bob (coherent disc, not hush freeze).
     const az = tRef.current * 0.026;
     const elBob = Math.sin(tRef.current * 0.05) * 0.25 * (1 - lock * 0.78);

@@ -2,7 +2,7 @@
  * Aisle/bay extraction.
  *
  * Home Depot's GraphQL responses don't put aisle/bay on a single fixed
- * field path — different products and different store layouts surface
+ * field path. Different products and different store layouts surface
  * them at slightly different nesting depths (sometimes on
  * `info.productSubType`, sometimes on a `location` object within
  * fulfillment). Rather than chase the schema, we walk the response
@@ -10,7 +10,7 @@
  *
  * The fallback contract is explicit: if we can't find either field,
  * the item legitimately has "No Home". That is a real category at
- * the store (~2–5% of inventory) — it's not a missing-data placeholder.
+ * the store (~2 to 5% of inventory). It's not a missing-data placeholder.
  */
 
 type Unknown = unknown;

@@ -6,7 +6,7 @@ import type { HdItem, HdSearchResponse } from '@/lib/hd/types';
 /**
  * Mobile-first stock lookup for Home Depot Hickory (#3628).
  *
- * Hard-isolated from the rest of torus.wtf — no shared components, no
+ * Hard-isolated from the rest of torus.wtf. No shared components, no
  * shared state, no shared styling. Renders inside a fixed full-viewport
  * .hd-root layer so the dark torus body styling never bleeds through.
  */
@@ -32,7 +32,7 @@ const INITIAL: FetchState = {
 };
 
 const formatCurrency = (n: number | null) =>
-  typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : '—';
+  typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : 'n/a';
 
 const formatUom = (u: string | null) => {
   if (!u) return '';
@@ -194,7 +194,7 @@ function StatusLine({
   if (error) {
     return (
       <p className="mt-2 text-xs text-rose-700">
-        Couldn’t reach Home Depot ({error.slice(0, 120)}). Try again.
+        Could not reach Home Depot ({error.slice(0, 120)}). Try again.
       </p>
     );
   }

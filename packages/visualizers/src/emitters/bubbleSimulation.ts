@@ -28,7 +28,7 @@ const DEFAULT_KIT_AMP = 1;
 const DEFAULT_ECHO_AMP = 1;
 /** Phrase-echo train: pulses spaced along BPM-paced travel (no pile-up). */
 const ECHO_TRAIN_SLOTS = 5;
-/** Bubbles emitted per echo pulse — small bright glints, not a kick surge. */
+/** Bubbles emitted per echo pulse. Small bright glints, not a kick surge. */
 const ECHO_PULSE_COUNT = 3;
 
 export interface BubblePoolConfig {
@@ -106,7 +106,7 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
-/** Asymmetric SmoothDamp-style ease — fast attack, slower release. */
+/** Asymmetric SmoothDamp-style ease. Fast attack, slower release. */
 function smoothToward(
   current: number,
   target: number,
@@ -340,7 +340,7 @@ export function emitBubbleBurst(
  * place; the numeric return value is the continuous count emitted this step
  * (kick burst particles are counted separately via `emittedTotal`).
  *
- * Kit / macro accents (supporting texture — never fireworks):
+ * Kit / macro accents (supporting texture, never fireworks):
  * - `kick` → buoyant upward surge + small `emitBubbleBurst`
  * - `snare` → brief lateral current flick that shears the column sideways
  * - `hat` → smoothed glint envelope (`pool.hatGlint` for the shader)
@@ -434,10 +434,10 @@ export function stepBubblePool(
   const tender = kit.tenderSmooth;
   const echoNow = kit.echoSmooth;
   // Soft under hush so thaw still breathes; never a hard freeze-dead.
-  // Tenderness slows without freezing — distinct from holdBreath suspension.
+  // Tenderness slows without freezing. Distinct from holdBreath suspension.
   const motionMul = (1 - stillness * 0.9) * (1 - tender * 0.28);
   const ageMul = 1 - stillness * 0.85;
-  // Soften hat micro-pops under tenderness — milkier, not sparkly.
+  // Soften hat micro-pops under tenderness. Milkier, not sparkly.
   pool.hatGlint = kit.hatSmooth * (1 - tender * 0.7);
   pool.tenderSoft = tender;
 
@@ -461,7 +461,7 @@ export function stepBubblePool(
     : echoNow * 0.04 * (1 - stillness * 0.55);
   pool.echoGlint = echoVis;
 
-  // Emit crest-by-slot pulses while the train climbs — spaced to the gap's BPM.
+  // Emit crest-by-slot pulses while the train climbs. Spaced to the gap's BPM.
   if (traveling && echoVis > 0.02) {
     const slot = Math.min(ECHO_TRAIN_SLOTS - 1, Math.floor(kit.echoTravel * ECHO_TRAIN_SLOTS));
     while (kit.echoEmitCursor <= slot && kit.echoEmitCursor < ECHO_TRAIN_SLOTS) {
@@ -475,7 +475,7 @@ export function stepBubblePool(
     }
   }
 
-  // Kick buoyant surge burst — rising-edge only, capped so it stays a texture.
+  // Kick buoyant surge burst. Rising-edge only, capped so it stays a texture.
   const kickRise = kick - kit.prevKick;
   if (kickRise > 0.07 && kick > 0.28) {
     const burstStrength = Math.min(0.28, kick * 0.2 + kickRise * 0.35);
@@ -483,7 +483,7 @@ export function stepBubblePool(
   }
   kit.prevKick = kick;
 
-  // Snare lateral flick — rising-edge flips direction; soft under hush.
+  // Snare lateral flick. Rising-edge flips direction; soft under hush.
   const snareRise = snare - kit.prevSnare;
   const snareHit = snareRise > 0.07 && snare > 0.28 && stillness < 0.55;
   if (snareHit) {
@@ -502,9 +502,9 @@ export function stepBubblePool(
 
   const flowAcceleration =
     turbulence * (0.05 + flowLevel * 0.045 + shimmer * 0.02) * (1 - tender * 0.4);
-  // Tenderness: slower, milkier rise — damp buoyancy without freezing.
+  // Tenderness: slower, milkier rise. Damp buoyancy without freezing.
   const liftAcceleration = lift * (0.018 + breath * 0.012) * (1 - tender * 0.48);
-  // Kick: brief upward buoyant pulse — accents, not a rocket.
+  // Kick: brief upward buoyant pulse. Accents, not a rocket.
   const kickLiftAccel = kick * lift * 0.55;
   // Snare: brief lateral current across the column (X primary, slight Z).
   const snareLateralAccel = snareAmp * (1.35 + amp * 0.45);
@@ -539,13 +539,13 @@ export function stepBubblePool(
       damping;
     let vz = (pool.velocities[i3 + 2]! + flow.z * flowAcceleration * integrateDt) * damping;
 
-    // Gentle inward gather — radial XZ only, leaves vertical buoyancy alone.
+    // Gentle inward gather. Radial XZ only, leaves vertical buoyancy alone.
     if (gatherPull > 0.001) {
       vx -= x * gatherPull * integrateDt;
       vz -= z * gatherPull * integrateDt;
     }
 
-    // Snare lateral current — shears the whole column sideways (not a Y surge).
+    // Snare lateral current. Shears the whole column sideways (not a Y surge).
     if (snareLateralAccel > 0.001) {
       vx += snareDir * snareLateralAccel * integrateDt;
       vz += snareDir * snareLateralAccel * 0.38 * integrateDt;

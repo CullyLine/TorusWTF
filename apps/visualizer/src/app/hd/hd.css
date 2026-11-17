@@ -2,7 +2,7 @@
 
 /*
  * Standalone styles for the /hd internal tool. Intentionally does NOT
- * import @torus/ui/styles.css or the torus theme tokens — this page is
+ * import @torus/ui/styles.css or the torus theme tokens. This page is
  * fully isolated from torus.wtf branding.
  */
 
@@ -32,7 +32,7 @@
 }
 
 .hd-root :focus-visible {
-  outline: 2px solid #f96302; /* Home Depot orange — feels right here */
+  outline: 2px solid #f96302; /* Home Depot orange */
   outline-offset: 2px;
   border-radius: 4px;
 }

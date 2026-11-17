@@ -7,7 +7,7 @@
  *   - FLAC VORBIS_COMMENT + PICTURE blocks
  *
  * Anything else (untagged WAV, Ogg, mic/desktop streams) returns an empty
- * result — the manual "Image" field is always available as a fallback.
+ * result. The manual "Image" field is always available as a fallback.
  *
  * Every parser is wrapped so a malformed file degrades to "no tags found"
  * instead of throwing. Cover art is returned as raw bytes + mime so the

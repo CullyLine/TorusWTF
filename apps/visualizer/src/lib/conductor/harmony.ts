@@ -2,7 +2,7 @@ import { nearestInScale, scaleDegree, SCALES, type KeyLock } from './scales';
 import type { Clip, Note } from './project';
 
 /**
- * harmony.ts — pure helpers for generating diatonic chords from a melody.
+ * harmony.ts. Pure helpers for generating diatonic chords from a melody.
  * No DOM/React: unit-tested in harmony.test.ts.
  *
  * Strategy (per the plan): one chord per bar, built from the bar's most

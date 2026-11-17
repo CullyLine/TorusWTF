@@ -179,7 +179,7 @@ function averageColor(pixels: Rgb[]): Rgb {
 
 /**
  * Choose three colors that spread across the luminance range while
- * preferring populous, saturated swatches — avoids three near-identical
+ * preferring populous, saturated swatches. Avoids three near-identical
  * muddy tones on busy artwork.
  */
 function pickThree(candidates: { color: Rgb; weight: number }[]): Rgb[] {

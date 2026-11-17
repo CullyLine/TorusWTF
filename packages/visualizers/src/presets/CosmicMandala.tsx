@@ -19,7 +19,7 @@ import { getDotTexture } from '../dotTexture';
 const FOLDS = 8;
 
 /**
- * Cosmic Mandala — sacred nested wire tori + shimmer halo.
+ * Cosmic Mandala. Sacred nested wire tori + shimmer halo.
  *
  * Soft-metric gestures (NS-20260727-05):
  *  - `holdBreath` / deep silence → ease ring/halo rotation to a suspended
@@ -82,14 +82,14 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
   const shimmerCount = tier === 'high' ? 900 : tier === 'mid' ? 420 : 180;
   // Vocal rim amp softens on lower tiers so mid/low stay readable without bloom blowout.
   const vocalAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
-  // HoldBreath / leanIn amp — low tier still pauses and approaches, just softer.
+  // HoldBreath / leanIn amp. Low tier still pauses and approaches, just softer.
   const stillAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
   const leanAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
-  // Tension / bar-lock amp — mid/low still coil and clock, just softer.
+  // Tension / bar-lock amp. mid/low still coil and clock, just softer.
   const tensionAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   const barAmp = tier === 'low' ? 0.7 : tier === 'mid' ? 0.9 : 1;
   // Flow Field Update: the shimmer halo is advected through the shared curl
-  // current with a spring back to its home ring — fluid swirl, stable form.
+  // current with a spring back to its home ring. Fluid swirl, stable form.
   const flowParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
   const flowTimeRef = useRef(0);
   const flowScratch = useRef<Vec3Like>({ x: 0, y: 0, z: 0 });
@@ -123,7 +123,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     pulseRef.current = Math.max(0, pulseRef.current - delta * 2.5);
     if (m.impact > 0.55) pulseRef.current = 1;
 
-    // Hold-breath stillness: the mandala listens — rings pause, halo ticks hold.
+    // Hold-breath stillness: the mandala listens. Rings pause, halo ticks hold.
     const stillnessTarget =
       Math.min(
         1,
@@ -152,7 +152,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
-    // Tension coil: climb with the build, spring loose on the drop — never a snap.
+    // Tension coil: climb with the build, spring loose on the drop. Never a snap.
     // Soft under stillness so a held quiet bar still owns the hush.
     let tensionTarget = Math.min(1, m.tension) * tensionAmp * (1 - stillness * 0.3);
     if (m.dropEvent > 0.4 || m.release > 0.55) tensionTarget = 0;
@@ -196,7 +196,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     // Tenderness softens rim contrast (vocal punch + outer/inner lift).
     const rimSoft = 1 - tender * 0.62;
 
-    // Tenderness slows the wheel and softens the breath — vocal-led quiet
+    // Tenderness slows the wheel and softens the breath, vocal-led quiet
     // passages read as meditation, not machinery. Section level paces the
     // whole mandala with the song's arc.
     const soften = 1 - m.tenderness * 0.3;
@@ -204,11 +204,11 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
 
     // Gather: whole mandala inhales before the predicted beat, then the
     // existing impact/bass breath reads as the release.
-    // LeanIn presence is Z approach + ring spacing (below) — never replaces gather.
+    // LeanIn presence is Z approach + ring spacing (below). Never replaces gather.
     const gatherSqueeze = 1 - m.gather * 0.14;
     const breath = (1 + m.bass * 0.22 + m.swell * 0.12 + m.impact * 0.14 * soften) * gatherSqueeze;
     root.scale.setScalar(breath);
-    // Draw nearer on leanIn — mild camera-ward pull, distinct from gather squeeze.
+    // Draw nearer on leanIn. Mild camera-ward pull, distinct from gather squeeze.
     root.position.z = -lean * 0.48;
     // Whole-mandala spin: now picks up mid + high + impact so the wheel
     // visibly turns at normal listening gain instead of waiting for the
@@ -254,8 +254,8 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
         Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12) * motionMul +
         snareCrack * 0.08;
       // Kick: inner rings bloom outward; snare: outer rings briefly flare.
-      // Vocal: outer rim thickens slightly — sacred geometry answering the voice.
-      // LeanIn: outer rings pull inward (tighten spacing) — distinct from gather.
+      // Vocal: outer rim thickens slightly. Sacred geometry answering the voice.
+      // LeanIn: outer rings pull inward (tighten spacing). Distinct from gather.
       // Tension: coil all rings tighter/sharper toward center (stronger on outer),
       // distinct from leanIn's mild outer-only approach squeeze.
       const leanTighten = 1 - lean * 0.14 * outerness;
@@ -267,7 +267,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
       );
       const hex = i % 3 === 0 ? palette.bass : i % 3 === 1 ? palette.mid : palette.high;
       c.set(hex);
-      // Value-only darken under tension — no hue shift (coil, not mood).
+      // Value-only darken under tension. No hue shift (coil, not mood).
       if (tension > 0.001) {
         scratchDark.current.setRGB(0.04, 0.03, 0.07);
         c.lerp(scratchDark.current, tension * 0.42);
@@ -276,7 +276,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
         const mat = (grand as THREE.Mesh).material;
         if (mat && !Array.isArray(mat) && 'emissiveIntensity' in mat) {
           const sm = mat as THREE.MeshStandardMaterial;
-          // Afterglow holds the rings lit after the peak passes — the
+          // Afterglow holds the rings lit after the peak passes, the
           // mandala remembers the moment for a few seconds.
           // Vocal deepens outer-rim emissive; tenderness compresses the
           // outer-vs-inner rim contrast so tender verses glow evenly.
@@ -302,7 +302,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     });
 
     if (shimmer && shimmerMat) {
-      // Hat ticks: sharp, short twinkles on the halo — distinct from the
+      // Hat ticks: sharp, short twinkles on the halo. Distinct from the
       // slower shimmer envelope and the impact pulse.
       // Vocal: halo deepens with the voice (size + opacity), softened by tenderness.
       // hatMul holds ticks mid-air during holdBreath.
@@ -312,7 +312,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
         pulseRef.current * 0.03 +
         m.hat * 0.07 * hatMul +
         vocal * 0.045 * rimSoft;
-      // Lead lines make the halo glitter — melody gets its own voice here.
+      // Lead lines make the halo glitter. Melody gets its own voice here.
       // Tension gently dims the halo with the coiled field.
       shimmerMat.opacity = Math.min(
         1,
@@ -329,16 +329,16 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
         scratchDark.current.setRGB(0.05, 0.04, 0.1);
         shimmerMat.color.lerp(scratchDark.current, tension * 0.35);
       }
-      // Phrase echo briefly reverses shimmer drift in post-phrase gaps —
-      // the halo answers the silence by turning back on itself.
+      // Phrase echo briefly reverses shimmer drift in post-phrase gaps.
+      // The halo answers the silence by turning back on itself.
       const echoFlip = 1 - Math.min(1, m.echo) * 2;
       // Halo rotation: when BPM is known, phase-lock to the continuous bar
-      // clock (half-turn per bar) — fluid SmoothToward follow, no stepping.
+      // clock (half-turn per bar). Fluid SmoothToward follow, no stepping.
       // Freewheel residual keeps a little life; holdBreath still hushes via motionMul.
       const freeHaloRate = (0.35 + m.high * 1.6 + m.mid * 0.5) * sectionPace * echoFlip * motionMul;
       if (bpmKnown) {
         const continuousBar = barTurnsRef.current + barPhase;
-        // Half-turn per bar — slow sacred wheel locked to the music's clock.
+        // Half-turn per bar. Slow sacred wheel locked to the music's clock.
         const targetHaloY = -continuousBar * Math.PI * barAmp;
         if (!hadBpmRef.current) {
           // Enter lock: seed so composed angle matches the current freewheel pose.

@@ -9,7 +9,7 @@ interface DesktopAudioGuideProps {
   open: boolean;
   reducedMotion?: boolean;
   onClose: () => void;
-  /** User picked a capture mode — open Chrome's share dialog with it. */
+  /** User picked a capture mode. Open Chrome's share dialog with it. */
   onPick: (mode: DesktopCaptureMode) => void;
 }
 

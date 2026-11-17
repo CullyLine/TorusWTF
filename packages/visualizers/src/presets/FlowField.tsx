@@ -23,17 +23,17 @@ function smoothToward(
 }
 
 /**
- * Flow Field — the flagship of the Flow Field Update.
+ * Flow Field. The flagship of the Flow Field Update.
  *
  * A GPGPU particle sim advected through divergence-free curl noise: local
  * chaos that rivers together into collective motion. Three band-assigned
  * fields (bass/mid/high particles ride different currents) that BLEND INTO
- * ONE as the music's bands converge — drops and choruses visibly unify the
+ * ONE as the music's bands converge. Drops and choruses visibly unify the
  * swarm, breakdowns fracture it.
  *
  * Call and response: pre-beat `gather` pulls particles inward (the inhale),
  * the hit releases them; in gaps after a phrase, `echo` replays the recorded
- * rhythm as radial ripples — the visual answering the music.
+ * rhythm as radial ripples. The visual answering the music.
  *
  * Alive cohesion:
  *  - `tenderness` calms turbulence and trail jitter (gentle vocal passages)
@@ -48,7 +48,7 @@ function smoothToward(
  *
  * Homages to the original FlowField Saga (2019-2021):
  *  - wandering magnet wells that capture and fling particles (Magnet build)
- *  - pointer stirring — the cursor directs the field (mouse lookAt build)
+ *  - pointer stirring. The cursor directs the field (mouse lookAt build)
  */
 
 // Simulation texture sides per tier. Particle count = side².
@@ -56,8 +56,8 @@ const TEX_SIDE_HIGH = 512; // 262,144 particles
 const TEX_SIDE_MID = 256; // 65,536
 const TEX_SIDE_LOW = 128; // 16,384
 
-// Sized to the default camera framing (z≈4, fov 50) like the other presets —
-// the swarm must live in front of the camera, not around it.
+// Sized to the default camera framing (z≈4, fov 50) like the other presets.
+// The swarm must live in front of the camera, not around it.
 const BOUNDS_RADIUS = 2.6;
 
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ void main() {
   // Call and response: gather inhales toward center pre-beat, the hit and
   // the drop release outward; echo replays the phrase as radial ripples.
   v -= p * (uGather * 1.1);
-  // LeanIn: milder sustained draw-in (section anticipation) — stacks with
+  // LeanIn: milder sustained draw-in (section anticipation), stacks with
   // gather but never replaces the pre-beat inhale.
   v -= p * (uLeanIn * 0.32);
   v += dir * (uBeat * 0.5 + uRelease * 0.35 + uDrop * 1.4);
@@ -141,7 +141,7 @@ void main() {
   p += v * uDelta * character * stillMul;
 
   // Kit currents stay ungated so kick/snare still punch through thaw.
-  // Hats only sparkle/densify in the render pass — motion stays axis-split.
+  // Hats only sparkle/densify in the render pass. Motion stays axis-split.
   float bassMask = 1.0 - smoothstep(0.4, 0.6, band);
   float midMask = smoothstep(0.4, 0.6, band) * (1.0 - smoothstep(1.4, 1.6, band));
   // Forward = toward camera (−Z) so kicks read as the bass river lunging
@@ -356,14 +356,14 @@ export function FlowFieldScene({
   const seedRef = useRef(0);
   const prevDropRef = useRef(0);
 
-  // Tenderness / convergence envelopes — fluid calm and lock-in.
+  // Tenderness / convergence envelopes. Fluid calm and lock-in.
   const tenderSmooth = useRef(0);
   const lockSmooth = useRef(0);
-  // HoldBreath / deep-silence listen gate — freeze/thaw without pops.
+  // HoldBreath / deep-silence listen gate. freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
   // LeanIn anticipation: densify + draw nearer (pre-chorus pull).
   const leanSmooth = useRef(0);
-  // Kit current envelopes — asymmetric rise/fall so punches feel fluid.
+  // Kit current envelopes. Asymmetric rise/fall so punches feel fluid.
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
@@ -383,7 +383,7 @@ export function FlowFieldScene({
     rng: mulberry32(0xf10f1e1d),
   });
 
-  // Pointer stirring (live only — pointer events never fire offscreen).
+  // Pointer stirring (live only, pointer events never fire offscreen).
   // `movement` is a decaying energy fed by actual cursor motion: a stationary
   // cursor must NOT become a permanent attractor that swallows the swarm.
   const pointerRef = useRef({
@@ -396,7 +396,7 @@ export function FlowFieldScene({
     ndc: new THREE.Vector2(),
   });
 
-  // CPU flow params — smoothed twin of the GPU field uniforms.
+  // CPU flow params. Smoothed twin of the GPU field uniforms.
   const cpuParamsRef = useRef<FlowParams>({ ...DEFAULT_FLOW_PARAMS });
 
   // ---- GPGPU resources ----
@@ -731,11 +731,11 @@ export function FlowFieldScene({
     wells.a.lerp(wells.aTarget, ease);
     wells.b.lerp(wells.bTarget, ease);
     // Capture strength rides the groove; drops fling (negative = repulse).
-    // Kept gentle — wells should bend the current, not swallow the swarm.
+    // Kept gentle. Wells should bend the current, not swallow the swarm.
     const wellStrength =
       (0.06 + m.bassActivity * 0.18 + m.beat * 0.2) * (m.dropEvent > 0.5 ? -2.2 : 1);
 
-    // Pointer strength follows stirring MOTION — eases in while the cursor
+    // Pointer strength follows stirring MOTION. Eases in while the cursor
     // moves, decays within ~0.6s of stillness so a parked cursor lets go.
     const ptr = pointerRef.current;
     ptr.movement = Math.max(0, ptr.movement - dt * 1.8);
@@ -781,7 +781,7 @@ export function FlowFieldScene({
     su.uVortex!.value = fp.vortex;
     su.uBuoyancy!.value = fp.buoyancy;
     // Impact envelope: each hit becomes a sustained outward breath the sim
-    // integrates over several frames — a bloom, not a single-frame jolt.
+    // integrates over several frames. A bloom, not a single-frame jolt.
     su.uBeat!.value = m.impact;
     su.uGather!.value = m.gather;
     su.uEcho!.value = m.echo;
@@ -811,7 +811,7 @@ export function FlowFieldScene({
     ru.uTurbulence.value = fp.turbulence;
     ru.uSwirl.value = fp.swirl;
     ru.uBandSpread.value = fp.bandSpread;
-    // Trail jitter calms with tenderness — shorter, less swell-wagged strokes.
+    // Trail jitter calms with tenderness. Shorter, less swell-wagged strokes.
     const trailCalm = 1 - tender * 0.5;
     ru.uTrailLen.value =
       (0.04 +

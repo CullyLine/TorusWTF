@@ -27,7 +27,7 @@ function rateLimit(ip: string): boolean {
   return true;
 }
 
-/** POST /api/feedback — deliver in-app feedback to feedback@torus.wtf via SMTP. */
+/** POST /api/feedback. Deliver in-app feedback to feedback@torus.wtf via SMTP. */
 export async function POST(req: Request) {
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??

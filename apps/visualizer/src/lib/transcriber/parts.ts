@@ -13,7 +13,7 @@ import {
 import type { NoteEventTime } from './transcribe';
 
 /**
- * parts.ts — pure helpers that turn Basic Pitch note events into a Conductor
+ * parts.ts. Pure helpers that turn Basic Pitch note events into a Conductor
  * project (for preview / "Send to Conductor") and into a standard .mid file
  * (for download). Grouping into "parts" happens once and is shared by both so
  * the preview, the handoff and the download always agree.

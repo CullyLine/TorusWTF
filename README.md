@@ -1,74 +1,51 @@
 # torus
 
-torus turns audio into 3D visuals in the browser and exports them as video. It runs at [torus.wtf](https://torus.wtf).
+torus turns your music into moving 3D visuals, right in your web browser. You can save the result as a video.
 
-torus is free. It has no ads, no paid tier, and no required account. Audio is analyzed and rendered on your device and is never uploaded. [PRINCIPLES.md](./PRINCIPLES.md) lists the commitments.
+**Try it at [torus.wtf](https://torus.wtf).** It is free. You do not need an account, and there is nothing to install.
 
-## What it does
+## How to use it
 
-- **Visualizer** (`/`). Takes audio from a file, a microphone, a browser tab, or desktop capture and draws it with one of nine WebGL visualizers. It exports a real-time recording (WebM or MP4) or an offline pre-render (MP4, up to 4K and 240 fps).
-- **Conductor** (`/conductor`). A SoundFont DAW for sketching music.
-- **Transcriber** (`/transcriber`). Converts audio to MIDI in the browser.
-- **Accounts.** Optional. Magic-link or Discord sign-in gives you a handle and a profile at `/u/<handle>`.
+1. **Open [torus.wtf](https://torus.wtf) on a computer.** Chrome and Edge work best.
+2. **Add audio.** Drop in a music file, turn on your microphone, or press "Play the demo track".
+3. **Choose a look.** Open the Look tab, pick a visualizer, and move the sliders until you like what you see.
+4. **Save a video.** Open the Export tab and press "Render full track". The video goes to your downloads folder.
 
-## Repository layout
+## Good to know
 
-One Next.js app and four workspace packages, managed with pnpm and Turborepo.
+- **Your audio stays on your computer.** torus does its work in your browser and never uploads your music.
+- **It is free.** There are no ads and no paid version.
+- **Your videos are yours.** You can post them anywhere, including for paid work. You still need the rights to the music in them.
+- **A computer works best.** torus also runs on a phone, with the controls in a panel under the picture.
 
-```
-apps/visualizer        The app: visualizer, Conductor, Transcriber, accounts
-packages/visualizers   Visualizer presets and the rendering engine (React Three Fiber)
-packages/db            Drizzle schema, libSQL client, migrations
-packages/ui            Shared UI components
-packages/shared        Shared types and id generation
-```
+## More tools
 
-[apps/visualizer/README.md](./apps/visualizer/README.md) describes the app in more detail.
+torus comes with two more tools for making music. Both are free and run in your browser.
 
-## Quick start
+- [Conductor](https://torus.wtf/conductor) lets you write music with built-in instruments.
+- [Transcriber](https://torus.wtf/transcriber) listens to a recording and writes out its notes as a MIDI file. A MIDI file stores which notes are played and when, so music software can play them back or edit them.
 
-You need Node 22 or newer and pnpm 10 or newer.
+## Help
+
+If something is broken or confusing, press Feedback at the top of the app or email [support@torus.wtf](mailto:support@torus.wtf).
+
+## For developers
+
+torus is open source. To run it on your own computer you need [Node.js](https://nodejs.org) 22 or newer and [pnpm](https://pnpm.io) 10 or newer.
 
 ```bash
 pnpm install
-cp .env.example .env      # the defaults work for local dev
-pnpm db:migrate           # creates ./data/torus.db
-pnpm dev                  # http://localhost:3000
+cp .env.example .env
+pnpm db:migrate
+pnpm dev
 ```
 
-Sign-in and email are optional, and the app runs without them. To test email sign-in locally, run an SMTP catcher such as Mailhog on port 1025 and read the mail on port 8025.
+Then open <http://localhost:3000>.
 
-## Scripts
-
-```bash
-pnpm dev            # run the app
-pnpm build          # production build
-pnpm typecheck      # tsc across the workspace
-pnpm lint           # eslint across the workspace
-pnpm test           # unit tests (Vitest)
-pnpm format         # prettier
-pnpm db:generate    # generate a migration from schema changes
-pnpm db:migrate     # apply migrations
-pnpm db:studio      # open Drizzle Studio
-```
-
-CI runs `db:migrate`, `typecheck`, `lint`, and `test` on every push and pull request.
-
-## Deployment
-
-Deploy `apps/visualizer` to Vercel. The database is libSQL: a local SQLite file in development and [Turso](https://turso.tech) in production.
-
-Connect the database in one of two ways:
-
-- Set `DATABASE_URL` to a `libsql://` URL and `DATABASE_AUTH_TOKEN` to its token.
-- Use the Vercel Turso integration, which sets `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
-
-Run `pnpm db:migrate` against the production database once before the first launch. [.env.example](./.env.example) lists the optional SMTP and Discord settings.
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md). New visualizers are a good first contribution.
+- [CONTRIBUTING.md](./CONTRIBUTING.md) explains how to report a problem or change the code.
+- [apps/visualizer/README.md](./apps/visualizer/README.md) explains how the code is organized and how to put it online.
+- [PRINCIPLES.md](./PRINCIPLES.md) lists what torus promises the people who use it.
 
 ## License
 
-[AGPL-3.0-or-later](./LICENSE).
+torus is licensed under [AGPL-3.0-or-later](./LICENSE). In short, you may use, copy, and change the code. If you run a changed version as a website, you must offer its source code to the people who use it.

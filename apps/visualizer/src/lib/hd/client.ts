@@ -2,27 +2,27 @@
  * Thin wrapper around Home Depot's federation GraphQL gateway.
  *
  * Endpoint and headers mirror what the real homedepot.com website sends.
- * No auth needed for the operations we use — pricing, inventory, and
+ * No auth needed for the operations we use. Pricing, inventory, and
  * fulfillment are part of the anonymous consumer experience.
  */
 
 /**
  * www.homedepot.com is hard-blocked from datacenter IPs (Akamai 403).
  * apionline.homedepot.com accepts the request and routes through the
- * federation gateway — that's the only viable host from Vercel.
+ * federation gateway. That's the only viable host from Vercel.
  */
 const HD_HOST = 'https://apionline.homedepot.com/federation-gateway/graphql';
 
 /**
  * Build a v4 UUID for the guest customer token. THD's own JS generates
- * one per browsing session and re-uses it across requests — we mint a
+ * one per browsing session and re-uses it across requests. We mint a
  * fresh one per server call, which their subgraphs accept as a guest.
  */
 function uuid(): string {
   // randomUUID exists on Node 22 globalThis.crypto.
   const g = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   if (g?.randomUUID) return g.randomUUID();
-  // Fallback — extremely unlikely path on Vercel Node runtime.
+  // Fallback. Extremely unlikely path on Vercel Node runtime.
   const hex = '0123456789abcdef';
   let s = '';
   for (let i = 0; i < 36; i++) {
@@ -39,7 +39,7 @@ function buildHeaders(
   ctx: { currentUrl: string; customerToken: string },
 ): Record<string, string> {
   // x-experience-name and apollographql-client-name are scoped per
-  // operation. For searchModel both are literally "search" — using
+  // operation. For searchModel both are literally "search", using
   // anything else makes the federation gateway return its "Generic
   // Errors API" response (HTTP 206 with no products).
   const experience = operationName === 'searchModel' ? 'search' : 'general_merchandise';
@@ -94,7 +94,7 @@ interface HdGatewayResponse<T> {
   data?: T | { 'Generic Errors API': null } | null;
   // Standard GraphQL uses `errors` (plural). Home Depot's federation
   // gateway sometimes emits `error` (singular) when it can't route a
-  // request — both shapes are handled below.
+  // request. Both shapes are handled below.
   errors?: Array<{ message: string }>;
   error?: Array<{ message: string }>;
 }
@@ -126,7 +126,7 @@ export async function hdGraphql<T>(
     debug?: HdGraphqlDebug[];
     /** Synthetic referer path (e.g. `/s/screws`). Defaults to `/`. */
     currentUrl?: string;
-    /** Override the guest customer token (rare — usually leave undefined). */
+    /** Override the guest customer token (rare, usually leave undefined). */
     customerToken?: string;
   },
 ): Promise<T> {
@@ -159,7 +159,7 @@ export async function hdGraphql<T>(
     bodySnippet: rawText.slice(0, 500),
   });
 
-  // 206 is "Partial Content" — HD's federation gateway emits it when
+  // 206 is "Partial Content". HD's federation gateway emits it when
   // it routed to some subgraphs but not all. We still try to parse it
   // because the body may legitimately contain `data`.
   if (!res.ok && res.status !== 206) {

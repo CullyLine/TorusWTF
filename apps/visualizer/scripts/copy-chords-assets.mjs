@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
  * The .wasm is a build artifact of the installed @libraz/libsonare version, so
  * it is gitignored and regenerated here (same pattern as the Basic Pitch model
  * and the Conductor worklet). We pass the bytes to emscripten directly, so the
- * file only needs to be reachable at /libsonare/sonare.wasm — no path magic.
+ * file only needs to be reachable at /libsonare/sonare.wasm. No path magic.
  */
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -80,7 +80,7 @@ export function fileExtensionForMime(mime: string): string {
 
 /**
  * Live recording draws through a `requestAnimationFrame` compositor, so it
- * cannot produce more frames per second than the display refreshes —
+ * cannot produce more frames per second than the display refreshes.
  * `captureStream(fps)` is only a hint. Anything above this is honest only on
  * the offline pre-render path, which steps frames itself.
  */

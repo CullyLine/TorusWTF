@@ -1,7 +1,7 @@
 export type DeviceTier = 'high' | 'mid' | 'low';
 
 /**
- * Quick runtime device tiering. Hand-wavy on purpose — we just need three
+ * Quick runtime device tiering. Hand-wavy on purpose. We just need three
  * buckets to scale particle counts and toggle post-processing.
  *
  *   - high: desktop / high-DPR powerful GPU

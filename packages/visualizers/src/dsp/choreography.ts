@@ -1,5 +1,5 @@
 /**
- * Choreography — the layer that converts audio signals into emotional intent.
+ * Choreography. The layer that converts audio signals into emotional intent.
  *
  * Track A (BPM / stems / macro / mood) gives us the *signals*. This layer
  * gives the creature *feelings*: anticipation (leanIn), focused stillness
@@ -48,7 +48,7 @@ export interface ChoreographyInput {
  * Update choreography state in place. Call every frame.
  *
  * `delta` is seconds since previous frame. `personality` (optional) biases
- * each output by +/-20% — subtle enough that it never breaks the feel but
+ * each output by +/-20%. Subtle enough that it never breaks the feel but
  * enough to give the creature taste.
  */
 export function updateChoreography(
@@ -67,7 +67,7 @@ export function updateChoreography(
   const tenderGain = 1 + (warmthBias * 0.15 + midAff * 0.1);
 
   // Lean-in: tracks tension with slight ahead-of-curve lag (5x faster up
-  // than down — creature leans in eagerly, settles back slowly).
+  // than down. Creature leans in eagerly, settles back slowly).
   const leanTarget = Math.min(1, input.tension * tensionGain);
   const leanAlpha = leanTarget > state.leanIn ? Math.min(1, dt * 4) : Math.min(1, dt * 0.8);
   state.leanIn = state.leanIn + (leanTarget - state.leanIn) * leanAlpha;

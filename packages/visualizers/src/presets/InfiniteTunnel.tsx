@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Infinite Tunnel — descendant of the original TunnelVisualizer (Three.js,
+ * Infinite Tunnel. Descendant of the original TunnelVisualizer (Three.js,
  * pre-AI era): segments of plane walls rushing toward the viewer with
  * pyramids on the inside faces. Rebuilt for torus.wtf with the Flow Field
  * Update systems:
@@ -63,18 +63,18 @@ const HALF = 2.2; // half width/height of the square bore
 const DEPTH = 3; // depth of one segment
 const RESET_Z = 8; // recycle plane behind the camera
 
-/** Candlelit soft — tender passages warm the bore without blowing it out. */
+/** Candlelit soft. Tender passages warm the bore without blowing it out. */
 /**
  * Both warms are deliberately saturated. A pale warm has to be mixed in
  * heavily before it reads as warm at all, and by then it has replaced the
  * palette; a rich one tints convincingly at a fraction of the amount.
  */
 const CANDLE_WARM = new THREE.Color(1.0, 0.52, 0.18);
-/** Residual heat after peaks — amber linger, distinct from the drop surge. */
+/** Residual heat after peaks. Amber linger, distinct from the drop surge. */
 const AFTERGLOW_AMBER = new THREE.Color(1.0, 0.34, 0.06);
 
 // ---------------------------------------------------------------------------
-// Tunnel segment shader — one template geometry shared by every segment.
+// Tunnel segment shader. One template geometry shared by every segment.
 // Per-vertex attributes let one draw call carry walls + pyramids:
 //   aWallDir : outward direction of the vertex's wall in segment-local xy
 //   aApex    : 1 on pyramid apex vertices (they extend inward with uTeeth)
@@ -111,7 +111,7 @@ void main() {
   // Mid teeth: pyramid apexes extend further into the bore.
   // Lock tucks teeth so segments align into concentric geometry.
   pos.xy -= aWallDir * aApex * uTeeth * (1.0 - lockSnap * 0.7);
-  // Snare: lateral X shear — floor/ceiling slide, side walls skew with depth.
+  // Snare: lateral X shear. floor/ceiling slide, side walls skew with depth.
   // Distinct axis from the kick's radial wall punch. Lock damps the warp.
   float depthWave = sin(pos.z * 1.15);
   pos.x += uSnare * (1.0 - lockSnap) * (aWallDir.y * 0.22 + aWallDir.x * depthWave * 0.12);
@@ -160,7 +160,7 @@ void main() {
   float lock = clamp(uLock, 0.0, 1.0);
   float lockSnap = lock * lock;
 
-  // Side walls read darker than floor/ceiling — fake form shading.
+  // Side walls read darker than floor/ceiling. Fake form shading.
   // Convergence flattens the shading so rings read clean and concentric.
   float formShade = mix(0.6 + 0.4 * abs(vWallDir.y), 0.92, lockSnap);
   col *= formShade;
@@ -177,7 +177,7 @@ void main() {
 
   // Pyramid faces glint on highs and snare. The accent colour is usually the
   // opposite end of the palette from the faces, so both adding it and
-  // blending toward it mixed complements and landed on grey — that is why
+  // blending toward it mixed complements and landed on grey. That is why
   // the teeth read as cardboard. Let the glint raise the face's own colour
   // instead, and save the accent for the lip below, where a contrasting hue
   // reads as a rim light rather than a wash.
@@ -199,7 +199,7 @@ void main() {
 
   // Heat. Tenderness is candlelight near the camera, afterglow is residual
   // embers deeper in the throat. This used to lerp up to 72% toward a pale
-  // warm colour, which replaced the palette with tan — the single largest
+  // warm colour, which replaced the palette with tan. The single largest
   // reason the tunnel read washed out. Tint multiplicatively so the warmth
   // passes THROUGH the palette hue instead of over it, and let the rest of
   // the heat express as chroma rather than luminance.
@@ -218,10 +218,10 @@ void main() {
   col += uAccentColor * barPulse * (0.18 + (1.0 - vKind) * 0.1);
   col *= 1.0 + barPulse * 0.14;
 
-  // Faint lock brighten — organization, not a punch.
+  // Faint lock brighten. Organization, not a punch.
   col *= 1.0 + lockSnap * 0.1;
 
-  // Depth fog into black — the infinite throat.
+  // Depth fog into black. The infinite throat.
   float fog = 1.0 - smoothstep(10.0, uFar, vViewZ);
   // Near fade: walls dim as they sweep past the camera so the closest
   // segment doesn't dominate the frame as a flat bright slab.
@@ -240,7 +240,7 @@ void main() {
 `;
 
 // ---------------------------------------------------------------------------
-// Existential particles — soft sprites riding the shared flow field while
+// Existential particles. Soft sprites riding the shared flow field while
 // the conveyor sweeps them down the bore.
 // ---------------------------------------------------------------------------
 
@@ -423,13 +423,13 @@ export function InfiniteTunnelScene({
   const kickSmooth = useRef(0);
   const snareSmooth = useRef(0);
   const hatSmooth = useRef(0);
-  // Hold-breath / deep-silence listen gate — freeze/thaw without pops.
+  // Hold-breath / deep-silence listen gate. freeze/thaw without pops.
   const stillnessSmooth = useRef(0);
-  // Tenderness hush — eases rush + candlelit walls (still breathes).
+  // Tenderness hush. Eases rush + candlelit walls (still breathes).
   const tenderSmooth = useRef(0);
-  // Afterglow linger — warm wall heat after peaks.
+  // Afterglow linger. Warm wall heat after peaks.
   const afterglowSmooth = useRef(0);
-  // LeanIn anticipation — deeper throat + narrower walls (pre-drop coil).
+  // LeanIn anticipation. Deeper throat + narrower walls (pre-drop coil).
   const leanSmooth = useRef(0);
   // Continuous bar unwrap for ring pulse (no 0→1 step at bar boundaries).
   const barTurnsRef = useRef(0);
@@ -648,7 +648,7 @@ export function InfiniteTunnelScene({
     );
     const lock = lockSmooth.current * (1 - stillness * 0.3);
     const lockSnap = lock * lock;
-    // Steadier continuous rush when locked — not frozen (holdBreath owns that).
+    // Steadier continuous rush when locked. Not frozen (holdBreath owns that).
     const lockPace = 1 - lock * 0.38;
 
     // Tenderness: damp the rush without freezing (holdBreath owns freeze).
@@ -672,7 +672,7 @@ export function InfiniteTunnelScene({
     );
     const afterglow = afterglowSmooth.current;
 
-    // LeanIn: draw deeper into the throat + narrow the bore — expectant
+    // LeanIn: draw deeper into the throat + narrow the bore, expectant
     // build-up coil, distinct from gather's brief wall inhale. Soft under
     // stillness so holdBreath hush still owns the freeze.
     leanSmooth.current = smoothToward(
@@ -771,7 +771,7 @@ export function InfiniteTunnelScene({
       const seg = tunnel.segments[i]!;
       seg.position.z += tunnelSpeed * dt;
       if (seg.position.z > RESET_Z) {
-        // Teleport behind the whole train — spacing stays exact.
+        // Teleport behind the whole train. Spacing stays exact.
         seg.position.z -= tunnelLength;
       }
       // Alternating segments counter-rotate (optionRotate homage).
@@ -791,7 +791,7 @@ export function InfiniteTunnelScene({
     }
 
     // ---- Band-driven uniforms ----
-    // Transient-driven so the bore stays intact between hits — sustained
+    // Transient-driven so the bore stays intact between hits, sustained
     // bass only swells it slightly; beats and drops blow it open.
     // punchMul eases the bore open during holdBreath so walls listen too.
     // Soften sustained wall aggression under tenderness (kit punch stays).
@@ -800,7 +800,7 @@ export function InfiniteTunnelScene({
       punchMul *
       (1 - tender * 0.28);
     explodeRef.current += (explodeTarget - explodeRef.current) * Math.min(1, dt * 10);
-    // Teeth bite hardest when the drum section is actually playing — the
+    // Teeth bite hardest when the drum section is actually playing, the
     // heuristic drum-activity signal, not just any mid-band energy.
     const teethTarget = Math.min(1.4, m.mid * 0.9 + m.impact * 0.4 + m.drumActivity * 0.3);
     teethRef.current += (teethTarget - teethRef.current) * Math.min(1, dt * 8);
@@ -927,7 +927,7 @@ export function InfiniteTunnelScene({
       y += fv.y * drift;
       z += fv.z * drift * 0.5 + sweep;
 
-      // z-axis swirl (the tunnel's own vortex — y-axis tornado math doesn't
+      // z-axis swirl (the tunnel's own vortex, y-axis tornado math doesn't
       // fit a bore, so the swirl lives here on the CPU).
       const r = Math.hypot(x, y) + 1e-4;
       x += (-y / r) * swirl;

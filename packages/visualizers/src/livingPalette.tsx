@@ -8,7 +8,7 @@ import { useModulation } from './modulation';
 import type { VisualImpulses } from './impulse';
 
 /**
- * Living palette — makes color itself a musical instrument.
+ * Living palette. Makes color itself a musical instrument.
  *
  * The user picks a base palette (three hex colors); this driver breathes
  * life into it every frame:
@@ -17,10 +17,10 @@ import type { VisualImpulses } from './impulse';
  *    sessions never sit on one static color
  *  - mood warmth from `moodValence` + `tenderness` (EMA-smoothed): warm
  *    vocal passages drift amber and bloom in saturation; cool instrumental
- *    valleys drift cyan and lean leaner — color feels emotional, not only
+ *    valleys drift cyan and lean leaner, color feels emotional, not only
  *    loudness-driven
  *  - gather cool: pre-beat `gather` eases hue toward cyan and leans
- *    saturation/light down a notch — color inhales before the hit
+ *    saturation/light down a notch, color inhales before the hit
  *  - hit warm bloom: `impact`/`kick` push amber + sat/light up so the
  *    downbeat answers the gather cool (on top of mood warmth, not instead)
  *  - holdBreath hush: during a held quiet bar, cool mood warmth toward cyan
@@ -28,26 +28,26 @@ import type { VisualImpulses } from './impulse';
  *    palette listens with the creature; thaw restores warmth crawl promptly
  *  - leanIn cool anticipation: as tension climbs before a drop, tilt hue
  *    slightly cyan and tighten saturation (held-breath-before-the-drop),
- *    then release into the existing impact/kick warm bloom — distinct from
+ *    then release into the existing impact/kick warm bloom, distinct from
  *    gather's pre-beat inhale and hush's crawl freeze
  *  - phrase-echo hue glint: when a phrase gap opens, a one-shot hue
  *    shimmer + saturation glint pulses with the replayed rhythm then
- *    settles — color answers the gaps without stealing gather cool,
+ *    settles, color answers the gaps without stealing gather cool,
  *    leanIn cool, hush, or mood warmth
  *  - convergence chord lock: when bass/mid/high lock into one rhythm,
  *    pull the three palette hues toward their circular mean and deepen
- *    saturation — a single unified chord that relaxes as parts diverge.
+ *    saturation. A single unified chord that relaxes as parts diverge.
  *    Distinct from gather/leanIn cyan casts, hush crawl-freeze, and
  *    echo's one-shot glint
  *  - tension coil: as `tension` climbs before a drop, deepen value contrast
  *    and pull lightness toward the palette's darkest base anchor with hue
- *    held steady — the scene coils dark, then springs back through the
+ *    held steady. The scene coils dark, then springs back through the
  *    existing dropEvent bloom. Value-only; distinct from leanIn cyan (#84),
  *    hush crawl (#57), echo glint (#94), and convergence hue pull (#106)
  *  - saturation and brightness swell with loudness and land with beat
- *    impacts — choruses literally glow more vivid than verses
+ *    impacts, choruses literally glow more vivid than verses
  *  - drops kick the whole palette a few degrees around the wheel
- *    (alternating direction) and it eases back over ~1.5s — a visible
+ *    (alternating direction) and it eases back over ~1.5s, a visible
  *    "the world changed" moment
  *  - silence gently desaturates toward rest
  *
@@ -101,7 +101,7 @@ function meanHue3(a: number, b: number, c: number): number {
   return wrap01(Math.atan2(y, x) / (Math.PI * 2));
 }
 
-/** Asymmetric EMA — rise/fall taus so hush freezes attentively and thaws promptly. */
+/** Asymmetric EMA. rise/fall taus so hush freezes attentively and thaws promptly. */
 function smoothToward(
   current: number,
   target: number,
@@ -128,15 +128,15 @@ export function LivingPaletteDriver({
   const prevDropRef = useRef(0);
   /** EMA of mood warmth (−1 cool … +1 warm) so hue never jumps with noisy valence. */
   const moodWarmthRef = useRef(0);
-  /** Smoothed pre-beat gather — cool/desat inhale before the downbeat. */
+  /** Smoothed pre-beat gather. cool/desat inhale before the downbeat. */
   const gatherCoolRef = useRef(0);
-  /** Smoothed impact+kick warmth — amber bloom that answers the gather. */
+  /** Smoothed impact+kick warmth. Amber bloom that answers the gather. */
   const hitWarmRef = useRef(0);
-  /** Smoothed holdBreath hush — cools warmth + slows hue crawl while listening. */
+  /** Smoothed holdBreath hush. Cools warmth + slows hue crawl while listening. */
   const hushSmooth = useRef(0);
-  /** Smoothed leanIn cool — cyan + sat tighten before the drop. */
+  /** Smoothed leanIn cool. Cyan + sat tighten before the drop. */
   const leanCoolRef = useRef(0);
-  /** Smoothed phrase-echo — one-shot travel drives the hue/sat glint. */
+  /** Smoothed phrase-echo. One-shot travel drives the hue/sat glint. */
   const echoSmooth = useRef(0);
   /** 0..1 traveling; >=1 idle. */
   const echoTravel = useRef(1);
@@ -144,16 +144,16 @@ export function LivingPaletteDriver({
   const prevEcho = useRef(0);
   /** Alternating shimmer sign so successive echo pulses call-and-answer. */
   const echoGlintSign = useRef(1);
-  /** Smoothed convergence — chord lock pulls hues together + deepens sat. */
+  /** Smoothed convergence. Chord lock pulls hues together + deepens sat. */
   const chordSmooth = useRef(0);
-  /** Smoothed tension coil — value darken + contrast; springs loose on drop. */
+  /** Smoothed tension coil. Value darken + contrast; springs loose on drop. */
   const tensionCoilRef = useRef(0);
 
   useFrame((_state, delta) => {
     const life = clamp(mods.current.colorLife ?? amount, 0, 1);
     const dt = Math.min(delta, 0.1);
 
-    // Manual color kick (trigger mapping / MIDI) — fires even at Color life
+    // Manual color kick (trigger mapping / MIDI). Fires even at Color life
     // 0, because the user explicitly asked for it.
     if (impulses && impulses.hueKick > 0.001) {
       kickSignRef.current *= -1;
@@ -189,11 +189,11 @@ export function LivingPaletteDriver({
     hushSmooth.current = smoothToward(hushSmooth.current, hushTarget, dt, 0.14, 0.08);
     const hush = hushSmooth.current;
 
-    // Hue orbit advances with the music's presence — faster in loud
+    // Hue orbit advances with the music's presence. Faster in loud
     // passages, near-still in silence. One full lap takes minutes.
     // Section level gates the pace so color moods linger through valleys
     // and evolve during peaks. Hush nearly freezes the crawl so the palette
-    // listens with the creature (a whisper remains — never frozen-dead).
+    // listens with the creature (a whisper remains, never frozen-dead).
     const sectionPace = 0.6 + m.sectionLevel * 0.55;
     const crawlMul = 1 - hush * 0.9;
     huePhaseRef.current = wrap01(
@@ -212,7 +212,7 @@ export function LivingPaletteDriver({
 
     // Mood warmth: long-EMA valence (confidence-gated) + tenderness, with a
     // gentle vocal lift so ballads amber-drift while cold techno cyan-drifts.
-    // ~1.1s time constant keeps the cast continuous — never a hue pop.
+    // ~1.1s time constant keeps the cast continuous. Never a hue pop.
     // Hush biases the target cool so a held quiet bar cools toward cyan
     // beyond silence desat alone; gather/hit phrase accents stay independent.
     const confidence = clamp(m.moodConfidence, 0, 1);
@@ -232,7 +232,7 @@ export function LivingPaletteDriver({
 
     // Pre-beat gather cool + hit warm bloom. Quiet passages stay still:
     // gather is near-zero without BPM anticipation, and hit only rises on
-    // real impact/kick — smoothed so micro-flux never flickers the cast.
+    // real impact/kick. Smoothed so micro-flux never flickers the cast.
     const gatherAlpha = 1 - Math.exp(-dt / 0.1);
     gatherCoolRef.current += (m.gather - gatherCoolRef.current) * gatherAlpha;
     const hitTarget = clamp(Math.max(m.impact * 0.85, m.kick * 0.95), 0, 1.2);
@@ -248,7 +248,7 @@ export function LivingPaletteDriver({
 
     // LeanIn cool anticipation: tension climb before a drop. Rise eagerly,
     // fall a bit slower so the cool cast dissolves into the hit warm bloom
-    // instead of snapping off. Hue cool + sat tighten only — no light dim
+    // instead of snapping off. Hue cool + sat tighten only. No light dim
     // (gather already inhales light) and no crawl freeze (hush owns that).
     leanCoolRef.current = smoothToward(leanCoolRef.current, m.leanIn, dt, 0.08, 0.2);
     const lean = leanCoolRef.current;
@@ -259,7 +259,7 @@ export function LivingPaletteDriver({
     // echo, fire on the first rise past 0.22, then travel at BPM pace so the
     // shimmer/sat glint pulses with the replayed train and settles still.
     // Distinct from gather/lean cool (sustained cyan), hush (crawl freeze),
-    // and mood warmth (long EMA) — this is a brief, rhythmic flash only.
+    // and mood warmth (long EMA). This is a brief, rhythmic flash only.
     echoSmooth.current = smoothToward(echoSmooth.current, Math.min(1, m.echo), dt, 0.05, 0.28);
     const echoNow = echoSmooth.current;
     if (echoNow < 0.08) echoArmed.current = true;
@@ -291,7 +291,7 @@ export function LivingPaletteDriver({
     // three palette hues toward their circular mean and deepen saturation.
     // Rise eagerly into the lock (~0.12s), release a touch slower (~0.28s)
     // so the chord dissolves without a snap. No cyan cast (gather/leanIn),
-    // no crawl freeze (hush), no one-shot flash (echo) — just unification.
+    // no crawl freeze (hush), no one-shot flash (echo), just unification.
     chordSmooth.current = smoothToward(
       chordSmooth.current,
       clamp(m.convergence, 0, 1),
@@ -305,7 +305,7 @@ export function LivingPaletteDriver({
     // Collapse the tiny mid/high orbit offsets as the chord locks.
     const bandSpread = 1 - chord * 0.92;
 
-    // Tension coil — value/contrast only (hue untouched). Slow coil-in as
+    // Tension coil. value/contrast only (hue untouched). Slow coil-in as
     // tension climbs; spring loose on dropEvent/release so the existing
     // drop bloom reclaims the scene without a snap. Distinct from leanIn
     // cyan+sat, hush crawl, echo glint, and convergence hue pull.
@@ -315,7 +315,7 @@ export function LivingPaletteDriver({
       tensionCoilRef.current,
       coilTarget,
       dt,
-      // Slow build anticipation (~0.4s) — matches SceneRig coil timescale feel.
+      // Slow build anticipation (~0.4s). Matches SceneRig coil timescale feel.
       0.4,
       // Faster spring-loose into the drop bloom.
       0.12,
@@ -333,7 +333,7 @@ export function LivingPaletteDriver({
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
     const hueShift = life * drift + hueKickRef.current + moodHue + phraseHue + leanHue + echoHue;
     // Afterglow holds saturation and light elevated for seconds after a
-    // peak — the color equivalent of a room still ringing.
+    // peak. The color equivalent of a room still ringing.
     const satBoost =
       1 +
       life * (m.swell * 0.22 + m.impact * 0.1 + m.afterglow * 0.16 - m.silence * 0.4) +
@@ -356,7 +356,7 @@ export function LivingPaletteDriver({
           m.shimmer * 0.05 +
           m.afterglow * 0.04 -
           m.silence * 0.22 +
-          // Soft warm lift — amber passages feel lit, not just tinted.
+          // Soft warm lift. Amber passages feel lit, not just tinted.
           Math.max(0, warmth) * 0.03) +
       phraseLight * 0.5 +
       echoLight * 0.5;
@@ -444,7 +444,7 @@ function applyLife(
     l += (coilAnchorL - l) * coil * 0.55;
     // Deepen value contrast around the three-band mean.
     l = coilMeanL + (l - coilMeanL) * (1 + coil * 0.45);
-    // Overall dark coil — the scene densifies before the drop.
+    // Overall dark coil. The scene densifies before the drop.
     l *= 1 - coil * 0.18;
   }
   scratchColor.setHSL(

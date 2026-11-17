@@ -202,7 +202,7 @@ export async function createPrerenderEncoder(
       try {
         videoEncoder.close();
       } catch {
-        // already closed / not-configured — ignore
+        // already closed / not-configured, ignore
       }
       try {
         audioEncoder.close();

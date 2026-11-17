@@ -4,7 +4,7 @@
  * The original band split used hard, non-overlapping bin ranges
  * (`[0,s1) [s1,s2) [s2,bins)`). When a spectral peak drifted across a
  * boundary bin its energy "teleported" from one band to the next, so a
- * band would suddenly drop out while its neighbour jumped — the
+ * band would suddenly drop out while its neighbour jumped, the
  * "rubberbanding" the visuals exhibited.
  *
  * Instead we give every bin a smooth raised-cosine membership in the bass,
@@ -13,7 +13,7 @@
  * fades continuously between bands rather than jumping.
  *
  * Magnitudes are also passed through a mild perceptual curve before
- * averaging so quiet musical detail is lifted into a usable range — this
+ * averaging so quiet musical detail is lifted into a usable range, this
  * is what lets the visualizer react well without cranking the gain.
  *
  * This module is intentionally pure and DOM-free: it is the seed of the
@@ -46,7 +46,7 @@ export interface BandLevels {
   mid: number;
   /** 0..1 weighted high energy. */
   high: number;
-  /** 0..1 full-spectrum average — a continuous "motion" signal. */
+  /** 0..1 full-spectrum average. A continuous "motion" signal. */
   full: number;
 }
 

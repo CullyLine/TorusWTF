@@ -1,10 +1,10 @@
 /**
- * midiLookup.ts — client helpers for the Transcriber's "Find existing MIDI"
+ * midiLookup.ts. Client helpers for the Transcriber's "Find existing MIDI"
  * mode. For popular songs, a human-made MIDI from BitMidi's archive is far more
  * accurate than browser transcription.
  *
  * We call BitMidi directly from the browser. Its search API and file downloads
- * both send `Access-Control-Allow-Origin: *`, so CORS isn't an issue — and
+ * both send `Access-Control-Allow-Origin: *`, so CORS isn't an issue, and
  * going direct is actually required: BitMidi sits behind Cloudflare, which
  * returns 403 for requests from datacenter IPs (e.g. Vercel's serverless
  * functions). The visitor's own IP isn't blocked, so the fetch must run
@@ -29,7 +29,7 @@ export interface MidiSearchResult {
   plays: number;
   /** Absolute BitMidi page URL (for attribution / "view source"). */
   pageUrl: string;
-  /** 0..1 — how well this result matches the query (see `relevance`). */
+  /** 0..1. How well this result matches the query (see `relevance`). */
   score: number;
 }
 

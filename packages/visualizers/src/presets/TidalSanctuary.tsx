@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Tidal Sanctuary — original clean-room ocean height-field on a fullscreen
+ * Tidal Sanctuary. Original clean-room ocean height-field on a fullscreen
  * clip-space triangle. Musical anatomy:
  *  - bass / bassActivity → broad swells / deep movement
  *  - kick → outward crest pulse (forward-only travel)
@@ -91,13 +91,13 @@ vec2 clampXZ(vec2 p) {
   return clamp(p, vec2(-80.0), vec2(80.0));
 }
 
-// Hue-preserving brighten — never wash foam/specular to plain white.
+// Hue-preserving brighten. Never wash foam/specular to plain white.
 vec3 tintHighlight(vec3 c, float amount) {
   float a = clamp(amount, 0.0, 0.72);
   return min(c * (1.0 + a) + c * c * (a * 0.28), vec3(1.65));
 }
 
-// Original directional wave trains — independent of any third-party seascape.
+// Original directional wave trains. Independent of any third-party seascape.
 float dirWave(vec2 xz, vec2 dir, float freq, float amp, float speed, float sharp, float t) {
   vec2 d = safeNorm(vec3(dir, 0.0)).xy;
   float phase = dot(xz, d) * freq + t * speed;
@@ -123,7 +123,7 @@ float heightField(vec2 xz) {
   // Tenderness eases chop/swell while the sea keeps rolling (holdBreath owns glass).
   float swellCalm = mix(1.0, 0.52, tender);
   float chopMul = mix(1.0, 0.28, tender);
-  // Tension sharpens storm chop (alive under pressure — not gather calm / lean raise).
+  // Tension sharpens storm chop (alive under pressure, not gather calm / lean raise).
   chopMul *= 1.0 + tension * 1.15;
   chop *= chopMul;
 
@@ -133,22 +133,22 @@ float heightField(vec2 xz) {
   float stormPull = 1.0 + tension * 0.72;
   float ampScale = glass * (1.0 - gather * 0.62) * (1.0 + surge * 0.85);
   ampScale *= 0.55 + uSwell * 0.55 + uBass * 0.35 + uBassAct * 0.4;
-  // LeanIn raises the swell — water gathers itself for the drop (opposite of gather calm).
+  // LeanIn raises the swell. Water gathers itself for the drop (opposite of gather calm).
   ampScale *= 1.0 + lean * 0.48;
-  // Tension presses amplitude slightly — darker storm sea, not lean swell raise.
+  // Tension presses amplitude slightly. Darker storm sea, not lean swell raise.
   ampScale *= mix(1.0, 0.82, tension);
   // Convergence organizes sets: primary swell stays present, chop fades.
   ampScale *= 1.0 + lockSnap * 0.08;
   ampScale = clamp(ampScale, 0.08, 1.85);
 
-  // Shared bar clock for wave-set trains — continuous, no bar-boundary snap.
+  // Shared bar clock for wave-set trains. Continuous, no bar-boundary snap.
   float lockBar = uLockBar;
-  // Primary swell direction — lock pulls secondary trains toward this set axis.
+  // Primary swell direction. Lock pulls secondary trains toward this set axis.
   vec2 setDir = vec2(0.92, 0.28);
   float setFreq = 0.42 * stormPull;
 
   float h = 0.0;
-  // Broad swells — deep movement from bass / bassActivity.
+  // Broad swells. Deep movement from bass / bassActivity.
   // Under lock, phases snap toward the shared bar so crests arrive in sets.
   float tA = mix(t, lockBar / max(0.55, 1e-3), lockSnap);
   float tB = mix(t * 0.92, lockBar / max(0.41, 1e-3) + 0.15, lockSnap);
@@ -160,13 +160,13 @@ float heightField(vec2 xz) {
   h += dirWave(xz * pull * stormPull, dB, 0.31 * stormPull, 0.28 * ampScale * swellCalm * (1.0 - lockSnap * 0.2), 0.41, mix(0.2, 0.38, lockSnap), tB);
   h += dirWave(xz * pull * stormPull, dC, 0.58 * stormPull, 0.16 * ampScale * swellCalm * (0.7 + uBassAct) * (1.0 - lockSnap * 0.35), 0.68, mix(0.3, 0.45, lockSnap), tC);
 
-  // Mid roll — surface body from mids / swell. Lock softens cross-chop into the set.
+  // Mid roll. Surface body from mids / swell. Lock softens cross-chop into the set.
   float midAmp = ampScale * swellCalm * (0.45 + uMid * 0.55 + uSwell * 0.35) * (1.0 - lockSnap * 0.55);
   float midSharp = mix(mix(0.35, 0.18, tender), mix(0.55, 0.28, tender), tension);
   h += dirWave(xz * pull * stormPull, normalize(mix(vec2(0.78, 0.62), setDir, lockSnap * 0.6)), 1.15 * stormPull, 0.12 * midAmp, 0.95, midSharp, mix(t * 1.15, lockBar * 1.7 + 0.4, lockSnap));
   h += dirWave(xz * pull * stormPull, normalize(mix(vec2(-0.66, 0.55), setDir, lockSnap * 0.5)), 1.55 * stormPull, 0.08 * midAmp, 1.22, midSharp, mix(t * 1.28, lockBar * 2.1 + 0.7, lockSnap));
 
-  // Chop / detail octaves — turbulence raises frequency content; tension shortens further.
+  // Chop / detail octaves. Turbulence raises frequency content; tension shortens further.
   float octAmp = 0.07 * ampScale * swellCalm * (0.35 + chop * 0.65) * (1.0 - lockSnap * 0.72);
   float octFreq = (2.1 + chop * 1.4) * (1.0 + tension * 0.85);
   vec2 oDir = mix(vec2(0.71, 0.41), setDir, lockSnap * 0.4);
@@ -182,7 +182,7 @@ float heightField(vec2 xz) {
     h += dirWave(xz * pull * stormPull, d, f, a, 1.4 + fi * 0.35, sharp, t * (1.0 + fi * 0.08));
   }
 
-  // Micro-crests from high / shimmer / hat — tension sharpens spray ticks.
+  // Micro-crests from high / shimmer / hat. Tension sharpens spray ticks.
   float sparkle =
     sin(dot(xz, vec2(3.7, 2.9)) * (2.4 + uHigh + tension * 1.1) + t * 2.6) *
     cos(dot(xz, vec2(-2.1, 3.3)) * (2.1 + uShimmer) - t * 2.1);
@@ -191,7 +191,7 @@ float heightField(vec2 xz) {
   sparkleAmp *= 1.0 - lockSnap * 0.4;
   h += sparkle * sparkleAmp;
 
-  // Convergence set crest — one bar-locked rolling train that organizes the sea.
+  // Convergence set crest. One bar-locked rolling train that organizes the sea.
   // Soft scatter as lock fades (lockSnap falls); never a kick ring or snare shear.
   if (lockSnap > 0.01) {
     float setPhase = dot(xz * pull, setDir) * setFreq + lockBar;
@@ -211,7 +211,7 @@ float heightField(vec2 xz) {
     h += ring * kickW * 0.42 * glass;
   }
 
-  // Snare: short lateral whitecap crack — foam ridge shearing along X on the
+  // Snare: short lateral whitecap crack. Foam ridge shearing along X on the
   // near crest line. Distinct from the kick's radial traveling ring.
   float snareW = max(uSnare, 0.0);
   if (snareW > 0.01) {
@@ -219,7 +219,7 @@ float heightField(vec2 xz) {
     float lateral =
       sin(xz.x * 6.8 + t * 0.35) * 0.55 + sin(xz.x * 13.2 - t * 0.85) * 0.45;
     float ridge = pow(0.5 + 0.5 * lateral, 3.4);
-    // Sparse spray ticks along the crest — reads as foam flecks, not hat glitter.
+    // Sparse spray ticks along the crest. Reads as foam flecks, not hat glitter.
     float sprayTick = step(0.6, fract(xz.x * 1.9 + 0.17));
     h += zBand * (ridge * 0.3 + sprayTick * ridge * 0.12) * snareW * glass;
   }
@@ -248,16 +248,16 @@ float foamMask(vec2 xz, vec3 n, float h) {
   float lock = clamp01(uLock);
   float lockSnap = lock * lock;
   // Density lowers the foam threshold → more coverage at high density.
-  // Tension sharpens spray (lower thresh, crisper crest) — storm flecks, not hat glitter.
+  // Tension sharpens spray (lower thresh, crisper crest). Storm flecks, not hat glitter.
   float thresh = mix(0.78, 0.54, dens);
   thresh -= clamp(uHigh * 0.01 + uShimmer * 0.025 + uHat * 0.015 + tension * 0.08, 0.0, 0.12);
-  // Lock organizes foam onto set crests — less scatter, clearer trains.
+  // Lock organizes foam onto set crests. Less scatter, clearer trains.
   thresh += lockSnap * 0.06;
   float raw =
     slope * 0.18 +
     crest * 0.48 +
     micro * 0.06 * (0.35 + uShimmer * 0.5 + uHat * 0.3 + tension * 0.35);
-  // Snare boosts foam along a lateral crest shear — short whitecap crack.
+  // Snare boosts foam along a lateral crest shear. Short whitecap crack.
   float snareCrack =
     clamp01(uSnare) *
     crest *
@@ -269,13 +269,13 @@ float foamMask(vec2 xz, vec3 n, float h) {
   float foam = smoothstep(thresh, thresh + mix(0.22, 0.14, tension), raw);
   foam *= 1.0 - clamp01(uStillness) * 0.85;
   foam *= 1.0 - clamp01(uGather) * 0.45;
-  // Tender passages thin foam slightly — milky calm, not holdBreath wipe.
+  // Tender passages thin foam slightly. Milky calm, not holdBreath wipe.
   foam *= 1.0 - clamp01(uTenderness) * 0.32;
   return clamp01(foam);
 }
 
 vec3 skyColor(vec2 uv, float lookY) {
-  // Subtle palette-driven sky / horizon — original, not a stock gradient.
+  // Subtle palette-driven sky / horizon. Original, not a stock gradient.
   float h = clamp01(lookY * 0.85 + 0.35);
   vec3 zenith = uColorBass * 0.22;
   vec3 belt = mix(uColorMid * 0.55, uColorBass * 0.4, 0.35);
@@ -293,7 +293,7 @@ bool intersectOcean(vec3 ro, vec3 rd, out float tHit, out vec3 pHit) {
   tHit = 0.0;
   pHit = ro;
 
-  // Camera must stay above the water — if somehow inside, fail soft.
+  // Camera must stay above the water. If somehow inside, fail soft.
   float h0 = heightField(ro.xz);
   if (ro.y < h0 + 0.02) {
     return false;
@@ -313,7 +313,7 @@ bool intersectOcean(vec3 ro, vec3 rd, out float tHit, out vec3 pHit) {
   float tB = tNear;
 
   for (int i = 0; i < TRACE_STEPS; i++) {
-    // Bounded progressive step — never unbounded raymarch.
+    // Bounded progressive step. Never unbounded raymarch.
     float stepSize = mix(0.18, 1.35, float(i) / float(max(TRACE_STEPS - 1, 1)));
     stepSize *= 0.85 + 0.25 * clamp01(-rd.y);
     t += stepSize;
@@ -354,7 +354,7 @@ bool intersectOcean(vec3 ro, vec3 rd, out float tHit, out vec3 pHit) {
     return false;
   }
 
-  // Binary refine inside the bracket — fixed iteration count.
+  // Binary refine inside the bracket. Fixed iteration count.
   for (int r = 0; r < REFINE_STEPS; r++) {
     float tm = 0.5 * (tA + tB);
     vec3 p = ro + rd * tm;
@@ -377,7 +377,7 @@ void main() {
   vec2 res = max(uResolution, vec2(1.0));
   vec2 uv = (gl_FragCoord.xy - 0.5 * res) / res.y;
 
-  // Perspective ocean camera of our own design — readable horizon, scale as zoom.
+  // Perspective ocean camera of our own design. Readable horizon, scale as zoom.
   float s = clamp(uScale, 0.35, 2.4);
   float zoom = mix(1.55, 0.72, clamp01((s - 0.35) / 2.05));
   float leanCam = clamp01(uLean);
@@ -406,7 +406,7 @@ void main() {
     float h = heightField(pHit.xz);
     vec3 V = safeNorm(-rd);
 
-    // Depth attenuation along the view — far / troughs read as deep bass water.
+    // Depth attenuation along the view. Far / troughs read as deep bass water.
     float viewDepth = clamp01((tHit - 1.5) / 22.0);
     float trough = clamp01((-h) * 0.85 + (1.0 - n.y) * 0.2);
     float deepAmt = clamp01(viewDepth * 0.75 + trough * 0.55);
@@ -415,7 +415,7 @@ void main() {
     vec3 bodyCol = uColorMid * (0.75 + uMid * 0.15);
     vec3 water = mix(bodyCol, deepCol, deepAmt);
 
-    // Tension storm darken — ink the troughs toward bass; distinct from gather calm
+    // Tension storm darken. Ink the troughs toward bass; distinct from gather calm
     // and lean approach (no camera move). Soft under stillness so glass still owns hush.
     float tension = clamp01(uTension);
     float lock = clamp01(uLock);
@@ -423,7 +423,7 @@ void main() {
     float stillShade = clamp01(uStillness);
     water = mix(water, deepCol * 0.72, tension * (0.35 + deepAmt * 0.4) * (1.0 - stillShade * 0.7));
     water *= mix(1.0, 0.78, tension * (1.0 - stillShade * 0.5));
-    // Convergence faint crest brighten — organization, not a punch.
+    // Convergence faint crest brighten. Organization, not a punch.
     water *= 1.0 + lockSnap * 0.08;
 
     // Water is a mirror at grazing angles. Schlick against water's real F0
@@ -466,11 +466,11 @@ void main() {
     float foam = foamMask(pHit.xz, n, h);
     vec3 foamCol = tintHighlight(uColorHigh, 0.12 + uShimmer * 0.08 + uHat * 0.06);
     foamCol = mix(foamCol, mix(uColorHigh, uColorMid, 0.2), 0.12);
-    // Cap foam brightness — hue-preserving, never plain white wash.
+    // Cap foam brightness. Hue-preserving, never plain white wash.
     foamCol = min(foamCol, uColorHigh * 1.12 + vec3(0.02));
     water = mix(water, foamCol, foam * (0.42 + uDensity * 0.2));
 
-    // Tenderness: milky pearlescent sheen — soft vocals pearl the surface while
+    // Tenderness: milky pearlescent sheen. Soft vocals pearl the surface while
     // waves keep rolling (distinct from holdBreath near-silence glass).
     float tender = clamp01(uTenderness);
     vec3 milk = vec3(0.9, 0.92, 0.97);
@@ -489,8 +489,8 @@ void main() {
     water = mix(water, tintHighlight(foamCol, 0.16), snareFlash * 0.52);
     water += uColorHigh * snareFlash * 0.2;
 
-    // Phrase-echo: one-shot moonlit glint train traveling across the swell —
-    // cool silver pinpoints pulse with the replayed rhythm, then fade. Lateral
+    // Phrase-echo: one-shot moonlit glint train traveling across the swell.
+    // Cool silver pinpoints pulse with the replayed rhythm, then fade. Lateral
     // +X crest (not kick +Z travel), not hat micro-foam, not tenderness pearl.
     float echoPulse = uEcho * (1.0 - clamp(uEchoTravel, 0.0, 1.0) * 0.85);
     if (echoPulse > 0.01) {
@@ -533,7 +533,7 @@ void main() {
     water += sunTint * sheen * (0.16 + uShimmer * 0.1) * (1.0 - clamp01(uStillness) * 0.6);
     water += sunTint * glitter * (0.6 + uShimmer * 0.55) * (1.0 - clamp01(uStillness) * 0.7);
 
-    // Afterglow leaves restrained horizon/foam warmth — not a fill bloom.
+    // Afterglow leaves restrained horizon/foam warmth. Not a fill bloom.
     water += mix(uColorMid, uColorHigh, 0.45) * uAfterglow * (0.06 + foam * 0.08);
 
     float barFlash = pow(1.0 - clamp01(uBarPhase), 9.0);
@@ -730,7 +730,7 @@ export function TidalSanctuaryScene({
     );
     const lean = leanSmooth.current * (1 - stillness * 0.35);
 
-    // Tension storm coil — spring-loose on drop/release (Tide Veil envelope).
+    // Tension storm coil. Spring-loose on drop/release (Tide Veil envelope).
     let tensionTarget = Math.min(1, m.tension) * tensionAmp;
     if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
     tensionSmooth.current = smoothToward(tensionSmooth.current, tensionTarget, dt, 0.1, 0.22);
@@ -740,8 +740,8 @@ export function TidalSanctuaryScene({
     const tension = tensionSmooth.current * (1 - stillness * 0.3);
 
     const sectionPace = 0.75 + m.sectionLevel * 0.45;
-    // Forward-only accumulated phase — never reverses when energy drops.
-    // Lock steadies the clock (organization, not freeze — holdBreath owns that).
+    // Forward-only accumulated phase. Never reverses when energy drops.
+    // Lock steadies the clock (organization, not freeze, holdBreath owns that).
     const phaseRate =
       (0.22 +
         Math.min(m.energy, 1.5) * 0.12 +
@@ -786,7 +786,7 @@ export function TidalSanctuaryScene({
       0.09,
     );
 
-    // Forward-only kick crest pulse — launches outward, never contracts.
+    // Forward-only kick crest pulse. Launches outward, never contracts.
     const kickNow = kickSmooth.current;
     if (kickNow < 0.08) kickArmed.current = true;
     if (kickArmed.current && kickNow > 0.22 && prevKick.current <= 0.22) {
@@ -803,7 +803,7 @@ export function TidalSanctuaryScene({
     }
 
     // Phrase-echo moonlit glint replay: arm on quiet, fire one travel per echo
-    // rise — call-response in the gaps, not a scrub of kick/snare/hat.
+    // rise. Call-response in the gaps, not a scrub of kick/snare/hat.
     echoSmooth.current = smoothToward(
       echoSmooth.current,
       Math.min(1, m.echo) * echoAmp,
@@ -828,7 +828,7 @@ export function TidalSanctuaryScene({
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
 
-    // Shared bar clock for convergence wave sets — continuous, no bar-boundary snap.
+    // Shared bar clock for convergence wave sets. Continuous, no bar-boundary snap.
     const barDrive = m.bpm && m.bpm > 30 ? (m.barPhase ?? 0) : (phaseRef.current * 0.08) % 1;
     const lockBar = barDrive * Math.PI * 2;
 

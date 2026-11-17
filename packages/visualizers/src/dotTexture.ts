@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Shared soft round sprite for point clouds — turns the default hard GL
+ * Shared soft round sprite for point clouds. Turns the default hard GL
  * squares into glowing orbs that bloom beautifully. Lazily created once per
  * page (needs `document`, so only call from client components).
  */

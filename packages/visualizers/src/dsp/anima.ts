@@ -1,5 +1,5 @@
 /**
- * Anima — the always-living layer.
+ * Anima. The always-living layer.
  *
  * Three drivers that run regardless of audio:
  *  - heartbeat: slow 3-5 second sine that gives the scene a subtle breath

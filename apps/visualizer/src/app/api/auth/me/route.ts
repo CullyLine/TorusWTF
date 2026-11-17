@@ -40,7 +40,7 @@ export async function GET(req: Request) {
   });
 }
 
-/** DELETE /api/auth/me — permanently delete the account (and its sessions). */
+/** DELETE /api/auth/me. Permanently delete the account (and its sessions). */
 export async function DELETE(req: Request) {
   const user = await getCurrentUser(req);
   if (!user) return NextResponse.json({ error: 'Sign in required.' }, { status: 401 });

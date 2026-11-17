@@ -36,7 +36,7 @@ const RESERVED = new Set([
 ]);
 
 function isIpHost(hostNoPort: string): boolean {
-  // IPv4 (e.g. 127.0.0.1) — dots make it look like a multi-label domain.
+  // IPv4 (e.g. 127.0.0.1). Dots make it look like a multi-label domain.
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostNoPort)) return true;
   // IPv6 in brackets or bare (Next usually strips brackets from Host).
   if (hostNoPort.includes(':') || hostNoPort === '::1') return true;

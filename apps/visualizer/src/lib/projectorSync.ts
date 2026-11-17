@@ -10,11 +10,11 @@ import type { WaveformPalette } from '@torus/shared';
 import type { BackgroundSettings, VisualizerControls } from '@/lib/storage';
 
 /**
- * Projector sync protocol — main window ⇄ pop-out projector window over a
+ * Projector sync protocol. Main window ⇄ pop-out projector window over a
  * BroadcastChannel (same-origin, zero-config, survives devtools).
  *
  * The main window stays the brain: it plays audio, computes metrics, and
- * owns all state. The projector is a dumb renderer — it receives state
+ * owns all state. The projector is a dumb renderer. It receives state
  * snapshots when something changes and a metrics stream every frame, and
  * feeds them into its own VisualizerCanvas via `externalMetricsRef`.
  * Modeled on nw_wrld's dashboard/projector split, minus Electron.
@@ -30,7 +30,7 @@ export interface ProjectorStatePayload {
   /** Optional so a projector kept open across a hot upgrade falls back safely. */
   screenEffect?: ScreenEffectSettings;
   emitter?: EmitterSettings;
-  /** Modulation-matrix routings — the projector runs the same math locally. */
+  /** Modulation-matrix routings. The projector runs the same math locally. */
   modMatrix: ModRouting[];
 }
 
