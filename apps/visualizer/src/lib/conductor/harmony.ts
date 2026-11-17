@@ -30,7 +30,7 @@ export function rootPositionTriad(melodyPitch: number, key: KeyLock, baseMidi = 
     return intervals[idx % len]! + 12 * Math.floor(idx / len);
   });
 
-  const rootPc = ((key.tonic + offsetsFromTonic[0]!) % 12 + 12) % 12;
+  const rootPc = (((key.tonic + offsetsFromTonic[0]!) % 12) + 12) % 12;
   const root = rootPc + 12 * Math.round((baseMidi - rootPc) / 12);
 
   return offsetsFromTonic.map((off) => {
@@ -57,8 +57,7 @@ export function barChordNotes(clip: Clip, key: KeyLock, ticksPerBar: number): Om
     const lead = inBar
       .slice()
       .sort(
-        (a, z) =>
-          z.durationTick - a.durationTick || a.startTick - z.startTick || z.pitch - a.pitch,
+        (a, z) => z.durationTick - a.durationTick || a.startTick - z.startTick || z.pitch - a.pitch,
       )[0]!;
 
     const durationTick = Math.min(ticksPerBar, clip.lengthTick - barStart);

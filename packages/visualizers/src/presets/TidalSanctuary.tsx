@@ -733,13 +733,7 @@ export function TidalSanctuaryScene({
     // Tension storm coil — spring-loose on drop/release (Tide Veil envelope).
     let tensionTarget = Math.min(1, m.tension) * tensionAmp;
     if (m.dropEvent > 0.45 || m.release > 0.55) tensionTarget = 0;
-    tensionSmooth.current = smoothToward(
-      tensionSmooth.current,
-      tensionTarget,
-      dt,
-      0.1,
-      0.22,
-    );
+    tensionSmooth.current = smoothToward(tensionSmooth.current, tensionTarget, dt, 0.1, 0.22);
     if (m.dropEvent > 0.45) {
       tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
     }
@@ -827,10 +821,7 @@ export function TidalSanctuaryScene({
     if (echoTravel.current < 1) {
       const bpm = m.bpm && m.bpm > 30 ? m.bpm : 120;
       const echoPace = 0.9 + pace * 0.15;
-      echoTravel.current = Math.min(
-        1,
-        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
-      );
+      echoTravel.current = Math.min(1, echoTravel.current + dt * echoPace * (0.85 + bpm / 180));
     }
     const traveling = echoTravel.current < 1;
     const echoVis = traveling
@@ -838,8 +829,7 @@ export function TidalSanctuaryScene({
       : echoSmooth.current * 0.04;
 
     // Shared bar clock for convergence wave sets — continuous, no bar-boundary snap.
-    const barDrive =
-      m.bpm && m.bpm > 30 ? (m.barPhase ?? 0) : (phaseRef.current * 0.08) % 1;
+    const barDrive = m.bpm && m.bpm > 30 ? (m.barPhase ?? 0) : (phaseRef.current * 0.08) % 1;
     const lockBar = barDrive * Math.PI * 2;
 
     mat.uniforms.uResolution!.value.set(size.width * viewport.dpr, size.height * viewport.dpr);

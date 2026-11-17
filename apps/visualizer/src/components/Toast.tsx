@@ -127,7 +127,13 @@ function PromptToast({
   );
 }
 
-function MessageToast({ item, onDismiss }: { item: ToastMessage; onDismiss: (id: string) => void }) {
+function MessageToast({
+  item,
+  onDismiss,
+}: {
+  item: ToastMessage;
+  onDismiss: (id: string) => void;
+}) {
   useEffect(() => {
     const timer = window.setTimeout(() => onDismiss(item.id), DISMISS_MS);
     return () => window.clearTimeout(timer);

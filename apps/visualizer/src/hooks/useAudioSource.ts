@@ -71,13 +71,9 @@ export function useAudioSource() {
   }, [source, mic.stream, tab.stream, fileStream]);
 
   const streamAnalyser = useStreamAnalyser(activeStream, 1024);
-  const fileAnalyser = useAudioAnalyser(
-    source?.kind === 'file' ? audioRef.current : null,
-    1024,
-  );
+  const fileAnalyser = useAudioAnalyser(source?.kind === 'file' ? audioRef.current : null, 1024);
 
-  const analyser: AnalyserHandle | null =
-    source?.kind === 'file' ? fileAnalyser : streamAnalyser;
+  const analyser: AnalyserHandle | null = source?.kind === 'file' ? fileAnalyser : streamAnalyser;
 
   const clearSource = useCallback(() => {
     if (audioRef.current) {
@@ -126,10 +122,7 @@ export function useAudioSource() {
   );
 
   const playUrl = useCallback(
-    (
-      url: string,
-      meta: { title: string; sourceLink?: string },
-    ) => {
+    (url: string, meta: { title: string; sourceLink?: string }) => {
       clearSource();
       const audio = audioRef.current ?? new Audio();
       audioRef.current = audio;

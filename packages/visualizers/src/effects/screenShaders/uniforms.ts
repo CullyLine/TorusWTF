@@ -113,10 +113,7 @@ export function createScreenUniformMap(
     ['gather', new Uniform(0)],
     ['convergence', new Uniform(0)],
     ['sceneDepth', new Uniform(depthTexture)],
-    [
-      'depthTexel',
-      new Uniform(new Vector2(1 / depthTextureSize, 1 / depthTextureSize)),
-    ],
+    ['depthTexel', new Uniform(new Vector2(1 / depthTextureSize, 1 / depthTextureSize))],
     ['cameraNear', new Uniform(cameraNear)],
     ['cameraFar', new Uniform(cameraFar)],
     ['tier', new Uniform(SCREEN_TIER_VALUE[tier])],

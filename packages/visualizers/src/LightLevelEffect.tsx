@@ -32,11 +32,12 @@ export class LightLevelEffectImpl extends Effect {
   }
 }
 
-export const LightLevel = forwardRef<LightLevelEffectImpl, { level?: number }>(
-  function LightLevel({ level = 1 }, ref) {
-    const effect = useMemo(() => new LightLevelEffectImpl(level), []);
-    effect.level = level;
-    useEffect(() => () => effect.dispose(), [effect]);
-    return <primitive ref={ref} object={effect} dispose={null} />;
-  },
-);
+export const LightLevel = forwardRef<LightLevelEffectImpl, { level?: number }>(function LightLevel(
+  { level = 1 },
+  ref,
+) {
+  const effect = useMemo(() => new LightLevelEffectImpl(level), []);
+  effect.level = level;
+  useEffect(() => () => effect.dispose(), [effect]);
+  return <primitive ref={ref} object={effect} dispose={null} />;
+});

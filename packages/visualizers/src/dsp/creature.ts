@@ -37,11 +37,9 @@ function rand(rng: () => number, min: number, max: number): number {
 }
 
 export function createCreature(seed?: number): Creature {
-  const finalSeed = seed ?? (Math.floor(Math.random() * 0xffffffff) >>> 0);
+  const finalSeed = seed ?? Math.floor(Math.random() * 0xffffffff) >>> 0;
   const rng = xorshift32(finalSeed);
-  const id = Array.from({ length: 8 }, () =>
-    Math.floor(rng() * 36).toString(36),
-  ).join('');
+  const id = Array.from({ length: 8 }, () => Math.floor(rng() * 36).toString(36)).join('');
   return {
     id,
     born: new Date().toISOString(),

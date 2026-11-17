@@ -35,7 +35,12 @@ function smoothToward(
  *
  * Gather pinch + kick/snare/hat + phrase-echo ghost stay on their own envelopes.
  */
-export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: VisualizerSceneProps) {
+export function VolumetricWaveformScene({
+  analyser,
+  palette,
+  tier,
+  speed = 1,
+}: VisualizerSceneProps) {
   const mods = useModulation();
   const groupRef = useRef<THREE.Group>(null);
   const lineRef = useRef<THREE.LineSegments>(null);
@@ -190,10 +195,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     if (dropTravel.current < 1) {
       const bpmDrop = m.bpm && m.bpm > 30 ? m.bpm : 120;
       const dropPace = 0.95 + spd * 0.12;
-      dropTravel.current = Math.min(
-        1,
-        dropTravel.current + dt * dropPace * (0.9 + bpmDrop / 200),
-      );
+      dropTravel.current = Math.min(1, dropTravel.current + dt * dropPace * (0.9 + bpmDrop / 200));
     }
     // Half-sine envelope: every ridge lifts once then settles.
     const dropSurge = drop * Math.sin(Math.min(1, dropTravel.current) * Math.PI);
@@ -229,8 +231,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
 
     // LeanIn slows the crawl — expectant, not freeze.
     const leanPace = 1 - lean * 0.22;
-    group.rotation.y +=
-      delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2) * motionMul * leanPace;
+    group.rotation.y += delta * spd * (0.1 + m.mid * 0.4 + m.impact * 0.2) * motionMul * leanPace;
     // Snare briefly rolls the ribbon on Z so the crease reads in depth, not only X.
     group.rotation.z = snareSmooth.current * 0.07 * (Math.sin(m.barPhase * Math.PI * 2) || 1);
     // Gather pinches the whole form toward the axis; impact/afterglow bloom out.
@@ -243,13 +244,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
       m.swell * 0.1 +
       m.afterglow * 0.04 +
       dropSurge * 0.16;
-    scaleSmooth.current = smoothToward(
-      scaleSmooth.current,
-      scaleTarget,
-      pinchDt,
-      0.045,
-      0.12,
-    );
+    scaleSmooth.current = smoothToward(scaleSmooth.current, scaleTarget, pinchDt, 0.045, 0.12);
     // LeanIn: mild camera-ward pull + presence scale — approach, distinct from gather pinch.
     group.position.z = -lean * 0.55;
     group.scale.setScalar(scaleSmooth.current * (1 + lean * 0.06));
@@ -341,8 +336,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
         const snareCrease = snareSmooth.current * 0.32 * ridgeSoft;
         // Height jitter hushes during holdBreath, softens on tenderness,
         // and stills slightly on leanIn (poised, not frozen).
-        const jitterAmp =
-          m.mid * 0.2 * (1 - stillness * 0.88) * jitterSoft * (1 - lean * 0.4);
+        const jitterAmp = m.mid * 0.2 * (1 - stillness * 0.88) * jitterSoft * (1 - lean * 0.4);
         const phase = phaseRef.current;
 
         if (!crestShape.current || crestShape.current.length !== samples) {
@@ -387,9 +381,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
     if (ghost) {
       const gMat = ghost.material as THREE.LineBasicMaterial;
       const traveling = crestTravel.current < 1;
-      const ghostStrength = traveling
-        ? echoSmooth.current * (1 - crestTravel.current) * 0.85
-        : 0;
+      const ghostStrength = traveling ? echoSmooth.current * (1 - crestTravel.current) * 0.85 : 0;
       gMat.opacity = Math.min(0.55, ghostStrength * 0.7);
       gMat.visible = ghostStrength > 0.02;
 
@@ -445,7 +437,9 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
           dropSurge * 0.25,
       );
       // Lean toward high-band color on hats so ticks sparkle, not just brighten.
-      mat.color.set(palette.mid).lerp(scratchHigh.current.set(palette.high), hatSmooth.current * 0.65);
+      mat.color
+        .set(palette.mid)
+        .lerp(scratchHigh.current.set(palette.high), hatSmooth.current * 0.65);
       const posAttr = dust.geometry.getAttribute('position') as THREE.BufferAttribute;
       const arr = posAttr.array as Float32Array;
       const drive =
@@ -462,10 +456,7 @@ export function VolumetricWaveformScene({ analyser, palette, tier, speed = 1 }: 
         const i3 = i * 3;
         arr[i3] = ((arr[i3] ?? 0) + (dustVel[i3] ?? 0) * drive * 20) * dustPinch;
         // Drop surge lifts the dust field with the ridges — one upward billow.
-        arr[i3 + 1] =
-          (arr[i3 + 1] ?? 0) +
-          (dustVel[i3 + 1] ?? 0) * drive * 20 +
-          dropSurge * 0.012;
+        arr[i3 + 1] = (arr[i3 + 1] ?? 0) + (dustVel[i3 + 1] ?? 0) * drive * 20 + dropSurge * 0.012;
         arr[i3 + 2] = ((arr[i3 + 2] ?? 0) + (dustVel[i3 + 2] ?? 0) * drive * 20) * dustPinch;
         if (Math.abs(arr[i3 + 1]!) > 2.5) arr[i3 + 1] = 0;
       }

@@ -40,11 +40,7 @@ export const DEFAULT_BACKGROUND: BackgroundSettings = {
   intensity: 0.6,
 };
 
-export type OverlayPosition =
-  | 'bottom-left'
-  | 'bottom-center'
-  | 'top-left'
-  | 'top-right';
+export type OverlayPosition = 'bottom-left' | 'bottom-center' | 'top-left' | 'top-right';
 
 /** Title card burned into exports. The live preview never shows it. */
 export interface TitleOverlay {

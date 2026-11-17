@@ -228,7 +228,11 @@ export function useTriggerEngine({
     const strength = 0.5 + e.velocity * 0.7;
     for (const mapping of mappingsRef.current) {
       if (!mapping.enabled || mapping.source !== 'midiNote') continue;
-      if (mapping.midiNote !== null && mapping.midiNote !== undefined && mapping.midiNote !== e.note)
+      if (
+        mapping.midiNote !== null &&
+        mapping.midiNote !== undefined &&
+        mapping.midiNote !== e.note
+      )
         continue;
       const last = lastFireRef.current[mapping.id] ?? 0;
       if (now - last < 0.05) continue;
@@ -238,4 +242,4 @@ export function useTriggerEngine({
   });
 
   return { handleMidiNote: handleMidiNoteRef.current };
-};
+}

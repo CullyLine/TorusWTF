@@ -209,9 +209,9 @@ describe('screen effect controls', () => {
   // tests that only check shader source strings.
   it('writes the live wet amount through to the shader uniform', () => {
     const effect = new ScreenStyleEffect('matrix', 0);
-    const uniform = (effect as unknown as { uniforms: Map<string, { value: number }> }).uniforms.get(
-      'mixAmount',
-    );
+    const uniform = (
+      effect as unknown as { uniforms: Map<string, { value: number }> }
+    ).uniforms.get('mixAmount');
     expect(uniform?.value).toBe(0);
     effect.mix = 0.8;
     expect(uniform?.value).toBeCloseTo(0.8, 6);
@@ -228,9 +228,9 @@ describe('screen effect controls', () => {
       cameraNear: 0.1,
       cameraFar: 100,
     });
-    const uniform = (effect as unknown as { uniforms: Map<string, { value: number }> }).uniforms.get(
-      'mixAmount',
-    );
+    const uniform = (
+      effect as unknown as { uniforms: Map<string, { value: number }> }
+    ).uniforms.get('mixAmount');
     expect(uniform?.value).toBeCloseTo(0.65, 6);
     effect.dispose();
   });

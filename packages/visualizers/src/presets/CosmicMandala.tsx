@@ -156,13 +156,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     // Soft under stillness so a held quiet bar still owns the hush.
     let tensionTarget = Math.min(1, m.tension) * tensionAmp * (1 - stillness * 0.3);
     if (m.dropEvent > 0.4 || m.release > 0.55) tensionTarget = 0;
-    tensionSmooth.current = smoothToward(
-      tensionSmooth.current,
-      tensionTarget,
-      dt,
-      0.1,
-      0.22,
-    );
+    tensionSmooth.current = smoothToward(tensionSmooth.current, tensionTarget, dt, 0.1, 0.22);
     // Drop punches the spring open so the coil releases with the hit.
     if (m.dropEvent > 0.45) {
       tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.05, 0.05);
@@ -212,8 +206,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
     // existing impact/bass breath reads as the release.
     // LeanIn presence is Z approach + ring spacing (below) — never replaces gather.
     const gatherSqueeze = 1 - m.gather * 0.14;
-    const breath =
-      (1 + m.bass * 0.22 + m.swell * 0.12 + m.impact * 0.14 * soften) * gatherSqueeze;
+    const breath = (1 + m.bass * 0.22 + m.swell * 0.12 + m.impact * 0.14 * soften) * gatherSqueeze;
     root.scale.setScalar(breath);
     // Draw nearer on leanIn — mild camera-ward pull, distinct from gather squeeze.
     root.position.z = -lean * 0.48;
@@ -258,9 +251,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
       // Continuous spin hushes under holdBreath; kit scale pulses stay ungated.
       child.rotation.z += delta * spd * spin * (i % 2 === 0 ? 1 : -1) * motionMul;
       child.rotation.x =
-        Math.sin(_state.clock.elapsedTime * 0.4 + i) *
-          (m.high * 0.35 + m.mid * 0.12) *
-          motionMul +
+        Math.sin(_state.clock.elapsedTime * 0.4 + i) * (m.high * 0.35 + m.mid * 0.12) * motionMul +
         snareCrack * 0.08;
       // Kick: inner rings bloom outward; snare: outer rings briefly flare.
       // Vocal: outer rim thickens slightly — sacred geometry answering the voice.
@@ -344,8 +335,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
       // Halo rotation: when BPM is known, phase-lock to the continuous bar
       // clock (half-turn per bar) — fluid SmoothToward follow, no stepping.
       // Freewheel residual keeps a little life; holdBreath still hushes via motionMul.
-      const freeHaloRate =
-        (0.35 + m.high * 1.6 + m.mid * 0.5) * sectionPace * echoFlip * motionMul;
+      const freeHaloRate = (0.35 + m.high * 1.6 + m.mid * 0.5) * sectionPace * echoFlip * motionMul;
       if (bpmKnown) {
         const continuousBar = barTurnsRef.current + barPhase;
         // Half-turn per bar — slow sacred wheel locked to the music's clock.
@@ -376,8 +366,7 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
         dtClamped * (0.4 + Math.min(m.energy, 1.5) * 0.4) * echoFlip * motionMul;
       const fp = flowParamsFromMetrics(m, flowParamsRef.current);
       fp.time = flowTimeRef.current;
-      const drift =
-        dtClamped * (0.3 + m.energy * 0.7 + m.dropEvent * 1.4) * echoFlip * motionMul;
+      const drift = dtClamped * (0.3 + m.energy * 0.7 + m.dropEvent * 1.4) * echoFlip * motionMul;
       const spring = dtClamped * 1.6;
       const fv = flowScratch.current;
       const posAttr = shimmer.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -431,7 +420,12 @@ export function CosmicMandalaScene({ analyser, palette, tier, speed = 1 }: Visua
 
       <points ref={shimmerRef}>
         <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[shimmerPos, 3]} count={shimmerCount} itemSize={3} />
+          <bufferAttribute
+            attach="attributes-position"
+            args={[shimmerPos, 3]}
+            count={shimmerCount}
+            itemSize={3}
+          />
         </bufferGeometry>
         <pointsMaterial
           ref={shimmerMatRef}

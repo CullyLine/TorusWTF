@@ -157,11 +157,7 @@ export function advanceToNextCinematicShot(state: CinematicState): void {
     cycleBeats += CINEMATIC_SHOTS[i]!.beats;
   }
 
-  if (
-    !Number.isFinite(state.beatsElapsed) ||
-    !Number.isFinite(cycleBeats) ||
-    cycleBeats <= 0
-  ) {
+  if (!Number.isFinite(state.beatsElapsed) || !Number.isFinite(cycleBeats) || cycleBeats <= 0) {
     state.beatsElapsed = 0;
     return;
   }

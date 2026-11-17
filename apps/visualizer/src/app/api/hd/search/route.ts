@@ -75,8 +75,7 @@ export async function GET(req: Request) {
   const page = Math.max(1, Number.parseInt(pageParam ?? '1', 10) || 1);
   const enrichParam = url.searchParams.get('enrich');
   const enrich = enrichParam === '0' || enrichParam === 'false' ? false : true;
-  const debug =
-    url.searchParams.get('debug') === '1' || url.searchParams.get('debug') === 'true';
+  const debug = url.searchParams.get('debug') === '1' || url.searchParams.get('debug') === 'true';
   const storefilterParam = url.searchParams.get('storefilter');
 
   if (q.length < 2) {

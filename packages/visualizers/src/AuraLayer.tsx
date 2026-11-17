@@ -152,8 +152,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
   // Tension / drop amps: full coil+bloom on high; readable without fighting presets.
   const tensionAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75;
   const dropAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.7;
-  const warmthMix =
-    (tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75) * AFTERGLOW_WARMTH_MIX;
+  const warmthMix = (tier === 'high' ? 1 : tier === 'mid' ? 0.9 : 0.75) * AFTERGLOW_WARMTH_MIX;
 
   // Per-wisp seeds for stable trajectory + per-wisp brightness phase offset.
   const { positions, seeds, colors, baseColors } = useMemo(() => {
@@ -316,13 +315,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
     // Zero target on drop/release so the coil never fights the bloom.
     let tensionTarget = Math.min(1, Math.max(0, m.tension ?? 0)) * tensionAmp;
     if (m.dropEvent > 0.12 || m.release > 0.18) tensionTarget = 0;
-    tensionSmooth.current = smoothToward(
-      tensionSmooth.current,
-      tensionTarget,
-      dt,
-      0.4,
-      0.12,
-    );
+    tensionSmooth.current = smoothToward(tensionSmooth.current, tensionTarget, dt, 0.4, 0.12);
     if (m.dropEvent > 0.12) {
       // Hard-release the coil so the bloom reads as spring-loose, not a fade.
       tensionSmooth.current = smoothToward(tensionSmooth.current, 0, dt, 0.04, 0.04);
@@ -394,12 +387,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
       // Lock yields free flocking to the shared ring without a freeze.
       // Tension coils wander down further — strain, not freeze.
       const wanderScale =
-        (1 -
-          gather * 0.55 -
-          lean * 0.22 * leanMul -
-          lock * 0.55 -
-          tension * 0.62) *
-        driftMul;
+        (1 - gather * 0.55 - lean * 0.22 * leanMul - lock * 0.55 - tension * 0.62) * driftMul;
       // Camera is +Z-facing; lean drifts wisps toward the viewer separately
       // from the radial gather inhale.
       const approachZ = lean * 0.85 * leanMul;
@@ -522,8 +510,7 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
           const seedPhase = seeds[i * 4 + 3]!;
           // Preferred ring angle rides the shared orbit so the formation turns
           // as one body; soft per-wisp phase keeps it from looking mechanical.
-          const slot =
-            orbitAngle + seedPhase + Math.sin(seedPhase * 1.7 + i * 0.05) * 0.12;
+          const slot = orbitAngle + seedPhase + Math.sin(seedPhase * 1.7 + i * 0.05) * 0.12;
           const ellipse = 0.72 + 0.08 * Math.sin(seedPhase * 0.9);
           const targetX = FLOCK_CX + Math.cos(slot) * LOCK_RING_R;
           const targetY = FLOCK_CY + Math.sin(slot) * LOCK_RING_R * ellipse;
@@ -655,16 +642,11 @@ export function AuraLayer({ palette, amount = 0.4, tier }: AuraLayerProps) {
         tenderExpand;
       // Warm vs cool target color depends on moodValence and tenderness.
       // Phrase-echo cools a touch so the reply reads as after-image, not a hit.
-      const warmth =
-        0.5 + m.moodValence * 0.35 + m.tenderness * 0.2 - echoVis * echoMul * 0.18;
+      const warmth = 0.5 + m.moodValence * 0.35 + m.tenderness * 0.2 - echoVis * echoMul * 0.18;
       bassColor.current.set(palette.bass);
       midColor.current.set(palette.mid);
       const glowColor = glowMat.uniforms.uColor!.value as THREE.Color;
-      glowColor.lerpColors(
-        bassColor.current,
-        midColor.current,
-        Math.max(0, Math.min(1, warmth)),
-      );
+      glowColor.lerpColors(bassColor.current, midColor.current, Math.max(0, Math.min(1, warmth)));
       // Peak residue: ember coals on the halo while afterglow decays — distinct
       // from echo cool and from tenderness soft expand.
       applyAfterglowEmber(glowColor, warmthLinger, scratchEmber.current, warmthMix);

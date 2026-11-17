@@ -76,18 +76,14 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: 'No fields to update.' }, { status: 400 });
   }
 
-  const [updated] = await db
-    .update(users)
-    .set(updates)
-    .where(eq(users.id, user.id))
-    .returning({
-      id: users.id,
-      handle: users.handle,
-      email: users.email,
-      avatarUrl: users.avatarUrl,
-      bio: users.bio,
-      customSubdomain: users.customSubdomain,
-    });
+  const [updated] = await db.update(users).set(updates).where(eq(users.id, user.id)).returning({
+    id: users.id,
+    handle: users.handle,
+    email: users.email,
+    avatarUrl: users.avatarUrl,
+    bio: users.bio,
+    customSubdomain: users.customSubdomain,
+  });
 
   return NextResponse.json({ user: updated });
 }

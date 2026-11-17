@@ -520,10 +520,7 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
     if (echoTravel.current < 1) {
       const bpm = m.bpm ?? 120;
       const echoPace = 0.9 + spd * 0.15;
-      echoTravel.current = Math.min(
-        1,
-        echoTravel.current + dt * echoPace * (0.85 + bpm / 180),
-      );
+      echoTravel.current = Math.min(1, echoTravel.current + dt * echoPace * (0.85 + bpm / 180));
     }
     const traveling = echoTravel.current < 1;
     const echoVis = traveling
@@ -569,16 +566,10 @@ export function StarFieldScene({ palette, tier, speed = 1 }: VisualizerSceneProp
     // freezes on holdBreath; mid drive softens on tenderness. Phrase-echo
     // briefly flips the sign so arms counter-swirl once in the gap.
     spinAccum.current +=
-      dt *
-      spd *
-      (0.03 + mid * 0.06 * (1 - tender * 0.48)) *
-      sectionPace *
-      motionMul *
-      spinSign;
+      dt * spd * (0.03 + mid * 0.06 * (1 - tender * 0.48)) * sectionPace * motionMul * spinSign;
     // Bar-lock: a subtle sin phase once per bar. sin(0)=sin(2π)=0 so the
     // wrap is seamless — arms feel timed without stuttering.
-    const barLock =
-      m.barPhase > 0 ? Math.sin(m.barPhase * Math.PI * 2) * 0.045 * motionMul : 0;
+    const barLock = m.barPhase > 0 ? Math.sin(m.barPhase * Math.PI * 2) * 0.045 * motionMul : 0;
     points.rotation.y = spinAccum.current + barLock;
     // Sway AROUND the base tilt — assigning the raw sway here used to stomp
     // the JSX rotation and flatten the disc edge-on (white-hot smear).

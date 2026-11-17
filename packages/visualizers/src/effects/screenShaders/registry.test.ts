@@ -33,8 +33,7 @@ describe('SCREEN_SHADER_MODULES', () => {
     for (const id of CREATIVE_SCREEN_EFFECT_IDS) {
       for (const tier of TIERS) {
         const fragment = buildScreenFragmentShader(id, tier);
-        const tierDefine =
-          tier === 'low' ? 'TIER_LOW' : tier === 'mid' ? 'TIER_MID' : 'TIER_HIGH';
+        const tierDefine = tier === 'low' ? 'TIER_LOW' : tier === 'mid' ? 'TIER_MID' : 'TIER_HIGH';
         expect(fragment.includes(`#define ${tierDefine}`)).toBe(true);
         expect(fragment.includes(`${id}Style`)).toBe(true);
         for (const other of CREATIVE_SCREEN_EFFECT_IDS) {

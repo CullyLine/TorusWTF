@@ -128,9 +128,7 @@ export function useExport() {
         compositor.stop();
         compositorRef.current = null;
         setState('idle');
-        throw err instanceof Error
-          ? err
-          : new Error('Could not start recording in this browser.');
+        throw err instanceof Error ? err : new Error('Could not start recording in this browser.');
       }
 
       chunksRef.current = [];
@@ -158,9 +156,7 @@ export function useExport() {
         compositorRef.current = null;
         recorderRef.current = null;
         setState('idle');
-        throw err instanceof Error
-          ? err
-          : new Error('Could not start recording in this browser.');
+        throw err instanceof Error ? err : new Error('Could not start recording in this browser.');
       }
       setState('recording');
       setElapsedSec(0);

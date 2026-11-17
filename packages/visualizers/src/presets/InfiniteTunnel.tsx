@@ -306,7 +306,14 @@ function buildSegmentGeometry(): THREE.BufferGeometry {
     { d: [1, 0], p: [0, 1] }, // right
   ];
 
-  const push = (x: number, y: number, z: number, d: [number, number], apex: number, kind: number) => {
+  const push = (
+    x: number,
+    y: number,
+    z: number,
+    d: [number, number],
+    apex: number,
+    kind: number,
+  ) => {
     positions.push(x, y, z);
     wallDirs.push(d[0], d[1]);
     apexes.push(apex);
@@ -336,11 +343,7 @@ function buildSegmentGeometry(): THREE.BufferGeometry {
 
     // Pyramid: 4 faces from the wall edges to an apex at the wall center,
     // pulled into the bore (your original GeneratePyramids construction).
-    const apex: [number, number, number] = [
-      d[0] * (HALF - 0.55),
-      d[1] * (HALF - 0.55),
-      -DEPTH / 2,
-    ];
+    const apex: [number, number, number] = [d[0] * (HALF - 0.55), d[1] * (HALF - 0.55), -DEPTH / 2];
     const faces: Array<[[number, number, number], [number, number, number]]> = [
       [a, b],
       [b, c],
@@ -517,7 +520,12 @@ export function InfiniteTunnelScene({
   // ---- Echo ring pool ----
   const echoRings = useMemo(() => {
     const geo = buildRingGeometry();
-    const rings: Array<{ obj: THREE.LineLoop; mat: THREE.LineBasicMaterial; active: boolean; life: number }> = [];
+    const rings: Array<{
+      obj: THREE.LineLoop;
+      mat: THREE.LineBasicMaterial;
+      active: boolean;
+      life: number;
+    }> = [];
     const root = new THREE.Group();
     for (let i = 0; i < ECHO_POOL; i++) {
       const mat = new THREE.LineBasicMaterial({
@@ -834,10 +842,7 @@ export function InfiniteTunnelScene({
     // palette at a usable value, so bass reads as deep colour rather than as
     // a dim grey that has to be rescued by additive glow later in the frame.
     const wallPulse =
-      (0.72 + m.bass * 0.3) *
-      (1 - tender * 0.1) *
-      (1 + afterglow * 0.22) *
-      (1 + lockSnap * 0.1);
+      (0.72 + m.bass * 0.3) * (1 - tender * 0.1) * (1 + afterglow * 0.22) * (1 + lockSnap * 0.1);
     const wallC = (eu.uWallColor!.value as THREE.Color).copy(cs.bass).multiplyScalar(wallPulse);
     wallC.lerp(cs.warm, Math.min(0.16, tender * 0.12 + afterglow * 0.1));
     const pyrC = (eu.uPyrColor!.value as THREE.Color).copy(cs.mid).multiplyScalar(1.35);
@@ -903,8 +908,7 @@ export function InfiniteTunnelScene({
       (0.35 + m.energy * 0.65 + m.dropEvent * 1.2 + afterglow * 0.12) *
       (1 - tender * 0.4) *
       lockPace;
-    const swirl =
-      vortexNow * dt * (0.6 + m.mid * 1.2) * (1 - tender * 0.35) * (1 - lockSnap * 0.7);
+    const swirl = vortexNow * dt * (0.6 + m.mid * 1.2) * (1 - tender * 0.35) * (1 - lockSnap * 0.7);
     const sweep = tunnelSpeed * dt * 0.85;
     const fv = flowScratch.current;
     const arr = particles.positions;

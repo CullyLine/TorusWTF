@@ -35,7 +35,10 @@ export async function POST(req: Request) {
     'unknown';
 
   if (!rateLimit(ip)) {
-    return NextResponse.json({ error: 'Too many messages. Try again in a minute.' }, { status: 429 });
+    return NextResponse.json(
+      { error: 'Too many messages. Try again in a minute.' },
+      { status: 429 },
+    );
   }
 
   let body: unknown;

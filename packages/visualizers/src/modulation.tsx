@@ -78,18 +78,46 @@ export const MOD_SOURCES: ModSourceDef[] = [
   { key: 'kick', label: 'Kick drum', hint: 'Low-band transients — the actual kick pattern' },
   { key: 'snare', label: 'Snare', hint: 'Mid-band cracks with hat bleed subtracted' },
   { key: 'hat', label: 'Hi-hat', hint: 'Fast top-end ticks, clears before the next 16th' },
-  { key: 'sectionLevel', label: 'Song peak', hint: 'How big this moment is vs. the whole song so far' },
-  { key: 'afterglow', label: 'Afterglow', hint: 'Lingering warmth for seconds after a peak or drop' },
+  {
+    key: 'sectionLevel',
+    label: 'Song peak',
+    hint: 'How big this moment is vs. the whole song so far',
+  },
+  {
+    key: 'afterglow',
+    label: 'Afterglow',
+    hint: 'Lingering warmth for seconds after a peak or drop',
+  },
   { key: 'tension', label: 'Build-up', hint: 'Rising tension before a drop — sweeps, snare rolls' },
   { key: 'dropEvent', label: 'Drop', hint: 'Pulses when a bass drop lands, decays over ~2 beats' },
-  { key: 'vocalActivity', label: 'Vocals', hint: 'How present a voice is (formant-range heuristic)' },
-  { key: 'leadActivity', label: 'Lead / synths', hint: 'Sustained tonal instruments, vocals excluded' },
+  {
+    key: 'vocalActivity',
+    label: 'Vocals',
+    hint: 'How present a voice is (formant-range heuristic)',
+  },
+  {
+    key: 'leadActivity',
+    label: 'Lead / synths',
+    hint: 'Sustained tonal instruments, vocals excluded',
+  },
   { key: 'drumActivity', label: 'Drums', hint: 'Percussive transient density' },
-  { key: 'bassActivity', label: 'Bassline', hint: 'Sustained low-end presence (smoother than Bass)' },
+  {
+    key: 'bassActivity',
+    label: 'Bassline',
+    hint: 'Sustained low-end presence (smoother than Bass)',
+  },
   { key: 'gather', label: 'Pre-beat', hint: 'The inhale just before each predicted beat' },
   { key: 'echo', label: 'Echo', hint: 'Replays the last phrase\u2019s rhythm into quiet gaps' },
-  { key: 'convergence', label: 'Lock-in', hint: 'How locked-together the bands are — 1 in choruses' },
-  { key: 'silence', label: 'Silence', hint: '1 during sustained quiet — great inverted (negative amount)' },
+  {
+    key: 'convergence',
+    label: 'Lock-in',
+    hint: 'How locked-together the bands are — 1 in choruses',
+  },
+  {
+    key: 'silence',
+    label: 'Silence',
+    hint: '1 during sustained quiet — great inverted (negative amount)',
+  },
 ];
 
 export const MOD_SOURCES_BY_KEY: Readonly<Record<ModSourceKey, ModSourceDef>> = Object.fromEntries(

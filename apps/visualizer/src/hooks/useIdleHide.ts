@@ -9,7 +9,10 @@ interface UseIdleHideOptions {
   idleMs?: number;
 }
 
-export function useIdleHide({ forceVisible = false, idleMs = DEFAULT_IDLE_MS }: UseIdleHideOptions = {}) {
+export function useIdleHide({
+  forceVisible = false,
+  idleMs = DEFAULT_IDLE_MS,
+}: UseIdleHideOptions = {}) {
   const [uiVisible, setUiVisible] = useState(true);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

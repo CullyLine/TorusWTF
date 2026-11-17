@@ -55,10 +55,7 @@ describe('tidal sanctuary palette-band mapping', () => {
       'deep',
     );
     expect(
-      mapWaterSampleToPaletteColor(
-        { depthFactor: 0.9, foamAmount: 0.04, crestStrength: 0 },
-        OCEAN,
-      ),
+      mapWaterSampleToPaletteColor({ depthFactor: 0.9, foamAmount: 0.04, crestStrength: 0 }, OCEAN),
     ).toBe(OCEAN.bass);
     expect(
       mapWaterSampleToPaletteColor(

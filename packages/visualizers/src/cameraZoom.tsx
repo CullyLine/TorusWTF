@@ -42,12 +42,7 @@ interface ZoomSpring {
  * First call snaps to the target so mount doesn't ease in from zero.
  * Near-zero error + velocity snaps so idle framing holds still.
  */
-function smoothDampZoom(
-  state: ZoomSpring,
-  target: number,
-  dt: number,
-  smoothTime: number,
-): number {
+function smoothDampZoom(state: ZoomSpring, target: number, dt: number, smoothTime: number): number {
   if (!state.initialized) {
     state.value = target;
     state.velocity = 0;

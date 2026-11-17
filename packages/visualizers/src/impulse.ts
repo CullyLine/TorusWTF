@@ -8,10 +8,7 @@
  * free and off the React render path, matching how metrics flow.
  */
 
-import {
-  advanceToNextCinematicShot,
-  type CinematicState,
-} from './dsp/cinematic';
+import { advanceToNextCinematicShot, type CinematicState } from './dsp/cinematic';
 
 export interface VisualImpulses {
   /** Living-palette hue jolt (same feel as an automatic drop kick). */

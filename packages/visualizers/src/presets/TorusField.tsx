@@ -115,8 +115,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
   // Lock amp: full lattice snap on high; slightly softer on mid/low.
   const lockAmp = tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1;
   // Soften amber mix on sparse low tier so bloom doesn’t blow out.
-  const warmthMix =
-    (tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1) * AFTERGLOW_WARMTH_MIX;
+  const warmthMix = (tier === 'low' ? 0.75 : tier === 'mid' ? 0.9 : 1) * AFTERGLOW_WARMTH_MIX;
   const sprite = useMemo(() => getDotTexture(), []);
 
   const { positions, baseTheta, basePhi } = useMemo(() => {
@@ -270,11 +269,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     const kickTube = kickSmooth.current * 0.12;
     const leanPull = lean * 0.038;
     const shellBase = 1 + m.bass * 0.3 + m.impact * 0.18 - m.gather * 0.05 - leanPull;
-    torus.scale.set(
-      shellBase + kickTube * 0.35,
-      shellBase + kickTube,
-      shellBase + kickTube * 0.35,
-    );
+    torus.scale.set(shellBase + kickTube * 0.35, shellBase + kickTube, shellBase + kickTube * 0.35);
     // Continuous spin hangs under stillness; kit snare Z roll stays ungated.
     // lockPace steadies the continuous X roll when bands lock.
     torus.rotation.y += flowSpeed * 0.4;
@@ -323,8 +318,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // hatMul holds ticks mid-air during holdBreath (thaw restores sparkle).
     // Lock slightly tightens point size so the lattice reads as crisp lines.
     const hatTick = hatSmooth.current * hatMul;
-    pointsMat.size =
-      0.05 + m.swell * 0.05 + m.impact * 0.04 + hatTick * 0.055 - lock * 0.012;
+    pointsMat.size = 0.05 + m.swell * 0.05 + m.impact * 0.04 + hatTick * 0.055 - lock * 0.012;
     // Dim the particle tube toward a still ember ring under hush.
     // Lock lifts opacity a touch so locked rings read denser / cleaner.
     pointsMat.opacity = Math.min(
@@ -367,12 +361,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
     // Continuous curl clock freezes with the field; echo reverse still flips sign.
     // lockPace steadies the curl clock when bands lock (distinct from freeze).
     flowTimeRef.current +=
-      dtClamped *
-      spd *
-      (0.4 + Math.min(m.energy, 1.5) * 0.4) *
-      flowSign *
-      motionMul *
-      lockPace;
+      dtClamped * spd * (0.4 + Math.min(m.energy, 1.5) * 0.4) * flowSign * motionMul * lockPace;
     const fp = flowParamsFromMetrics(m, flowParamsRef.current);
     fp.time = flowTimeRef.current;
     // Convergence power-locks bandSpread so choruses read as one lattice
@@ -402,12 +391,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
       // Theta advance steadies under lock so the lattice holds its phase.
       baseTheta[i] =
         (baseTheta[i]! +
-          delta *
-            spd *
-            (0.15 + m.high * 1.2 + m.impact) *
-            flowSign *
-            motionMul *
-            lockPace) %
+          delta * spd * (0.15 + m.high * 1.2 + m.impact) * flowSign * motionMul * lockPace) %
         (Math.PI * 2);
 
       // Phase-aligned ring lattice: soft-snap phi/theta toward discrete slots
@@ -423,10 +407,7 @@ export function TorusFieldScene({ analyser, palette, tier, speed = 1 }: Visualiz
 
       // Mid wobble collapses under lock so rings sharpen (loose drift returns).
       const radius =
-        1.4 +
-        m.bass * 0.25 +
-        Math.sin(phi * 3) * m.mid * 0.08 * (1 - lock * 0.92) -
-        leanRadius;
+        1.4 + m.bass * 0.25 + Math.sin(phi * 3) * m.mid * 0.08 * (1 - lock * 0.92) - leanRadius;
       const tube = 0.5 + m.breath * 0.15 + kickTubeR - leanTube;
       const i3 = i * 3;
       setTorusPoint(arr, i3, theta, phi, radius, tube);

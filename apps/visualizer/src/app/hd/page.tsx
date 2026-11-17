@@ -32,9 +32,7 @@ const INITIAL: FetchState = {
 };
 
 const formatCurrency = (n: number | null) =>
-  typeof n === 'number'
-    ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-    : '—';
+  typeof n === 'number' ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD' }) : '—';
 
 const formatUom = (u: string | null) => {
   if (!u) return '';
@@ -53,7 +51,14 @@ export default function HdPage() {
   useEffect(() => {
     if (debouncedQuery.length < 2) {
       inflightRef.current?.abort();
-      setState((s) => ({ ...s, query: debouncedQuery, loading: false, items: [], total: 0, error: null }));
+      setState((s) => ({
+        ...s,
+        query: debouncedQuery,
+        loading: false,
+        items: [],
+        total: 0,
+        error: null,
+      }));
       return;
     }
 
@@ -143,13 +148,7 @@ function Header({ storeName, storeId }: { storeName: string; storeId: string }) 
   );
 }
 
-function SearchInput({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function SearchInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="relative">
       <input
@@ -235,9 +234,7 @@ function EmptyHint() {
   return (
     <div className="px-4 pt-10 text-center text-sm text-zinc-400">
       <p>Search for any item.</p>
-      <p className="mt-1 text-xs">
-        Results auto-filtered to in-stock at Hickory.
-      </p>
+      <p className="mt-1 text-xs">Results auto-filtered to in-stock at Hickory.</p>
     </div>
   );
 }
@@ -291,8 +288,8 @@ function ItemRow({ item }: { item: HdItem }) {
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <span className="text-sm font-semibold text-zinc-900">{priceLine}</span>
           <LocationTag
-            aisle={hasLocation ? aisle ?? null : null}
-            bay={hasLocation ? bay ?? null : null}
+            aisle={hasLocation ? (aisle ?? null) : null}
+            bay={hasLocation ? (bay ?? null) : null}
           />
         </div>
 

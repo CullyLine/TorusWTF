@@ -4,9 +4,9 @@ Autonomous improvement loop for the visualizer. One **Architect** run each morni
 
 **The mission:** make the visualizers more fluid, more alive, more beautiful.
 
-- *Fluid* — motion quality. Easing, springs, inertia, continuity. Nothing pops, snaps, or moves linearly unless it's a deliberate hit on a transient.
-- *Alive* — the feeling of a living thing. Idle breathing, anticipation, organic variation, deeper audio-reactivity (transients, beat phase, spectral nuance — see `packages/visualizers/src/metrics.ts`), behavior that surprises without ever feeling random.
-- *Beautiful* — color, light, and composition. Palette life, bloom discipline, camera choreography, framing that owns the screen (see the "Pulse Update" framing philosophy in `packages/visualizers/src/registry.ts`).
+- _Fluid_ — motion quality. Easing, springs, inertia, continuity. Nothing pops, snaps, or moves linearly unless it's a deliberate hit on a transient.
+- _Alive_ — the feeling of a living thing. Idle breathing, anticipation, organic variation, deeper audio-reactivity (transients, beat phase, spectral nuance — see `packages/visualizers/src/metrics.ts`), behavior that surprises without ever feeling random.
+- _Beautiful_ — color, light, and composition. Palette life, bloom discipline, camera choreography, framing that owns the screen (see the "Pulse Update" framing philosophy in `packages/visualizers/src/registry.ts`).
 
 ## Shared rules
 
@@ -66,7 +66,7 @@ Runs several times a day. Ships exactly one item per run.
 1. `git fetch`, then read the Priority list from the `night-shift` branch (or from `main` if that branch doesn't exist yet).
 2. Take the **highest-priority item that is unclaimed, not built, and has no open PR** — exactly one item per run, never a second take of the same item. If everything is claimed or built, stop cleanly without a PR.
 3. Claim it first: on `night-shift`, mark the item `[~] building <ISO timestamp>` and push. If the push is rejected, re-fetch and re-check the list — someone else may have claimed it.
-4. Branch off the latest `origin/main` as `agent/<yyyymmdd>-<slug>` and implement a working first draft. Rough edges in code are acceptable; broken or half-rendered visuals are not — it must *look* intentional and feel like the mission.
+4. Branch off the latest `origin/main` as `agent/<yyyymmdd>-<slug>` and implement a working first draft. Rough edges in code are acceptable; broken or half-rendered visuals are not — it must _look_ intentional and feel like the mission.
 5. Verify (the boot check):
    - `pnpm install`
    - `pnpm typecheck` && `pnpm lint` && `pnpm test`
@@ -82,8 +82,8 @@ Runs several times a day. Ships exactly one item per run.
 
 ## Priority list
 
-*(Replaced by the Architect each morning. Empty until the first Architect run.)*
+_(Replaced by the Architect each morning. Empty until the first Architect run.)_
 
 ## Built log
 
-*(Append-only: `YYYY-MM-DD — NS-id — PR #NN — one-line result`.)*
+_(Append-only: `YYYY-MM-DD — NS-id — PR #NN — one-line result`.)_

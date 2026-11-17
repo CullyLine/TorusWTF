@@ -1,6 +1,13 @@
 'use client';
 
-import { createContext, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useReducer,
+  type Dispatch,
+  type ReactNode,
+} from 'react';
 import {
   conductorReducer,
   createDefaultProject,
@@ -29,7 +36,9 @@ export function ConductorProvider({ children }: { children: ReactNode }) {
     saveProject(project);
   }, [project]);
 
-  return <ConductorContext.Provider value={{ project, dispatch }}>{children}</ConductorContext.Provider>;
+  return (
+    <ConductorContext.Provider value={{ project, dispatch }}>{children}</ConductorContext.Provider>
+  );
 }
 
 export function useConductor(): ConductorContextValue {

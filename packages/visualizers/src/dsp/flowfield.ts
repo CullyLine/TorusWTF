@@ -84,7 +84,15 @@ function noised(x: number, y: number, z: number, seed: number, out: NoiseGrad): 
   const k6 = a - b - e + f;
   const k7 = -a + b + c - d + e - f - g + h;
 
-  out.v = k0 + k1 * ux + k2 * uy + k3 * uz + k4 * ux * uy + k5 * uy * uz + k6 * uz * ux + k7 * ux * uy * uz;
+  out.v =
+    k0 +
+    k1 * ux +
+    k2 * uy +
+    k3 * uz +
+    k4 * ux * uy +
+    k5 * uy * uz +
+    k6 * uz * ux +
+    k7 * ux * uy * uz;
   out.gx = dux * (k1 + k4 * uy + k6 * uz + k7 * uy * uz);
   out.gy = duy * (k2 + k4 * ux + k5 * uz + k7 * uz * ux);
   out.gz = duz * (k3 + k5 * uy + k6 * ux + k7 * ux * uy);
@@ -155,7 +163,7 @@ export function addWell(
   const dy = cy - y;
   const dz = cz - z;
   const d2 = dx * dx + dy * dy + dz * dz;
-  const falloff = radius * radius / (radius * radius + d2);
+  const falloff = (radius * radius) / (radius * radius + d2);
   const inv = 1 / (Math.sqrt(d2) + 0.12);
   const s = strength * falloff * inv;
   out.x += dx * s;

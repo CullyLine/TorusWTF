@@ -242,7 +242,8 @@ export function PlasmaGlobeScene({ palette, tier, speed = 1 }: VisualizerScenePr
 
     const gather = gatherSmooth.current;
     const tension = tensionSmooth.current;
-    const jitter = (0.06 + midSmooth.current * 0.16 + highSmooth.current * 0.05) * (1 - tension * 0.55);
+    const jitter =
+      (0.06 + midSmooth.current * 0.16 + highSmooth.current * 0.05) * (1 - tension * 0.55);
 
     colBass.set(palette.bass);
     colMid.set(palette.mid);
@@ -273,7 +274,10 @@ export function PlasmaGlobeScene({ palette, tier, speed = 1 }: VisualizerScenePr
 
       // Gather pulls every landing point toward a shared side of the glass.
       scratchB.set(0.55, 0.25, 0.8).normalize();
-      scratchA.copy(arc.dir).lerp(scratchB, gather * 0.45).normalize();
+      scratchA
+        .copy(arc.dir)
+        .lerp(scratchB, gather * 0.45)
+        .normalize();
 
       // Snare whips the arcs sideways.
       const whip = snareSmooth.current * 0.22 * (i % 2 === 0 ? 1 : -1);
@@ -383,7 +387,8 @@ export function PlasmaGlobeScene({ palette, tier, speed = 1 }: VisualizerScenePr
     const lines = linesRef.current;
     if (lines) {
       const mat = lines.material as THREE.LineBasicMaterial;
-      mat.opacity = Math.min(1, 0.55 + m.energy * 0.3 + kickSmooth.current * 0.2) * (1 - still * 0.5);
+      mat.opacity =
+        Math.min(1, 0.55 + m.energy * 0.3 + kickSmooth.current * 0.2) * (1 - still * 0.5);
     }
 
     const glow = glowRef.current;

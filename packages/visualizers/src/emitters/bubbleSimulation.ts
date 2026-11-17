@@ -120,10 +120,7 @@ function smoothToward(
 
 /** holdBreath + deep silence → mid-water listen (same blend as Aura / presets). */
 function stillnessFromMetrics(holdBreath: number, silence: number): number {
-  return Math.min(
-    1,
-    Math.max(holdBreath, silence * 0.92) + Math.min(holdBreath, silence) * 0.15,
-  );
+  return Math.min(1, Math.max(holdBreath, silence * 0.92) + Math.min(holdBreath, silence) * 0.15);
 }
 
 function normalizeCapacity(value: number): number {
@@ -284,7 +281,8 @@ function activateBubble(
   pool.positions[i3 + 2] = Math.sin(angle) * radius * 0.72;
   pool.velocities[i3] =
     Math.cos(angle) * lateralSpeed + (nextRandom(pool) - 0.5) * echoSpread * 0.055;
-  pool.velocities[i3 + 1] = lift * (echo ? 0.52 + nextRandom(pool) * 0.22 : 0.38 + nextRandom(pool) * 0.28);
+  pool.velocities[i3 + 1] =
+    lift * (echo ? 0.52 + nextRandom(pool) * 0.22 : 0.38 + nextRandom(pool) * 0.28);
   pool.velocities[i3 + 2] =
     Math.sin(angle) * lateralSpeed * 0.72 + (nextRandom(pool) - 0.5) * echoSpread * 0.04;
   pool.ages[index] = 0;
@@ -292,9 +290,7 @@ function activateBubble(
     ? meanLifetime * (0.42 + nextRandom(pool) * 0.28)
     : meanLifetime * (0.75 + nextRandom(pool) * 0.5);
   // Always rewrite size so echo glints don't permanently shrink recycled slots.
-  pool.sizes[index] = echo
-    ? 0.32 + nextRandom(pool) * 0.28
-    : 0.68 + nextRandom(pool) * 0.68;
+  pool.sizes[index] = echo ? 0.32 + nextRandom(pool) * 0.28 : 0.68 + nextRandom(pool) * 0.68;
   pool.echoFlags[index] = echo ? 1 : 0;
   pool.active[index] = 1;
   pool.activeCount++;
@@ -467,10 +463,7 @@ export function stepBubblePool(
 
   // Emit crest-by-slot pulses while the train climbs — spaced to the gap's BPM.
   if (traveling && echoVis > 0.02) {
-    const slot = Math.min(
-      ECHO_TRAIN_SLOTS - 1,
-      Math.floor(kit.echoTravel * ECHO_TRAIN_SLOTS),
-    );
+    const slot = Math.min(ECHO_TRAIN_SLOTS - 1, Math.floor(kit.echoTravel * ECHO_TRAIN_SLOTS));
     while (kit.echoEmitCursor <= slot && kit.echoEmitCursor < ECHO_TRAIN_SLOTS) {
       const pulseStrength = 0.55 + (1 - kit.echoEmitCursor / ECHO_TRAIN_SLOTS) * 0.35;
       const count = Math.max(
@@ -518,8 +511,7 @@ export function stepBubblePool(
   // Gather: pull toward the column core (XZ → 0), distinct from kick Y surge.
   const gatherPull = gather * (1.55 + amp * 0.55) * (1 - stillness * 0.35);
   const damping = Math.exp(
-    -dt *
-      (0.055 + turbulence * 0.025 + stillness * 3.6 + gather * 0.06 + tender * 0.35),
+    -dt * (0.055 + turbulence * 0.025 + stillness * 3.6 + gather * 0.06 + tender * 0.35),
   );
   const flow = pool.flowScratch;
   const integrateDt = dt * motionMul;
@@ -591,9 +583,7 @@ export function stepBubblePool(
   }
 
   const rate =
-    clamp(finiteOr(settings.rate, 0), 0, MAX_RATE) *
-    (1 - stillness * 0.88) *
-    (1 - tender * 0.22);
+    clamp(finiteOr(settings.rate, 0), 0, MAX_RATE) * (1 - stillness * 0.88) * (1 - tender * 0.22);
   pool.emissionCarry = Math.min(pool.capacity, pool.emissionCarry + rate * dt);
   const requested = Math.floor(pool.emissionCarry);
   if (requested <= 0) return 0;

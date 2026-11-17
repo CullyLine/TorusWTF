@@ -24,11 +24,7 @@ import {
   type TitleOverlay,
   type VisualizerControls,
 } from './storage';
-import {
-  TRIGGER_ACTIONS,
-  TRIGGER_SOURCES,
-  type TriggerMapping,
-} from './triggerActions';
+import { TRIGGER_ACTIONS, TRIGGER_SOURCES, type TriggerMapping } from './triggerActions';
 
 export interface TorusShowFile {
   kind: 'torus-show';
@@ -60,9 +56,7 @@ export interface ShowFileState {
   savedPresets: SavedPreset[];
 }
 
-export type ParseShowResult =
-  | { ok: true; show: TorusShowFile }
-  | { ok: false; error: string };
+export type ParseShowResult = { ok: true; show: TorusShowFile } | { ok: false; error: string };
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
@@ -112,7 +106,7 @@ export function parseShowFile(text: string): ParseShowResult {
   if (raw.kind !== 'torus-show') {
     return {
       ok: false,
-      error: "Not a Torus show file (expected kind \"torus-show\").",
+      error: 'Not a Torus show file (expected kind "torus-show").',
     };
   }
 
@@ -122,8 +116,7 @@ export function parseShowFile(text: string): ParseShowResult {
   if (raw.version !== 1) {
     return {
       ok: false,
-      error:
-        'This show file was made with a newer version of TorusFM and can\'t be opened here.',
+      error: "This show file was made with a newer version of TorusFM and can't be opened here.",
     };
   }
 
@@ -142,7 +135,9 @@ export function parseShowFile(text: string): ParseShowResult {
       ? { ...DEFAULT_SCREEN_EFFECT_SETTINGS }
       : sanitizeScreenEffectSettings(raw.screenEffect);
   const emitter =
-    raw.emitter === undefined ? { ...DEFAULT_EMITTER_SETTINGS } : sanitizeEmitterSettings(raw.emitter);
+    raw.emitter === undefined
+      ? { ...DEFAULT_EMITTER_SETTINGS }
+      : sanitizeEmitterSettings(raw.emitter);
   const titleOverlay = sanitizeTitleOverlay(raw.titleOverlay);
   const triggerMappings = sanitizeTriggerMappings(raw.triggerMappings);
   const modMatrix = sanitizeModRoutings(raw.modMatrix);

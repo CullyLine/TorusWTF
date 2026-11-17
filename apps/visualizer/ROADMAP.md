@@ -35,7 +35,7 @@ pnpm --filter @torus/web typecheck             # regression check — sacred
 pnpm --filter @torus/visualizers typecheck     # regression check — sacred
 ```
 
-All five must pass clean before you open the PR. Pre-existing lint *warnings* in other packages are fine; new *errors* anywhere are not.
+All five must pass clean before you open the PR. Pre-existing lint _warnings_ in other packages are fine; new _errors_ anywhere are not.
 
 ---
 
@@ -115,7 +115,7 @@ Items appear in the order Composer should ship them. The "(was #N in original li
   - `torus-visualizer-export-resolution`
   - `torus-visualizer-export-fps`
 - For paid-only settings (1080p+, 60fps+), if user is no longer unlocked, downgrade silently to free max on load.
-- Do NOT persist the audio source itself (object URLs / streams) — only the *kind* of source last used.
+- Do NOT persist the audio source itself (object URLs / streams) — only the _kind_ of source last used.
 
 **Acceptance criteria:**
 

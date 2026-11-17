@@ -89,9 +89,7 @@ export function updateChoreography(
   // Tenderness: high vocal activity AND low arousal AND low silence
   // (so not silence-tenderness, but active-but-gentle).
   const tenderRaw =
-    input.vocalActivity *
-    Math.max(0, 1 - input.arousal * 1.2) *
-    Math.max(0, 1 - input.silence);
+    input.vocalActivity * Math.max(0, 1 - input.arousal * 1.2) * Math.max(0, 1 - input.silence);
   const tenderTarget = Math.min(1, tenderRaw * tenderGain);
   const tenderAlpha = Math.min(1, dt * 2);
   state.tenderness = state.tenderness + (tenderTarget - state.tenderness) * tenderAlpha;

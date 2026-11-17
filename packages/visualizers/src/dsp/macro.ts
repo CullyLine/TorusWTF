@@ -77,9 +77,7 @@ export function updateMacro(
     state.silenceCounter = Math.max(0, state.silenceCounter - delta * 4);
   }
   const silenceTarget =
-    state.silenceCounter > 0.4
-      ? Math.min(1, (state.silenceCounter - 0.4) * 2)
-      : 0;
+    state.silenceCounter > 0.4 ? Math.min(1, (state.silenceCounter - 0.4) * 2) : 0;
   state.silence = state.silence * 0.85 + silenceTarget * 0.15;
 
   // ---- Centroid history (for tension) ----

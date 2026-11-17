@@ -86,7 +86,9 @@ function localQuantity(product: RawProduct, storeId: string): number | null {
       if (!['bopis', 'pickup', 'pickupinstore'].includes(svcType)) continue;
       for (const loc of svc.locations ?? []) {
         const matchesStore =
-          loc?.locationId === storeId || loc?.isAnchor === true || (svc.locations?.length ?? 0) === 1;
+          loc?.locationId === storeId ||
+          loc?.isAnchor === true ||
+          (svc.locations?.length ?? 0) === 1;
         if (matchesStore && typeof loc?.inventory?.quantity === 'number') {
           return loc.inventory.quantity;
         }

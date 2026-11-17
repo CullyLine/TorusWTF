@@ -15,13 +15,7 @@
 
 type Unknown = unknown;
 
-const AISLE_KEYS = new Set([
-  'aisle',
-  'aisleNumber',
-  'aisleNum',
-  'aisle_number',
-  'aisleId',
-]);
+const AISLE_KEYS = new Set(['aisle', 'aisleNumber', 'aisleNum', 'aisle_number', 'aisleId']);
 
 const BAY_KEYS = new Set(['bay', 'bayNumber', 'bayNum', 'bay_number', 'bayId']);
 

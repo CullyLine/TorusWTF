@@ -304,7 +304,10 @@ export function chordsToProject(
 }
 
 /** Build a standard .mid file (single chord track) from a progression. */
-export function chordsToMidi(segments: ChordSegment[], voicing: ChordVoicing = 'block'): Uint8Array {
+export function chordsToMidi(
+  segments: ChordSegment[],
+  voicing: ChordVoicing = 'block',
+): Uint8Array {
   const midi = new Midi();
   midi.header.setTempo(CHORD_BPM);
   const track = midi.addTrack();

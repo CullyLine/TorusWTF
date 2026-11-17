@@ -51,13 +51,7 @@ import { getDotTexture } from './dotTexture';
 
 export type BackgroundMode = 'none' | 'nebula' | 'starfield' | 'aurora' | 'glow';
 
-export const BACKGROUND_MODES: BackgroundMode[] = [
-  'none',
-  'nebula',
-  'starfield',
-  'aurora',
-  'glow',
-];
+export const BACKGROUND_MODES: BackgroundMode[] = ['none', 'nebula', 'starfield', 'aurora', 'glow'];
 
 export interface BackgroundLayerProps {
   mode: BackgroundMode;
@@ -186,10 +180,7 @@ function smoothToward(
 
 /** holdBreath + deep silence → sky listens (same blend as Aura / presets). */
 function stillnessFromMetrics(holdBreath: number, silence: number): number {
-  return Math.min(
-    1,
-    Math.max(holdBreath, silence * 0.92) + Math.min(holdBreath, silence) * 0.15,
-  );
+  return Math.min(1, Math.max(holdBreath, silence * 0.92) + Math.min(holdBreath, silence) * 0.15);
 }
 
 /** Bias a sky color toward amber by eased afterglow; quiet (0) is a no-op. */
@@ -204,11 +195,7 @@ function applyAfterglowWarmth(
 }
 
 /** Soft voice-warm tint; apply before afterglow so amber linger still wins. */
-function applyVocalWarmth(
-  color: THREE.Color,
-  vocalLinger: number,
-  scratchWarm: THREE.Color,
-): void {
+function applyVocalWarmth(color: THREE.Color, vocalLinger: number, scratchWarm: THREE.Color): void {
   const t = Math.max(0, Math.min(1, vocalLinger)) * VOCAL_WARMTH_MIX;
   if (t < 0.001) return;
   color.lerp(scratchWarm.copy(VOCAL_WARM), t);
@@ -218,11 +205,7 @@ function applyVocalWarmth(
  * Milk-amber tenderness tint; apply after vocal, before afterglow so big-moment
  * amber linger still owns peaks and vocal warmth stays a separate cue.
  */
-function applyTenderWarmth(
-  color: THREE.Color,
-  tender: number,
-  scratchWarm: THREE.Color,
-): void {
+function applyTenderWarmth(color: THREE.Color, tender: number, scratchWarm: THREE.Color): void {
   const t = Math.max(0, Math.min(1, tender)) * TENDER_WARMTH_MIX;
   if (t < 0.001) return;
   color.lerp(scratchWarm.copy(TENDER_WARM), t);
@@ -506,10 +489,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     prevEcho.current = echoNow;
     if (echoTravel.current < 1) {
       const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
-      echoTravel.current = Math.min(
-        1,
-        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
-      );
+      echoTravel.current = Math.min(1, echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180));
     }
     const traveling = echoTravel.current < 1;
     const echoVis = traveling
@@ -517,8 +497,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
       : echoSmooth.current * 0.04;
     const echoMul = 1 - stillness * 0.55;
     // Tenderness eases drift without the hush freeze — stack under stillness.
-    const motionMul =
-      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
@@ -542,8 +521,7 @@ function Nebula({ intensity, palette, tier, reducedMotion }: ModeProps) {
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
     const glitterTarget = Math.min(1, m.shimmer * 0.9 + m.hat * 0.55);
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
-    glitterRef.current +=
-      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    glitterRef.current += (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     // Kit accents stay on full dt so kick/snare still fire through holdBreath thaw.
     kickRef.current = smoothToward(
@@ -636,7 +614,8 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   const tenderRef = useRef(0);
   const vocalLingerRef = useRef(0);
   const sprite = useMemo(() => getDotTexture(), []);
-  const count = tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
+  const count =
+    tier === 'high' ? STAR_COUNT_HIGH : tier === 'mid' ? STAR_COUNT_MID : STAR_COUNT_LOW;
   const lockAmp = lockAmpForTier(tier);
   const echoAmp = echoAmpForTier(tier);
 
@@ -716,18 +695,14 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     prevEcho.current = echoNow;
     if (echoTravel.current < 1) {
       const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
-      echoTravel.current = Math.min(
-        1,
-        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
-      );
+      echoTravel.current = Math.min(1, echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180));
     }
     const traveling = echoTravel.current < 1;
     const echoVis = traveling
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
     const echoMul = 1 - stillness * 0.55;
-    const motionMul =
-      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     const glitterLive = (1 - stillness * GLITTER_HUSH) * (1 - tender * GLITTER_TENDER);
     const tenderDim = 1 - tender * TENDER_DIM;
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
@@ -747,8 +722,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
     const glitterTarget = Math.min(1, m.shimmer * 0.95 + m.hat * 0.6);
     const glitterTau = glitterTarget > glitterRef.current ? 0.04 : 0.18;
-    glitterRef.current +=
-      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    glitterRef.current += (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     const glitter = glitterRef.current * glitterLive;
     const mat = matRef.current;
     if (mat) {
@@ -778,8 +752,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
       const pArr = pAttr.array as Float32Array;
       const midC = scratchMid.current.set(palette.mid);
       const highC = scratchHigh.current.set(palette.high);
-      const vocalT =
-        Math.max(0, Math.min(1, vocalLingerRef.current)) * VOCAL_WARMTH_MIX;
+      const vocalT = Math.max(0, Math.min(1, vocalLingerRef.current)) * VOCAL_WARMTH_MIX;
       if (vocalT >= 0.001) {
         const warm = scratchVocal.current.copy(VOCAL_WARM);
         midC.lerp(warm, vocalT);
@@ -809,11 +782,7 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
           dist = Math.min(dist, 1 - dist);
           const beat =
             0.45 +
-            0.55 *
-              Math.max(
-                0,
-                Math.sin(travel * Math.PI * 8 + (starVariance[i] ?? 0.5) * 14),
-              );
+            0.55 * Math.max(0, Math.sin(travel * Math.PI * 8 + (starVariance[i] ?? 0.5) * 14));
           const glint =
             (traveling ? echoAmt * (1 - travel * 0.85) : echoAmt * 0.35) *
             Math.max(0, 1 - dist / 0.1) *
@@ -836,7 +805,12 @@ function Starfield({ intensity, palette, tier, reducedMotion }: ModeProps) {
   return (
     <points ref={groupRef} renderOrder={-10} frustumCulled={false}>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} count={count} itemSize={3} />
+        <bufferAttribute
+          attach="attributes-position"
+          args={[positions, 3]}
+          count={count}
+          itemSize={3}
+        />
         <bufferAttribute attach="attributes-color" args={[colors, 3]} count={count} itemSize={3} />
       </bufferGeometry>
       <pointsMaterial
@@ -1025,18 +999,14 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     prevEcho.current = echoNow;
     if (echoTravel.current < 1) {
       const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
-      echoTravel.current = Math.min(
-        1,
-        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
-      );
+      echoTravel.current = Math.min(1, echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180));
     }
     const traveling = echoTravel.current < 1;
     const echoVis = traveling
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
     const echoMul = 1 - stillness * 0.55;
-    const motionMul =
-      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     timeRef.current += reducedMotion ? 0 : dt * motionMul;
     // Smooth the bass drive so curtains billow rather than flicker.
     // Tension swells through builds on top of the slow breath.
@@ -1051,8 +1021,7 @@ function Aurora({ intensity, palette, tier, reducedMotion }: ModeProps) {
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
     const glitterTarget = Math.min(1, m.shimmer * 0.9 + m.hat * 0.55);
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.2;
-    glitterRef.current +=
-      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    glitterRef.current += (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     // Kit accents stay on full dt so kick/snare still fire through holdBreath thaw.
     kickRef.current = smoothToward(
@@ -1260,18 +1229,14 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     prevEcho.current = echoNow;
     if (echoTravel.current < 1) {
       const bpmEcho = m.bpm && m.bpm > 30 ? m.bpm : 120;
-      echoTravel.current = Math.min(
-        1,
-        echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180),
-      );
+      echoTravel.current = Math.min(1, echoTravel.current + dt * 0.88 * (0.85 + bpmEcho / 180));
     }
     const traveling = echoTravel.current < 1;
     const echoVis = traveling
       ? echoSmooth.current * (1 - echoTravel.current * 0.3)
       : echoSmooth.current * 0.04;
     const echoMul = 1 - stillness * 0.55;
-    const motionMul =
-      (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
+    const motionMul = (1 - stillness * DRIFT_HUSH) * (1 - tender * DRIFT_TENDER) * lockPace;
     tRef.current += reducedMotion ? 0 : dt * motionMul;
     const mat = matRef.current;
     if (!mat) return;
@@ -1301,8 +1266,7 @@ function Glow({ intensity, palette, tier, reducedMotion }: ModeProps) {
     inhaleRef.current += (m.gather - inhaleRef.current) * (1 - Math.exp(-dt / 0.12));
     const glitterTarget = Math.min(1, m.shimmer * 0.85 + m.hat * 0.5);
     const glitterTau = glitterTarget > glitterRef.current ? 0.05 : 0.22;
-    glitterRef.current +=
-      (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
+    glitterRef.current += (glitterTarget - glitterRef.current) * (1 - Math.exp(-dt / glitterTau));
     leanRef.current = smoothToward(leanRef.current, m.leanIn, dt, LEAN_RISE_TAU, LEAN_FALL_TAU);
     // Kit accents stay on full dt so kick/snare still fire through holdBreath thaw.
     kickRef.current = smoothToward(

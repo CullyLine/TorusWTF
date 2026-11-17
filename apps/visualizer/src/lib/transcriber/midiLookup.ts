@@ -34,7 +34,18 @@ export interface MidiSearchResult {
 }
 
 const STOP = new Set([
-  'the', 'a', 'an', 'of', 'and', 'or', 'to', 'in', 'feat', 'ft', 'mid', 'midi',
+  'the',
+  'a',
+  'an',
+  'of',
+  'and',
+  'or',
+  'to',
+  'in',
+  'feat',
+  'ft',
+  'mid',
+  'midi',
 ]);
 
 function tokens(text: string): Set<string> {
@@ -79,16 +90,19 @@ export function cleanSongQuery(raw: string): string {
     /\bHD\b/g,
   ];
   for (const p of patterns) s = s.replace(p, '');
-  return s.replace(/\s{2,}/g, ' ').replace(/^[\s\-|]+|[\s\-|]+$/g, '').trim();
+  return s
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^[\s\-|]+|[\s\-|]+$/g, '')
+    .trim();
 }
 
 export async function searchMidi(query: string, signal?: AbortSignal): Promise<MidiSearchResult[]> {
   const q = query.trim();
   if (q.length < 2) return [];
-  const res = await fetch(
-    `${BITMIDI}/api/midi/search?q=${encodeURIComponent(q)}&page=0`,
-    { signal, headers: { Accept: 'application/json' } },
-  );
+  const res = await fetch(`${BITMIDI}/api/midi/search?q=${encodeURIComponent(q)}&page=0`, {
+    signal,
+    headers: { Accept: 'application/json' },
+  });
   if (!res.ok) throw new Error(`Search failed (${res.status})`);
 
   const data = (await res.json()) as { result?: { results?: BitMidiRaw[] } };

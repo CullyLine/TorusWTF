@@ -191,8 +191,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   flow_field: {
     id: 'flow_field',
     label: 'Flow Field',
-    hint:
-      'A quarter of a million particles follow a flow field. Move your cursor over them to stir it.',
+    hint: 'A quarter of a million particles follow a flow field. Move your cursor over them to stir it.',
     Scene: FlowFieldScene,
     presetControls: ['turbulence', 'trailLength', 'density', 'vortexAmount', 'interactStrength'],
     defaults: {
@@ -231,8 +230,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   infinite_tunnel: {
     id: 'infinite_tunnel',
     label: 'Tunnel',
-    hint:
-      'A tunnel you fly through without end. Bass pushes the walls out and mids raise spikes along them.',
+    hint: 'A tunnel you fly through without end. Bass pushes the walls out and mids raise spikes along them.',
     Scene: InfiniteTunnelScene,
     presetControls: ['turbulence', 'density', 'vortexAmount'],
     defaults: {
@@ -326,8 +324,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   tidal_sanctuary: {
     id: 'tidal_sanctuary',
     label: 'Tidal Sanctuary',
-    hint:
-      'An ocean surface. Bass raises swells, kicks pulse the crests, highs add foam, and silence leaves it glassy.',
+    hint: 'An ocean surface. Bass raises swells, kicks pulse the crests, highs add foam, and silence leaves it glassy.',
     Scene: TidalSanctuaryScene,
     presetControls: ['turbulence', 'density'],
     // Clip-space ocean owns framing via scale; still camera keeps the sea stable.
@@ -349,8 +346,7 @@ export const VISUALIZERS: Record<VisualizerId, VisualizerDefinition> = {
   plasma_globe: {
     id: 'plasma_globe',
     label: 'Plasma Globe',
-    hint:
-      'A plasma ball whose filaments strike the glass on every kick. Light enough to run without a dedicated graphics card.',
+    hint: 'A plasma ball whose filaments strike the glass on every kick. Light enough to run without a dedicated graphics card.',
     Scene: PlasmaGlobeScene,
     defaults: {
       speed: 1,

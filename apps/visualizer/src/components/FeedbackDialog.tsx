@@ -25,7 +25,8 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
 
   useEffect(() => {
     if (!open) return;
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    previousFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = panelRef.current?.querySelector<HTMLElement>(
       'button, [href], input, [tabindex]:not([tabindex="-1"])',
     );
@@ -131,8 +132,8 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
           Send feedback
         </h2>
         <p className="mt-1 text-xs text-torus-fg-faint">
-          Goes straight to our inbox. If you&apos;re signed in, we&apos;ll include your account email
-          so we can reply.
+          Goes straight to our inbox. If you&apos;re signed in, we&apos;ll include your account
+          email so we can reply.
         </p>
 
         {sent ? (
@@ -206,9 +207,7 @@ export function FeedbackDialog({ open, onClose }: FeedbackDialogProps) {
               <button
                 type="button"
                 onClick={() => void submit()}
-                disabled={
-                  busy || (body.trim().length === 0 && title.trim().length === 0)
-                }
+                disabled={busy || (body.trim().length === 0 && title.trim().length === 0)}
                 className="rounded-md bg-torus-mid px-4 py-2 text-sm font-medium text-torus-bg disabled:opacity-40"
               >
                 {busy ? 'Sending…' : 'Send feedback'}

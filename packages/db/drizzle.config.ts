@@ -2,8 +2,7 @@ import { defineConfig } from 'drizzle-kit';
 import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 
-const url =
-  process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL ?? 'file:./data/torus.db';
+const url = process.env.DATABASE_URL ?? process.env.TURSO_DATABASE_URL ?? 'file:./data/torus.db';
 const authToken = process.env.TURSO_AUTH_TOKEN ?? process.env.DATABASE_AUTH_TOKEN;
 const isFile = url.startsWith('file:');
 const raw = isFile ? url.slice(5) : url;

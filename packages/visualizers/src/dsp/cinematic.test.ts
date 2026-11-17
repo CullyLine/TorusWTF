@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  advanceToNextCinematicShot,
-  CINEMATIC_SHOTS,
-  createCinematicState,
-} from './cinematic';
+import { advanceToNextCinematicShot, CINEMATIC_SHOTS, createCinematicState } from './cinematic';
 
 function shotStart(index: number): number {
   let start = 0;
@@ -35,8 +31,7 @@ describe('advanceToNextCinematicShot', () => {
   it('wraps from the final shot to the first authored shot start', () => {
     const state = createCinematicState();
     const finalShotIndex = CINEMATIC_SHOTS.length - 1;
-    state.beatsElapsed =
-      shotStart(finalShotIndex) + CINEMATIC_SHOTS[finalShotIndex]!.beats / 2;
+    state.beatsElapsed = shotStart(finalShotIndex) + CINEMATIC_SHOTS[finalShotIndex]!.beats / 2;
 
     advanceToNextCinematicShot(state);
 

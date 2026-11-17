@@ -31,7 +31,11 @@ export interface AdaptiveResolutionProps {
  * deliberately, and an export whose resolution drifts mid-render is worse
  * than a slow one.
  */
-export function AdaptiveResolution({ onScaleChange, enabled = true, config }: AdaptiveResolutionProps) {
+export function AdaptiveResolution({
+  onScaleChange,
+  enabled = true,
+  config,
+}: AdaptiveResolutionProps) {
   const state = useMemo(() => createGovernorState(), []);
   const appliedStep = useRef(0);
   const lastTime = useRef(0);

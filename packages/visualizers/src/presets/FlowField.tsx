@@ -7,11 +7,7 @@ import type { VisualizerSceneProps } from '../registry';
 import { useMetricsRef } from '../metrics';
 import { useModulation } from '../modulation';
 import { FLOW_GLSL } from '../dsp/flowGlsl';
-import {
-  DEFAULT_FLOW_PARAMS,
-  flowParamsFromMetrics,
-  type FlowParams,
-} from '../dsp/flowfield';
+import { DEFAULT_FLOW_PARAMS, flowParamsFromMetrics, type FlowParams } from '../dsp/flowfield';
 
 /** EMA toward target with separate rise/fall time constants. */
 function smoothToward(
@@ -424,7 +420,13 @@ export function FlowFieldScene({
       init[i * 4 + 2] = s * Math.sin(theta) * radius;
       init[i * 4 + 3] = rng();
     }
-    const initTexture = new THREE.DataTexture(init, texSide, texSide, THREE.RGBAFormat, THREE.FloatType);
+    const initTexture = new THREE.DataTexture(
+      init,
+      texSide,
+      texSide,
+      THREE.RGBAFormat,
+      THREE.FloatType,
+    );
     initTexture.needsUpdate = true;
 
     const simMaterial = new THREE.ShaderMaterial({
@@ -472,7 +474,16 @@ export function FlowFieldScene({
     simMesh.frustumCulled = false;
     simScene.add(simMesh);
 
-    return { targetA, targetB, simMaterial, simScene, simCamera, simGeo, initTexture, swapped: false };
+    return {
+      targetA,
+      targetB,
+      simMaterial,
+      simScene,
+      simCamera,
+      simGeo,
+      initTexture,
+      swapped: false,
+    };
   }, [gl, texSide, count]);
 
   // ---- Render geometries: trails (4 verts / particle) + heads ----
@@ -849,7 +860,12 @@ export function FlowFieldScene({
 
   return (
     <group ref={groupRef}>
-      <lineSegments ref={trailRef} geometry={trailGeometry} material={trailMaterial} frustumCulled={false} />
+      <lineSegments
+        ref={trailRef}
+        geometry={trailGeometry}
+        material={trailMaterial}
+        frustumCulled={false}
+      />
       <points ref={headRef} geometry={headGeometry} material={headMaterial} frustumCulled={false} />
     </group>
   );

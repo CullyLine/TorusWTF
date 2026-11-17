@@ -59,7 +59,8 @@ export function useBPM(analyser: AnalyserHandle | null, enabled: boolean): UseBP
         fluxHistory.current.shift();
       }
 
-      const threshold = 0.008 + fluxHistory.current.reduce((a, b) => a + b, 0) / fluxHistory.current.length * 1.4;
+      const threshold =
+        0.008 + (fluxHistory.current.reduce((a, b) => a + b, 0) / fluxHistory.current.length) * 1.4;
       if (flux > threshold && now - lastOnset.current > 0.22) {
         const dt = now - lastOnset.current;
         if (lastOnset.current > 0 && dt > 0.28 && dt < 1.2) {
@@ -99,7 +100,7 @@ export function useBPM(analyser: AnalyserHandle | null, enabled: boolean): UseBP
       if (smoothBpm.current == null) {
         smoothBpm.current = bestBpm;
       } else {
-        const alpha = Math.min(1, (sampleMs / 1000) / SMOOTH_SEC);
+        const alpha = Math.min(1, sampleMs / 1000 / SMOOTH_SEC);
         smoothBpm.current = smoothBpm.current * (1 - alpha) + bestBpm * alpha;
       }
       const rounded = Math.round(smoothBpm.current);
@@ -110,8 +111,5 @@ export function useBPM(analyser: AnalyserHandle | null, enabled: boolean): UseBP
     return () => clearInterval(id);
   }, [analyser, enabled]);
 
-  return useMemo(
-    () => ({ bpm, confident, bpmRef, lastOnsetRef: lastOnset }),
-    [bpm, confident],
-  );
+  return useMemo(() => ({ bpm, confident, bpmRef, lastOnsetRef: lastOnset }), [bpm, confident]);
 }

@@ -258,6 +258,9 @@ function hslToRgb(h: number, s: number, l: number): Rgb {
 }
 
 function toHex({ r, g, b }: Rgb): string {
-  const h = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+  const h = (n: number) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, '0');
   return `#${h(r)}${h(g)}${h(b)}`;
 }

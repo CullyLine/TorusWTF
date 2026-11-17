@@ -47,9 +47,15 @@ describe('partsToProject', () => {
   });
 
   it('maps amplitude to a 1..127 velocity', () => {
-    const project = partsToProject([{ name: 'T', notes: [note(60, 0, 1, 0)] }], { bpm: 120, name: 'x' });
+    const project = partsToProject([{ name: 'T', notes: [note(60, 0, 1, 0)] }], {
+      bpm: 120,
+      name: 'x',
+    });
     expect(project.tracks[0]!.clips[0]!.notes[0]!.velocity).toBe(1);
-    const loud = partsToProject([{ name: 'T', notes: [note(60, 0, 1, 1)] }], { bpm: 120, name: 'x' });
+    const loud = partsToProject([{ name: 'T', notes: [note(60, 0, 1, 1)] }], {
+      bpm: 120,
+      name: 'x',
+    });
     expect(loud.tracks[0]!.clips[0]!.notes[0]!.velocity).toBe(127);
   });
 

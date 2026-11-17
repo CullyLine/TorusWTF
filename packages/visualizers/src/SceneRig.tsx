@@ -24,11 +24,7 @@ import {
 } from './effects/brightness';
 import { ScreenStyleEffect } from './effects/ScreenStyleEffect';
 import { SCREEN_EFFECT_REGISTRY, type ScreenEffectId } from './effects/screenEffects';
-import {
-  createCinematicState,
-  updateCinematicCamera,
-  type CinematicState,
-} from './dsp/cinematic';
+import { createCinematicState, updateCinematicCamera, type CinematicState } from './dsp/cinematic';
 import {
   DEFAULT_FLOW_PARAMS,
   flowParamsFromMetrics,
@@ -327,8 +323,7 @@ function ScreenStylePass({
       cameraNear: camera.near,
       cameraFar: camera.far,
     });
-    renderDepthRef.current =
-      wet > 0.001 && usesDepth && !state.gl.getContext().isContextLost();
+    renderDepthRef.current = wet > 0.001 && usesDepth && !state.gl.getContext().isContextLost();
   });
 
   // A small fixed-size prepass supplies depth discontinuities without asking
@@ -581,10 +576,7 @@ export function SceneRig({
         impulses.camPunch = 0;
       }
       if (impulses.dofPunch > 0.001) {
-        dofPunchEnvRef.current = Math.max(
-          dofPunchEnvRef.current,
-          Math.min(1.5, impulses.dofPunch),
-        );
+        dofPunchEnvRef.current = Math.max(dofPunchEnvRef.current, Math.min(1.5, impulses.dofPunch));
         impulses.dofPunch = 0;
       }
       if (impulses.bloomPulse > 0.001) {
@@ -663,11 +655,7 @@ export function SceneRig({
     const flashLightBoost = calculateFlashLightBoost(flash);
     if (bassLight.current) {
       bassLight.current.intensity = clampReactiveLightIntensity(
-        ((0.55 +
-          bassSignal * 2.4 +
-          impactSignal * 2.2 +
-          afterglowSignal * 0.7 +
-          flashLightBoost) *
+        ((0.55 + bassSignal * 2.4 + impactSignal * 2.2 + afterglowSignal * 0.7 + flashLightBoost) *
           keyRimDim +
           kickPunch * 1.6 * kitKeep) *
           STAGE_LIGHT_SCALE,
@@ -681,11 +669,7 @@ export function SceneRig({
     }
     if (midLight.current) {
       midLight.current.intensity = clampReactiveLightIntensity(
-        ((0.45 +
-          midSignal * 2.0 +
-          swellSignal * 0.8 +
-          afterglowSignal * 0.4 +
-          flashLightBoost) *
+        ((0.45 + midSignal * 2.0 + swellSignal * 0.8 + afterglowSignal * 0.4 + flashLightBoost) *
           fillDim +
           snareCrack * 1.8 * kitKeep) *
           STAGE_LIGHT_SCALE,
@@ -723,8 +707,7 @@ export function SceneRig({
     // Tenderness lowers the shake floor so gentle vocals settle the stage;
     // kit / impact can still punch when drums speak (target scales, spring stays).
     const shakeFloor = 1 - tender * 0.55;
-    const shakeTarget =
-      (m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015) * shakeFloor;
+    const shakeTarget = (m.impact * (embedded ? 0.05 : 0.085) + m.bass * 0.015) * shakeFloor;
     const shake = smoothDampScalar(
       shakeAmpSpringRef.current,
       shakeTarget,
@@ -831,9 +814,7 @@ export function SceneRig({
         const fv = flowCamScratch.current;
         sampleFlow(fv, anchor.x * 2.2, anchor.y * 2.2, anchor.z * 2.2, 0, fp);
         // Plant softens the idle current; energy/drop still push when music speaks.
-        const drift =
-          dt *
-          (0.16 * idleMul + m.energy * 0.18 + m.dropEvent * 0.3);
+        const drift = dt * (0.16 * idleMul + m.energy * 0.18 + m.dropEvent * 0.3);
         anchor.x += fv.x * drift;
         anchor.y += fv.y * drift * 0.6; // damp vertical so the horizon stays sane
         anchor.z += fv.z * drift;
@@ -844,11 +825,7 @@ export function SceneRig({
         // Lean into the music: the camera drifts closer as the track
         // swells and eases back out as it exhales. Idle sin wobble plants too.
         const radius =
-          baseZ *
-          (1 -
-            m.swell * 0.09 -
-            m.impact * 0.03 +
-            Math.sin(t * 0.4) * 0.03 * idleMul);
+          baseZ * (1 - m.swell * 0.09 - m.impact * 0.03 + Math.sin(t * 0.4) * 0.03 * idleMul);
         desiredX = anchor.x * radius;
         desiredY = anchor.y * radius;
         desiredZ = anchor.z * radius;
@@ -926,19 +903,13 @@ export function SceneRig({
     // seconds so build-ups hold their breath; dropEvent/release spring
     // the coil loose. leanIn Z, echo X sway, cinematic cuts stay separate.
     const coilAmp = tier === 'high' ? 1 : tier === 'mid' ? 0.85 : 0.7;
-    const releasing =
-      m.dropEvent > 0.12 || m.release > 0.18;
+    const releasing = m.dropEvent > 0.12 || m.release > 0.18;
     const coilTarget = releasing ? 0 : Math.min(1, m.tension) * coilAmp;
     const coilSmooth =
       releasing || coilTarget < tensionCoilSpringRef.current.value
         ? TENSION_RELEASE_SPRING_SMOOTH
         : TENSION_COIL_SPRING_SMOOTH;
-    const coil = smoothDampScalar(
-      tensionCoilSpringRef.current,
-      coilTarget,
-      dtCam,
-      coilSmooth,
-    );
+    const coil = smoothDampScalar(tensionCoilSpringRef.current, coilTarget, dtCam, coilSmooth);
     desiredY += coil * (embedded ? 0.055 : 0.1);
 
     // Phrase-echo parallax sway — one-shot slow lateral drift-and-return when
@@ -1039,9 +1010,7 @@ export function SceneRig({
     {
       const bassPunch = m.bass * 0.5 + m.impact * 1.3;
       const ampTarget =
-        bassShakeNow > 0
-          ? bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07) * shakeFloor
-          : 0;
+        bassShakeNow > 0 ? bassShakeNow * bassPunch * (embedded ? 0.04 : 0.07) * shakeFloor : 0;
       const amp = smoothDampScalar(
         bassShakeAmpSpringRef.current,
         ampTarget,
@@ -1056,12 +1025,7 @@ export function SceneRig({
       const off = bassShakeOffsetSpringRef.current;
       springTo(off, oxTarget, oyTarget, ozTarget, dtCam, SHAKE_OFFSET_SPRING_SMOOTH);
       // Settle snap — once amp and offsets are near rest, kill residual crawl.
-      if (
-        amp === 0 &&
-        Math.abs(off.x) < 1e-5 &&
-        Math.abs(off.y) < 1e-5 &&
-        Math.abs(off.z) < 1e-5
-      ) {
+      if (amp === 0 && Math.abs(off.x) < 1e-5 && Math.abs(off.y) < 1e-5 && Math.abs(off.z) < 1e-5) {
         off.x = 0;
         off.y = 0;
         off.z = 0;
@@ -1091,14 +1055,7 @@ export function SceneRig({
     // framing glides (~0.28s); other modes keep the snappier default.
     const lookSmooth =
       cameraMode === 'cinematic' ? CINEMATIC_LOOK_SPRING_SMOOTH : LOOK_SPRING_SMOOTH;
-    springTo(
-      lookSpringRef.current,
-      lookTargetX,
-      lookTargetY,
-      lookTargetZ,
-      dtCam,
-      lookSmooth,
-    );
+    springTo(lookSpringRef.current, lookTargetX, lookTargetY, lookTargetZ, dtCam, lookSmooth);
     settleSpring3(lookSpringRef.current, lookTargetX, lookTargetY, lookTargetZ);
     const look = lookSpringRef.current;
     state.camera.lookAt(look.x + lookYaw, look.y + lookPitch, look.z);
@@ -1111,22 +1068,13 @@ export function SceneRig({
     const cam = state.camera as PerspectiveCamera;
     if (cam.isPerspectiveCamera) {
       if (baseFovRef.current === null) baseFovRef.current = cam.fov;
-      const punchIn = Math.min(
-        7,
-        m.impact * (0.9 + m.swell * 2.1) + camPunchEnvRef.current * 5,
-      );
+      const punchIn = Math.min(7, m.impact * (0.9 + m.swell * 2.1) + camPunchEnvRef.current * 5);
       // Couple degrees of FOV tighten from the tension coil — distinct from
       // the punchy hit envelope (punchIn) and afterglow exhale.
       const coilTighten = coil * (embedded ? 1.6 : 2.4);
-      const targetFov =
-        baseFovRef.current - punchIn - coilTighten + m.afterglow * 1.3;
+      const targetFov = baseFovRef.current - punchIn - coilTighten + m.afterglow * 1.3;
       const dtFov = Math.min(Math.max(delta, 0), 0.05);
-      const nextFov = smoothDampScalar(
-        fovSpringRef.current,
-        targetFov,
-        dtFov,
-        FOV_SPRING_SMOOTH,
-      );
+      const nextFov = smoothDampScalar(fovSpringRef.current, targetFov, dtFov, FOV_SPRING_SMOOTH);
       if (Math.abs(cam.fov - nextFov) > 0.005) {
         cam.fov = nextFov;
         cam.updateProjectionMatrix();
@@ -1140,16 +1088,8 @@ export function SceneRig({
     // shake, and safe-zone), so focusDistance tracks the subject.
     if (dofEffect) {
       const dofDrive = m.bass * 0.5 + m.impact * 1.3;
-      const kickTarget = Math.min(
-        1.5,
-        depthOfFieldNow * dofDrive * 0.6 + dofPunchEnvRef.current,
-      );
-      const kick = smoothDampScalar(
-        dofKickSpringRef.current,
-        kickTarget,
-        dtCam,
-        FOV_SPRING_SMOOTH,
-      );
+      const kickTarget = Math.min(1.5, depthOfFieldNow * dofDrive * 0.6 + dofPunchEnvRef.current);
+      const kick = smoothDampScalar(dofKickSpringRef.current, kickTarget, dtCam, FOV_SPRING_SMOOTH);
       const camDist = state.camera.position.length();
       dofEffect.cocMaterial.focusDistance = camDist * (1 - 0.25 * kick);
       dofEffect.cocMaterial.focusRange = Math.max(0.4, 3.0 - 2.2 * kick);
@@ -1168,8 +1108,7 @@ export function SceneRig({
       );
       bloomHushRef.current = smoothToward(bloomHushRef.current, hushTarget, dtImp, 0.14, 0.08);
       const hush = bloomHushRef.current;
-      const breathTarget =
-        0.5 + swellSignal * 0.82 + afterglowSignal * 0.5 - hush * 0.22;
+      const breathTarget = 0.5 + swellSignal * 0.82 + afterglowSignal * 0.5 - hush * 0.22;
       // Rise through builds a touch faster than the verse exhale.
       const breathTau = breathTarget > bloomBreathRef.current ? 0.2 : 0.55;
       bloomBreathRef.current +=
@@ -1203,24 +1142,9 @@ export function SceneRig({
   return (
     <>
       <ambientLight intensity={0.14} />
-      <pointLight
-        ref={bassLight}
-        position={[0, -1.5, 2]}
-        color={palette.bass}
-        intensity={1}
-      />
-      <pointLight
-        ref={midLight}
-        position={[2, 1, 1]}
-        color={palette.mid}
-        intensity={0.8}
-      />
-      <pointLight
-        ref={highLight}
-        position={[-2, 0.5, -1]}
-        color={palette.high}
-        intensity={0.6}
-      />
+      <pointLight ref={bassLight} position={[0, -1.5, 2]} color={palette.bass} intensity={1} />
+      <pointLight ref={midLight} position={[2, 1, 1]} color={palette.mid} intensity={0.8} />
+      <pointLight ref={highLight} position={[-2, 0.5, -1]} color={palette.high} intensity={0.6} />
       <spotLight
         ref={keySpotRef}
         position={[0, 4, 0]}

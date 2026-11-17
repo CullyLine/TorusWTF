@@ -69,8 +69,7 @@ const NO_AUDIO_MESSAGES: Record<DesktopCaptureMode, string> = {
   application:
     'No audio in the shared source. Tick "Also share audio" when picking the application, or choose a tab that is playing audio.',
   tab: 'No audio from that tab. Pick a tab that is playing audio and keep "Also share tab audio" ticked.',
-  currentTab:
-    'No audio from this tab. Keep "Also share tab audio" ticked when sharing.',
+  currentTab: 'No audio from this tab. Keep "Also share tab audio" ticked when sharing.',
 };
 
 export function useTabCapture() {

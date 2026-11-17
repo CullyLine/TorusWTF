@@ -114,7 +114,12 @@ function smoothToward(
   return current + (target - current) * k;
 }
 
-export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: LivingPaletteDriverProps) {
+export function LivingPaletteDriver({
+  base,
+  out,
+  amount = 0.6,
+  impulses,
+}: LivingPaletteDriverProps) {
   const metricsRef = useMetricsRef();
   const mods = useModulation();
   const huePhaseRef = useRef(Math.random());
@@ -287,7 +292,13 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     // Rise eagerly into the lock (~0.12s), release a touch slower (~0.28s)
     // so the chord dissolves without a snap. No cyan cast (gather/leanIn),
     // no crawl freeze (hush), no one-shot flash (echo) — just unification.
-    chordSmooth.current = smoothToward(chordSmooth.current, clamp(m.convergence, 0, 1), dt, 0.12, 0.28);
+    chordSmooth.current = smoothToward(
+      chordSmooth.current,
+      clamp(m.convergence, 0, 1),
+      dt,
+      0.12,
+      0.28,
+    );
     const chord = chordSmooth.current;
     const chordPull = life * chord * 0.62;
     const chordSat = life * chord * 0.18;
@@ -320,8 +331,7 @@ export function LivingPaletteDriver({ base, out, amount = 0.6, impulses }: Livin
     const moodSat = life * (warmth * 0.14 + m.tenderness * 0.06 * (1 - hush * 0.7));
 
     const drift = Math.sin(huePhaseRef.current * Math.PI * 2) * 0.034;
-    const hueShift =
-      life * drift + hueKickRef.current + moodHue + phraseHue + leanHue + echoHue;
+    const hueShift = life * drift + hueKickRef.current + moodHue + phraseHue + leanHue + echoHue;
     // Afterglow holds saturation and light elevated for seconds after a
     // peak — the color equivalent of a room still ringing.
     const satBoost =
